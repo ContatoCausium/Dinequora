@@ -1,6 +1,13 @@
-import { listInventory, saveInventoryItem, type InventoryItem } from './inventory-service';
+import { listInventory, saveInventoryItem, type InventoryItem } from "./inventory-service";
+import {
+  assertLocationAllowed,
+  assertTenantContext,
+  isLocationAllowed,
+  readTenantRecords,
+  writeTenantRecords,
+} from "./tenant-storage";
 
-export type MovementType = 'in' | 'out' | 'adjustment' | 'loss' | 'transfer';
+export type MovementType = "in" | "out" | "adjustment" | "loss" | "transfer";
 
 export interface InventoryMovement {
   id: string;
@@ -16,7 +23,7 @@ export interface InventoryMovement {
   reason: string;
   performedBy: string;
   sourceLocationId: string;
-  targetLocationId?: string;
+  targetLocationId?: string | undefined;
   createdAt: string;
 }
 
@@ -29,46 +36,49 @@ export interface RecordMovementParams {
   performedBy: string;
   unitCostCents?: number;
   sourceLocationId: string;
-  targetLocationId?: string;
+  targetLocationId?: string | undefined;
   allowNegativeStock?: boolean;
+  /** Stores the caller may act on; undefined = org-wide caller (owner). */
+  allowedLocationIds?: readonly string[] | undefined;
 }
 
-const MOVEMENTS_STORAGE_KEY = 'servora_inventory_movements_v1';
-
-function readMovementsStore(): InventoryMovement[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(MOVEMENTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function readMovementsStore(orgId: string): InventoryMovement[] {
+  return readTenantRecords<InventoryMovement>("inventory_movements", orgId);
 }
 
-function writeMovementsStore(movements: InventoryMovement[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(MOVEMENTS_STORAGE_KEY, JSON.stringify(movements));
-  } catch {}
+function writeMovementsStore(orgId: string, movements: InventoryMovement[]): void {
+  writeTenantRecords("inventory_movements", orgId, movements);
 }
 
 export function listInventoryMovements(
   orgId: string,
   filter?: {
-    locationId?: string;
+    locationId?: string | undefined;
     itemId?: string;
     type?: MovementType;
     startDate?: string;
     endDate?: string;
-  }
+  },
+  allowedLocationIds?: readonly string[],
 ): InventoryMovement[] {
-  const all = readMovementsStore();
+  assertTenantContext(orgId);
+  const requested = filter?.locationId;
+  if (requested && requested !== "all" && !isLocationAllowed(requested, allowedLocationIds))
+    return [];
+  const all = readMovementsStore(orgId);
   return all.filter((mov) => {
-    if (mov.orgId !== orgId && !(orgId === 'demo' && mov.orgId === 'demo')) {
+    if (mov.orgId !== orgId) {
       return false;
     }
-    if (filter?.locationId && filter.locationId !== 'all') {
-      if (mov.sourceLocationId !== filter.locationId && mov.targetLocationId !== filter.locationId) {
+    // Each side of a transfer is recorded with its own store as source.
+    if (!isLocationAllowed(mov.sourceLocationId, allowedLocationIds)) {
+      return false;
+    }
+    if (filter?.locationId && filter.locationId !== "all") {
+      if (
+        mov.sourceLocationId !== filter.locationId &&
+        mov.targetLocationId !== filter.locationId
+      ) {
         return false;
       }
     }
@@ -90,41 +100,58 @@ export function listInventoryMovements(
 
 export function recordInventoryMovement(params: RecordMovementParams): {
   movement: InventoryMovement;
-  transferMovement?: InventoryMovement;
+  transferMovement?: InventoryMovement | undefined;
 } {
-  const { orgId, itemId, type, quantity, reason, performedBy, sourceLocationId, targetLocationId, allowNegativeStock } = params;
+  const {
+    orgId,
+    itemId,
+    type,
+    quantity,
+    reason,
+    performedBy,
+    sourceLocationId,
+    targetLocationId,
+    allowNegativeStock,
+    allowedLocationIds,
+  } = params;
+  assertTenantContext(orgId);
+  assertLocationAllowed(sourceLocationId, allowedLocationIds);
+  if (type === "transfer") assertLocationAllowed(targetLocationId, allowedLocationIds);
 
   if (quantity <= 0) {
-    throw new Error('A quantidade da movimentação deve ser maior que zero.');
+    throw new Error("A quantidade da movimentação deve ser maior que zero.");
   }
 
-  const currentItems = listInventory(orgId, 'all');
+  const currentItems = listInventory(orgId, "all");
   const item = currentItems.find((i) => i.id === itemId);
   if (!item) {
-    throw new Error('Insumo não encontrado.');
+    throw new Error("Insumo não encontrado.");
+  }
+  if (item.locationId !== sourceLocationId) {
+    throw new Error("O insumo não pertence à unidade de origem informada.");
   }
 
   const costPerUnit = params.unitCostCents !== undefined ? params.unitCostCents : item.costCents;
   const now = new Date().toISOString();
-  const allMovements = readMovementsStore();
+  const allMovements = readMovementsStore(orgId);
 
   let delta = 0;
-  if (type === 'in') {
+  if (type === "in") {
     delta = quantity;
-  } else if (type === 'out' || type === 'loss') {
+  } else if (type === "out" || type === "loss") {
     delta = -quantity;
-  } else if (type === 'adjustment') {
+  } else if (type === "adjustment") {
     delta = quantity - item.quantity;
-  } else if (type === 'transfer') {
+  } else if (type === "transfer") {
     if (!targetLocationId || targetLocationId === sourceLocationId) {
-      throw new Error('Unidade de destino inválida para transferência.');
+      throw new Error("Unidade de destino inválida para transferência.");
     }
     delta = -quantity;
   }
 
-  const newQuantity = type === 'adjustment' ? quantity : item.quantity + delta;
+  const newQuantity = type === "adjustment" ? quantity : item.quantity + delta;
   if (newQuantity < 0 && !allowNegativeStock) {
-    throw new Error('Saldo insuficiente em estoque. Operação de estoque negativo não autorizada.');
+    throw new Error("Saldo insuficiente em estoque. Operação de estoque negativo não autorizada.");
   }
 
   // Atomic balance update on source item
@@ -148,7 +175,7 @@ export function recordInventoryMovement(params: RecordMovementParams): {
     reason,
     performedBy,
     sourceLocationId,
-    targetLocationId: type === 'transfer' ? targetLocationId : undefined,
+    targetLocationId: type === "transfer" ? targetLocationId : undefined,
     createdAt: now,
   };
 
@@ -157,9 +184,9 @@ export function recordInventoryMovement(params: RecordMovementParams): {
   let transferMovement: InventoryMovement | undefined;
 
   // In case of transfer, update or seed target item atomically
-  if (type === 'transfer' && targetLocationId) {
+  if (type === "transfer" && targetLocationId) {
     const targetItem = currentItems.find(
-      (i) => i.name.toLowerCase() === item.name.toLowerCase() && i.locationId === targetLocationId
+      (i) => i.name.toLowerCase() === item.name.toLowerCase() && i.locationId === targetLocationId,
     );
 
     let targetPrevQty = 0;
@@ -175,6 +202,7 @@ export function recordInventoryMovement(params: RecordMovementParams): {
     } else {
       // Seed target store with transferred item
       saveInventoryItem(orgId, {
+        orgId,
         name: item.name,
         category: item.category,
         sku: item.sku,
@@ -194,7 +222,7 @@ export function recordInventoryMovement(params: RecordMovementParams): {
       orgId,
       itemId: targetItem?.id || `inv-transferred-${Date.now()}`,
       itemName: item.name,
-      type: 'in',
+      type: "in",
       quantityDelta: quantity,
       previousQuantity: targetPrevQty,
       resultingQuantity: targetNewQty,
@@ -209,6 +237,6 @@ export function recordInventoryMovement(params: RecordMovementParams): {
     allMovements.unshift(transferMovement);
   }
 
-  writeMovementsStore(allMovements);
+  writeMovementsStore(orgId, allMovements);
   return { movement, transferMovement };
 }
