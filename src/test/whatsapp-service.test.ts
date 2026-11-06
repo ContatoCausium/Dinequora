@@ -55,7 +55,13 @@ describe("Servora Intelligence — WhatsApp Service", () => {
   });
 
   it("renders deterministic WhatsApp message templates correctly in pt and en", () => {
-    const msgPt = renderWhatsAppMessage(orgId, "all", "financial_summary", "Carlos Eduardo", "pt-BR");
+    const msgPt = renderWhatsAppMessage(
+      orgId,
+      "all",
+      "financial_summary",
+      "Carlos Eduardo",
+      "pt-BR",
+    );
     expect(msgPt).toContain("SERVORA INTELLIGENCE");
     expect(msgPt).toContain("Carlos Eduardo");
     expect(msgPt).toContain("Faturamento Bruto");

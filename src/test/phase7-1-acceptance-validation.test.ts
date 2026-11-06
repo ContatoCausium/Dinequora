@@ -12,14 +12,14 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
   it("validates tenant isolation guard before calling database RPC", () => {
     const candidateOrgName = "marao burgers";
     const isForbidden = forbiddenOrgPatterns.some((pattern) =>
-      candidateOrgName.toLowerCase().includes(pattern)
+      candidateOrgName.toLowerCase().includes(pattern),
     );
     expect(isForbidden).toBe(true);
   });
 
   it("inspects validate_pos_e2e_acceptance_flow or fallback atomic flow on active Supabase", async () => {
-    const envUrl = process.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
-    const envKey = process.env.VITE_SUPABASE_ANON_KEY || "placeholder-key";
+    const envUrl = process.env["VITE_SUPABASE_URL"] || "https://placeholder.supabase.co";
+    const envKey = process.env["VITE_SUPABASE_ANON_KEY"] || "placeholder-key";
     const isLive = !envUrl.includes("placeholder") && !envKey.includes("placeholder");
 
     if (!isLive) {
@@ -42,8 +42,8 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
       return;
     }
 
-    const isolatedOrg = testOrgs.find((o) =>
-      !forbiddenOrgPatterns.some((p) => o.name.toLowerCase().includes(p))
+    const isolatedOrg = testOrgs.find(
+      (o) => !forbiddenOrgPatterns.some((p) => o.name.toLowerCase().includes(p)),
     );
 
     if (!isolatedOrg) {
@@ -67,13 +67,15 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
     // Explicit validation that target is strictly a demo/test organization
     expect(isolatedOrg.is_demo).toBe(true);
     // Confirm safe test environment with zero customer data collision
-    expect(forbiddenOrgPatterns.some(p => isolatedOrg.name.toLowerCase().includes(p))).toBe(false);
+    expect(forbiddenOrgPatterns.some((p) => isolatedOrg.name.toLowerCase().includes(p))).toBe(
+      false,
+    );
     const { data: flowResult, error: flowErr } = await (supabase.rpc as any)(
       "validate_pos_e2e_acceptance_flow",
       {
         _org_id: isolatedOrg.id,
         _location_id: isolatedLocationId,
-      }
+      },
     );
 
     if (flowResult) {

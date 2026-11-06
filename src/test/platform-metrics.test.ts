@@ -1,13 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { attentionReasons, computeOverview, type OrgInsight, type PlanDef } from "@/lib/platform-metrics";
+import {
+  attentionReasons,
+  computeOverview,
+  type OrgInsight,
+  type PlanDef,
+} from "@/lib/platform-metrics";
 
 const plans: PlanDef[] = [
-  { id: "starter", name: "Starter", price_per_location_cents: 8900, currency: "usd", default_store_limit: 1, trial_store_limit: 1, trial_days: 14, is_placeholder_pricing: true },
+  {
+    id: "starter",
+    name: "Starter",
+    price_per_location_cents: 8900,
+    currency: "usd",
+    default_store_limit: 1,
+    trial_store_limit: 1,
+    trial_days: 14,
+    is_placeholder_pricing: true,
+  },
 ];
 const base: OrgInsight = {
-  id: "x", name: "X", status: "active", plan: "starter", is_demo: false, created_at: "2026-10-01T00:00:00Z",
-  store_count: 2, active_store_count: 2, store_limit: 3, has_override: false, member_count: 1, owner_count: 1, owner_email: null,
-  pending_invites: 0, brand_customized: false, sub_status: "active", trial_ends_at: null, billed_locations: 2, billing_connected: false, last_activity: null,
+  id: "x",
+  name: "X",
+  status: "active",
+  plan: "starter",
+  is_demo: false,
+  created_at: "2026-10-01T00:00:00Z",
+  store_count: 2,
+  active_store_count: 2,
+  store_limit: 3,
+  has_override: false,
+  member_count: 1,
+  owner_count: 1,
+  owner_email: null,
+  pending_invites: 0,
+  brand_customized: false,
+  sub_status: "active",
+  trial_ends_at: null,
+  billed_locations: 2,
+  billing_connected: false,
+  last_activity: null,
 };
 const NOW = Date.parse("2026-10-23T00:00:00Z");
 
@@ -28,15 +59,26 @@ describe("platform overview", () => {
   });
 
   it("counts actual MRR only from provider-synced active subscriptions", () => {
-    const o = computeOverview([{ ...base, billing_connected: true }, { ...base, id: "y" }], plans, NOW);
+    const o = computeOverview(
+      [
+        { ...base, billing_connected: true },
+        { ...base, id: "y" },
+      ],
+      plans,
+      NOW,
+    );
     expect(o.actualMrrCents).toBe(2 * 8900);
     expect(o.actualArrCents).toBe(2 * 8900 * 12);
     expect(o.activeSubscriptions).toBe(1);
   });
 
   it("flags an expired trial and an unowned customer organization", () => {
-    expect(attentionReasons({ ...base, owner_count: 0, sub_status: "trialing", trial_ends_at: "2026-10-20T00:00:00Z" }, NOW))
-      .toEqual(["no_owner", "trial_expired"]);
+    expect(
+      attentionReasons(
+        { ...base, owner_count: 0, sub_status: "trialing", trial_ends_at: "2026-10-20T00:00:00Z" },
+        NOW,
+      ),
+    ).toEqual(["no_owner", "trial_expired"]);
   });
 
   it("does not flag missing owners on demo organizations", () => {

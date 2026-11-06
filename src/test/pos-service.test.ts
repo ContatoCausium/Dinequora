@@ -26,6 +26,7 @@ const mockItem: MenuItem = {
   prepTimeMinutes: 8,
   active: true,
   locationIds: [],
+  modifierGroups: [],
   createdAt: new Date().toISOString(),
 };
 
