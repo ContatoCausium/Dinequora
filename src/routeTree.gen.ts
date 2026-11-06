@@ -19,14 +19,22 @@ import { Route as AuthenticatedControlRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/_app/index'
+import { Route as AuthenticatedAppFinanceRouteImport } from './routes/_authenticated/_app/finance'
+import { Route as AuthenticatedAppIntelligenceRouteImport } from './routes/_authenticated/_app/intelligence'
+import { Route as AuthenticatedAppInventoryRouteImport } from './routes/_authenticated/_app/inventory'
+import { Route as AuthenticatedAppKdsRouteImport } from './routes/_authenticated/_app/kds'
 import { Route as AuthenticatedAppLocationsRouteImport } from './routes/_authenticated/_app/locations'
+import { Route as AuthenticatedAppMenuRouteImport } from './routes/_authenticated/_app/menu'
+import { Route as AuthenticatedAppPosRouteImport } from './routes/_authenticated/_app/pos'
 import { Route as AuthenticatedAppTeamRouteImport } from './routes/_authenticated/_app/team'
 import { Route as AuthenticatedControlIndexRouteImport } from './routes/_authenticated/control.index'
 import { Route as AuthenticatedControlAdminsRouteImport } from './routes/_authenticated/control.admins'
 import { Route as AuthenticatedControlAuditRouteImport } from './routes/_authenticated/control.audit'
 import { Route as AuthenticatedControlDemoRouteImport } from './routes/_authenticated/control.demo'
 import { Route as AuthenticatedControlOrganizationsRouteImport } from './routes/_authenticated/control.organizations'
+import { Route as AuthenticatedControlPlansRouteImport } from './routes/_authenticated/control.plans'
 import { Route as AuthenticatedControlSettingsRouteImport } from './routes/_authenticated/control.settings'
+import { Route as AuthenticatedControlSubscriptionsRouteImport } from './routes/_authenticated/control.subscriptions'
 import { Route as AuthenticatedAppSettingsBillingRouteImport } from './routes/_authenticated/_app/settings.billing'
 import { Route as AuthenticatedAppSettingsBrandingRouteImport } from './routes/_authenticated/_app/settings.branding'
 
@@ -78,12 +86,44 @@ const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
+const AuthenticatedAppFinanceRoute = AuthenticatedAppFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
+const AuthenticatedAppIntelligenceRoute =
+  AuthenticatedAppIntelligenceRouteImport.update({
+    id: '/intelligence',
+    path: '/intelligence',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
+const AuthenticatedAppInventoryRoute =
+  AuthenticatedAppInventoryRouteImport.update({
+    id: '/inventory',
+    path: '/inventory',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
+const AuthenticatedAppKdsRoute = AuthenticatedAppKdsRouteImport.update({
+  id: '/kds',
+  path: '/kds',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
 const AuthenticatedAppLocationsRoute =
   AuthenticatedAppLocationsRouteImport.update({
     id: '/locations',
     path: '/locations',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppMenuRoute = AuthenticatedAppMenuRouteImport.update({
+  id: '/menu',
+  path: '/menu',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
+const AuthenticatedAppPosRoute = AuthenticatedAppPosRouteImport.update({
+  id: '/pos',
+  path: '/pos',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
 const AuthenticatedAppTeamRoute = AuthenticatedAppTeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -119,10 +159,22 @@ const AuthenticatedControlOrganizationsRoute =
     path: '/organizations',
     getParentRoute: () => AuthenticatedControlRoute,
   } as any)
+const AuthenticatedControlPlansRoute =
+  AuthenticatedControlPlansRouteImport.update({
+    id: '/plans',
+    path: '/plans',
+    getParentRoute: () => AuthenticatedControlRoute,
+  } as any)
 const AuthenticatedControlSettingsRoute =
   AuthenticatedControlSettingsRouteImport.update({
     id: '/settings',
     path: '/settings',
+    getParentRoute: () => AuthenticatedControlRoute,
+  } as any)
+const AuthenticatedControlSubscriptionsRoute =
+  AuthenticatedControlSubscriptionsRouteImport.update({
+    id: '/subscriptions',
+    path: '/subscriptions',
     getParentRoute: () => AuthenticatedControlRoute,
   } as any)
 const AuthenticatedAppSettingsBillingRoute =
@@ -147,13 +199,21 @@ export interface FileRoutesByFullPath {
   '/control': typeof AuthenticatedControlRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/finance': typeof AuthenticatedAppFinanceRoute
+  '/intelligence': typeof AuthenticatedAppIntelligenceRoute
+  '/inventory': typeof AuthenticatedAppInventoryRoute
+  '/kds': typeof AuthenticatedAppKdsRoute
   '/locations': typeof AuthenticatedAppLocationsRoute
+  '/menu': typeof AuthenticatedAppMenuRoute
+  '/pos': typeof AuthenticatedAppPosRoute
   '/team': typeof AuthenticatedAppTeamRoute
   '/control/admins': typeof AuthenticatedControlAdminsRoute
   '/control/audit': typeof AuthenticatedControlAuditRoute
   '/control/demo': typeof AuthenticatedControlDemoRoute
   '/control/organizations': typeof AuthenticatedControlOrganizationsRoute
+  '/control/plans': typeof AuthenticatedControlPlansRoute
   '/control/settings': typeof AuthenticatedControlSettingsRoute
+  '/control/subscriptions': typeof AuthenticatedControlSubscriptionsRoute
   '/control/': typeof AuthenticatedControlIndexRoute
   '/settings/billing': typeof AuthenticatedAppSettingsBillingRoute
   '/settings/branding': typeof AuthenticatedAppSettingsBrandingRoute
@@ -166,13 +226,21 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/finance': typeof AuthenticatedAppFinanceRoute
+  '/intelligence': typeof AuthenticatedAppIntelligenceRoute
+  '/inventory': typeof AuthenticatedAppInventoryRoute
+  '/kds': typeof AuthenticatedAppKdsRoute
   '/locations': typeof AuthenticatedAppLocationsRoute
+  '/menu': typeof AuthenticatedAppMenuRoute
+  '/pos': typeof AuthenticatedAppPosRoute
   '/team': typeof AuthenticatedAppTeamRoute
   '/control/admins': typeof AuthenticatedControlAdminsRoute
   '/control/audit': typeof AuthenticatedControlAuditRoute
   '/control/demo': typeof AuthenticatedControlDemoRoute
   '/control/organizations': typeof AuthenticatedControlOrganizationsRoute
+  '/control/plans': typeof AuthenticatedControlPlansRoute
   '/control/settings': typeof AuthenticatedControlSettingsRoute
+  '/control/subscriptions': typeof AuthenticatedControlSubscriptionsRoute
   '/control': typeof AuthenticatedControlIndexRoute
   '/settings/billing': typeof AuthenticatedAppSettingsBillingRoute
   '/settings/branding': typeof AuthenticatedAppSettingsBrandingRoute
@@ -188,13 +256,21 @@ export interface FileRoutesById {
   '/_authenticated/control': typeof AuthenticatedControlRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/invite/$token': typeof InviteTokenRoute
+  '/_authenticated/_app/finance': typeof AuthenticatedAppFinanceRoute
+  '/_authenticated/_app/intelligence': typeof AuthenticatedAppIntelligenceRoute
+  '/_authenticated/_app/inventory': typeof AuthenticatedAppInventoryRoute
+  '/_authenticated/_app/kds': typeof AuthenticatedAppKdsRoute
   '/_authenticated/_app/locations': typeof AuthenticatedAppLocationsRoute
+  '/_authenticated/_app/menu': typeof AuthenticatedAppMenuRoute
+  '/_authenticated/_app/pos': typeof AuthenticatedAppPosRoute
   '/_authenticated/_app/team': typeof AuthenticatedAppTeamRoute
   '/_authenticated/control/admins': typeof AuthenticatedControlAdminsRoute
   '/_authenticated/control/audit': typeof AuthenticatedControlAuditRoute
   '/_authenticated/control/demo': typeof AuthenticatedControlDemoRoute
   '/_authenticated/control/organizations': typeof AuthenticatedControlOrganizationsRoute
+  '/_authenticated/control/plans': typeof AuthenticatedControlPlansRoute
   '/_authenticated/control/settings': typeof AuthenticatedControlSettingsRoute
+  '/_authenticated/control/subscriptions': typeof AuthenticatedControlSubscriptionsRoute
   '/_authenticated/_app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/control/': typeof AuthenticatedControlIndexRoute
   '/_authenticated/_app/settings/billing': typeof AuthenticatedAppSettingsBillingRoute
@@ -211,13 +287,21 @@ export interface FileRouteTypes {
     | '/control'
     | '/onboarding'
     | '/invite/$token'
+    | '/finance'
+    | '/intelligence'
+    | '/inventory'
+    | '/kds'
     | '/locations'
+    | '/menu'
+    | '/pos'
     | '/team'
     | '/control/admins'
     | '/control/audit'
     | '/control/demo'
     | '/control/organizations'
+    | '/control/plans'
     | '/control/settings'
+    | '/control/subscriptions'
     | '/control/'
     | '/settings/billing'
     | '/settings/branding'
@@ -230,13 +314,21 @@ export interface FileRouteTypes {
     | '/signup'
     | '/onboarding'
     | '/invite/$token'
+    | '/finance'
+    | '/intelligence'
+    | '/inventory'
+    | '/kds'
     | '/locations'
+    | '/menu'
+    | '/pos'
     | '/team'
     | '/control/admins'
     | '/control/audit'
     | '/control/demo'
     | '/control/organizations'
+    | '/control/plans'
     | '/control/settings'
+    | '/control/subscriptions'
     | '/control'
     | '/settings/billing'
     | '/settings/branding'
@@ -251,13 +343,21 @@ export interface FileRouteTypes {
     | '/_authenticated/control'
     | '/_authenticated/onboarding'
     | '/invite/$token'
+    | '/_authenticated/_app/finance'
+    | '/_authenticated/_app/intelligence'
+    | '/_authenticated/_app/inventory'
+    | '/_authenticated/_app/kds'
     | '/_authenticated/_app/locations'
+    | '/_authenticated/_app/menu'
+    | '/_authenticated/_app/pos'
     | '/_authenticated/_app/team'
     | '/_authenticated/control/admins'
     | '/_authenticated/control/audit'
     | '/_authenticated/control/demo'
     | '/_authenticated/control/organizations'
+    | '/_authenticated/control/plans'
     | '/_authenticated/control/settings'
+    | '/_authenticated/control/subscriptions'
     | '/_authenticated/_app/'
     | '/_authenticated/control/'
     | '/_authenticated/_app/settings/billing'
@@ -345,11 +445,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/finance': {
+      id: '/_authenticated/_app/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof AuthenticatedAppFinanceRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/intelligence': {
+      id: '/_authenticated/_app/intelligence'
+      path: '/intelligence'
+      fullPath: '/intelligence'
+      preLoaderRoute: typeof AuthenticatedAppIntelligenceRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/inventory': {
+      id: '/_authenticated/_app/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof AuthenticatedAppInventoryRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/kds': {
+      id: '/_authenticated/_app/kds'
+      path: '/kds'
+      fullPath: '/kds'
+      preLoaderRoute: typeof AuthenticatedAppKdsRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/_app/locations': {
       id: '/_authenticated/_app/locations'
       path: '/locations'
       fullPath: '/locations'
       preLoaderRoute: typeof AuthenticatedAppLocationsRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/menu': {
+      id: '/_authenticated/_app/menu'
+      path: '/menu'
+      fullPath: '/menu'
+      preLoaderRoute: typeof AuthenticatedAppMenuRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/pos': {
+      id: '/_authenticated/_app/pos'
+      path: '/pos'
+      fullPath: '/pos'
+      preLoaderRoute: typeof AuthenticatedAppPosRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
     '/_authenticated/_app/team': {
@@ -394,11 +536,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedControlOrganizationsRouteImport
       parentRoute: typeof AuthenticatedControlRoute
     }
+    '/_authenticated/control/plans': {
+      id: '/_authenticated/control/plans'
+      path: '/plans'
+      fullPath: '/control/plans'
+      preLoaderRoute: typeof AuthenticatedControlPlansRouteImport
+      parentRoute: typeof AuthenticatedControlRoute
+    }
     '/_authenticated/control/settings': {
       id: '/_authenticated/control/settings'
       path: '/settings'
       fullPath: '/control/settings'
       preLoaderRoute: typeof AuthenticatedControlSettingsRouteImport
+      parentRoute: typeof AuthenticatedControlRoute
+    }
+    '/_authenticated/control/subscriptions': {
+      id: '/_authenticated/control/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/control/subscriptions'
+      preLoaderRoute: typeof AuthenticatedControlSubscriptionsRouteImport
       parentRoute: typeof AuthenticatedControlRoute
     }
     '/_authenticated/_app/settings/billing': {
@@ -419,7 +575,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAppRouteRouteChildren {
+  AuthenticatedAppFinanceRoute: typeof AuthenticatedAppFinanceRoute
+  AuthenticatedAppIntelligenceRoute: typeof AuthenticatedAppIntelligenceRoute
+  AuthenticatedAppInventoryRoute: typeof AuthenticatedAppInventoryRoute
+  AuthenticatedAppKdsRoute: typeof AuthenticatedAppKdsRoute
   AuthenticatedAppLocationsRoute: typeof AuthenticatedAppLocationsRoute
+  AuthenticatedAppMenuRoute: typeof AuthenticatedAppMenuRoute
+  AuthenticatedAppPosRoute: typeof AuthenticatedAppPosRoute
   AuthenticatedAppTeamRoute: typeof AuthenticatedAppTeamRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppSettingsBillingRoute: typeof AuthenticatedAppSettingsBillingRoute
@@ -427,7 +589,13 @@ interface AuthenticatedAppRouteRouteChildren {
 }
 
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
+  AuthenticatedAppFinanceRoute: AuthenticatedAppFinanceRoute,
+  AuthenticatedAppIntelligenceRoute: AuthenticatedAppIntelligenceRoute,
+  AuthenticatedAppInventoryRoute: AuthenticatedAppInventoryRoute,
+  AuthenticatedAppKdsRoute: AuthenticatedAppKdsRoute,
   AuthenticatedAppLocationsRoute: AuthenticatedAppLocationsRoute,
+  AuthenticatedAppMenuRoute: AuthenticatedAppMenuRoute,
+  AuthenticatedAppPosRoute: AuthenticatedAppPosRoute,
   AuthenticatedAppTeamRoute: AuthenticatedAppTeamRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppSettingsBillingRoute: AuthenticatedAppSettingsBillingRoute,
@@ -444,7 +612,9 @@ interface AuthenticatedControlRouteChildren {
   AuthenticatedControlAuditRoute: typeof AuthenticatedControlAuditRoute
   AuthenticatedControlDemoRoute: typeof AuthenticatedControlDemoRoute
   AuthenticatedControlOrganizationsRoute: typeof AuthenticatedControlOrganizationsRoute
+  AuthenticatedControlPlansRoute: typeof AuthenticatedControlPlansRoute
   AuthenticatedControlSettingsRoute: typeof AuthenticatedControlSettingsRoute
+  AuthenticatedControlSubscriptionsRoute: typeof AuthenticatedControlSubscriptionsRoute
   AuthenticatedControlIndexRoute: typeof AuthenticatedControlIndexRoute
 }
 
@@ -454,7 +624,10 @@ const AuthenticatedControlRouteChildren: AuthenticatedControlRouteChildren = {
   AuthenticatedControlDemoRoute: AuthenticatedControlDemoRoute,
   AuthenticatedControlOrganizationsRoute:
     AuthenticatedControlOrganizationsRoute,
+  AuthenticatedControlPlansRoute: AuthenticatedControlPlansRoute,
   AuthenticatedControlSettingsRoute: AuthenticatedControlSettingsRoute,
+  AuthenticatedControlSubscriptionsRoute:
+    AuthenticatedControlSubscriptionsRoute,
   AuthenticatedControlIndexRoute: AuthenticatedControlIndexRoute,
 }
 

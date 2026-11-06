@@ -1,12 +1,46 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import {
+  fetchOperationalResources,
+  saveOperationalRecord,
+  fetchOperationalOrders,
+  fetchOperationalMenu,
+} from "@/lib/operational.functions";
+import { mapResources, type Resources } from "@/lib/operational-mappers";
+import { ledgerMetrics } from "@/lib/operational-metrics";
+import type { Order } from "@/lib/orders-service";
+import type { MenuItem } from "@/lib/menu-service";
 import { useTranslation } from "react-i18next";
 import {
-  Landmark, DollarSign, TrendingUp, TrendingDown, Calendar, Plus,
-  AlertCircle, CheckCircle2, Clock, Trash2, Edit2, ShieldAlert,
-  Filter, PieChart as PieChartIcon, FileText, ArrowUpRight, ArrowDownRight, Tag
+  Landmark,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  Plus,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  Edit2,
+  ShieldAlert,
+  Filter,
+  PieChart as PieChartIcon,
+  FileText,
+  ArrowUpRight,
+  ArrowDownRight,
+  Tag,
 } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Cell,
+} from "recharts";
 import { toast } from "sonner";
 
 import { useWorkspace } from "@/components/app/workspace-context";
@@ -15,15 +49,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  listExpenses, saveExpense, deleteExpense, updateExpenseStatus,
-  computeFinanceSummary, generateMonthlyTrend, buildCashFlowTimeline, formatUsd,
-  calculateDreStatement, calculateProductMargins, calculateCategoryMargins,
+  listExpenses,
+  saveExpense,
+  deleteExpense,
+  updateExpenseStatus,
+  computeFinanceSummary,
+  generateMonthlyTrend,
+  buildCashFlowTimeline,
+  formatUsd,
+  calculateDreStatement,
+  calculateProductMargins,
+  calculateCategoryMargins,
   compareStoreFinancials,
-  type Expense, type ExpenseCategory, type ExpenseRecurrence, type ExpenseStatus,
-  type CashFlowGranularity
+  type Expense,
+  type ExpenseCategory,
+  type ExpenseRecurrence,
+  type ExpenseStatus,
+  type CashFlowGranularity,
 } from "@/lib/finance-service";
 import { FinanceReports } from "@/components/finance/finance-reports";
 import { listMenuProducts } from "@/lib/menu-service";
@@ -31,7 +81,17 @@ import { listOrders } from "@/lib/orders-service";
 
 export const Route = createFileRoute("/_authenticated/_app/finance")({
   head: () => ({
-    meta: [{ title: "Financial Management · Servora" }],
+    meta: [
+      { title: "Financial Management · Servora" },
+      { name: "description", content: "Recorded restaurant revenue, expenses and recipe cost." },
+      { property: "og:title", content: "Financial Management · Servora" },
+      {
+        property: "og:description",
+        content: "Recorded restaurant revenue, expenses and recipe cost.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
   }),
   component: FinancePage,
 });
@@ -52,15 +112,69 @@ export function FinancePage() {
   const { t } = useTranslation("finance");
   const { org, locationId, role } = useWorkspace();
   const canManage = role !== "staff";
+  // Owners are org-wide; managers/staff are limited to their authorized stores.
+  const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
 
-  const [expenses, setExpenses] = useState<Expense[]>(() => listExpenses(org.id, locationId));
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [entries, setEntries] = useState<Resources["finance"]>([]);
+  const [products, setProducts] = useState<MenuItem[]>([]);
+  const expenses = allExpenses.filter((e) => locationId === "all" || e.locationId === locationId);
+  const ledger = ledgerMetrics(
+    entries.filter(
+      (e) =>
+        locationId === "all" ||
+        org.locations.find((l) => l.id === locationId)?.dbId === e.location_id,
+    ),
+  );
+  const [saving, setSaving] = useState(false);
+  async function reloadFinance() {
+    const [r, o, m] = await Promise.all([
+      fetchOperationalResources({ data: { orgId: org.id } }),
+      fetchOperationalOrders({ data: { orgId: org.id, limit: 200 } }),
+      fetchOperationalMenu({ data: { orgId: org.id } }),
+    ]);
+    setAllExpenses(mapResources(r).expenses);
+    setAllOrders(o.orders);
+    setEntries(r.finance);
+    setProducts(m.items);
+  }
+  useEffect(() => {
+    let active = true;
+    setAllExpenses([]);
+    setAllOrders([]);
+    setEntries([]);
+    setProducts([]);
+    Promise.all([
+      fetchOperationalResources({ data: { orgId: org.id } }),
+      fetchOperationalOrders({ data: { orgId: org.id, limit: 200 } }),
+      fetchOperationalMenu({ data: { orgId: org.id } }),
+    ])
+      .then(([r, o, m]) => {
+        if (!active) return;
+        setAllExpenses(mapResources(r).expenses);
+        setAllOrders(o.orders);
+        setEntries(r.finance);
+        setProducts(m.items);
+      })
+      .catch(() => {
+        if (active) toast.error(t("errors.generic"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [org.id]);
   const [statusFilter, setStatusFilter] = useState<ExpenseStatus | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | "all">("all");
   const [recurrenceFilter, setRecurrenceFilter] = useState<ExpenseRecurrence | "all">("all");
   const [search, setSearch] = useState("");
-  const [viewTab, setViewTab] = useState<"overview" | "comparison" | "dre" | "cashflow" | "payables" | "reports">("overview");
+  const [viewTab, setViewTab] = useState<
+    "overview" | "comparison" | "dre" | "cashflow" | "payables" | "reports"
+  >("overview");
   const [cfGranularity, setCfGranularity] = useState<CashFlowGranularity>("monthly");
-  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(() => org.locations.map((l) => l.id));
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(() =>
+    org.locations.map((l) => l.id),
+  );
 
   // Modal states
   const [formOpen, setFormOpen] = useState(false);
@@ -73,33 +187,37 @@ export function FinancePage() {
   const [formCategory, setFormCategory] = useState<ExpenseCategory>("suppliers");
   const [formRecurrence, setFormRecurrence] = useState<ExpenseRecurrence>("fixed");
   const [formStatus, setFormStatus] = useState<ExpenseStatus>("pending");
-  const [formDueDate, setFormDueDate] = useState(() => new Date().toISOString().split("T")[0] || "");
+  const [formDueDate, setFormDueDate] = useState(
+    () => new Date().toISOString().split("T")[0] || "",
+  );
   const [formSupplier, setFormSupplier] = useState("");
   const [formResponsible, setFormResponsible] = useState("");
 
   // Pull sales orders to compute revenue, separating real paid orders from simulated/unfulfilled ones
-  const orders = useMemo(() => listOrders(org.id, locationId), [org.id, locationId]);
+  const orders = allOrders.filter((o) => locationId === "all" || o.locationId === locationId);
   const realSalesCents = useMemo(() => {
     return orders
-      .filter((o) => o.status === "delivered" && !o.isSimulated)
-      .reduce((sum, o) => sum + o.totalCents, 0);
+      .filter((o) => o.status !== "cancelled" && !o.isSimulated)
+      .reduce((sum, o) => sum + o.subtotalCents, 0);
   }, [orders]);
 
   const simulatedSalesCents = useMemo(() => {
-    return orders
-      .filter((o) => o.isSimulated)
-      .reduce((sum, o) => sum + o.totalCents, 0);
+    return orders.filter((o) => o.isSimulated).reduce((sum, o) => sum + o.totalCents, 0);
   }, [orders]);
 
   const discountsCents = useMemo(() => {
-    return orders.filter((o) => !o.isSimulated).reduce((sum, o) => sum + (o.discountCents || 0), 0);
+    return orders
+      .filter((o) => !o.isSimulated && o.status !== "cancelled")
+      .reduce((sum, o) => sum + (o.discountCents || 0), 0);
   }, [orders]);
 
   const taxesCents = useMemo(() => {
-    return orders.filter((o) => !o.isSimulated).reduce((sum, o) => sum + (o.taxCents || 0), 0);
+    return orders
+      .filter((o) => !o.isSimulated && o.status !== "cancelled")
+      .reduce((sum, o) => sum + (o.taxCents || 0), 0);
   }, [orders]);
 
-  const menuProducts = useMemo(() => listMenuProducts(org.id), [org.id]);
+  const menuProducts = products;
 
   // Calculate product margins and overall COGS
   const productMargins = useMemo(() => {
@@ -107,11 +225,11 @@ export function FinancePage() {
       menuProducts.map((p, idx) => ({
         id: p.id,
         name: p.name,
-        category: p.categoryName || "Burgers & Sandwiches",
+        category: p.category,
         priceCents: p.priceCents,
-        recipeCostCents: Math.round(p.priceCents * (0.24 + (idx % 3) * 0.05)),
-        unitsSold: 45 + (idx * 15),
-      }))
+        recipeCostCents: 0,
+        unitsSold: 0,
+      })),
     );
   }, [menuProducts]);
 
@@ -120,28 +238,34 @@ export function FinancePage() {
   }, [productMargins]);
 
   const totalCogsCents = useMemo(() => {
-    return productMargins.reduce((sum, p) => sum + p.cogsCents, 0);
-  }, [productMargins]);
+    return ledger.cogsCents;
+  }, [ledger.cogsCents]);
 
   const dreStatement = useMemo(() => {
-    const baselineRevenue = realSalesCents > 0 ? realSalesCents : 4850000;
-    const safeTaxes = taxesCents > 0 ? taxesCents : Math.round(baselineRevenue * 0.0825);
-    const safeDiscounts = discountsCents > 0 ? discountsCents : Math.round(baselineRevenue * 0.02);
-    const safeCogs = totalCogsCents > 0 ? totalCogsCents : Math.round(baselineRevenue * 0.29);
-    return calculateDreStatement(baselineRevenue, safeDiscounts, safeTaxes, safeCogs, expenses, simulatedSalesCents);
-  }, [realSalesCents, taxesCents, discountsCents, totalCogsCents, expenses, simulatedSalesCents]);
+    // The ledger already excludes tax and discounts. Never manufacture a baseline.
+    return calculateDreStatement(
+      ledger.revenueCents,
+      0,
+      0,
+      totalCogsCents,
+      expenses,
+      simulatedSalesCents,
+    );
+  }, [ledger.revenueCents, totalCogsCents, expenses, simulatedSalesCents]);
 
   // Multi-Store Comparison calculations
-  const allOrgExpenses = useMemo(() => listExpenses(org.id), [org.id]);
-  const allOrgOrders = useMemo(() => listOrders(org.id), [org.id]);
+  const allOrgExpenses = allExpenses;
+  const allOrgOrders = allOrders;
 
   const storeComparison = useMemo(() => {
-    const activeLocations = org.locations.filter((l) =>
-      selectedLocationIds.length === 0 || selectedLocationIds.includes(l.id)
+    const activeLocations = org.locations.filter(
+      (l) => selectedLocationIds.length === 0 || selectedLocationIds.includes(l.id),
     );
     const inputs = activeLocations.map((loc) => {
       const locOrders = allOrgOrders.filter((o) => o.locationId === loc.id);
-      const locExpenses = allOrgExpenses.filter((e) => e.locationId === loc.id || e.locationId === "all");
+      const locExpenses = allOrgExpenses.filter(
+        (e) => e.locationId === loc.id || e.locationId === "all",
+      );
       return {
         id: loc.id,
         name: loc.name,
@@ -161,18 +285,16 @@ export function FinancePage() {
 
   // Finance metrics
   const summary = useMemo(() => {
-    return computeFinanceSummary(expenses, realSalesCents, simulatedSalesCents);
-  }, [expenses, realSalesCents, simulatedSalesCents]);
+    return computeFinanceSummary(expenses, ledger.revenueCents, simulatedSalesCents, 0);
+  }, [expenses, ledger.revenueCents, simulatedSalesCents]);
 
   const monthlyTrend = useMemo(() => {
-    const effectiveRevenue = realSalesCents > 0 ? realSalesCents : 4250000; // Benchmark baseline if no delivered orders yet
-    return generateMonthlyTrend(summary.totalExpensesCents, effectiveRevenue);
+    return [];
   }, [summary.totalExpensesCents, realSalesCents]);
 
   const cashFlowTimeline = useMemo(() => {
-    const effectiveRevenue = realSalesCents > 0 ? realSalesCents : 4250000;
-    return buildCashFlowTimeline(expenses, effectiveRevenue, cfGranularity, 1500000);
-  }, [expenses, realSalesCents, cfGranularity]);
+    return buildCashFlowTimeline(expenses, ledger.revenueCents, cfGranularity, 0);
+  }, [expenses, ledger.revenueCents, cfGranularity]);
 
   // Filtered expenses list
   const filteredExpenses = useMemo(() => {
@@ -216,7 +338,7 @@ export function FinancePage() {
     setFormOpen(true);
   };
 
-  const handleSaveExpense = () => {
+  const handleSaveExpense = async () => {
     if (!formDescription.trim()) {
       toast.error(t("errors.descriptionRequired"));
       return;
@@ -228,41 +350,86 @@ export function FinancePage() {
     }
     const amountCents = Math.round(val * 100);
 
-    const saved = saveExpense({
-      id: editingExpense?.id,
-      orgId: org.id,
-      locationId: locationId === "all" ? (org.locations[0]?.id || "all") : locationId,
-      category: formCategory,
-      recurrence: formRecurrence,
-      status: formStatus,
-      supplierName: formSupplier.trim() || undefined,
-      description: formDescription.trim(),
-      amountCents,
-      currency: "usd",
-      dueDate: formDueDate,
-      competencyDate: formDueDate.substring(0, 7) + "-01",
-      responsiblePerson: formResponsible.trim() || "Store Manager",
-      isSimulation: false,
-    });
-
-    setExpenses(listExpenses(org.id, locationId));
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          locationId: locationId === "all" ? org.locations[0]?.id : locationId,
+          kind: "expense",
+          payload: {
+            ...(editingExpense ? { id: editingExpense.id } : {}),
+            orgId: org.id,
+            locationId: locationId === "all" ? org.locations[0]?.id || "all" : locationId,
+            category: formCategory,
+            recurrence: formRecurrence,
+            status: formStatus,
+            supplierName: formSupplier.trim(),
+            description: formDescription.trim(),
+            amountCents,
+            currency: "usd",
+            dueDate: formDueDate,
+            competencyDate: formDueDate.substring(0, 7) + "-01",
+            responsiblePerson: formResponsible.trim() || "Store Manager",
+            isSimulation: false,
+          },
+        },
+      });
+      await reloadFinance();
+    } catch {
+      toast.error(t("errors.generic", { defaultValue: "Action not allowed for this store" }));
+      return;
+    } finally {
+      setSaving(false);
+    }
     setFormOpen(false);
     toast.success(editingExpense ? t("expenseUpdated") : t("expenseCreated"));
   };
 
-  const handleDeleteExpense = (id: string) => {
+  const handleDeleteExpense = async (id: string) => {
     if (!canManage) return;
-    deleteExpense(id);
-    setExpenses(listExpenses(org.id, locationId));
+    try {
+      const exp = expenses.find((e) => e.id === id);
+      if (!exp) return;
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          locationId: exp.locationId,
+          kind: "expense",
+          payload: { ...exp, active: false },
+        },
+      });
+      await reloadFinance();
+    } catch {
+      toast.error(t("errors.generic", { defaultValue: "Action not allowed for this store" }));
+      return;
+    }
     setDeleteConfirmId(null);
     toast.success(t("expenseDeleted"));
   };
 
-  const handleToggleStatus = (exp: Expense) => {
+  const handleToggleStatus = async (exp: Expense) => {
     if (!canManage) return;
     const nextStatus: ExpenseStatus = exp.status === "paid" ? "pending" : "paid";
-    updateExpenseStatus(exp.id, nextStatus);
-    setExpenses(listExpenses(org.id, locationId));
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          locationId: exp.locationId,
+          kind: "expense",
+          payload: {
+            ...exp,
+            status: nextStatus,
+            paidAt: nextStatus === "paid" ? new Date().toISOString() : "",
+          },
+        },
+      });
+      await reloadFinance();
+    } catch {
+      toast.error(t("errors.generic", { defaultValue: "Action not allowed for this store" }));
+      return;
+    }
     toast.success(t("statusChanged"));
   };
 
@@ -294,7 +461,9 @@ export function FinancePage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">{t("metrics.netProfit")}</span>
+            <span className="text-xs font-medium uppercase tracking-wider">
+              {t("metrics.netProfit")}
+            </span>
             <TrendingUp className="size-4 text-primary" />
           </div>
           <p className="tabular mt-2 text-2xl font-bold tracking-tight">
@@ -302,13 +471,17 @@ export function FinancePage() {
           </p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>{t("metrics.margin")}:</span>
-            <span className="font-semibold text-foreground">{summary.marginPercent.toFixed(1)}%</span>
+            <span className="font-semibold text-foreground">
+              {summary.marginPercent.toFixed(1)}%
+            </span>
           </div>
         </div>
 
         <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">{t("metrics.totalExpenses")}</span>
+            <span className="text-xs font-medium uppercase tracking-wider">
+              {t("metrics.totalExpenses")}
+            </span>
             <TrendingDown className="size-4 text-destructive" />
           </div>
           <p className="tabular mt-2 text-2xl font-bold tracking-tight text-destructive">
@@ -323,7 +496,9 @@ export function FinancePage() {
 
         <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">{t("metrics.payablesPending")}</span>
+            <span className="text-xs font-medium uppercase tracking-wider">
+              {t("metrics.payablesPending")}
+            </span>
             <Clock className="size-4 text-amber-500" />
           </div>
           <p className="tabular mt-2 text-2xl font-bold tracking-tight text-amber-600">
@@ -331,20 +506,26 @@ export function FinancePage() {
           </p>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>{t("metrics.overdue")}:</span>
-            <span className="font-bold text-destructive">{formatUsd(summary.overduePayablesCents)}</span>
+            <span className="font-bold text-destructive">
+              {formatUsd(summary.overduePayablesCents)}
+            </span>
           </div>
         </div>
 
         <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium uppercase tracking-wider">{t("metrics.paidThisMonth")}</span>
+            <span className="text-xs font-medium uppercase tracking-wider">
+              {t("metrics.paidThisMonth")}
+            </span>
             <CheckCircle2 className="size-4 text-emerald-500" />
           </div>
           <p className="tabular mt-2 text-2xl font-bold tracking-tight text-emerald-600">
             {formatUsd(summary.paidCents)}
           </p>
           <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-            <span>{expenses.filter((e) => e.status === "paid").length} {t("table.paid")}</span>
+            <span>
+              {expenses.filter((e) => e.status === "paid").length} {t("table.paid")}
+            </span>
           </div>
         </div>
       </div>
@@ -355,11 +536,16 @@ export function FinancePage() {
           <DollarSign className="size-4 text-primary shrink-0" />
           <div>
             <span className="font-medium text-foreground">{t("audit.salesRevenueTitle")}: </span>
-            <span className="text-muted-foreground">{formatUsd(summary.totalRevenueCents)} {t("audit.salesRevenueDesc")}</span>
+            <span className="text-muted-foreground">
+              {formatUsd(summary.totalRevenueCents)} {t("audit.salesRevenueDesc")}
+            </span>
           </div>
         </div>
         {summary.simulatedRevenueCents > 0 && (
-          <Badge variant="outline" className="border-amber-500/40 text-amber-600 bg-amber-500/5 text-[11px]">
+          <Badge
+            variant="outline"
+            className="border-amber-500/40 text-amber-600 bg-amber-500/5 text-[11px]"
+          >
             {t("audit.simulationNotice")}: {formatUsd(summary.simulatedRevenueCents)}
           </Badge>
         )}
@@ -371,7 +557,9 @@ export function FinancePage() {
           type="button"
           onClick={() => setViewTab("overview")}
           className={`px-3 py-1.5 rounded-md transition-colors ${
-            viewTab === "overview" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
+            viewTab === "overview"
+              ? "bg-primary text-primary-foreground font-semibold"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {t("tabs.overview")}
@@ -380,7 +568,9 @@ export function FinancePage() {
           type="button"
           onClick={() => setViewTab("comparison")}
           className={`px-3 py-1.5 rounded-md transition-colors ${
-            viewTab === "comparison" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
+            viewTab === "comparison"
+              ? "bg-primary text-primary-foreground font-semibold"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {t("tabs.comparison")}
@@ -389,7 +579,9 @@ export function FinancePage() {
           type="button"
           onClick={() => setViewTab("dre")}
           className={`px-3 py-1.5 rounded-md transition-colors ${
-            viewTab === "dre" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
+            viewTab === "dre"
+              ? "bg-primary text-primary-foreground font-semibold"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {t("tabs.dre")}
@@ -398,7 +590,9 @@ export function FinancePage() {
           type="button"
           onClick={() => setViewTab("cashflow")}
           className={`px-3 py-1.5 rounded-md transition-colors ${
-            viewTab === "cashflow" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
+            viewTab === "cashflow"
+              ? "bg-primary text-primary-foreground font-semibold"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {t("tabs.cashflow")}
@@ -407,7 +601,9 @@ export function FinancePage() {
           type="button"
           onClick={() => setViewTab("payables")}
           className={`px-3 py-1.5 rounded-md transition-colors ${
-            viewTab === "payables" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
+            viewTab === "payables"
+              ? "bg-primary text-primary-foreground font-semibold"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {t("tabs.payables")}
@@ -416,7 +612,9 @@ export function FinancePage() {
           type="button"
           onClick={() => setViewTab("reports")}
           className={`px-3 py-1.5 rounded-md transition-colors ${
-            viewTab === "reports" ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:bg-muted"
+            viewTab === "reports"
+              ? "bg-primary text-primary-foreground font-semibold"
+              : "text-muted-foreground hover:bg-muted"
           }`}
         >
           {t("tabs.reports")}
@@ -444,7 +642,9 @@ export function FinancePage() {
             {/* Store Selection Filters */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-medium text-muted-foreground">{t("comparison.filterStores")}:</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t("comparison.filterStores")}:
+                </span>
                 {org.locations.map((loc) => {
                   const isChecked = selectedLocationIds.includes(loc.id);
                   return (
@@ -453,7 +653,9 @@ export function FinancePage() {
                       type="button"
                       onClick={() => {
                         setSelectedLocationIds((prev) =>
-                          prev.includes(loc.id) ? prev.filter((id) => id !== loc.id) : [...prev, loc.id]
+                          prev.includes(loc.id)
+                            ? prev.filter((id) => id !== loc.id)
+                            : [...prev, loc.id],
                         );
                       }}
                       className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
@@ -468,43 +670,96 @@ export function FinancePage() {
                 })}
               </div>
               <div className="text-xs text-muted-foreground">
-                <span>{storeComparison.stores.length} {t("comparison.storesAnalyzed")}</span>
+                <span>
+                  {storeComparison.stores.length} {t("comparison.storesAnalyzed")}
+                </span>
               </div>
             </div>
 
             {/* Benchmarks Header Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 pb-2">
               <div className="rounded-lg border bg-muted/10 p-3.5">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t("comparison.topRevenueStore")}</p>
-                <p className="text-lg font-bold mt-1 text-foreground">{storeComparison.topRevenueStoreName}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Total: {formatUsd(storeComparison.benchmarkTotalGrossRevenueCents)}</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("comparison.topRevenueStore")}
+                </p>
+                <p className="text-lg font-bold mt-1 text-foreground">
+                  {storeComparison.topRevenueStoreName}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Total: {formatUsd(storeComparison.benchmarkTotalGrossRevenueCents)}
+                </p>
               </div>
               <div className="rounded-lg border bg-emerald-500/5 border-emerald-500/20 p-3.5">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">{t("comparison.topMarginStore")}</p>
-                <p className="text-lg font-bold mt-1 text-emerald-600">{storeComparison.topMarginStoreName}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Benchmark Avg: {storeComparison.benchmarkAvgMarginPct.toFixed(1)}%</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">
+                  {t("comparison.topMarginStore")}
+                </p>
+                <p className="text-lg font-bold mt-1 text-emerald-600">
+                  {storeComparison.topMarginStoreName}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Benchmark Avg: {storeComparison.benchmarkAvgMarginPct.toFixed(1)}%
+                </p>
               </div>
               <div className="rounded-lg border bg-amber-500/5 border-amber-500/20 p-3.5">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-amber-600">{t("comparison.highestExpenseStore")}</p>
-                <p className="text-lg font-bold mt-1 text-foreground">{storeComparison.highestExpenseStoreName}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Total Net: {formatUsd(storeComparison.benchmarkTotalNetProfitCents)}</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-amber-600">
+                  {t("comparison.highestExpenseStore")}
+                </p>
+                <p className="text-lg font-bold mt-1 text-foreground">
+                  {storeComparison.highestExpenseStoreName}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Total Net: {formatUsd(storeComparison.benchmarkTotalNetProfitCents)}
+                </p>
               </div>
             </div>
 
             {/* Comparison Chart */}
             <div className="h-[260px] w-full pt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={storeComparison.stores} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <BarChart
+                  data={storeComparison.stores}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                >
                   <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
-                  <XAxis dataKey="locationName" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `$${v / 100000}k`} />
+                  <XAxis
+                    dataKey="locationName"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    tickFormatter={(v) => `$${v / 100000}k`}
+                  />
                   <Tooltip
-                    contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={{
+                      background: "var(--popover)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
                     formatter={(val: number) => [formatUsd(val), "USD"]}
                   />
-                  <Bar dataKey="grossRevenueCents" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Gross Revenue" />
-                  <Bar dataKey="estimatedNetProfitCents" fill="#10b981" radius={[4, 4, 0, 0]} name="Net Profit" />
-                  <Bar dataKey="operatingExpensesCents" fill="#ef4444" radius={[4, 4, 0, 0]} name="OpEx" />
+                  <Bar
+                    dataKey="grossRevenueCents"
+                    fill="var(--primary)"
+                    radius={[4, 4, 0, 0]}
+                    name="Gross Revenue"
+                  />
+                  <Bar
+                    dataKey="estimatedNetProfitCents"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    name="Net Profit"
+                  />
+                  <Bar
+                    dataKey="operatingExpensesCents"
+                    fill="#ef4444"
+                    radius={[4, 4, 0, 0]}
+                    name="OpEx"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -544,22 +799,38 @@ export function FinancePage() {
                       </td>
                       <td className="p-3 text-right tabular">{s.orderCount}</td>
                       <td className="p-3 text-right tabular">{formatUsd(s.averageTicketCents)}</td>
-                      <td className="p-3 text-right tabular font-medium text-foreground">{formatUsd(s.grossRevenueCents)}</td>
-                      <td className="p-3 text-right tabular text-muted-foreground">{formatUsd(s.cogsCents)} ({s.cogsPct.toFixed(0)}%)</td>
-                      <td className="p-3 text-right tabular text-destructive">{formatUsd(s.operatingExpensesCents)}</td>
-                      <td className="p-3 text-right tabular font-bold text-foreground">{formatUsd(s.estimatedNetProfitCents)}</td>
+                      <td className="p-3 text-right tabular font-medium text-foreground">
+                        {formatUsd(s.grossRevenueCents)}
+                      </td>
+                      <td className="p-3 text-right tabular text-muted-foreground">
+                        {formatUsd(s.cogsCents)} ({s.cogsPct.toFixed(0)}%)
+                      </td>
+                      <td className="p-3 text-right tabular text-destructive">
+                        {formatUsd(s.operatingExpensesCents)}
+                      </td>
+                      <td className="p-3 text-right tabular font-bold text-foreground">
+                        {formatUsd(s.estimatedNetProfitCents)}
+                      </td>
                       <td className="p-3 text-right tabular font-bold">
-                        <span className={s.netMarginPct < 10 ? "text-amber-600" : "text-emerald-600"}>
+                        <span
+                          className={s.netMarginPct < 10 ? "text-amber-600" : "text-emerald-600"}
+                        >
                           {s.netMarginPct.toFixed(1)}%
                         </span>
                       </td>
                       <td className="p-3">
                         {s.status === "realized" ? (
-                          <Badge variant="secondary" className="text-emerald-600 bg-emerald-500/10 text-[10px]">
+                          <Badge
+                            variant="secondary"
+                            className="text-emerald-600 bg-emerald-500/10 text-[10px]"
+                          >
                             {t("comparison.statusRealized")}
                           </Badge>
                         ) : s.status === "simulated" ? (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600 text-[10px]">
+                          <Badge
+                            variant="outline"
+                            className="border-amber-500 text-amber-600 text-[10px]"
+                          >
                             {t("comparison.statusSimulated")}
                           </Badge>
                         ) : (
@@ -589,7 +860,9 @@ export function FinancePage() {
                 </div>
                 <div className="flex justify-between py-1 text-muted-foreground">
                   <span className="pl-4">{t("dre.discounts")}</span>
-                  <span className="text-destructive">-{formatUsd(dreStatement.discountsCents)}</span>
+                  <span className="text-destructive">
+                    -{formatUsd(dreStatement.discountsCents)}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 text-muted-foreground">
                   <span className="pl-4">{t("dre.taxes")}</span>
@@ -604,12 +877,16 @@ export function FinancePage() {
                   <span className="text-destructive">-{formatUsd(dreStatement.cogsCents)}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-t border-b font-semibold text-emerald-600 bg-emerald-500/10 px-2 rounded">
-                  <span>{t("dre.grossProfit")} ({dreStatement.grossMarginPct.toFixed(1)}%)</span>
+                  <span>
+                    {t("dre.grossProfit")} ({dreStatement.grossMarginPct.toFixed(1)}%)
+                  </span>
                   <span>{formatUsd(dreStatement.grossProfitCents)}</span>
                 </div>
                 <div className="flex justify-between py-1 text-muted-foreground">
                   <span className="pl-4">{t("dre.operatingExpenses")}</span>
-                  <span className="text-destructive">-{formatUsd(dreStatement.operatingExpensesCents)}</span>
+                  <span className="text-destructive">
+                    -{formatUsd(dreStatement.operatingExpensesCents)}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 text-[11px] text-muted-foreground pl-8">
                   <span>• {t("dre.fixedExpenses")}</span>
@@ -620,7 +897,9 @@ export function FinancePage() {
                   <span>{formatUsd(dreStatement.variableExpensesCents)}</span>
                 </div>
                 <div className="flex justify-between py-2 border-t font-bold text-base text-primary bg-primary/10 px-2 rounded mt-2">
-                  <span>{t("dre.netProfit")} ({dreStatement.netMarginPct.toFixed(1)}%)</span>
+                  <span>
+                    {t("dre.netProfit")} ({dreStatement.netMarginPct.toFixed(1)}%)
+                  </span>
                   <span>{formatUsd(dreStatement.estimatedNetProfitCents)}</span>
                 </div>
               </div>
@@ -635,10 +914,15 @@ export function FinancePage() {
                       <div key={cm.category} className="space-y-1 text-xs">
                         <div className="flex justify-between font-medium">
                           <span>{cm.category}</span>
-                          <span className="tabular text-muted-foreground">{formatUsd(cm.grossProfitCents)} ({cm.grossMarginPct.toFixed(0)}%)</span>
+                          <span className="tabular text-muted-foreground">
+                            {formatUsd(cm.grossProfitCents)} ({cm.grossMarginPct.toFixed(0)}%)
+                          </span>
                         </div>
                         <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, Math.max(0, cm.grossMarginPct))}%` }} />
+                          <div
+                            className="h-full bg-emerald-500 rounded-full"
+                            style={{ width: `${Math.min(100, Math.max(0, cm.grossMarginPct))}%` }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -672,16 +956,34 @@ export function FinancePage() {
                         <td className="p-3 text-muted-foreground">{pm.category}</td>
                         <td className="p-3 text-right tabular">{pm.unitsSold}</td>
                         <td className="p-3 text-right tabular">{formatUsd(pm.revenueCents)}</td>
-                        <td className="p-3 text-right tabular text-destructive">{formatUsd(pm.cogsCents)}</td>
-                        <td className="p-3 text-right tabular font-bold text-foreground">{formatUsd(pm.grossProfitCents)}</td>
-                        <td className="p-3 text-right tabular font-bold">{pm.grossMarginPct.toFixed(1)}%</td>
+                        <td className="p-3 text-right tabular text-destructive">
+                          {formatUsd(pm.cogsCents)}
+                        </td>
+                        <td className="p-3 text-right tabular font-bold text-foreground">
+                          {formatUsd(pm.grossProfitCents)}
+                        </td>
+                        <td className="p-3 text-right tabular font-bold">
+                          {pm.grossMarginPct.toFixed(1)}%
+                        </td>
                         <td className="p-3">
                           {pm.hasHighCostAlert ? (
-                            <Badge variant="destructive" className="text-[10px]">{t("dre.alertHighCogs")}</Badge>
+                            <Badge variant="destructive" className="text-[10px]">
+                              {t("dre.alertHighCogs")}
+                            </Badge>
                           ) : pm.hasLowMarginAlert ? (
-                            <Badge variant="outline" className="border-amber-500 text-amber-600 text-[10px]">{t("dre.alertLowMargin")}</Badge>
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500 text-amber-600 text-[10px]"
+                            >
+                              {t("dre.alertLowMargin")}
+                            </Badge>
                           ) : (
-                            <Badge variant="secondary" className="text-emerald-600 bg-emerald-500/10 text-[10px]">{t("dre.healthy")}</Badge>
+                            <Badge
+                              variant="secondary"
+                              className="text-emerald-600 bg-emerald-500/10 text-[10px]"
+                            >
+                              {t("dre.healthy")}
+                            </Badge>
                           )}
                         </td>
                       </tr>
@@ -701,13 +1003,15 @@ export function FinancePage() {
           subtitle={t("cashflow.subtitle")}
           action={
             <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-0.5 text-xs">
-              {(['daily', 'weekly', 'monthly'] as CashFlowGranularity[]).map((g) => (
+              {(["daily", "weekly", "monthly"] as CashFlowGranularity[]).map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setCfGranularity(g)}
                   className={`px-2 py-1 rounded capitalize font-medium transition-colors ${
-                    cfGranularity === g ? "bg-background shadow-xs text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                    cfGranularity === g
+                      ? "bg-background shadow-xs text-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {t(`cashflow.${g}`)}
@@ -718,35 +1022,74 @@ export function FinancePage() {
         >
           <div className="grid grid-cols-2 gap-3 pb-4 sm:grid-cols-4">
             <div className="rounded-lg border bg-muted/10 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t("cashflow.openingBalance")}</p>
-              <p className="tabular text-lg font-bold mt-1">{formatUsd(cashFlowTimeline.initialOpeningCents)}</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                {t("cashflow.openingBalance")}
+              </p>
+              <p className="tabular text-lg font-bold mt-1">
+                {formatUsd(cashFlowTimeline.initialOpeningCents)}
+              </p>
             </div>
             <div className="rounded-lg border bg-emerald-500/5 border-emerald-500/20 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-emerald-600 font-medium">{t("cashflow.inflows")}</p>
-              <p className="tabular text-lg font-bold text-emerald-600 mt-1">+{formatUsd(cashFlowTimeline.totalInflowCents)}</p>
+              <p className="text-[11px] uppercase tracking-wider text-emerald-600 font-medium">
+                {t("cashflow.inflows")}
+              </p>
+              <p className="tabular text-lg font-bold text-emerald-600 mt-1">
+                +{formatUsd(cashFlowTimeline.totalInflowCents)}
+              </p>
             </div>
             <div className="rounded-lg border bg-destructive/5 border-destructive/20 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-destructive font-medium">{t("cashflow.outflows")}</p>
-              <p className="tabular text-lg font-bold text-destructive mt-1">-{formatUsd(cashFlowTimeline.totalOutflowCents)}</p>
+              <p className="text-[11px] uppercase tracking-wider text-destructive font-medium">
+                {t("cashflow.outflows")}
+              </p>
+              <p className="tabular text-lg font-bold text-destructive mt-1">
+                -{formatUsd(cashFlowTimeline.totalOutflowCents)}
+              </p>
             </div>
             <div className="rounded-lg border bg-primary/5 border-primary/20 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-primary font-medium">{t("cashflow.closingBalance")}</p>
-              <p className="tabular text-lg font-bold text-primary mt-1">{formatUsd(cashFlowTimeline.closingCashCents)}</p>
+              <p className="text-[11px] uppercase tracking-wider text-primary font-medium">
+                {t("cashflow.closingBalance")}
+              </p>
+              <p className="tabular text-lg font-bold text-primary mt-1">
+                {formatUsd(cashFlowTimeline.closingCashCents)}
+              </p>
             </div>
           </div>
 
           <div className="h-[240px] w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cashFlowTimeline.buckets} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <BarChart
+                data={cashFlowTimeline.buckets}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              >
                 <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `$${v / 100000}k`} />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  tickFormatter={(v) => `$${v / 100000}k`}
+                />
                 <Tooltip
-                  contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                   formatter={(val: number) => [formatUsd(val), "USD"]}
                 />
                 <Bar dataKey="inflowCents" fill="#10b981" radius={[4, 4, 0, 0]} name="Inflow (+)" />
-                <Bar dataKey="outflowCents" fill="#ef4444" radius={[4, 4, 0, 0]} name="Outflow (-)" />
+                <Bar
+                  dataKey="outflowCents"
+                  fill="#ef4444"
+                  radius={[4, 4, 0, 0]}
+                  name="Outflow (-)"
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -755,19 +1098,49 @@ export function FinancePage() {
 
       {/* Monthly Chart and Breakdown */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <Panel className="lg:col-span-2" title={t("charts.trendTitle")} subtitle={t("charts.trendSubtitle")}>
+        <Panel
+          className="lg:col-span-2"
+          title={t("charts.trendTitle")}
+          subtitle={t("charts.trendSubtitle")}
+        >
           <div className="h-[260px] w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `$${v / 100000}k`} />
+                <XAxis
+                  dataKey="month"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  tickFormatter={(v) => `$${v / 100000}k`}
+                />
                 <Tooltip
-                  contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                   formatter={(val: number) => [formatUsd(val), "USD"]}
                 />
-                <Bar dataKey="revenueCents" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Revenue" />
-                <Bar dataKey="expensesCents" fill="var(--destructive)" opacity={0.8} radius={[4, 4, 0, 0]} name="Expenses" />
+                <Bar
+                  dataKey="revenueCents"
+                  fill="var(--primary)"
+                  radius={[4, 4, 0, 0]}
+                  name="Revenue"
+                />
+                <Bar
+                  dataKey="expensesCents"
+                  fill="var(--destructive)"
+                  opacity={0.8}
+                  radius={[4, 4, 0, 0]}
+                  name="Expenses"
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -778,16 +1151,24 @@ export function FinancePage() {
             {CATEGORIES.map((cat) => {
               const catExpenses = expenses.filter((e) => e.category === cat);
               const totalCents = catExpenses.reduce((s, e) => s + e.amountCents, 0);
-              const pct = summary.totalExpensesCents > 0 ? (totalCents / summary.totalExpensesCents) * 100 : 0;
+              const pct =
+                summary.totalExpensesCents > 0
+                  ? (totalCents / summary.totalExpensesCents) * 100
+                  : 0;
               if (totalCents === 0) return null;
               return (
                 <div key={cat} className="flex flex-col gap-1">
                   <div className="flex justify-between text-xs font-medium">
                     <span className="capitalize">{t(`categories.${cat}`)}</span>
-                    <span className="tabular text-muted-foreground">{formatUsd(totalCents)} ({pct.toFixed(0)}%)</span>
+                    <span className="tabular text-muted-foreground">
+                      {formatUsd(totalCents)} ({pct.toFixed(0)}%)
+                    </span>
                   </div>
                   <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full bg-primary/70" style={{ width: `${pct}%` }} />
+                    <div
+                      className="h-full rounded-full bg-primary/70"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
               );
@@ -813,7 +1194,9 @@ export function FinancePage() {
             >
               <option value="all">{t("table.allCategories")}</option>
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{t(`categories.${c}`)}</option>
+                <option key={c} value={c}>
+                  {t(`categories.${c}`)}
+                </option>
               ))}
             </select>
             <select
@@ -859,9 +1242,7 @@ export function FinancePage() {
                   <td className="p-3 capitalize text-muted-foreground">
                     {t(`recurrence.${exp.recurrence}`)}
                   </td>
-                  <td className="p-3 tabular font-medium text-muted-foreground">
-                    {exp.dueDate}
-                  </td>
+                  <td className="p-3 tabular font-medium text-muted-foreground">{exp.dueDate}</td>
                   <td className="p-3 text-right tabular font-bold text-foreground">
                     {formatUsd(exp.amountCents)}
                   </td>
@@ -873,7 +1254,13 @@ export function FinancePage() {
                       className="focus:outline-none"
                     >
                       <Badge
-                        variant={exp.status === "paid" ? "default" : exp.status === "overdue" ? "destructive" : "outline"}
+                        variant={
+                          exp.status === "paid"
+                            ? "default"
+                            : exp.status === "overdue"
+                              ? "destructive"
+                              : "outline"
+                        }
                         className="capitalize text-[10px] cursor-pointer"
                       >
                         {t(`table.${exp.status}`)}
@@ -883,7 +1270,12 @@ export function FinancePage() {
                   {canManage && (
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="size-7" onClick={() => handleOpenEdit(exp)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          onClick={() => handleOpenEdit(exp)}
+                        >
                           <Edit2 className="size-3.5" />
                         </Button>
                         <Button
@@ -961,7 +1353,9 @@ export function FinancePage() {
                   className="mt-1 h-8 w-full rounded-md border bg-background px-2 text-xs"
                 >
                   {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>{t(`categories.${cat}`)}</option>
+                    <option key={cat} value={cat}>
+                      {t(`categories.${cat}`)}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1014,7 +1408,9 @@ export function FinancePage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>{t("form.cancel")}</Button>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>
+              {t("form.cancel")}
+            </Button>
             <Button onClick={handleSaveExpense}>{t("form.save")}</Button>
           </DialogFooter>
         </DialogContent>
@@ -1028,7 +1424,9 @@ export function FinancePage() {
             <DialogDescription>{t("deleteConfirm.body")}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>{t("form.cancel")}</Button>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
+              {t("form.cancel")}
+            </Button>
             <Button
               variant="destructive"
               onClick={() => deleteConfirmId && handleDeleteExpense(deleteConfirmId)}

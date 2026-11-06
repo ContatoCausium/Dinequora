@@ -14,9 +14,15 @@ export const Route = createFileRoute("/_authenticated/_app/settings/billing")({
   head: () => ({
     meta: [
       { title: "Billing · Servora" },
-      { name: "description", content: "Subscription plan, trial, billed locations and billing history." },
+      {
+        name: "description",
+        content: "Subscription plan, trial, billed locations and billing history.",
+      },
       { property: "og:title", content: "Billing · Servora" },
-      { property: "og:description", content: "Subscription plan, trial, billed locations and billing history." },
+      {
+        property: "og:description",
+        content: "Subscription plan, trial, billed locations and billing history.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -28,51 +34,96 @@ function BillingPage() {
   const { t, i18n } = useTranslation("settings");
   const lng = i18n.language;
   const { role, orgDbId, org, storeLimit } = useWorkspace();
-  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["billing", orgDbId], queryFn: () => fetchBilling(orgDbId), enabled: role === "owner" });
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["billing", orgDbId],
+    queryFn: () => fetchBilling(orgDbId),
+    enabled: role === "owner",
+  });
 
   if (role !== "owner") {
-    return <div className="mx-auto max-w-[900px]"><EmptyState icon={<ShieldAlert className="size-5" strokeWidth={1.75} />} title={t("billing.ownerOnlyTitle")} body={t("billing.ownerOnlyBody")} /></div>;
+    return (
+      <div className="mx-auto max-w-[900px]">
+        <EmptyState
+          icon={<ShieldAlert className="size-5" strokeWidth={1.75} />}
+          title={t("billing.ownerOnlyTitle")}
+          body={t("billing.ownerOnlyBody")}
+        />
+      </div>
+    );
   }
   if (error) return <AppError error={error as Error} reset={() => void refetch()} />;
 
   const sub = data?.subscription;
   const plan = data?.plans.find((p) => p.id === sub?.plan_id);
-  const date = (d: string | null) => (d ? fmtDate(d, lng, { month: "short", day: "numeric", year: "numeric" }) : "—");
+  const date = (d: string | null) =>
+    d ? fmtDate(d, lng, { month: "short", day: "numeric", year: "numeric" }) : "—";
 
   return (
     <div className="mx-auto max-w-[1100px]">
-      <PageHeader eyebrow={<span className="eyebrow">{t("billing.eyebrow")}</span>} title={t("billing.title")} description={t("billing.subtitle", { org: org.name })} />
+      <PageHeader
+        eyebrow={<span className="eyebrow">{t("billing.eyebrow")}</span>}
+        title={t("billing.title")}
+        description={t("billing.subtitle", { org: org.name })}
+      />
 
       <div className="surface mb-6 flex items-start gap-3 border-warning/40 bg-warning/10 p-4 text-sm">
         <CreditCard className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
         <p>{t("billing.notConnected")}</p>
       </div>
 
-      {isLoading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : (
+      {isLoading ? (
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col gap-6">
             <Panel title={t("billing.subscription")}>
-              {!sub ? <p className="text-sm text-muted-foreground">{t("billing.noSubscription")}</p> : (
+              {!sub ? (
+                <p className="text-sm text-muted-foreground">{t("billing.noSubscription")}</p>
+              ) : (
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
                   <Item label={t("billing.plan")} value={plan?.name ?? sub.plan_id} />
                   <Item label={t("billing.status")} value={<StatusPill status={sub.status} />} />
-                  <Item label={t("billing.billedLocations")} value={`${sub.billed_locations} / ${storeLimit}`} />
-                  {sub.status === "trialing" && <Item label={t("billing.trialEnds")} value={date(sub.trial_ends_at)} />}
-                  {sub.status === "grace" && <Item label={t("billing.graceEnds")} value={date(sub.grace_ends_at)} />}
-                  <Item label={t("billing.renews")} value={sub.cancel_at_period_end ? t("billing.cancelsAtEnd") : date(sub.current_period_end)} />
+                  <Item
+                    label={t("billing.billedLocations")}
+                    value={`${sub.billed_locations} / ${storeLimit}`}
+                  />
+                  {sub.status === "trialing" && (
+                    <Item label={t("billing.trialEnds")} value={date(sub.trial_ends_at)} />
+                  )}
+                  {sub.status === "grace" && (
+                    <Item label={t("billing.graceEnds")} value={date(sub.grace_ends_at)} />
+                  )}
+                  <Item
+                    label={t("billing.renews")}
+                    value={
+                      sub.cancel_at_period_end
+                        ? t("billing.cancelsAtEnd")
+                        : date(sub.current_period_end)
+                    }
+                  />
                 </dl>
               )}
             </Panel>
             <Panel title={t("billing.history")} bodyClassName="p-0">
               {!data?.events.length ? (
-                <div className="flex items-center gap-3 px-5 py-6 text-sm text-muted-foreground"><ReceiptText className="size-4" strokeWidth={1.75} />{t("billing.noHistory")}</div>
+                <div className="flex items-center gap-3 px-5 py-6 text-sm text-muted-foreground">
+                  <ReceiptText className="size-4" strokeWidth={1.75} />
+                  {t("billing.noHistory")}
+                </div>
               ) : (
                 <ul className="divide-y">
                   {data.events.map((e) => (
-                    <li key={e.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                    <li
+                      key={e.id}
+                      className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
+                    >
                       <span className="min-w-0 truncate">{e.description ?? e.kind}</span>
-                      <span className="tabular text-xs text-muted-foreground">{date(e.occurred_at)}</span>
-                      <span className="tabular font-medium">{e.amount_cents != null ? fmtCurrency(e.amount_cents / 100, lng) : "—"}</span>
+                      <span className="tabular text-xs text-muted-foreground">
+                        {date(e.occurred_at)}
+                      </span>
+                      <span className="tabular font-medium">
+                        {e.amount_cents != null ? fmtCurrency(e.amount_cents / 100, lng) : "—"}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -82,12 +133,26 @@ function BillingPage() {
           <Panel title={t("billing.plans")} subtitle={t("billing.plansNote")}>
             <ul className="flex flex-col gap-2">
               {data?.plans.map((p) => (
-                <li key={p.id} className={cn("rounded-lg border p-3.5", p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40")}>
+                <li
+                  key={p.id}
+                  className={cn(
+                    "rounded-lg border p-3.5",
+                    p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
+                  )}
+                >
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm font-semibold">{p.name}</span>
-                    <span className="tabular text-sm">{p.price_per_location_cents ? t("billing.perLocation", { price: fmtCurrency(p.price_per_location_cents / 100, lng) }) : t("billing.custom")}</span>
+                    <span className="tabular text-sm">
+                      {p.price_per_location_cents
+                        ? t("billing.perLocation", {
+                            price: fmtCurrency(p.price_per_location_cents / 100, lng),
+                          })
+                        : t("billing.custom")}
+                    </span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{t("billing.planMeta", { count: p.default_store_limit, days: p.trial_days })}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("billing.planMeta", { count: p.default_store_limit, days: p.trial_days })}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -99,12 +164,28 @@ function BillingPage() {
 }
 
 function Item({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium">{value}</dd></div>;
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 font-medium">{value}</dd>
+    </div>
+  );
 }
 
 function StatusPill({ status }: { status: string }) {
   const { t } = useTranslation("settings");
   const good = status === "active" || status === "trialing";
   const bad = status === "unpaid" || status === "canceled" || status === "past_due";
-  return <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", good && "bg-success/12 text-success", bad && "bg-destructive/12 text-destructive", !good && !bad && "bg-warning/15")}>{t(`billing.statuses.${status}`, { defaultValue: status })}</span>;
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2 py-0.5 text-[11px] font-medium",
+        good && "bg-success/12 text-success",
+        bad && "bg-destructive/12 text-destructive",
+        !good && !bad && "bg-warning/15",
+      )}
+    >
+      {t(`billing.statuses.${status}`, { defaultValue: status })}
+    </span>
+  );
 }

@@ -2,28 +2,72 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Search, Plus, Minus, Trash2, ShoppingBag, PlayCircle,
-  DollarSign, CreditCard, Smartphone, Receipt, XCircle, Tag, Printer
+  Search,
+  Plus,
+  Minus,
+  Trash2,
+  ShoppingBag,
+  PlayCircle,
+  DollarSign,
+  CreditCard,
+  Smartphone,
+  Receipt,
+  XCircle,
+  Tag,
+  Printer,
 } from "lucide-react";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { listMenuItems, type MenuItem, type ModifierOption } from "@/lib/menu-service";
+import { fetchOperationalMenu } from "@/lib/operational.functions";
 import {
-  getPOSSession, addItemToCart, updateCartItemQuantity,
-  removeItemFromCart, applyDiscount, setOrderType, setCustomerInfo,
-  suspendSession, resumeSession, simulatePayment,
+  getPOSSession,
+  addItemToCart,
+  updateCartItemQuantity,
+  removeItemFromCart,
+  applyDiscount,
+  setOrderType,
+  setCustomerInfo,
+  suspendSession,
+  resumeSession,
+  simulatePayment,
   type POSPaymentMethod,
-  type POSCartItem
+  type POSCartItem,
 } from "@/lib/pos-service";
-import { persistFinalizedPOSSaleAtomic, cancelOrderWithReversal } from "@/lib/orders-persistence-service";
+import {
+  persistFinalizedPOSSaleAtomic,
+  cancelOrderWithReversal,
+} from "@/lib/orders-persistence-service";
 import { type OrderType } from "@/lib/orders-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/_app/pos")({
+  head: () => ({
+    meta: [
+      { title: "POS · Servora" },
+      {
+        name: "description",
+        content: "Authorized point of sale and server-confirmed restaurant orders.",
+      },
+      { property: "og:title", content: "POS · Servora" },
+      {
+        property: "og:description",
+        content: "Authorized point of sale and server-confirmed restaurant orders.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: POSPage,
 });
 
@@ -33,11 +77,15 @@ function formatMoney(cents: number): string {
 
 export function POSPage() {
   const { t } = useTranslation("orders");
-  const { org, locationId, user } = useWorkspace();
-  const activeLocId = locationId === "all" ? (org.locations[0]?.id || "loc-1") : locationId;
+  const { org, locationId, user, role } = useWorkspace();
+  // Owners are org-wide; managers/staff are limited to their authorized stores.
+  const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
+  const activeLocId = locationId === "all" ? org.locations[0]?.id || "loc-1" : locationId;
   const cashierName = user.fullName || user.email || "Cashier";
 
-  const [session, setSession] = useState(() => getPOSSession(org.id, activeLocId, cashierName));
+  const [session, setSession] = useState(() =>
+    getPOSSession(org.id, activeLocId, cashierName, locationScope),
+  );
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState<string>("all");
   const [modModalItem, setModModalItem] = useState<MenuItem | null>(null);
@@ -48,16 +96,38 @@ export function POSPage() {
   const [discountInput, setDiscountInput] = useState("");
   const [payMethod, setPayMethod] = useState<POSPaymentMethod>("cash");
   const [tenderedInput, setTenderedInput] = useState("");
-  const [receiptSession, setReceiptSession] = useState<(typeof session & { persistedOrderId?: string }) | null>(null);
+  const [receiptSession, setReceiptSession] = useState<
+    (typeof session & { persistedOrderId?: string }) | null
+  >(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancellingSale, setCancellingSale] = useState(false);
 
   useEffect(() => {
-    setSession(getPOSSession(org.id, activeLocId, cashierName));
+    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
   }, [org.id, activeLocId, cashierName]);
 
-  const menuItems = useMemo(() => listMenuItems(org.id), [org.id]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  useEffect(() => {
+    let active = true;
+    setMenuItems([]);
+    fetchOperationalMenu({ data: { orgId: org.id } })
+      .then((data) => {
+        if (active)
+          setMenuItems(
+            data.items.filter(
+              (i) =>
+                i.active && (i.locationIds.length === 0 || i.locationIds.includes(activeLocId)),
+            ),
+          );
+      })
+      .catch(() => {
+        if (active) toast.error("Menu could not be loaded");
+      });
+    return () => {
+      active = false;
+    };
+  }, [org.id, activeLocId]);
   const categories = useMemo(() => {
     const cats = new Set(menuItems.map((m) => m.category));
     return ["all", ...Array.from(cats)];
@@ -66,7 +136,8 @@ export function POSPage() {
   const filteredItems = useMemo(() => {
     return menuItems.filter((i) => {
       const matchCat = selectedCat === "all" || i.category === selectedCat;
-      const matchSearch = i.name.toLowerCase().includes(search.toLowerCase()) ||
+      const matchSearch =
+        i.name.toLowerCase().includes(search.toLowerCase()) ||
         i.description.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     });
@@ -87,7 +158,7 @@ export function POSPage() {
   const handleConfirmModifiers = () => {
     if (!modModalItem) return;
     const missingRequired = modModalItem.modifierGroups?.filter(
-      (g) => g.required && (!selectedMods[g.id] || selectedMods[g.id]!.length === 0)
+      (g) => g.required && (selectedMods[g.id]?.length ?? 0) === 0,
     );
     if (missingRequired && missingRequired.length > 0) {
       toast.error(t("pos.requiredModifier"));
@@ -103,7 +174,13 @@ export function POSPage() {
         priceCents: opt.priceCents,
       }));
     });
-    const updated = addItemToCart(session, modModalItem, flatMods, 1, itemNotes.trim() || undefined);
+    const updated = addItemToCart(
+      session,
+      modModalItem,
+      flatMods,
+      1,
+      itemNotes.trim() || undefined,
+    );
     setSession(updated);
     setModModalItem(null);
     toast.success(`${modModalItem.name} added`);
@@ -113,15 +190,16 @@ export function POSPage() {
     const itm = session.cart.find((c) => c.id === cartItemId);
     if (!itm) return;
     const nextQty = itm.quantity + delta;
-    const updated = nextQty <= 0
-      ? removeItemFromCart(session, cartItemId)
-      : updateCartItemQuantity(session, cartItemId, nextQty);
+    const updated =
+      nextQty <= 0
+        ? removeItemFromCart(session, cartItemId)
+        : updateCartItemQuantity(session, cartItemId, nextQty);
     setSession(updated);
   };
 
   const handleClearTicket = () => {
     if (session.cart.length === 0) return;
-    setSession(getPOSSession(org.id, activeLocId, cashierName));
+    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
     toast.info(t("pos.clearTicket"));
   };
 
@@ -136,13 +214,13 @@ export function POSPage() {
 
   const handleSuspend = () => {
     if (session.cart.length === 0) return;
-    suspendSession(session);
+    suspendSession(session, locationScope);
     toast.info(t("pos.suspend"));
-    setSession(getPOSSession(org.id, activeLocId, cashierName));
+    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
   };
 
   const handleResume = (id: string) => {
-    const resumed = resumeSession(org.id, id);
+    const resumed = resumeSession(org.id, id, locationScope);
     if (resumed) {
       setSession(resumed);
       toast.success(t("pos.resume"));
@@ -167,7 +245,7 @@ export function POSPage() {
     }
     setSubmittingSale(true);
     try {
-      const idemKey = session.clientOrderId || `pos-tx-${session.id || Date.now()}`;
+      const idemKey = `pos-tx-${session.id || Date.now()}`;
       const persistRes = await persistFinalizedPOSSaleAtomic(paid, idemKey);
       if (!persistRes.success || !persistRes.orderId) {
         throw new Error(persistRes.error || "RPC persist_finalized_pos_sale_atomic unconfirmed");
@@ -181,8 +259,10 @@ export function POSPage() {
       setReceiptSession(finalizedRecord);
       setCheckoutOpen(false);
       // Only reset active cart once server confirmed sale ID
-      setSession(getPOSSession(org.id, activeLocId, cashierName));
-      toast.success(`Venda registrada com sucesso! Pedido #${persistRes.orderNumber || persistRes.orderId.slice(0, 8)}`);
+      setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
+      toast.success(
+        `Venda registrada com sucesso! Pedido #${persistRes.orderNumber || persistRes.orderId.slice(0, 8)}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao registrar venda na base";
       toast.error(`Falha no POS: ${msg}. A venda NÃO foi confirmada.`);
@@ -217,7 +297,10 @@ export function POSPage() {
   };
 
   const changeDueCents = receiptSession
-    ? Math.max(0, (receiptSession.payment?.tenderedCents ?? receiptSession.totalCents) - receiptSession.totalCents)
+    ? Math.max(
+        0,
+        (receiptSession.tenderedCents ?? receiptSession.totalCents) - receiptSession.totalCents,
+      )
     : 0;
 
   return (
@@ -235,14 +318,27 @@ export function POSPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="border-amber-500/30 text-amber-600 bg-amber-50/50 dark:bg-amber-950/20 text-xs">
-              {t("pos.simulatedBadge")}
-            </Badge>
+            {org.fictional && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/30 text-amber-600 bg-amber-50/50 dark:bg-amber-950/20 text-xs"
+              >
+                {t("pos.simulatedBadge")}
+              </Badge>
+            )}
             {session.suspendedSessions.length > 0 && (
               <div className="flex items-center gap-1.5 overflow-x-auto">
-                <span className="text-xs text-muted-foreground hidden sm:inline">{t("pos.suspended")}:</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">
+                  {t("pos.suspended")}:
+                </span>
                 {session.suspendedSessions.map((s) => (
-                  <Button key={s.id} size="sm" variant="secondary" onClick={() => handleResume(s.id)} className="h-7 text-xs px-2">
+                  <Button
+                    key={s.id}
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleResume(s.id)}
+                    className="h-7 text-xs px-2"
+                  >
                     <PlayCircle className="size-3 mr-1" /> {s.customerName || t("pos.resume")}
                   </Button>
                 ))}
@@ -276,7 +372,9 @@ export function POSPage() {
             >
               <div>
                 <p className="font-medium text-sm leading-snug line-clamp-2">{item.name}</p>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                  {item.description}
+                </p>
               </div>
               <div className="flex items-center justify-between mt-3 pt-2 border-t w-full">
                 <span className="font-semibold text-sm">{formatMoney(item.priceCents)}</span>
@@ -287,8 +385,13 @@ export function POSPage() {
           {filteredItems.length === 0 && (
             <div className="col-span-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
               <ShoppingBag className="size-10 mb-2 opacity-40" />
-              <p className="font-medium text-sm text-foreground">Cardápio operacional sem itens cadastrados</p>
-              <p className="text-xs text-muted-foreground mt-1">Acesse a página de Cardápio para cadastrar categorias e produtos ativos para esta loja.</p>
+              <p className="font-medium text-sm text-foreground">
+                Cardápio operacional sem itens cadastrados
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Acesse a página de Cardápio para cadastrar categorias e produtos ativos para esta
+                loja.
+              </p>
             </div>
           )}
         </div>
@@ -303,7 +406,7 @@ export function POSPage() {
             <span className="text-xs text-muted-foreground">Attendant: {session.cashierName}</span>
           </div>
           <div className="grid grid-cols-3 gap-1">
-            {(['dine_in', 'takeout', 'delivery'] as OrderType[]).map((tType) => (
+            {(["dine_in", "takeout", "delivery"] as OrderType[]).map((tType) => (
               <Button
                 key={tType}
                 size="sm"
@@ -311,7 +414,7 @@ export function POSPage() {
                 onClick={() => setSession(setOrderType(session, tType))}
                 className="h-7 text-xs capitalize"
               >
-                {tType.replace('_', ' ')}
+                {tType.replace("_", " ")}
               </Button>
             ))}
           </div>
@@ -337,19 +440,36 @@ export function POSPage() {
                   </p>
                 )}
                 {item.notes && (
-                  <p className="text-[10px] italic text-amber-600 dark:text-amber-400">{item.notes}</p>
+                  <p className="text-[10px] italic text-amber-600 dark:text-amber-400">
+                    {item.notes}
+                  </p>
                 )}
-                <p className="text-xs font-semibold mt-0.5">{formatMoney(item.totalCents)}</p>
+                <p className="text-xs font-semibold mt-0.5">{formatMoney(item.subtotalCents)}</p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <Button size="icon" variant="outline" className="size-6" onClick={() => handleQuantity(item.id, -1)}>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="size-6"
+                  onClick={() => handleQuantity(item.id, -1)}
+                >
                   <Minus className="size-3" />
                 </Button>
                 <span className="w-5 text-center text-xs font-medium">{item.quantity}</span>
-                <Button size="icon" variant="outline" className="size-6" onClick={() => handleQuantity(item.id, 1)}>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="size-6"
+                  onClick={() => handleQuantity(item.id, 1)}
+                >
                   <Plus className="size-3" />
                 </Button>
-                <Button size="icon" variant="ghost" className="size-6 text-destructive" onClick={() => setSession(removeItemFromCart(session, item.id))}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-6 text-destructive"
+                  onClick={() => setSession(removeItemFromCart(session, item.id))}
+                >
                   <Trash2 className="size-3" />
                 </Button>
               </div>
@@ -387,19 +507,41 @@ export function POSPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setDiscountModalOpen(true)} className="h-8 text-xs">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDiscountModalOpen(true)}
+              className="h-8 text-xs"
+            >
               <Tag className="size-3 mr-1" /> Discount
             </Button>
-            <Button size="sm" variant="outline" onClick={handleSuspend} disabled={session.cart.length === 0} className="h-8 text-xs">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSuspend}
+              disabled={session.cart.length === 0}
+              className="h-8 text-xs"
+            >
               <PlayCircle className="size-3 mr-1" /> Hold
             </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-1.5">
-            <Button size="sm" variant="ghost" onClick={handleClearTicket} disabled={session.cart.length === 0} className="h-9 text-xs text-destructive hover:bg-destructive/10">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleClearTicket}
+              disabled={session.cart.length === 0}
+              className="h-9 text-xs text-destructive hover:bg-destructive/10"
+            >
               <XCircle className="size-3.5 mr-1" /> Clear
             </Button>
-            <Button size="sm" className="col-span-2 h-9 text-xs font-semibold" onClick={handleStartCheckout} disabled={session.cart.length === 0}>
+            <Button
+              size="sm"
+              className="col-span-2 h-9 text-xs font-semibold"
+              onClick={handleStartCheckout}
+              disabled={session.cart.length === 0}
+            >
               <CreditCard className="size-4 mr-1.5" /> Charge {formatMoney(session.totalCents)}
             </Button>
           </div>
@@ -431,8 +573,8 @@ export function POSPage() {
                 <span className="text-xs">Credit / Debit</span>
               </Button>
               <Button
-                variant={payMethod === "digital_wallet" ? "default" : "outline"}
-                onClick={() => setPayMethod("digital_wallet")}
+                variant={payMethod === "digital" ? "default" : "outline"}
+                onClick={() => setPayMethod("digital")}
                 className="h-16 flex-col gap-1"
               >
                 <Smartphone className="size-5" />
@@ -442,7 +584,9 @@ export function POSPage() {
 
             {payMethod === "cash" && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Amount Tendered ($)</label>
+                <label className="text-xs font-medium text-muted-foreground">
+                  Amount Tendered ($)
+                </label>
                 <Input
                   type="number"
                   step="0.01"
@@ -451,14 +595,21 @@ export function POSPage() {
                 />
                 {parseFloat(tenderedInput) * 100 > session.totalCents && (
                   <p className="text-xs text-emerald-600 font-semibold">
-                    Change to return: {formatMoney(Math.round(parseFloat(tenderedInput) * 100) - session.totalCents)}
+                    Change to return:{" "}
+                    {formatMoney(Math.round(parseFloat(tenderedInput) * 100) - session.totalCents)}
                   </p>
                 )}
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" disabled={submittingSale} onClick={() => setCheckoutOpen(false)}>Cancel</Button>
+            <Button
+              variant="outline"
+              disabled={submittingSale}
+              onClick={() => setCheckoutOpen(false)}
+            >
+              Cancel
+            </Button>
             <Button disabled={submittingSale} onClick={handleCompleteSale}>
               {submittingSale ? "Confirmando..." : "Confirm Payment"}
             </Button>
@@ -482,7 +633,9 @@ export function POSPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDiscountModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDiscountModalOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleApplyDiscountSubmit}>Apply</Button>
           </DialogFooter>
         </DialogContent>
@@ -506,19 +659,41 @@ export function POSPage() {
               <div className="flex flex-col gap-1 py-1 border-b">
                 {receiptSession.cart.map((c) => (
                   <div key={c.id} className="flex justify-between">
-                    <span>{c.quantity}x {c.productName}</span>
-                    <span>{formatMoney(c.totalCents)}</span>
+                    <span>
+                      {c.quantity}x {c.productName}
+                    </span>
+                    <span>{formatMoney(c.subtotalCents)}</span>
                   </div>
                 ))}
               </div>
               <div className="flex flex-col gap-0.5 pt-1">
-                <div className="flex justify-between text-muted-foreground"><span>Subtotal:</span><span>{formatMoney(receiptSession.subtotalCents)}</span></div>
-                {receiptSession.discountCents > 0 && <div className="flex justify-between text-emerald-600"><span>Discount:</span><span>-{formatMoney(receiptSession.discountCents)}</span></div>}
-                <div className="flex justify-between text-muted-foreground"><span>Tax:</span><span>{formatMoney(receiptSession.taxCents)}</span></div>
-                <div className="flex justify-between font-bold text-sm pt-1 border-t"><span>Total Paid:</span><span>{formatMoney(receiptSession.totalCents)}</span></div>
-                <div className="flex justify-between text-[11px] text-muted-foreground pt-1"><span>Method:</span><span className="uppercase">{receiptSession.payment?.method}</span></div>
-                {receiptSession.payment?.method === "cash" && (
-                  <div className="flex justify-between text-[11px] font-semibold text-emerald-600"><span>Change:</span><span>{formatMoney(changeDueCents)}</span></div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal:</span>
+                  <span>{formatMoney(receiptSession.subtotalCents)}</span>
+                </div>
+                {receiptSession.discountCents > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>Discount:</span>
+                    <span>-{formatMoney(receiptSession.discountCents)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Tax:</span>
+                  <span>{formatMoney(receiptSession.taxCents)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-sm pt-1 border-t">
+                  <span>Total Paid:</span>
+                  <span>{formatMoney(receiptSession.totalCents)}</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-muted-foreground pt-1">
+                  <span>Method:</span>
+                  <span className="uppercase">{receiptSession.paymentMethod}</span>
+                </div>
+                {receiptSession.paymentMethod === "cash" && (
+                  <div className="flex justify-between text-[11px] font-semibold text-emerald-600">
+                    <span>Change:</span>
+                    <span>{formatMoney(changeDueCents)}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -535,10 +710,18 @@ export function POSPage() {
               </Button>
             )}
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <Button variant="outline" size="sm" onClick={() => { window.print(); }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  window.print();
+                }}
+              >
                 <Printer className="size-3.5 mr-1" /> Print
               </Button>
-              <Button size="sm" onClick={() => setReceiptSession(null)}>Close</Button>
+              <Button size="sm" onClick={() => setReceiptSession(null)}>
+                Close
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -554,7 +737,8 @@ export function POSPage() {
           </DialogHeader>
           <div className="flex flex-col gap-3 py-2 text-xs">
             <p className="text-muted-foreground">
-              Esta operação cancelará o pedido persistido no backend e reverterá automaticamente os movimentos de estoque e CMV.
+              Esta operação cancelará o pedido persistido no backend e reverterá automaticamente os
+              movimentos de estoque e CMV.
             </p>
             <div className="flex flex-col gap-1.5">
               <label className="font-medium text-foreground">Motivo do Cancelamento</label>
@@ -567,7 +751,12 @@ export function POSPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" disabled={cancellingSale} onClick={() => setCancelModalOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={cancellingSale}
+              onClick={() => setCancelModalOpen(false)}
+            >
               Voltar
             </Button>
             <Button
@@ -583,5 +772,4 @@ export function POSPage() {
       </Dialog>
     </div>
   );
-
 }

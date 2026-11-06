@@ -2,8 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  CookingPot, Clock, AlertTriangle, CheckCircle2, Play, Check, Flame,
-  RotateCcw, Sparkles, Filter, Store, UtensilsCrossed, BellRing
+  CookingPot,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  Play,
+  Check,
+  Flame,
+  RotateCcw,
+  Sparkles,
+  Filter,
+  Store,
+  UtensilsCrossed,
+  BellRing,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -11,17 +22,38 @@ import { useWorkspace } from "@/components/app/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Order, OrderStatus, KitchenStation,
-  listOrders, updateOrderStatus, toggleOrderItemReady
+  Order,
+  OrderStatus,
+  KitchenStation,
+  listOrders,
+  updateOrderStatus,
+  toggleOrderItemReady,
 } from "@/lib/orders-service";
 import {
-  calculateElapsedMinutes, getTicketUrgency, filterOrdersByStation,
-  assignDefaultStation, simulateIncomingOrder, DEFAULT_THRESHOLDS
+  calculateElapsedMinutes,
+  getTicketUrgency,
+  filterOrdersByStation,
+  assignDefaultStation,
+  simulateIncomingOrder,
+  DEFAULT_THRESHOLDS,
 } from "@/lib/kds-service";
 
 export const Route = createFileRoute("/_authenticated/_app/kds")({
   head: () => ({
-    meta: [{ title: "Kitchen Display System (KDS) · Servora" }],
+    meta: [
+      { title: "Kitchen Display System (KDS) · Servora" },
+      {
+        name: "description",
+        content: "Authorized restaurant kitchen tickets and recorded status transitions.",
+      },
+      { property: "og:title", content: "Kitchen Display System (KDS) · Servora" },
+      {
+        property: "og:description",
+        content: "Authorized restaurant kitchen tickets and recorded status transitions.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
   }),
   component: KDSPage,
 });
@@ -36,18 +68,28 @@ const STATIONS: { id: KitchenStation | "all"; label: string }[] = [
 ];
 
 import { supabase } from "@/integrations/supabase/client";
-import { fetchPersistedOrders, persistOrderStatusTransition } from "@/lib/orders-persistence-service";
+import {
+  fetchPersistedOrders,
+  persistOrderStatusTransition,
+} from "@/lib/orders-persistence-service";
 import { mergeKDSOrders } from "@/lib/kds-service";
+import { setOperationalItemReady } from "@/lib/operational.functions";
 
 export function KDSPage() {
   const { t } = useTranslation("orders");
-  const { org, locationId, user } = useWorkspace();
+  const { org, orgDbId, locationId, user, role } = useWorkspace();
+  // Owners are org-wide; managers/staff are limited to their authorized stores.
+  const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
   const staffName = user.fullName || user.email || "Kitchen Lead";
-  const [orders, setOrders] = useState<Order[]>(() => listOrders(org.id, locationId));
+  const [orders, setOrders] = useState<Order[]>(() =>
+    listOrders(org.id, locationId, locationScope),
+  );
   const [stationFilter, setStationFilter] = useState<KitchenStation | "all">("all");
   const [nowTick, setNowTick] = useState(Date.now());
   const [audioAlerts, setAudioAlerts] = useState(true);
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting");
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connected" | "connecting" | "disconnected"
+  >("connecting");
 
   const refreshPersistedData = async () => {
     try {
@@ -56,9 +98,11 @@ export function KDSPage() {
         locationId: locationId === "all" ? undefined : locationId,
         limit: 100,
       });
-      if (res && res.orders.length > 0) {
-        setOrders((prev) => mergeKDSOrders(prev, res.orders));
+      if (res.unavailable) {
+        setConnectionStatus("disconnected");
+        return;
       }
+      setOrders(res.orders);
     } catch (err) {
       console.error("[KDS] Fetch error:", err);
     }
@@ -66,6 +110,7 @@ export function KDSPage() {
 
   // Initial fetch from database + 15s safety backup sync
   useEffect(() => {
+    setOrders([]);
     void refreshPersistedData();
     const interval = setInterval(() => {
       setNowTick(Date.now());
@@ -88,13 +133,14 @@ export function KDSPage() {
           event: "*",
           schema: "public",
           table: "orders",
-          filter: `org_id=eq.${org.id}`,
+          filter: `org_id=eq.${orgDbId}`,
         },
         async (payload) => {
           if (!isMounted) return;
           // Target location check
-          const row = payload.new as any;
-          if (locationId !== "all" && row && row.location_id && row.location_id !== locationId) {
+          const row = payload.new;
+          const locDbId = org.locations.find((l) => l.id === locationId)?.dbId;
+          if (locationId !== "all" && "location_id" in row && row["location_id"] !== locDbId) {
             return;
           }
 
@@ -111,7 +157,7 @@ export function KDSPage() {
           }
 
           await refreshPersistedData();
-        }
+        },
       )
       .subscribe((status) => {
         if (!isMounted) return;
@@ -131,9 +177,11 @@ export function KDSPage() {
   }, [org.id, locationId, audioAlerts]);
 
   const filteredOrders = useMemo(() => {
-    let list = listOrders(org.id, locationId);
+    const list = orders.filter(
+      (o) => o.orgId === org.id && (locationId === "all" || o.locationId === locationId),
+    );
     return filterOrdersByStation(list, stationFilter);
-  }, [org.id, locationId, stationFilter, nowTick]);
+  }, [orders, org.id, locationId, stationFilter, nowTick]);
 
   const columns = useMemo(() => {
     const active = filteredOrders.filter((o) => o.status !== "cancelled");
@@ -146,32 +194,32 @@ export function KDSPage() {
   }, [filteredOrders]);
 
   const handleStatusChange = async (orderId: string, next: OrderStatus) => {
-    // Optimistic local update
-    const updated = updateOrderStatus(org.id, orderId, next, staffName, `Updated via KDS`);
-    if (updated) {
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: next, updatedAt: new Date().toISOString() } : o)));
-      toast.success(`Ticket #${updated.orderNumber} moved to ${next}`);
-    }
-
-    // Backend persistence
     const res = await persistOrderStatusTransition(orderId, next);
     if (!res.success) {
       toast.error(`Database sync failed: ${res.error || "Unknown error"}`);
       await refreshPersistedData();
+    } else {
+      await refreshPersistedData();
+      toast.success(`Ticket moved to ${next}`);
     }
   };
 
-  const handleToggleItem = (orderId: string, itemId: string) => {
-    const updated = toggleOrderItemReady(org.id, orderId, itemId);
-    if (updated) {
-      setOrders(listOrders(org.id, locationId));
+  const handleToggleItem = async (orderId: string, itemId: string) => {
+    const item = orders.find((o) => o.id === orderId)?.items.find((i) => i.id === itemId);
+    if (!item) return;
+    try {
+      await setOperationalItemReady({ data: { id: itemId, ready: !item.isItemReady } });
+      await refreshPersistedData();
+    } catch {
+      toast.error("Item could not be updated");
     }
   };
 
   const handleSimulateNewOrder = () => {
-    const targetLoc = locationId === "all" ? (org.locations[0]?.id || "loc-1") : locationId;
+    if (!org.fictional) return;
+    const targetLoc = locationId === "all" ? org.locations[0]?.id || "loc-1" : locationId;
     const newOrd = simulateIncomingOrder(org.id, targetLoc);
-    setOrders(listOrders(org.id, locationId));
+    setOrders(listOrders(org.id, locationId, locationScope));
     if (audioAlerts && typeof window !== "undefined") {
       try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -196,20 +244,34 @@ export function KDSPage() {
             <div>
               <h1 className="font-bold text-base leading-none flex items-center gap-2">
                 Kitchen Display System (KDS)
-                <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${
-                  connectionStatus === "connected"
-                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                    connectionStatus === "connected"
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                      : connectionStatus === "connecting"
+                        ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                        : "bg-destructive/10 text-destructive border-destructive/30"
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      connectionStatus === "connected"
+                        ? "bg-emerald-500"
+                        : connectionStatus === "connecting"
+                          ? "bg-amber-500 animate-pulse"
+                          : "bg-destructive"
+                    }`}
+                  />
+                  {connectionStatus === "connected"
+                    ? "Live Realtime"
                     : connectionStatus === "connecting"
-                    ? "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                    : "bg-destructive/10 text-destructive border-destructive/30"
-                }`}>
-                  <span className={`size-1.5 rounded-full ${
-                    connectionStatus === "connected" ? "bg-emerald-500" : connectionStatus === "connecting" ? "bg-amber-500 animate-pulse" : "bg-destructive"
-                  }`} />
-                  {connectionStatus === "connected" ? "Live Realtime" : connectionStatus === "connecting" ? "Connecting..." : "Offline"}
+                      ? "Connecting..."
+                      : "Offline"}
                 </span>
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Station-routed production display with delay tracking</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Station-routed production display with delay tracking
+              </p>
             </div>
           </div>
         </div>
@@ -222,7 +284,9 @@ export function KDSPage() {
                 key={s.id}
                 onClick={() => setStationFilter(s.id)}
                 className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                  stationFilter === s.id ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                  stationFilter === s.id
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {s.label}
@@ -240,9 +304,11 @@ export function KDSPage() {
             {audioAlerts ? "Chime ON" : "Muted"}
           </Button>
 
-          <Button size="sm" onClick={handleSimulateNewOrder} className="h-8 text-xs gap-1.5">
-            <Sparkles className="size-3.5" /> Simulate Order
-          </Button>
+          {org.fictional && (
+            <Button size="sm" onClick={handleSimulateNewOrder} className="h-8 text-xs gap-1.5">
+              <Sparkles className="size-3.5" /> Simulate Order
+            </Button>
+          )}
         </div>
       </div>
 
@@ -355,7 +421,9 @@ function KDSColumn({
 
   return (
     <div className="flex flex-col rounded-xl border bg-card/60 backdrop-blur overflow-hidden h-full shadow-xs">
-      <div className={`flex items-center justify-between border-b px-3 py-2.5 font-semibold text-xs ${toneColors[tone]}`}>
+      <div
+        className={`flex items-center justify-between border-b px-3 py-2.5 font-semibold text-xs ${toneColors[tone]}`}
+      >
         <span>{title}</span>
         <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-bold">
           {count}
@@ -407,7 +475,9 @@ function KDSTicketCard({
   });
 
   return (
-    <div className={`rounded-lg border bg-card p-3 shadow-xs flex flex-col gap-2.5 transition-all ${urgencyBorder}`}>
+    <div
+      className={`rounded-lg border bg-card p-3 shadow-xs flex flex-col gap-2.5 transition-all ${urgencyBorder}`}
+    >
       {/* Card Header */}
       <div className="flex items-start justify-between gap-1 border-b pb-2">
         <div>
@@ -423,14 +493,21 @@ function KDSTicketCard({
         </div>
 
         <div className="flex flex-col items-end">
-          <span className={`inline-flex items-center gap-1 font-mono text-xs font-semibold ${
-            urgency === "delayed" && !isCompleted ? "text-destructive animate-pulse" : "text-muted-foreground"
-          }`}>
+          <span
+            className={`inline-flex items-center gap-1 font-mono text-xs font-semibold ${
+              urgency === "delayed" && !isCompleted
+                ? "text-destructive animate-pulse"
+                : "text-muted-foreground"
+            }`}
+          >
             <Clock className="size-3" />
             {elapsed}m
           </span>
           <span className="text-[10px] text-muted-foreground">
-            {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {new Date(order.createdAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </span>
         </div>
       </div>

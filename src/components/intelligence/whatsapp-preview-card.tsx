@@ -1,9 +1,24 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { fetchOperationalWhatsApp, saveOperationalRecord } from "@/lib/operational.functions";
+import { z } from "zod";
 import { useTranslation } from "react-i18next";
 import {
-  MessageSquare, BellRing, ShieldAlert, Sparkles, Check, Smartphone,
-  Calendar, Clock, Send, Users, FileText, CheckCircle2, AlertCircle,
-  Copy, ShieldCheck, History
+  MessageSquare,
+  BellRing,
+  ShieldAlert,
+  Sparkles,
+  Check,
+  Smartphone,
+  Calendar,
+  Clock,
+  Send,
+  Users,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  ShieldCheck,
+  History,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +40,7 @@ import {
   type WhatsAppContact,
   type WhatsAppScheduleConfig,
   type WhatsAppReportFrequency,
-  type RecipientRole
+  type RecipientRole,
 } from "@/lib/whatsapp-service";
 import { useWorkspace } from "@/components/app/workspace-context";
 
@@ -33,19 +48,91 @@ export function WhatsAppPreviewCard() {
   const { t, i18n } = useTranslation("common");
   const lng = i18n.language;
   const { org, locationId, role } = useWorkspace();
-  const canManage = role !== "staff";
+  const canManage = role === "owner";
 
-  const [activeTab, setActiveTab] = useState<"preview" | "settings" | "contacts" | "schedules" | "logs">("preview");
+  const [activeTab, setActiveTab] = useState<
+    "preview" | "settings" | "contacts" | "schedules" | "logs"
+  >("preview");
 
   // Data state from service
   const [settings, setSettings] = useState(() => getWhatsAppSettings(org.id));
-  const [contacts, setContacts] = useState<WhatsAppContact[]>(() => listWhatsAppContacts(org.id));
-  const [schedules, setSchedules] = useState<WhatsAppScheduleConfig[]>(() => listWhatsAppSchedules(org.id));
-  const [logs, setLogs] = useState(() => listWhatsAppLogs(org.id));
+  const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
+  const [schedules, setSchedules] = useState<WhatsAppScheduleConfig[]>(() =>
+    listWhatsAppSchedules(org.id),
+  );
+  const [logs, setLogs] = useState<ReturnType<typeof listWhatsAppLogs>>([]);
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function reloadRecords() {
+    const rows = await fetchOperationalWhatsApp({ data: { orgId: org.id } });
+    const cs = rows
+      .filter((r) => r.kind === "contact")
+      .map((r) => {
+        const p = z
+          .object({
+            name: z.string(),
+            phone: z.string(),
+            role: z.enum(["owner", "manager", "financial_lead", "chef"]),
+            optInDate: z.string(),
+            consentGranted: z.literal(true),
+            active: z.boolean(),
+          })
+          .parse(r.payload);
+        return {
+          id: r.id,
+          orgId: org.id,
+          name: p.name,
+          phone: p.phone,
+          role: p.role,
+          locationIds: [],
+          optInConsent: true,
+          optInDate: p.optInDate,
+          active: p.active,
+        };
+      });
+    setContacts(cs);
+    setLogs(
+      rows
+        .filter((r) => r.kind === "message")
+        .map((r) => {
+          const p = z
+            .object({
+              recipientName: z.string(),
+              recipientPhone: z.string(),
+              renderedText: z.string(),
+              templateKind: z.enum([
+                "financial_summary",
+                "revenue_pulse",
+                "cmv_audit",
+                "low_stock_alert",
+                "waste_alert",
+                "multi_store_comparison",
+              ]),
+            })
+            .parse(r.payload);
+          return {
+            id: r.id,
+            ...p,
+            status: "draft",
+            isDemo: true,
+            createdAt: r.created_at,
+            idempotencyKey: r.id,
+          };
+        }),
+    );
+  }
+  useEffect(() => {
+    setContacts([]);
+    setLogs([]);
+    if (canManage) void reloadRecords().catch(() => toast.error(t("operations:failed")));
+  }, [org.id, canManage]);
 
   // Preview interactive state
-  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplateKind>("financial_summary");
-  const [previewRecipient, setPreviewRecipient] = useState(contacts[0]?.name || "Diretor de Operações");
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<WhatsAppTemplateKind>("financial_summary");
+  const [previewRecipient, setPreviewRecipient] = useState(
+    contacts[0]?.name || "Diretor de Operações",
+  );
 
   // Form new contact
   const [newContactName, setNewContactName] = useState("");
@@ -56,19 +143,36 @@ export function WhatsAppPreviewCard() {
     return renderWhatsAppMessage(org.id, locationId, selectedTemplate, previewRecipient, lng);
   }, [org.id, locationId, selectedTemplate, previewRecipient, lng]);
 
-  const handleSimulateDispatch = () => {
-    const activeContact = contacts[0] || {
-      name: "Diretor de Operações",
-      phone: "+55 (11) 98765-4321"
-    };
-    const created = queueSimulatedSend(org.id, activeContact.name, activeContact.phone, selectedTemplate, lng);
-    setLogs(listWhatsAppLogs(org.id));
-    toast.success(
-      `Prévia enviada em modo demonstração para ${activeContact.name} (${activeContact.phone}). Nenhum SMS ou WhatsApp real foi disparado.`
-    );
+  const handleSimulateDispatch = async () => {
+    const c = contacts.find((c) => c.active && c.optInConsent);
+    if (!c || !canManage || busy) return;
+    setBusy(true);
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          kind: "whatsapp",
+          payload: {
+            kind: "message",
+            recipientName: c.name,
+            recipientPhone: c.phone,
+            templateKind: selectedTemplate,
+            renderedText: renderedPreview,
+            status: "draft",
+            isSimulation: true,
+          },
+        },
+      });
+      await reloadRecords();
+      toast.success(t("operations:saved"));
+    } catch {
+      toast.error(t("operations:failed"));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleAddContact = (e: React.FormEvent) => {
+  const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContactName.trim() || !newContactPhone.trim()) {
       toast.error("Nome e telefone são obrigatórios");
@@ -85,8 +189,31 @@ export function WhatsAppPreviewCard() {
       optInDate: new Date().toISOString(),
       active: true,
     };
-    const updated = saveWhatsAppContact(item);
-    setContacts(updated);
+    if (!consent || !canManage || busy) return;
+    setBusy(true);
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          kind: "whatsapp",
+          payload: {
+            kind: "contact",
+            name: item.name,
+            phone: item.phone,
+            role: item.role,
+            consentGranted: true,
+            optInDate: item.optInDate,
+            active: true,
+          },
+        },
+      });
+      await reloadRecords();
+    } catch {
+      toast.error(t("operations:failed"));
+      return;
+    } finally {
+      setBusy(false);
+    }
     setNewContactName("");
     setNewContactPhone("");
     toast.success("Contato cadastrado com consentimento opt-in registrado.");
@@ -103,12 +230,16 @@ export function WhatsAppPreviewCard() {
             <div>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 Central WhatsApp Business
-                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]">
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]"
+                >
                   Simulado · Conector Seguro Inativo
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Disparo de resumos financeiros, CMV, alertas de compras e relatórios para a diretoria.
+                Disparo de resumos financeiros, CMV, alertas de compras e relatórios para a
+                diretoria.
               </CardDescription>
             </div>
           </div>
@@ -171,6 +302,7 @@ export function WhatsAppPreviewCard() {
 
               <Button
                 size="sm"
+                disabled={!canManage || busy || contacts.length === 0}
                 onClick={handleSimulateDispatch}
                 className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
@@ -219,10 +351,12 @@ export function WhatsAppPreviewCard() {
                       </Badge>
                     </div>
                     <p className="text-muted-foreground text-[11px] flex items-center gap-2">
-                      <Clock className="size-3" /> Horário: {sch.scheduledTime} · Modelo: {sch.templateKind}
+                      <Clock className="size-3" /> Horário: {sch.scheduledTime} · Modelo:{" "}
+                      {sch.templateKind}
                     </p>
                   </div>
                   <Switch
+                    disabled
                     checked={sch.enabled}
                     onCheckedChange={(checked) => {
                       const updated = saveWhatsAppSchedule({ ...sch, enabled: checked });
@@ -245,12 +379,17 @@ export function WhatsAppPreviewCard() {
                   <div>
                     <p className="font-semibold text-foreground flex items-center gap-1.5">
                       {c.name}
-                      <Badge variant="outline" className="text-[9px]">{c.role}</Badge>
+                      <Badge variant="outline" className="text-[9px]">
+                        {c.role}
+                      </Badge>
                     </p>
                     <p className="text-muted-foreground text-[11px] font-mono mt-0.5">{c.phone}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/20">
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
+                    >
                       <CheckCircle2 className="size-3 mr-1" /> Consentimento Ativo
                     </Badge>
                   </div>
@@ -259,36 +398,55 @@ export function WhatsAppPreviewCard() {
             </div>
 
             {/* Formulário de Adicionar Contato */}
-            <form onSubmit={handleAddContact} className="p-3 rounded-lg border bg-muted/20 space-y-2.5">
-              <p className="font-semibold text-foreground">Adicionar Novo Contato de Alerta</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <Input
-                  placeholder="Nome Completo"
-                  value={newContactName}
-                  onChange={(e) => setNewContactName(e.target.value)}
-                  className="h-8 text-xs"
-                />
-                <Input
-                  placeholder="+55 (11) 90000-0000"
-                  value={newContactPhone}
-                  onChange={(e) => setNewContactPhone(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-                <select
-                  value={newContactRole}
-                  onChange={(e) => setNewContactRole(e.target.value as RecipientRole)}
-                  className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
+            {canManage && (
+              <form
+                onSubmit={handleAddContact}
+                className="p-3 rounded-lg border bg-muted/20 space-y-2.5"
+              >
+                <p className="font-semibold text-foreground">Adicionar Novo Contato de Alerta</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <Input
+                    placeholder="Nome Completo"
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <Input
+                    placeholder="+55 (11) 90000-0000"
+                    value={newContactPhone}
+                    onChange={(e) => setNewContactPhone(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <select
+                    value={newContactRole}
+                    onChange={(e) => setNewContactRole(e.target.value as RecipientRole)}
+                    className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
+                  >
+                    <option value="owner">Proprietário / Sócio</option>
+                    <option value="manager">Gerente Geral</option>
+                    <option value="financial_lead">Responsável Financeiro</option>
+                    <option value="chef">Chef / Cozinha</option>
+                  </select>
+                </div>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                  />
+                  {t("operations:consent")}
+                </label>
+                <Button
+                  disabled={!consent || busy}
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5"
                 >
-                  <option value="owner">Proprietário / Sócio</option>
-                  <option value="manager">Gerente Geral</option>
-                  <option value="financial_lead">Responsável Financeiro</option>
-                  <option value="chef">Chef / Cozinha</option>
-                </select>
-              </div>
-              <Button type="submit" size="sm" variant="outline" className="h-8 text-xs gap-1.5">
-                <Users className="size-3.5" /> Cadastrar Destinatário
-              </Button>
-            </form>
+                  <Users className="size-3.5" /> Cadastrar Destinatário
+                </Button>
+              </form>
+            )}
           </div>
         )}
 
@@ -311,10 +469,16 @@ export function WhatsAppPreviewCard() {
                       >
                         {log.status === "sent" ? "Enviado (Demo)" : "Agendado"}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground font-mono">{log.idempotencyKey}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {log.idempotencyKey}
+                      </span>
                     </div>
                     <p className="text-muted-foreground text-[11px]">
-                      {log.templateKind} · {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {log.templateKind} ·{" "}
+                      {new Date(log.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </div>
                 </div>
@@ -329,7 +493,8 @@ export function WhatsAppPreviewCard() {
             <div className="rounded-lg border bg-muted/30 p-3 text-muted-foreground flex items-start gap-2.5">
               <ShieldAlert className="size-4 text-primary shrink-0 mt-0.5" />
               <p className="leading-relaxed text-[11px]">
-                O Servora está preparado para acoplar o WhatsApp Business Cloud API oficial da Meta. Nenhum token secreto ou chave privada é exposta no navegador.
+                O Servora está preparado para acoplar o WhatsApp Business Cloud API oficial da Meta.
+                Nenhum token secreto ou chave privada é exposta no navegador.
               </p>
             </div>
 
@@ -353,9 +518,12 @@ export function WhatsAppPreviewCard() {
             </div>
 
             <div className="pt-2 flex items-center justify-between text-muted-foreground text-[11px] border-t">
-              <span>Status do Webhook: Meta Webhook Validated</span>
-              <Badge variant="outline" className="text-[9px] text-emerald-600 border-emerald-500/30">
-                Ativo e Monitorado
+              <span>{t("operations:pending")}</span>
+              <Badge
+                variant="outline"
+                className="text-[9px] text-emerald-600 border-emerald-500/30"
+              >
+                {t("operations:pending")}
               </Badge>
             </div>
           </div>

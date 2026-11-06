@@ -17,7 +17,9 @@ export function PageHeader({
       <div className="min-w-0">
         {eyebrow && <div className="mb-2 flex flex-wrap items-center gap-2">{eyebrow}</div>}
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] md:text-[26px]">{title}</h1>
-        {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+        )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -67,7 +69,11 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex h-9 items-center rounded-md border bg-card p-0.5 shadow-xs">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex h-9 items-center rounded-md border bg-card p-0.5 shadow-xs"
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -76,7 +82,9 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             "h-full rounded-[5px] px-3 text-xs font-medium transition-colors",
-            value === o.value ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+            value === o.value
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           {o.label}

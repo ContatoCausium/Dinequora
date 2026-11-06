@@ -1,10 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import {
+  fetchOperationalMenu,
+  saveOperationalMenu,
+  archiveOperationalMenu,
+} from "@/lib/operational.functions";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
-  BookOpenText, Plus, Search, Eye, Sparkles, Clock, Trash2, Edit3, Check, DollarSign, Store,
-  Layers, ChefHat, AlertCircle
+  BookOpenText,
+  Plus,
+  Search,
+  Eye,
+  Sparkles,
+  Clock,
+  Trash2,
+  Edit3,
+  Check,
+  DollarSign,
+  Store,
+  Layers,
+  ChefHat,
+  AlertCircle,
 } from "lucide-react";
 
 import { useWorkspace } from "@/components/app/workspace-context";
@@ -14,17 +31,44 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  listCategories, saveCategory, deleteCategory, listMenuItems, saveMenuItem, deleteMenuItem, duplicateMenuItem,
-  type MenuItem, type MenuCategory, type ModifierGroup, type ModifierOption
+  listCategories,
+  saveCategory,
+  deleteCategory,
+  listMenuItems,
+  saveMenuItem,
+  deleteMenuItem,
+  duplicateMenuItem,
+  type MenuItem,
+  type MenuCategory,
+  type ModifierGroup,
+  type ModifierOption,
 } from "@/lib/menu-service";
 import { DemoBadge } from "@/components/app/brand-mark";
 
 export const Route = createFileRoute("/_authenticated/_app/menu")({
   head: () => ({
-    meta: [{ title: "Menu & Products · Servora" }],
+    meta: [
+      { title: "Menu & Products · Servora" },
+      {
+        name: "description",
+        content: "Restaurant products, prices and modifiers with authorized store access.",
+      },
+      { property: "og:title", content: "Menu & Products · Servora" },
+      {
+        property: "og:description",
+        content: "Restaurant products, prices and modifiers with authorized store access.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
   }),
   component: MenuPage,
 });
@@ -33,9 +77,46 @@ function MenuPage() {
   const { t } = useTranslation("menu");
   const { org, locationId, role } = useWorkspace();
   const canManage = role !== "staff";
+  // Owners are org-wide; managers/staff are limited to their authorized stores.
+  const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
+  async function guarded(action: () => void | Promise<void>) {
+    try {
+      await action();
+    } catch (e) {
+      toast.error(
+        e instanceof Error && e.message === "location_forbidden"
+          ? "Not allowed for your stores"
+          : "Action could not be completed",
+      );
+    }
+  }
 
-  const [categories, setCategories] = useState<MenuCategory[]>(() => listCategories(org.id));
-  const [items, setItems] = useState<MenuItem[]>(() => listMenuItems(org.id));
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [items, setItems] = useState<MenuItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  async function reloadMenu() {
+    const data = await fetchOperationalMenu({ data: { orgId: org.id } });
+    setCategories(data.categories);
+    setItems(data.items);
+  }
+  useEffect(() => {
+    let active = true;
+    setCategories([]);
+    setItems([]);
+    fetchOperationalMenu({ data: { orgId: org.id } })
+      .then((data) => {
+        if (active) {
+          setCategories(data.categories);
+          setItems(data.items);
+        }
+      })
+      .catch(() => {
+        if (active) toast.error(t("common:states.errorTitle"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [org.id]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -62,7 +143,11 @@ function MenuPage() {
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      if (locationId !== "all" && item.locationIds.length > 0 && !item.locationIds.includes(locationId)) {
+      if (
+        locationId !== "all" &&
+        item.locationIds.length > 0 &&
+        !item.locationIds.includes(locationId)
+      ) {
         return false;
       }
       if (activeCategory !== "all" && item.category !== activeCategory) {
@@ -126,57 +211,101 @@ function MenuPage() {
       prepTimeMinutes: prep,
       imageUrl: formImage.trim() || undefined,
       active: formActive,
-      locationIds: editingItem?.locationIds || [],
+      locationIds:
+        editingItem?.locationIds ||
+        (role === "owner"
+          ? []
+          : locationId === "all"
+            ? org.locations.map((l) => l.id)
+            : [locationId]),
       modifierGroups: formModifiers,
       createdAt: editingItem?.createdAt || new Date().toISOString(),
     };
 
-    const updated = saveMenuItem(org.id, toSave);
-    setItems(updated);
-    setItemDialogOpen(false);
-    toast.success(editingItem ? "Product updated" : "Product created");
+    if (saving) return;
+    guarded(async () => {
+      setSaving(true);
+      try {
+        await saveOperationalMenu({ data: { kind: "product", orgId: org.id, item: toSave } });
+        await reloadMenu();
+        setItemDialogOpen(false);
+        toast.success(editingItem ? "Product updated" : "Product created");
+      } finally {
+        setSaving(false);
+      }
+    });
   }
 
   function confirmDeleteItem(id: string) {
     if (!canManage) return;
-    const updated = deleteMenuItem(org.id, id);
-    setItems(updated);
-    setDeleteConfirmId(null);
-    toast.success("Product removed");
+    guarded(async () => {
+      await archiveOperationalMenu({ data: { orgId: org.id, kind: "product", id } });
+      await reloadMenu();
+      setDeleteConfirmId(null);
+      toast.success("Product removed");
+    });
   }
 
   function handleDuplicateItem(id: string) {
     if (!canManage) return;
-    const updated = duplicateMenuItem(org.id, id);
-    setItems(updated);
-    toast.success("Product duplicated");
+    guarded(async () => {
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      await saveOperationalMenu({
+        data: {
+          kind: "product",
+          orgId: org.id,
+          item: { ...item, id: `item-${crypto.randomUUID()}`, name: `${item.name} (Copy)` },
+        },
+      });
+      await reloadMenu();
+      toast.success("Product duplicated");
+    });
   }
 
   function toggleItemActive(item: MenuItem) {
     if (!canManage) return;
-    const updated = saveMenuItem(org.id, { ...item, active: !item.active });
-    setItems(updated);
-    toast.success(item.active ? "Product set to unavailable" : "Product is now available");
+    guarded(async () => {
+      await saveOperationalMenu({
+        data: { kind: "product", orgId: org.id, item: { ...item, active: !item.active } },
+      });
+      await reloadMenu();
+      toast.success(item.active ? "Product set to unavailable" : "Product is now available");
+    });
   }
 
   function handleDeleteCategory(id: string) {
     if (!canManage) return;
-    const updated = deleteCategory(org.id, id);
-    setCategories(updated);
-    if (activeCategory === id) setActiveCategory("all");
-    toast.success("Category deleted");
+    guarded(async () => {
+      await archiveOperationalMenu({ data: { orgId: org.id, kind: "category", id } });
+      await reloadMenu();
+      if (activeCategory === id) setActiveCategory("all");
+      toast.success("Category deleted");
+    });
   }
 
-  function handleSaveCategory() {
+  async function handleSaveCategory() {
     if (!catName.trim()) return;
-    const catId = catName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const catId = catName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
     const newCat: MenuCategory = {
       id: catId || `cat-${Date.now()}`,
       name: catName.trim(),
       description: catDesc.trim() || undefined,
     };
-    const updated = saveCategory(org.id, newCat);
-    setCategories(updated);
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveOperationalMenu({ data: { kind: "category", orgId: org.id, category: newCat } });
+      await reloadMenu();
+    } catch {
+      toast.error("Not allowed for your stores");
+      return;
+    } finally {
+      setSaving(false);
+    }
     setCatDialogOpen(false);
     setCatName("");
     setCatDesc("");
@@ -201,7 +330,7 @@ function MenuPage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            <DemoBadge label={t("interactiveBadge")} />
+            {org.fictional && <DemoBadge label={t("interactiveBadge")} />}
           </div>
         }
         title={t("title")}
@@ -274,7 +403,10 @@ function MenuPage() {
         <Panel className="p-12 text-center">
           <BookOpenText className="mx-auto size-12 text-muted-foreground/50" />
           <h3 className="mt-4 text-base font-semibold">Nenhum produto cadastrado no cardápio</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Cadastre categorias e itens reais no banco de dados para disponibilizar no POS e atendimento.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cadastre categorias e itens reais no banco de dados para disponibilizar no POS e
+            atendimento.
+          </p>
           {canManage && (
             <Button size="sm" onClick={openNewItem} className="mt-4">
               <Plus className="mr-1.5 size-4" />
@@ -306,7 +438,10 @@ function MenuPage() {
                       </div>
                     )}
                     <div className="absolute right-2 top-2 flex gap-1">
-                      <Badge variant={item.active ? "default" : "secondary"} className="text-[10px]">
+                      <Badge
+                        variant={item.active ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
                         {item.active ? t("item.available") : t("item.unavailable")}
                       </Badge>
                     </div>
@@ -319,7 +454,9 @@ function MenuPage() {
                         ${(item.priceCents / 100).toFixed(2)}
                       </span>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {item.description}
+                    </p>
                   </div>
                 </div>
 
@@ -337,7 +474,7 @@ function MenuPage() {
                     </span>
                   </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-1.5">
+                  <div className="mt-3 flex items-center justify-between gap-1.5">
                     {canManage ? (
                       <Button
                         variant="outline"
@@ -347,7 +484,9 @@ function MenuPage() {
                       >
                         {item.active ? t("item.unavailable") : t("item.available")}
                       </Button>
-                    ) : <span />}
+                    ) : (
+                      <span />
+                    )}
                     <div className="flex items-center gap-1">
                       {canManage && (
                         <Button
@@ -361,7 +500,12 @@ function MenuPage() {
                         </Button>
                       )}
                       {canManage && (
-                        <Button variant="ghost" size="icon" className="size-8" onClick={() => openEditItem(item)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => openEditItem(item)}
+                        >
                           <Edit3 className="size-4" />
                         </Button>
                       )}
@@ -402,7 +546,9 @@ function MenuPage() {
                 <div key={c.id} className="flex items-center justify-between p-3 text-sm">
                   <div>
                     <p className="font-medium">{c.name}</p>
-                    {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
+                    {c.description && (
+                      <p className="text-xs text-muted-foreground">{c.description}</p>
+                    )}
                   </div>
                   {canManage && categories.length > 1 && (
                     <Button
@@ -446,7 +592,9 @@ function MenuPage() {
             <Button variant="outline" onClick={() => setCatDialogOpen(false)}>
               {t("form.cancel")}
             </Button>
-            <Button onClick={handleSaveCategory}>{t("categoryForm.save")}</Button>
+            <Button disabled={saving} onClick={handleSaveCategory}>
+              {t("categoryForm.save")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -571,7 +719,9 @@ function MenuPage() {
             <Button variant="outline" onClick={() => setItemDialogOpen(false)}>
               {t("form.cancel")}
             </Button>
-            <Button onClick={handleSaveItem}>{t("form.save")}</Button>
+            <Button disabled={saving} onClick={handleSaveItem}>
+              {t("form.save")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -612,7 +762,9 @@ function MenuPage() {
                 <div key={c.id} className="space-y-3">
                   <div className="border-b pb-1">
                     <h4 className="font-bold text-lg">{c.name}</h4>
-                    {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
+                    {c.description && (
+                      <p className="text-xs text-muted-foreground">{c.description}</p>
+                    )}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {catItems.map((item) => (

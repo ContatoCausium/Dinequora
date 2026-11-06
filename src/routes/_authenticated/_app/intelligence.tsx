@@ -1,20 +1,36 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { fetchOperationalResources } from "@/lib/operational.functions";
+import { recordedIntelligence } from "@/lib/operational-metrics";
+import type { Resources } from "@/lib/operational-mappers";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import {
-  Sparkles, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Store, DollarSign,
-  PieChart as PieIcon, ShieldCheck, HelpCircle, Layers, CheckCircle2, ChevronRight, RefreshCw
+  Sparkles,
+  TrendingUp,
+  AlertTriangle,
+  ArrowUpRight,
+  ArrowDownRight,
+  Store,
+  DollarSign,
+  PieChart as PieIcon,
+  ShieldCheck,
+  HelpCircle,
+  Layers,
+  CheckCircle2,
+  ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { useWorkspace, useScopedLocations } from "@/components/app/workspace-context";
 import { PageHeader, Panel } from "@/components/app/page";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { 
-  computeIntelligenceSummary, 
-  executeAgentQuery, 
-  type IntelligenceInsight, 
-  type AgentQueryResponse 
+import {
+  computeIntelligenceSummary,
+  executeAgentQuery,
+  type IntelligenceInsight,
+  type AgentQueryResponse,
 } from "@/lib/intelligence-service";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +40,18 @@ export const Route = createFileRoute("/_authenticated/_app/intelligence")({
   head: () => ({
     meta: [
       { title: "Servora Intelligence · Resumo Executivo e Insights" },
-      { name: "description", content: "Inteligência determinística de operações, CMV, desperdícios e margens para restaurantes." },
+      {
+        name: "description",
+        content:
+          "Inteligência determinística de operações, CMV, desperdícios e margens para restaurantes.",
+      },
+      { property: "og:title", content: "Servora Intelligence · Resumo Executivo e Insights" },
+      {
+        property: "og:description",
+        content: "Métricas registradas de operações e custos de restaurantes.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: IntelligencePage,
@@ -38,6 +65,37 @@ export function IntelligencePage() {
   const [periodDays, setPeriodDays] = useState<number>(30);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [selectedInsight, setSelectedInsight] = useState<IntelligenceInsight | null>(null);
+  const [resources, setResources] = useState<Resources | null>(null);
+  useEffect(() => {
+    let active = true;
+    setResources(null);
+    fetchOperationalResources({ data: { orgId: org.id } })
+      .then((r) => {
+        if (active) setResources(r);
+      })
+      .catch(() => {
+        if (active) toast.error(t("operations:failed"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [org.id]);
+  function resourceScope(id: string) {
+    if (!resources) return null;
+    const loc = resources.locations.find((l) => l.slug === id || l.id === id);
+    if (id !== "all" && !loc) return null;
+    const filter = <T extends { location_id: string }>(rows: T[]) =>
+      loc ? rows.filter((r) => r.location_id === loc.id) : rows;
+    return {
+      ...resources,
+      inventory: filter(resources.inventory),
+      recipes: filter(resources.recipes),
+      purchases: filter(resources.purchases),
+      movements: filter(resources.movements),
+      finance: filter(resources.finance),
+      expenses: filter(resources.expenses),
+    };
+  }
 
   // Estado do Agente de Consultas Executivas (Fase 6.2)
   const [searchPrompt, setSearchPrompt] = useState<string>("");
@@ -50,9 +108,40 @@ export function IntelligencePage() {
     if (!q) return;
     setIsProcessing(true);
     setTimeout(() => {
-      const response = executeAgentQuery(q, org.id, locationId, periodDays);
+      const response: AgentQueryResponse = {
+        id: crypto.randomUUID(),
+        query: q,
+        topic: "profit",
+        headline: t("operations:recorded"),
+        confidence: "deterministic",
+        deterministicEngine: true,
+        timestamp: new Date().toISOString(),
+        report: {
+          title: t("operations:recorded"),
+          summary: t("operations:recorded"),
+          numericEvidence: [
+            {
+              label: t("operations:netRevenue"),
+              value: fmtCurrency(summary.grossRevenueCents, lng),
+              origin: "real_recorded",
+            },
+            {
+              label: t("operations:cogs"),
+              value: fmtCurrency(summary.foodCostCents, lng),
+              origin: "real_recorded",
+            },
+          ],
+          periodAnalyzed: `${periodDays}`,
+          dataOrigin: "real_recorded",
+          calculationExplanation: t("operations:recorded"),
+          practicalRecommendations: [],
+          limitations: [t("operations:pending")],
+        },
+      };
       setActiveReport(response);
-      setQueryHistory((prev) => [response, ...prev.filter(item => item.id !== response.id)].slice(0, 5));
+      setQueryHistory((prev) =>
+        [response, ...prev.filter((item) => item.id !== response.id)].slice(0, 5),
+      );
       setIsProcessing(false);
       if (!promptToRun) setSearchPrompt("");
     }, 280);
@@ -68,13 +157,30 @@ export function IntelligencePage() {
 
   // Cálculo determinístico modular e seguro
   const summary = useMemo(() => {
-    return computeIntelligenceSummary(org.id, locationId, periodDays);
-  }, [org.id, locationId, periodDays]);
+    const r = resourceScope(locationId);
+    return r
+      ? recordedIntelligence(r, periodDays)
+      : {
+          grossRevenueCents: 0,
+          netRevenueCents: 0,
+          foodCostCents: 0,
+          cmvRate: 0,
+          grossMarginRate: 0,
+          operatingExpensesCents: 0,
+          estimatedWasteCents: 0,
+          lowStockItemCount: 0,
+          activeRecipeCount: 0,
+          analyzedOrderCount: 0,
+          dataBreakdown: { realTransactionsCount: 0, realOrdersCount: 0, inventoryCount: 0 },
+          insights: [],
+        };
+  }, [resources, locationId, periodDays]);
 
   // Comparativo de desempenho entre lojas
   const storeComparison = useMemo(() => {
     return org.locations.map((loc) => {
-      const s = computeIntelligenceSummary(org.id, loc.id, periodDays);
+      const r = resourceScope(loc.id);
+      const s = r ? recordedIntelligence(r, periodDays) : summary;
       return {
         id: loc.id,
         name: loc.name,
@@ -84,7 +190,7 @@ export function IntelligencePage() {
         margin: s.grossMarginRate,
       };
     });
-  }, [org.id, org.locations, periodDays]);
+  }, [resources, org.locations, periodDays]);
 
   const filteredInsights = useMemo(() => {
     if (activeCategory === "all") return summary.insights;
@@ -97,7 +203,10 @@ export function IntelligencePage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase font-semibold">
+            <Badge
+              variant="secondary"
+              className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase font-semibold"
+            >
               Fase 6.1 · Servora Intelligence
             </Badge>
           </div>
@@ -112,7 +221,9 @@ export function IntelligencePage() {
                   key={d}
                   onClick={() => setPeriodDays(d)}
                   className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                    periodDays === d ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                    periodDays === d
+                      ? "bg-card text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {d} dias
@@ -134,12 +245,16 @@ export function IntelligencePage() {
               <div>
                 <CardTitle className="text-base font-bold flex items-center gap-2">
                   Agente Executivo de Consultas
-                  <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] bg-primary/10 text-primary border-primary/30"
+                  >
                     Motor Determinístico Ativo
                   </Badge>
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">
-                  Faça perguntas analíticas sobre vendas, despesas, CMV, desperdício ou selecione uma consulta pronta.
+                  Faça perguntas analíticas sobre vendas, despesas, CMV, desperdício ou selecione
+                  uma consulta pronta.
                 </CardDescription>
               </div>
             </div>
@@ -163,7 +278,11 @@ export function IntelligencePage() {
               onClick={() => handleRunQuery()}
               className="h-9 px-4 text-xs font-medium shrink-0"
             >
-              {isProcessing ? <RefreshCw className="size-3.5 animate-spin mr-1.5" /> : <Sparkles className="size-3.5 mr-1.5" />}
+              {isProcessing ? (
+                <RefreshCw className="size-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Sparkles className="size-3.5 mr-1.5" />
+              )}
               Consultar
             </Button>
           </div>
@@ -194,7 +313,9 @@ export function IntelligencePage() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="text-[10px]">
-                  {activeReport.confidence === "deterministic" ? "Cálculo Determinístico" : "Estatístico"}
+                  {activeReport.confidence === "deterministic"
+                    ? "Cálculo Determinístico"
+                    : "Estatístico"}
                 </Badge>
                 <span className="text-[11px] text-muted-foreground">{activeReport.timestamp}</span>
               </div>
@@ -212,10 +333,19 @@ export function IntelligencePage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {activeReport.report.numericEvidence.map((ev, i) => (
                   <div key={i} className="rounded-lg border bg-background/80 p-2.5 space-y-1">
-                    <span className="text-[11px] text-muted-foreground block truncate">{ev.label}</span>
+                    <span className="text-[11px] text-muted-foreground block truncate">
+                      {ev.label}
+                    </span>
                     <span className="text-sm font-bold text-foreground block">{ev.value}</span>
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-muted-foreground/30">
-                      {ev.origin === "real_recorded" ? "Dado Real" : ev.origin === "mixed_verified" ? "Estimado" : "Simulado"}
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1 py-0 border-muted-foreground/30"
+                    >
+                      {ev.origin === "real_recorded"
+                        ? "Dado Real"
+                        : ev.origin === "mixed_verified"
+                          ? "Estimado"
+                          : "Simulado"}
                     </Badge>
                   </div>
                 ))}
@@ -238,7 +368,8 @@ export function IntelligencePage() {
 
               <div className="space-y-2 bg-primary/5 p-3 rounded-lg text-xs border border-primary/20">
                 <p className="font-semibold text-foreground flex items-center gap-1.5">
-                  <CheckCircle2 className="size-3.5 text-primary" /> Recomendações Práticas Acionáveis
+                  <CheckCircle2 className="size-3.5 text-primary" /> Recomendações Práticas
+                  Acionáveis
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-muted-foreground text-[11px]">
                   {activeReport.report.practicalRecommendations.map((rec, i) => (
@@ -265,10 +396,14 @@ export function IntelligencePage() {
         <div className="flex items-center gap-2.5">
           <ShieldCheck className="size-5 text-primary shrink-0" />
           <div>
-            <p className="font-medium text-foreground text-sm">Motor Analítico Determinístico & Auditável</p>
+            <p className="font-medium text-foreground text-sm">
+              Motor Analítico Determinístico & Auditável
+            </p>
             <p className="mt-0.5">
-              Os indicadores abaixo são calculados diretamente de transações financeiras, fichas técnicas e estoque.
-              Nenhum dado é alucinado por modelos generativos. Cálculos separados por origem real ({summary.dataBreakdown.realTransactionsCount} transações / {summary.dataBreakdown.realOrdersCount} pedidos).
+              Os indicadores abaixo são calculados diretamente de transações financeiras, fichas
+              técnicas e estoque. Nenhum dado é alucinado por modelos generativos. Cálculos
+              separados por origem real ({summary.dataBreakdown.realTransactionsCount} transações /{" "}
+              {summary.dataBreakdown.realOrdersCount} pedidos).
             </p>
           </div>
         </div>
@@ -281,7 +416,9 @@ export function IntelligencePage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border bg-card/70">
           <CardHeader className="p-4 pb-2">
-            <CardDescription className="text-xs font-medium">Receita Bruta ({periodDays}d)</CardDescription>
+            <CardDescription className="text-xs font-medium">
+              Receita Bruta ({periodDays}d)
+            </CardDescription>
             <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
               {fmtCurrency(summary.grossRevenueCents, lng)}
             </CardTitle>
@@ -301,7 +438,10 @@ export function IntelligencePage() {
           </CardHeader>
           <CardContent className="p-4 pt-0 text-xs text-muted-foreground flex items-center justify-between">
             <span>Meta: 30% a 32%</span>
-            <Badge variant={summary.cmvRate <= 33 ? "secondary" : "destructive"} className="text-[10px] px-1.5 py-0">
+            <Badge
+              variant={summary.cmvRate <= 33 ? "secondary" : "destructive"}
+              className="text-[10px] px-1.5 py-0"
+            >
               {summary.cmvRate <= 33 ? "Adequado" : "Atenção"}
             </Badge>
           </CardContent>
@@ -322,14 +462,19 @@ export function IntelligencePage() {
 
         <Card className="border bg-card/70">
           <CardHeader className="p-4 pb-2">
-            <CardDescription className="text-xs font-medium">Risco de Ruptura (Estoque)</CardDescription>
+            <CardDescription className="text-xs font-medium">
+              Risco de Ruptura (Estoque)
+            </CardDescription>
             <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
               {summary.lowStockItemCount} itens
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 text-xs text-muted-foreground flex items-center justify-between">
             <span>Desperdício est.: ~{fmtCurrency(summary.estimatedWasteCents, lng)}</span>
-            <Badge variant={summary.lowStockItemCount > 0 ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+            <Badge
+              variant={summary.lowStockItemCount > 0 ? "destructive" : "secondary"}
+              className="text-[10px] px-1.5 py-0"
+            >
               {summary.lowStockItemCount > 0 ? "Crítico" : "Normal"}
             </Badge>
           </CardContent>
@@ -383,14 +528,22 @@ export function IntelligencePage() {
                           insight.impactLevel === "high"
                             ? "border-destructive/40 text-destructive bg-destructive/5"
                             : insight.impactLevel === "opportunity"
-                            ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/5"
-                            : "border-primary/40 text-primary bg-primary/5"
+                              ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/5"
+                              : "border-primary/40 text-primary bg-primary/5"
                         }`}
                       >
-                        {insight.impactLevel === "high" ? "Crítico" : insight.impactLevel === "opportunity" ? "Oportunidade" : "Aviso"}
+                        {insight.impactLevel === "high"
+                          ? "Crítico"
+                          : insight.impactLevel === "opportunity"
+                            ? "Oportunidade"
+                            : "Aviso"}
                       </Badge>
-                      <span className="text-[11px] text-muted-foreground">Origem: {insight.dataOrigin.replace("_", " ")}</span>
-                      <span className="text-[11px] text-muted-foreground">· Confiança: {insight.confidence}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Origem: {insight.dataOrigin.replace("_", " ")}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        · Confiança: {insight.confidence}
+                      </span>
                     </div>
                     <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                       {insight.title}
@@ -438,7 +591,10 @@ export function IntelligencePage() {
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-1">
               {storeComparison.map((st) => (
-                <div key={st.id} className="rounded-lg border p-2.5 text-xs space-y-1.5 bg-muted/10">
+                <div
+                  key={st.id}
+                  className="rounded-lg border p-2.5 text-xs space-y-1.5 bg-muted/10"
+                >
                   <div className="flex items-center justify-between font-medium">
                     <span>{st.name}</span>
                     <span className="font-semibold">{fmtCurrency(st.revenue, lng)}</span>

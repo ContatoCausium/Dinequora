@@ -8,7 +8,10 @@ import { AppPending, AppError } from "@/components/app/states";
 
 export const Route = createFileRoute("/_authenticated/_app")({
   loader: async ({ context }) => {
-    const [memberships, admin] = await Promise.all([fetchMemberships(context.user.id), isPlatformAdmin()]);
+    const [memberships, admin] = await Promise.all([
+      fetchMemberships(context.user.id),
+      isPlatformAdmin(),
+    ]);
     // No membership = no organization data. New users create their own or accept an invitation.
     // Platform admins without restaurant membership go to the Control Center, never into a tenant.
     if (memberships.length === 0) throw redirect({ to: admin ? "/control" : "/onboarding" });
@@ -24,7 +27,12 @@ function AppLayout() {
   const { user } = Route.useRouteContext();
   const router = useRouter();
   return (
-    <WorkspaceProvider user={user} memberships={memberships} isPlatformAdmin={admin} onRefresh={() => void router.invalidate()}>
+    <WorkspaceProvider
+      user={user}
+      memberships={memberships}
+      isPlatformAdmin={admin}
+      onRefresh={() => void router.invalidate()}
+    >
       <AppShell>
         <Outlet />
       </AppShell>

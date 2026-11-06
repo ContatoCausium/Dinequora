@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { FileSpreadsheet, Download, FileText, Printer, Filter, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  FileSpreadsheet,
+  Download,
+  FileText,
+  Printer,
+  Filter,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/app/page";
 import { Button } from "@/components/ui/button";
@@ -50,7 +58,9 @@ export function FinanceReports({
 
   const [reportType, setReportType] = useState<FinancialReportType>("cash_flow");
   const [selectedLocation, setSelectedLocation] = useState<string>(currentLocationId || "all");
-  const [selectedDataType, setSelectedDataType] = useState<"all" | "realized" | "projected" | "simulated">("all");
+  const [selectedDataType, setSelectedDataType] = useState<
+    "all" | "realized" | "projected" | "simulated"
+  >("all");
 
   const locationName = useMemo(() => {
     if (selectedLocation === "all") return "All Locations (Consolidated)";
@@ -91,8 +101,14 @@ export function FinanceReports({
 
   const handleExportXmlSpreadsheet = () => {
     const xml = exportReportToXmlSpreadsheet(report);
-    triggerFileDownload(`${report.reportType}-${Date.now()}.xml`, xml, "application/vnd.ms-excel;charset=utf-8;");
-    toast.info(t("reports.exportedXmlNote", "Spreadsheet generated in Excel-compatible XML format"));
+    triggerFileDownload(
+      `${report.reportType}-${Date.now()}.xml`,
+      xml,
+      "application/vnd.ms-excel;charset=utf-8;",
+    );
+    toast.info(
+      t("reports.exportedXmlNote", "Spreadsheet generated in Excel-compatible XML format"),
+    );
   };
 
   const handlePrintPdf = () => {
@@ -105,14 +121,22 @@ export function FinanceReports({
     <div className="space-y-6">
       <Panel
         title={t("reports.title", "Financial Reports & Exports")}
-        subtitle={t("reports.subtitle", "Download clean operational and executive reports in CSV, Excel XML, or Print/PDF format")}
+        subtitle={t(
+          "reports.subtitle",
+          "Download clean operational and executive reports in CSV, Excel XML, or Print/PDF format",
+        )}
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleExportCsv} className="text-xs h-8">
               <Download className="mr-1.5 size-3.5" />
               {t("reports.exportCsv", "Export CSV")}
             </Button>
-            <Button size="sm" variant="outline" onClick={handleExportXmlSpreadsheet} className="text-xs h-8">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportXmlSpreadsheet}
+              className="text-xs h-8"
+            >
               <FileSpreadsheet className="mr-1.5 size-3.5" />
               {t("reports.exportExcel", "Export Excel (XML)")}
             </Button>
@@ -131,12 +155,20 @@ export function FinanceReports({
               onChange={(e) => setReportType(e.target.value as FinancialReportType)}
               className="h-8 rounded-md border bg-background px-2.5 text-xs text-foreground font-medium"
             >
-              <option value="cash_flow">{t("reports.types.cash_flow", "Cash Flow Activity")}</option>
+              <option value="cash_flow">
+                {t("reports.types.cash_flow", "Cash Flow Activity")}
+              </option>
               <option value="revenue">{t("reports.types.revenue", "Revenue & Sales")}</option>
               <option value="expenses">{t("reports.types.expenses", "Operating Expenses")}</option>
-              <option value="payables_receivables">{t("reports.types.payables", "Accounts Payable")}</option>
-              <option value="cogs_margins">{t("reports.types.margins", "COGS & Product Margins")}</option>
-              <option value="store_performance">{t("reports.types.performance", "Multi-Store Performance")}</option>
+              <option value="payables_receivables">
+                {t("reports.types.payables", "Accounts Payable")}
+              </option>
+              <option value="cogs_margins">
+                {t("reports.types.margins", "COGS & Product Margins")}
+              </option>
+              <option value="store_performance">
+                {t("reports.types.performance", "Multi-Store Performance")}
+              </option>
               <option value="monthly_trends">{t("reports.types.trends", "Monthly Trends")}</option>
             </select>
 
@@ -155,7 +187,11 @@ export function FinanceReports({
 
             <select
               value={selectedDataType}
-              onChange={(e) => setSelectedDataType(e.target.value as any)}
+              onChange={(e) =>
+                setSelectedDataType(
+                  e.target.value as "all" | "realized" | "projected" | "simulated",
+                )
+              }
               className="h-8 rounded-md border bg-background px-2.5 text-xs text-foreground"
             >
               <option value="all">{t("reports.allData", "All Data Types")}</option>
@@ -166,7 +202,9 @@ export function FinanceReports({
           </div>
 
           <div className="text-xs text-muted-foreground">
-            <span>{report.rows.length} {t("reports.recordsCount", "records found")}</span>
+            <span>
+              {report.rows.length} {t("reports.recordsCount", "records found")}
+            </span>
           </div>
         </div>
 
@@ -230,8 +268,8 @@ export function FinanceReports({
                         row.typeKind === "inflow"
                           ? "text-emerald-600"
                           : row.typeKind === "outflow"
-                          ? "text-destructive"
-                          : "text-foreground"
+                            ? "text-destructive"
+                            : "text-foreground"
                       }
                     >
                       {row.formattedAmount}

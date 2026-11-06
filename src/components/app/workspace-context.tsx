@@ -1,13 +1,29 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { generateTheme, themeToCssVars, type BrandColors } from "@/lib/theme-engine";
 import type { Organization } from "@/lib/tenants";
-import { saveOrganizationBrand, type Membership, type OrgRole, type OrgStatus } from "@/lib/org-service";
+import {
+  saveOrganizationBrand,
+  type Membership,
+  type OrgRole,
+  type OrgStatus,
+} from "@/lib/org-service";
 import type { AuthUser } from "@/lib/auth";
 import { applyUserLanguage } from "@/lib/profile-service";
 
 type Mode = "light" | "dark";
-type StoredBrand = { current: BrandColors & { logoUrl?: string | undefined }; previous?: BrandColors & { logoUrl?: string | undefined } };
+type StoredBrand = {
+  current: BrandColors & { logoUrl?: string | undefined };
+  previous?: BrandColors & { logoUrl?: string | undefined };
+};
 
 type Ctx = {
   user: AuthUser;
@@ -35,8 +51,19 @@ type Ctx = {
 
 const WorkspaceContext = createContext<Ctx | null>(null);
 
-
-export function WorkspaceProvider({ children, user, memberships, isPlatformAdmin = false, onRefresh }: { children: ReactNode; user: AuthUser; memberships: Membership[]; isPlatformAdmin?: boolean; onRefresh?: () => void }) {
+export function WorkspaceProvider({
+  children,
+  user,
+  memberships,
+  isPlatformAdmin = false,
+  onRefresh,
+}: {
+  children: ReactNode;
+  user: AuthUser;
+  memberships: Membership[];
+  isPlatformAdmin?: boolean;
+  onRefresh?: () => void;
+}) {
   const ORGANIZATIONS = useMemo(() => memberships.map((m) => m.org), [memberships]);
   const [orgId, setOrgIdState] = useState(ORGANIZATIONS[0]?.id ?? "");
   const membership = memberships.find((m) => m.org.id === orgId) ?? memberships[0];
@@ -57,10 +84,7 @@ export function WorkspaceProvider({ children, user, memberships, isPlatformAdmin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const brand = useMemo(
-    () => ({ ...org.brand, logoUrl: org.logoUrl }),
-    [org],
-  );
+  const brand = useMemo(() => ({ ...org.brand, logoUrl: org.logoUrl }), [org]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -72,8 +96,11 @@ export function WorkspaceProvider({ children, user, memberships, isPlatformAdmin
   const persist = useCallback((id: string, value: StoredBrand | null) => {
     setStored((s) => {
       const next = { ...s };
-      if (value) { next[id] = value; }
-      else { delete next[id]; }
+      if (value) {
+        next[id] = value;
+      } else {
+        delete next[id];
+      }
       return next;
     });
   }, []);
@@ -90,17 +117,37 @@ export function WorkspaceProvider({ children, user, memberships, isPlatformAdmin
     refresh: () => onRefresh?.(),
     org,
     orgs: ORGANIZATIONS,
-    setOrgId: (id) => { setOrgIdState(id); setLocationId("all"); localStorage.setItem("servora.org", id); },
+    setOrgId: (id) => {
+      setOrgIdState(id);
+      setLocationId("all");
+      localStorage.setItem("servora.org", id);
+    },
     locationId,
     setLocationId,
     mode,
-    setMode: (m) => { setModeState(m); localStorage.setItem("servora.mode", m); },
+    setMode: (m) => {
+      setModeState(m);
+      localStorage.setItem("servora.mode", m);
+    },
     brand,
-    saveBrand: (b) => saveOrganizationBrand(membership.dbId, b).then(() => { persist(org.id, { current: b, previous: brand }); onRefresh?.(); }),
-    resetBrand: async () => { const b = { primary: "#b5502f", accent: "#e0a23a", logoUrl: undefined }; await saveOrganizationBrand(membership.dbId, b); persist(org.id, { current: b, previous: brand }); onRefresh?.(); },
+    saveBrand: (b) =>
+      saveOrganizationBrand(membership.dbId, b).then(() => {
+        persist(org.id, { current: b, previous: brand });
+        onRefresh?.();
+      }),
+    resetBrand: async () => {
+      const b = { primary: "#b5502f", accent: "#e0a23a", logoUrl: undefined };
+      await saveOrganizationBrand(membership.dbId, b);
+      persist(org.id, { current: b, previous: brand });
+      onRefresh?.();
+    },
     restorePrevious: async () => {
       const prev = stored[org.id]?.previous ?? org.previousBrand;
-      if (prev) { await saveOrganizationBrand(membership.dbId, prev); persist(org.id, { current: prev, previous: brand }); onRefresh?.(); }
+      if (prev) {
+        await saveOrganizationBrand(membership.dbId, prev);
+        persist(org.id, { current: prev, previous: brand });
+        onRefresh?.();
+      }
     },
     hasPrevious: Boolean(stored[org.id]?.previous ?? org.previousBrand),
   };
