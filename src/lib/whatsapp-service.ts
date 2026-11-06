@@ -2,9 +2,16 @@
 import { computeIntelligenceSummary } from "./intelligence-service";
 import { fmtCurrency, fmtPercent } from "./format";
 
-export type WhatsAppConnectionStatus = "disconnected" | "pending_verification" | "connected" | "demo_mode";
+export type WhatsAppConnectionStatus =
+  "disconnected" | "pending_verification" | "connected" | "demo_mode";
 export type WhatsAppReportFrequency = "daily" | "weekly" | "monthly";
-export type WhatsAppTemplateKind = "financial_summary" | "revenue_pulse" | "cmv_audit" | "low_stock_alert" | "waste_alert" | "multi_store_comparison";
+export type WhatsAppTemplateKind =
+  | "financial_summary"
+  | "revenue_pulse"
+  | "cmv_audit"
+  | "low_stock_alert"
+  | "waste_alert"
+  | "multi_store_comparison";
 export type WhatsAppDeliveryStatus = "draft" | "scheduled" | "sent" | "failed";
 export type RecipientRole = "owner" | "manager" | "financial_lead" | "chef";
 
@@ -179,7 +186,13 @@ export function saveWhatsAppSchedule(schedule: WhatsAppScheduleConfig): WhatsApp
   return updated;
 }
 
-export function renderWhatsAppMessage(orgId: string, locationId: string, template: WhatsAppTemplateKind, recipientName: string, lng = "pt-BR"): string {
+export function renderWhatsAppMessage(
+  orgId: string,
+  locationId: string,
+  template: WhatsAppTemplateKind,
+  recipientName: string,
+  lng = "pt-BR",
+): string {
   const summary = computeIntelligenceSummary(orgId, locationId, 30);
   const isPt = lng.startsWith("pt");
 
@@ -262,7 +275,13 @@ export function listWhatsAppLogs(orgId: string): WhatsAppMessageLog[] {
       recipientName: "Diretor de Operações (Demo)",
       recipientPhone: "+55 (11) 98765-4321",
       templateKind: "financial_summary",
-      renderedText: renderWhatsAppMessage(orgId, "all", "financial_summary", "Diretor de Operações (Demo)", "pt-BR"),
+      renderedText: renderWhatsAppMessage(
+        orgId,
+        "all",
+        "financial_summary",
+        "Diretor de Operações (Demo)",
+        "pt-BR",
+      ),
       status: "sent",
       isDemo: true,
       createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
@@ -274,7 +293,13 @@ export function listWhatsAppLogs(orgId: string): WhatsAppMessageLog[] {
       recipientName: "Gerente Geral Unidade Matriz",
       recipientPhone: "+55 (11) 99123-5566",
       templateKind: "low_stock_alert",
-      renderedText: renderWhatsAppMessage(orgId, "all", "low_stock_alert", "Gerente Geral Unidade Matriz", "pt-BR"),
+      renderedText: renderWhatsAppMessage(
+        orgId,
+        "all",
+        "low_stock_alert",
+        "Gerente Geral Unidade Matriz",
+        "pt-BR",
+      ),
       status: "scheduled",
       isDemo: true,
       createdAt: new Date(Date.now() - 1800000).toISOString(),
@@ -285,7 +310,13 @@ export function listWhatsAppLogs(orgId: string): WhatsAppMessageLog[] {
   return seed;
 }
 
-export function queueSimulatedSend(orgId: string, recipientName: string, recipientPhone: string, template: WhatsAppTemplateKind, lng = "pt-BR"): WhatsAppMessageLog {
+export function queueSimulatedSend(
+  orgId: string,
+  recipientName: string,
+  recipientPhone: string,
+  template: WhatsAppTemplateKind,
+  lng = "pt-BR",
+): WhatsAppMessageLog {
   const logs = listWhatsAppLogs(orgId);
   const newLog: WhatsAppMessageLog = {
     id: `log-${orgId}-${Date.now()}`,
@@ -304,7 +335,10 @@ export function queueSimulatedSend(orgId: string, recipientName: string, recipie
 }
 
 // Webhook Meta validation stub for modular API compatibility
-export function validateMetaWebhookPayload(body: unknown, signatureHeader?: string): { valid: boolean; error?: string } {
+export function validateMetaWebhookPayload(
+  body: unknown,
+  signatureHeader?: string,
+): { valid: boolean; error?: string } {
   if (!body || typeof body !== "object") {
     return { valid: false, error: "payload_empty" };
   }

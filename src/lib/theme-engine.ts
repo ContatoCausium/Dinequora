@@ -164,7 +164,14 @@ export function themeToCssVars(t: ThemeTokens): Record<string, string> {
   return out;
 }
 
-export type ContrastCheck = { key: string; fg: string; bg: string; ratio: number; pass: boolean; target: number };
+export type ContrastCheck = {
+  key: string;
+  fg: string;
+  bg: string;
+  ratio: number;
+  pass: boolean;
+  target: number;
+};
 
 export function contrastReport(t: ThemeTokens): ContrastCheck[] {
   const rows: [string, string, string, number][] = [

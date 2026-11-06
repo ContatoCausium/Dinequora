@@ -8,22 +8,63 @@ import type { LocationLifecycle, WeeklyHours } from "@/lib/access-rules";
 
 export type OrgRole = "owner" | "manager" | "staff";
 export type OrgStatus = "trial" | "active" | "suspended";
-export type Membership = { org: Organization; role: OrgRole; dbId: string; memberId: string; status: OrgStatus; suspendedReason: string | null; storeLimit: number };
+export type Membership = {
+  org: Organization;
+  role: OrgRole;
+  dbId: string;
+  memberId: string;
+  status: OrgStatus;
+  suspendedReason: string | null;
+  storeLimit: number;
+};
 
-type DbLocation = { id: string; slug: string; name: string; address: string | null; phone: string | null; timezone: string; status: LocationLifecycle; hours: WeeklyHours; is_verified: boolean };
+type DbLocation = {
+  id: string;
+  slug: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  timezone: string;
+  status: LocationLifecycle;
+  hours: WeeklyHours;
+  is_verified: boolean;
+};
 type Row = {
   role: OrgRole;
   id: string;
   member_location_access: { location_id: string }[];
-  organizations: { id: string; slug: string; name: string; brand_primary: string; brand_accent: string; status: OrgStatus; suspended_reason: string | null; store_limit: number; plan: Organization["plan"]; is_demo: boolean; logo_url: string | null; previous_brand: Organization["previousBrand"]; onboarding_step: number; locations: DbLocation[] } | null;
+  organizations: {
+    id: string;
+    slug: string;
+    name: string;
+    brand_primary: string;
+    brand_accent: string;
+    status: OrgStatus;
+    suspended_reason: string | null;
+    store_limit: number;
+    plan: Organization["plan"];
+    is_demo: boolean;
+    logo_url: string | null;
+    previous_brand: Organization["previousBrand"];
+    onboarding_step: number;
+    locations: DbLocation[];
+  } | null;
 };
 
-const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
+const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("") || "?";
 
 export async function fetchMemberships(userId: string): Promise<Membership[]> {
   const { data, error } = await supabase
     .from("organization_members")
-    .select("id, role, member_location_access(location_id), organizations(id, slug, name, brand_primary, brand_accent, status, suspended_reason, store_limit, plan, is_demo, logo_url, previous_brand, onboarding_step, locations(id, slug, name, address, phone, timezone, status, hours, is_verified))")
+    .select(
+      "id, role, member_location_access(location_id), organizations(id, slug, name, brand_primary, brand_accent, status, suspended_reason, store_limit, plan, is_demo, logo_url, previous_brand, onboarding_step, locations(id, slug, name, address, phone, timezone, status, hours, is_verified))",
+    )
     .eq("user_id", userId);
   if (error) throw error;
   return ((data ?? []) as unknown as Row[]).flatMap((r) => {
@@ -41,9 +82,11 @@ export async function fetchMemberships(userId: string): Promise<Membership[]> {
       phone: l.phone ?? undefined,
       hours: l.hours ?? {},
       timezone: l.timezone,
-      demoScale: known?.locations.find((k) => k.id === l.slug)?.demoScale ?? Math.max(0.3, 0.6 - i * 0.1),
+      demoScale:
+        known?.locations.find((k) => k.id === l.slug)?.demoScale ?? Math.max(0.3, 0.6 - i * 0.1),
     }));
-    const base: Organization = { ...(known ?? { categories: [], topItems: [] }),
+    const base: Organization = {
+      ...(known ?? { categories: [], topItems: [] }),
       id: o.slug,
       name: o.name,
       initials: initialsOf(o.name),
@@ -60,14 +103,39 @@ export async function fetchMemberships(userId: string): Promise<Membership[]> {
     };
     // Only owners are org-wide; managers and staff see assigned stores (mirrors can_access_location).
     const allowed = new Set(r.member_location_access.map((a) => a.location_id));
-    const org = r.role === "owner" ? base : { ...base, locations: base.locations.filter((l) => l.dbId && allowed.has(l.dbId)) };
-    return [{ org, role: r.role, dbId: o.id, memberId: r.id, status: o.status, suspendedReason: o.suspended_reason, storeLimit: o.store_limit }];
+    const org =
+      r.role === "owner"
+        ? base
+        : { ...base, locations: base.locations.filter((l) => l.dbId && allowed.has(l.dbId)) };
+    return [
+      {
+        org,
+        role: r.role,
+        dbId: o.id,
+        memberId: r.id,
+        status: o.status,
+        suspendedReason: o.suspended_reason,
+        storeLimit: o.store_limit,
+      },
+    ];
   });
 }
 
 /** Maps backend error codes to stable keys the UI translates. */
 export function rpcErrorCode(message: string): string {
-  const codes = ["store_limit", "org_suspended", "subscription_inactive", "forbidden", "last_owner", "invalid_timezone", "invalid_name", "address_required", "invalid_location", "invalid_email", "email_mismatch"];
+  const codes = [
+    "store_limit",
+    "org_suspended",
+    "subscription_inactive",
+    "forbidden",
+    "last_owner",
+    "invalid_timezone",
+    "invalid_name",
+    "address_required",
+    "invalid_location",
+    "invalid_email",
+    "email_mismatch",
+  ];
   return codes.find((c) => message.includes(c)) ?? "unknown";
 }
 
@@ -78,27 +146,76 @@ async function rpc(fn: string, args: Record<string, unknown>) {
   return data as unknown;
 }
 
-export const createLocation = (orgDbId: string, v: { name: string; address: string; timezone: string; phone: string }) =>
-  rpc("create_location", { _org_id: orgDbId, _name: v.name, _address: v.address, _timezone: v.timezone, _phone: v.phone }) as Promise<string>;
-export const updateLocation = (id: string, v: { name: string; address: string; phone: string; timezone: string; hours: WeeklyHours }) =>
-  rpc("update_location", { _id: id, _name: v.name, _address: v.address, _phone: v.phone, _timezone: v.timezone, _hours: v.hours });
-export const setLocationStatus = (id: string, status: "active" | "inactive") => rpc("set_location_status", { _id: id, _status: status });
+export const createLocation = (
+  orgDbId: string,
+  v: { name: string; address: string; timezone: string; phone: string },
+) =>
+  rpc("create_location", {
+    _org_id: orgDbId,
+    _name: v.name,
+    _address: v.address,
+    _timezone: v.timezone,
+    _phone: v.phone,
+  }) as Promise<string>;
+export const updateLocation = (
+  id: string,
+  v: { name: string; address: string; phone: string; timezone: string; hours: WeeklyHours },
+) =>
+  rpc("update_location", {
+    _id: id,
+    _name: v.name,
+    _address: v.address,
+    _phone: v.phone,
+    _timezone: v.timezone,
+    _hours: v.hours,
+  });
+export const setLocationStatus = (id: string, status: "active" | "inactive") =>
+  rpc("set_location_status", { _id: id, _status: status });
 /** Saves details and (owners only) store managers in one backend transaction: all-or-nothing. */
-export const saveLocationWithManagers = (id: string, v: { name: string; address: string; phone: string; timezone: string; hours: WeeklyHours }, memberIds: string[] | null) =>
-  rpc("save_location_with_managers", { _id: id, _name: v.name, _address: v.address, _phone: v.phone, _timezone: v.timezone, _hours: v.hours, _member_ids: memberIds as string[] });
-export const setLocationManagers = (id: string, memberIds: string[]) => rpc("set_location_managers", { _location_id: id, _member_ids: memberIds });
-export const setMemberRole = (memberId: string, role: OrgRole) => rpc("set_member_role", { _member_id: memberId, _role: role });
-export const setMemberLocations = (memberId: string, locationIds: string[]) => rpc("set_member_locations", { _member_id: memberId, _location_ids: locationIds });
+export const saveLocationWithManagers = (
+  id: string,
+  v: { name: string; address: string; phone: string; timezone: string; hours: WeeklyHours },
+  memberIds: string[] | null,
+) =>
+  rpc("save_location_with_managers", {
+    _id: id,
+    _name: v.name,
+    _address: v.address,
+    _phone: v.phone,
+    _timezone: v.timezone,
+    _hours: v.hours,
+    _member_ids: memberIds as string[],
+  });
+export const setLocationManagers = (id: string, memberIds: string[]) =>
+  rpc("set_location_managers", { _location_id: id, _member_ids: memberIds });
+export const setMemberRole = (memberId: string, role: OrgRole) =>
+  rpc("set_member_role", { _member_id: memberId, _role: role });
+export const setMemberLocations = (memberId: string, locationIds: string[]) =>
+  rpc("set_member_locations", { _member_id: memberId, _location_ids: locationIds });
 export const removeMember = (memberId: string) => rpc("remove_member", { _member_id: memberId });
 
 export async function createOrganization(name: string, brandPrimary: string, locationName: string) {
-  const { data, error } = await supabase.rpc("create_organization", { _name: name, _brand_primary: brandPrimary, _location_name: locationName });
+  const { data, error } = await supabase.rpc("create_organization", {
+    _name: name,
+    _brand_primary: brandPrimary,
+    _location_name: locationName,
+  });
   if (error) throw new Error(error.message.includes("org_limit") ? "org_limit" : "unknown");
   return data as string;
 }
 
-export async function createInvitation(orgDbId: string, email: string, role: OrgRole, locationIds: string[] = []) {
-  const { data, error } = await supabase.rpc("create_invitation", { _org_id: orgDbId, _email: email, _role: role, _location_ids: locationIds });
+export async function createInvitation(
+  orgDbId: string,
+  email: string,
+  role: OrgRole,
+  locationIds: string[] = [],
+) {
+  const { data, error } = await supabase.rpc("create_invitation", {
+    _org_id: orgDbId,
+    _email: email,
+    _role: role,
+    _location_ids: locationIds,
+  });
   if (error) throw error;
   return `${window.location.origin}/invite/${data as string}`;
 }
@@ -108,7 +225,14 @@ export async function revokeInvitation(id: string) {
   if (error) throw error;
 }
 
-export type InvitationInfo = { org_name: string; org_slug: string; brand_primary: string; email: string; role: OrgRole; status: "pending" | "accepted" | "expired" | "revoked" };
+export type InvitationInfo = {
+  org_name: string;
+  org_slug: string;
+  brand_primary: string;
+  email: string;
+  role: OrgRole;
+  status: "pending" | "accepted" | "expired" | "revoked";
+};
 export async function getInvitation(token: string): Promise<InvitationInfo | null> {
   const { data, error } = await supabase.rpc("get_invitation", { _token: token });
   if (error) throw error;
@@ -117,58 +241,156 @@ export async function getInvitation(token: string): Promise<InvitationInfo | nul
 
 export async function acceptInvitation(token: string) {
   const { error } = await supabase.rpc("accept_invitation", { _token: token });
-  if (error) throw new Error(error.message.includes("email_mismatch") ? "email_mismatch" : "invalid_invitation");
+  if (error)
+    throw new Error(
+      error.message.includes("email_mismatch") ? "email_mismatch" : "invalid_invitation",
+    );
 }
 
 export async function fetchTeam(orgDbId: string) {
   const [members, invites] = await Promise.all([
-    supabase.from("organization_members").select("id, role, user_id, created_at, member_location_access(location_id)").eq("org_id", orgDbId).order("created_at"),
-    supabase.from("invitations").select("id, email, role, location_ids, expires_at, accepted_at, revoked_at, created_at").eq("org_id", orgDbId).is("accepted_at", null).is("revoked_at", null).order("created_at", { ascending: false }),
+    supabase
+      .from("organization_members")
+      .select("id, role, user_id, created_at, member_location_access(location_id)")
+      .eq("org_id", orgDbId)
+      .order("created_at"),
+    supabase
+      .from("invitations")
+      .select("id, email, role, location_ids, expires_at, accepted_at, revoked_at, created_at")
+      .eq("org_id", orgDbId)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false }),
   ]);
   if (members.error) throw members.error;
   const ids = (members.data ?? []).map((m) => m.user_id);
-  const profiles = ids.length ? (await supabase.from("profiles").select("id, full_name").in("id", ids)).data ?? [] : [];
+  const profiles = ids.length
+    ? ((await supabase.from("profiles").select("id, full_name").in("id", ids)).data ?? [])
+    : [];
   return {
-    members: (members.data ?? []).map((m) => ({ ...m, location_ids: (m.member_location_access ?? []).map((a) => a.location_id), full_name: profiles.find((p) => p.id === m.user_id)?.full_name ?? null })),
+    members: (members.data ?? []).map((m) => ({
+      ...m,
+      location_ids: (m.member_location_access ?? []).map((a) => a.location_id),
+      full_name: profiles.find((p) => p.id === m.user_id)?.full_name ?? null,
+    })),
     invites: invites.data ?? [],
   };
 }
 
-export type AuditEntry = { id: string; action: string; target: string | null; actor_id: string | null; metadata: Record<string, unknown>; created_at: string };
+export type AuditEntry = {
+  id: string;
+  action: string;
+  target: string | null;
+  actor_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
 /** Owners/managers only (enforced by RLS); returns [] for everyone else. */
 export async function fetchOrgAudit(orgDbId: string, limit = 20): Promise<AuditEntry[]> {
-  const { data, error } = await supabase.from("audit_logs").select("id, action, target, actor_id, metadata, created_at").eq("org_id", orgDbId).order("created_at", { ascending: false }).limit(limit);
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("id, action, target, actor_id, metadata, created_at")
+    .eq("org_id", orgDbId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return (data ?? []) as AuditEntry[];
 }
 
 export async function transferOwnership(orgDbId: string, newOwnerUserId: string) {
-  const { error } = await supabase.rpc("transfer_ownership", { _org_id: orgDbId, _new_owner: newOwnerUserId });
+  const { error } = await supabase.rpc("transfer_ownership", {
+    _org_id: orgDbId,
+    _new_owner: newOwnerUserId,
+  });
   if (error) throw new Error(error.message.includes("forbidden") ? "forbidden" : "unknown");
 }
 
 export type BillingSummary = {
-  subscription: { plan_id: string; status: string; billed_locations: number; trial_ends_at: string | null; current_period_end: string | null; grace_ends_at: string | null; cancel_at_period_end: boolean; stripe_subscription_id: string | null } | null;
-  plans: { id: string; name: string; price_per_location_cents: number; default_store_limit: number; trial_days: number; is_placeholder_pricing: boolean }[];
-  events: { id: string; kind: string; amount_cents: number | null; status: string | null; description: string | null; occurred_at: string }[];
+  subscription: {
+    plan_id: string;
+    status: string;
+    billed_locations: number;
+    trial_ends_at: string | null;
+    current_period_end: string | null;
+    grace_ends_at: string | null;
+    cancel_at_period_end: boolean;
+    stripe_subscription_id: string | null;
+  } | null;
+  plans: {
+    id: string;
+    name: string;
+    price_per_location_cents: number;
+    default_store_limit: number;
+    trial_days: number;
+    is_placeholder_pricing: boolean;
+  }[];
+  events: {
+    id: string;
+    kind: string;
+    amount_cents: number | null;
+    status: string | null;
+    description: string | null;
+    occurred_at: string;
+  }[];
 };
 /** Owners only (RLS); others get an empty summary. */
 export async function fetchBilling(orgDbId: string): Promise<BillingSummary> {
   const [s, p, e] = await Promise.all([
-    supabase.from("subscriptions").select("plan_id, status, billed_locations, trial_ends_at, current_period_end, grace_ends_at, cancel_at_period_end, stripe_subscription_id").eq("org_id", orgDbId).maybeSingle(),
-    supabase.from("billing_plans").select("id, name, price_per_location_cents, default_store_limit, trial_days, is_placeholder_pricing").order("price_per_location_cents"),
-    supabase.from("billing_events").select("id, kind, amount_cents, status, description, occurred_at").eq("org_id", orgDbId).order("occurred_at", { ascending: false }).limit(24),
+    supabase
+      .from("subscriptions")
+      .select(
+        "plan_id, status, billed_locations, trial_ends_at, current_period_end, grace_ends_at, cancel_at_period_end, stripe_subscription_id",
+      )
+      .eq("org_id", orgDbId)
+      .maybeSingle(),
+    supabase
+      .from("billing_plans")
+      .select(
+        "id, name, price_per_location_cents, default_store_limit, trial_days, is_placeholder_pricing",
+      )
+      .order("price_per_location_cents"),
+    supabase
+      .from("billing_events")
+      .select("id, kind, amount_cents, status, description, occurred_at")
+      .eq("org_id", orgDbId)
+      .order("occurred_at", { ascending: false })
+      .limit(24),
   ]);
   return { subscription: s.data ?? null, plans: p.data ?? [], events: e.data ?? [] };
 }
 
-export const createTestRestaurant = (name: string, companyName: string, companyAddress: string, locationName: string) => rpc("create_test_restaurant", { _name: name, _company_name: companyName, _company_address: companyAddress, _location_name: locationName }) as Promise<string>;
-export const saveOrganizationBrand = (orgId: string, brand: { primary: string; accent: string; logoUrl?: string | undefined }) => rpc("save_org_brand", { _org_id: orgId, _primary: brand.primary, _accent: brand.accent, _logo: brand.logoUrl ?? null });
-export const setOnboardingStep = (orgId: string, step: number) => rpc("set_onboarding_step", { _org_id: orgId, _step: step });
+export const createTestRestaurant = (
+  name: string,
+  companyName: string,
+  companyAddress: string,
+  locationName: string,
+) =>
+  rpc("create_test_restaurant", {
+    _name: name,
+    _company_name: companyName,
+    _company_address: companyAddress,
+    _location_name: locationName,
+  }) as Promise<string>;
+export const saveOrganizationBrand = (
+  orgId: string,
+  brand: { primary: string; accent: string; logoUrl?: string | undefined },
+) =>
+  rpc("save_org_brand", {
+    _org_id: orgId,
+    _primary: brand.primary,
+    _accent: brand.accent,
+    _logo: brand.logoUrl ?? null,
+  });
+export const setOnboardingStep = (orgId: string, step: number) =>
+  rpc("set_onboarding_step", { _org_id: orgId, _step: step });
 
 /** The bundled sample logo only applies to an organization whose branding was never edited;
  * once an owner saves or removes a logo, the stored value is authoritative (null = no logo). */
-export function resolveLogo(stored: string | null, previousBrand: unknown, bundled: string | undefined): string | undefined {
+export function resolveLogo(
+  stored: string | null,
+  previousBrand: unknown,
+  bundled: string | undefined,
+): string | undefined {
   if (stored) return stored;
   return previousBrand == null ? bundled : undefined;
 }

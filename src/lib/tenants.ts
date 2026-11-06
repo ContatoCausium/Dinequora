@@ -56,8 +56,16 @@ export const ORGANIZATIONS: Organization[] = [
     subscription: "active",
     fictional: false,
     categories: [
-      "American Burgers", "Brazilian Burgers", "Combos", "Açaí", "Pastel",
-      "Fried Chicken", "Wraps, Subs & Hot Dogs", "Drinks", "Desserts", "Salads",
+      "American Burgers",
+      "Brazilian Burgers",
+      "Combos",
+      "Açaí",
+      "Pastel",
+      "Fried Chicken",
+      "Wraps, Subs & Hot Dogs",
+      "Drinks",
+      "Desserts",
+      "Salads",
     ],
     topItems: [
       { name: "X-Tudo De Marao", price: 0 },
@@ -76,8 +84,20 @@ export const ORGANIZATIONS: Organization[] = [
         timezone: "America/New_York",
         demoScale: 1,
       },
-      { id: "loc_marao_2", name: "Location 2", status: "placeholder", timezone: "America/New_York", demoScale: 0.78 },
-      { id: "loc_marao_3", name: "Location 3", status: "placeholder", timezone: "America/New_York", demoScale: 0.62 },
+      {
+        id: "loc_marao_2",
+        name: "Location 2",
+        status: "placeholder",
+        timezone: "America/New_York",
+        demoScale: 0.78,
+      },
+      {
+        id: "loc_marao_3",
+        name: "Location 3",
+        status: "placeholder",
+        timezone: "America/New_York",
+        demoScale: 0.62,
+      },
     ],
   },
   {
@@ -96,7 +116,13 @@ export const ORGANIZATIONS: Organization[] = [
       { name: "Horchata", price: 0 },
     ],
     locations: [
-      { id: "loc_harbor_1", name: "Harbor Taco · Demo Store", status: "placeholder", timezone: "America/New_York", demoScale: 0.7 },
+      {
+        id: "loc_harbor_1",
+        name: "Harbor Taco · Demo Store",
+        status: "placeholder",
+        timezone: "America/New_York",
+        demoScale: 0.7,
+      },
     ],
   },
 ];

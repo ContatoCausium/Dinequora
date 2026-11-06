@@ -1,10 +1,19 @@
+import { assertLocationAllowed, assertTenantContext, isLocationAllowed } from "./tenant-storage";
 import { MenuItem } from "./menu-service";
-import { Order, OrderItem, OrderType, SelectedModifier, calculateOrderSummary, saveOrder } from "./orders-service";
+import { persistFinalizedPOSSaleAtomic } from "./orders-persistence-service";
+import {
+  Order,
+  OrderItem,
+  OrderType,
+  SelectedModifier,
+  calculateOrderSummary,
+  saveOrder,
+} from "./orders-service";
 
 export type POSPaymentMethod = "cash" | "card" | "digital";
 export type PaymentMethod = POSPaymentMethod;
 
-export interface POSCartItem extends OrderItem {}
+export type POSCartItem = OrderItem;
 export type PosCartItem = POSCartItem;
 
 export interface POSSession {
@@ -12,7 +21,7 @@ export interface POSSession {
   orgId: string;
   locationId: string;
   cashierName: string;
-  customerName?: string;
+  customerName?: string | undefined;
   orderType: OrderType;
   cart: POSCartItem[];
   discountCents: number;
@@ -31,11 +40,11 @@ export interface SuspendedSale {
   id: string;
   orgId: string;
   locationId: string;
-  note?: string;
+  note?: string | undefined;
   suspendedAt: string;
   orderType: OrderType;
   attendantName: string;
-  customerName?: string;
+  customerName?: string | undefined;
   items: POSCartItem[];
   discountCents: number;
   taxRatePercent: number;
@@ -48,7 +57,7 @@ export interface CompletedPosSale {
   locationId: string;
   attendantName: string;
   orderType: OrderType;
-  customerName?: string;
+  customerName?: string | undefined;
   items: POSCartItem[];
   subtotalCents: number;
   discountCents: number;
@@ -69,44 +78,79 @@ export function calculateChange(tenderedCents: number, totalCents: number): numb
   return Math.max(0, tenderedCents - totalCents);
 }
 
-export function listSuspendedSales(orgId: string, locationId?: string): SuspendedSale[] {
+export function listSuspendedSales(
+  orgId: string,
+  locationId?: string,
+  allowedLocationIds?: readonly string[],
+): SuspendedSale[] {
+  assertTenantContext(orgId);
+  if (locationId && locationId !== "all" && !isLocationAllowed(locationId, allowedLocationIds))
+    return [];
   if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem(`${SUSPENDED_STORAGE_PREFIX}${orgId}`);
+  const raw = localStorage.getItem(`${SUSPENDED_STORAGE_PREFIX}${assertTenantContext(orgId)}`);
   let sales: SuspendedSale[] = [];
   if (raw) {
     try {
-      sales = JSON.parse(raw) as SuspendedSale[];
+      sales = (JSON.parse(raw) as SuspendedSale[]).filter(
+        (s) => s.orgId === undefined || s.orgId === orgId,
+      );
     } catch {
       sales = [];
     }
   }
+  sales = sales.filter((s) => isLocationAllowed(s.locationId, allowedLocationIds));
   if (locationId && locationId !== "all") {
-    return sales.filter((s) => s.locationId === locationId || s.locationId === "loc-1");
+    return sales.filter((s) => s.locationId === locationId);
   }
   return sales;
 }
 
-export function suspendSale(orgId: string, sale: SuspendedSale): SuspendedSale[] {
+export function suspendSale(
+  orgId: string,
+  sale: SuspendedSale,
+  allowedLocationIds?: readonly string[],
+): SuspendedSale[] {
+  assertTenantContext(orgId);
+  assertLocationAllowed(sale.locationId, allowedLocationIds);
   const existing = listSuspendedSales(orgId);
-  const updated = [sale, ...existing.filter((s) => s.id !== sale.id)];
+  const updated = [{ ...sale, orgId }, ...existing.filter((s) => s.id !== sale.id)];
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${SUSPENDED_STORAGE_PREFIX}${orgId}`, JSON.stringify(updated));
+    localStorage.setItem(
+      `${SUSPENDED_STORAGE_PREFIX}${assertTenantContext(orgId)}`,
+      JSON.stringify(updated),
+    );
   }
   return updated;
 }
 
-export function removeSuspendedSale(orgId: string, saleId: string): SuspendedSale[] {
+export function removeSuspendedSale(
+  orgId: string,
+  saleId: string,
+  allowedLocationIds?: readonly string[],
+): SuspendedSale[] {
   const existing = listSuspendedSales(orgId);
+  const target = existing.find((s) => s.id === saleId);
+  if (target) assertLocationAllowed(target.locationId, allowedLocationIds);
   const updated = existing.filter((s) => s.id !== saleId);
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${SUSPENDED_STORAGE_PREFIX}${orgId}`, JSON.stringify(updated));
+    localStorage.setItem(
+      `${SUSPENDED_STORAGE_PREFIX}${assertTenantContext(orgId)}`,
+      JSON.stringify(updated),
+    );
   }
   return updated;
 }
 
-export function listPosHistory(orgId: string, locationId?: string): CompletedPosSale[] {
+export function listPosHistory(
+  orgId: string,
+  locationId?: string,
+  allowedLocationIds?: readonly string[],
+): CompletedPosSale[] {
+  assertTenantContext(orgId);
+  if (locationId && locationId !== "all" && !isLocationAllowed(locationId, allowedLocationIds))
+    return [];
   if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem(`${HISTORY_STORAGE_PREFIX}${orgId}`);
+  const raw = localStorage.getItem(`${HISTORY_STORAGE_PREFIX}${assertTenantContext(orgId)}`);
   let list: CompletedPosSale[] = [];
   if (raw) {
     try {
@@ -115,20 +159,27 @@ export function listPosHistory(orgId: string, locationId?: string): CompletedPos
       list = [];
     }
   }
+  list = list.filter((s) => isLocationAllowed(s.locationId, allowedLocationIds));
   if (locationId && locationId !== "all") {
-    return list.filter((s) => s.locationId === locationId || s.locationId === "loc-1");
+    return list.filter((s) => s.locationId === locationId);
   }
   return list;
 }
 
 export function recordCompletedSale(
   orgId: string,
-  sale: CompletedPosSale
+  sale: CompletedPosSale,
+  allowedLocationIds?: readonly string[],
 ): { posHistory: CompletedPosSale[]; createdOrder: Order } {
+  assertTenantContext(orgId);
+  assertLocationAllowed(sale.locationId, allowedLocationIds);
   const existingHistory = listPosHistory(orgId);
   const posHistory = [sale, ...existingHistory];
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${HISTORY_STORAGE_PREFIX}${orgId}`, JSON.stringify(posHistory));
+    localStorage.setItem(
+      `${HISTORY_STORAGE_PREFIX}${assertTenantContext(orgId)}`,
+      JSON.stringify(posHistory),
+    );
   }
 
   const createdOrder: Order = {
@@ -163,20 +214,22 @@ export function recordCompletedSale(
     isSimulated: true,
   };
 
-    saveOrder(orgId, createdOrder);
-    if (typeof window !== "undefined") {
-      import("./orders-persistence-service").then(({ persistOrderToSupabase }) => {
+  saveOrder(orgId, createdOrder);
+  if (typeof window !== "undefined") {
+    import("./orders-persistence-service")
+      .then(({ persistOrderToSupabase }) => {
         void persistOrderToSupabase(orgId, createdOrder);
-      }).catch(() => {});
-    }
-    return { posHistory, createdOrder };
+      })
+      .catch(() => {});
   }
+  return { posHistory, createdOrder };
+}
 
 export function buildCartItem(
   product: MenuItem,
   quantity: number,
   modifiers: SelectedModifier[],
-  notes?: string
+  notes?: string,
 ): POSCartItem {
   const modSum = modifiers.reduce((acc, m) => acc + m.priceCents, 0);
   const itemTotal = (product.priceCents + modSum) * Math.max(1, quantity);
@@ -193,7 +246,11 @@ export function buildCartItem(
 }
 
 function recalculateSession(session: POSSession): POSSession {
-  const summary = calculateOrderSummary(session.cart, session.taxRatePercent, session.discountCents);
+  const summary = calculateOrderSummary(
+    session.cart,
+    session.taxRatePercent,
+    session.discountCents,
+  );
   return {
     ...session,
     subtotalCents: summary.subtotalCents,
@@ -202,8 +259,15 @@ function recalculateSession(session: POSSession): POSSession {
   };
 }
 
-export function getPOSSession(orgId: string, locationId: string, cashierName: string): POSSession {
-  const suspended = listSuspendedSales(orgId, locationId);
+export function getPOSSession(
+  orgId: string,
+  locationId: string,
+  cashierName: string,
+  allowedLocationIds?: readonly string[],
+): POSSession {
+  assertTenantContext(orgId);
+  assertLocationAllowed(locationId, allowedLocationIds);
+  const suspended = listSuspendedSales(orgId, locationId, allowedLocationIds);
   return recalculateSession({
     id: `pos-${Date.now()}`,
     orgId,
@@ -229,7 +293,7 @@ export function addItemToCart(
   product: MenuItem,
   modifiers: SelectedModifier[] = [],
   quantity: number = 1,
-  notes?: string
+  notes?: string,
 ): POSSession {
   const item = buildCartItem(product, quantity, modifiers, notes);
   return recalculateSession({
@@ -238,7 +302,11 @@ export function addItemToCart(
   });
 }
 
-export function updateCartItemQuantity(session: POSSession, cartItemId: string, quantity: number): POSSession {
+export function updateCartItemQuantity(
+  session: POSSession,
+  cartItemId: string,
+  quantity: number,
+): POSSession {
   const nextCart = session.cart.map((item) => {
     if (item.id !== cartItemId) return item;
     const modSum = item.modifiers.reduce((acc, m) => acc + m.priceCents, 0);
@@ -276,7 +344,7 @@ export function setCustomerInfo(session: POSSession, customerName: string): POSS
   return { ...session, customerName };
 }
 
-export function suspendSession(session: POSSession): void {
+export function suspendSession(session: POSSession, allowedLocationIds?: readonly string[]): void {
   if (session.cart.length === 0) return;
   const sale: SuspendedSale = {
     id: session.id,
@@ -290,15 +358,19 @@ export function suspendSession(session: POSSession): void {
     taxRatePercent: session.taxRatePercent,
     suspendedAt: new Date().toISOString(),
   };
-  suspendSale(session.orgId, sale);
+  suspendSale(session.orgId, sale, allowedLocationIds);
 }
 
-export function resumeSession(orgId: string, saleId: string): POSSession | null {
-  const sales = listSuspendedSales(orgId);
+export function resumeSession(
+  orgId: string,
+  saleId: string,
+  allowedLocationIds?: readonly string[],
+): POSSession | null {
+  const sales = listSuspendedSales(orgId, undefined, allowedLocationIds);
   const found = sales.find((s) => s.id === saleId);
   if (!found) return null;
-  removeSuspendedSale(orgId, saleId);
-  const activeSuspended = listSuspendedSales(orgId, found.locationId);
+  removeSuspendedSale(orgId, saleId, allowedLocationIds);
+  const activeSuspended = listSuspendedSales(orgId, found.locationId, allowedLocationIds);
   return recalculateSession({
     id: found.id,
     orgId,
@@ -319,7 +391,7 @@ export function resumeSession(orgId: string, saleId: string): POSSession | null 
 export function simulatePayment(
   session: POSSession,
   method: POSPaymentMethod,
-  tenderedCents: number
+  tenderedCents: number,
 ): POSSession {
   const changeDueCents = method === "cash" ? calculateChange(tenderedCents, session.totalCents) : 0;
   return {
@@ -359,59 +431,19 @@ export function finalizeSale(session: POSSession): POSSession {
 }
 
 export async function finalizeAndPersistSale(
-  session: POSSession
-): Promise<{ session: POSSession; orderId?: string; error?: string }> {
-  const completed = finalizeSale(session);
+  session: POSSession,
+): Promise<{ session: POSSession; orderId?: string | undefined; error?: string | undefined }> {
   const res = await submitPosSaleToBackend(session);
+  if (!res.success || !res.orderId) return { session, error: res.error ?? "sale_not_confirmed" };
   return {
-    session: completed,
+    session: { ...session, completedAt: new Date().toISOString() },
     orderId: res.orderId,
     error: res.error,
   };
 }
 
-export async function submitPosSaleToBackend(session: POSSession): Promise<{ success: boolean; orderId?: string; error?: string }> {
-  try {
-    const { supabase } = await import("@/integrations/supabase/client");
-    const itemsPayload = session.cart.map((item) => ({
-      product_id: item.productId && item.productId.length === 36 ? item.productId : null,
-      product_name: item.productName,
-      quantity: item.quantity,
-      unit_price_cents: item.basePriceCents,
-      modifiers: (item.modifiers || []).map((m) => ({
-        option_id: m.optionId && m.optionId.length === 36 ? m.optionId : null,
-        group_name: m.groupName,
-        option_name: m.optionName,
-        price_cents: m.priceCents,
-      })),
-      notes: item.notes || null,
-    }));
-
-    // ponytail: uses finalize_pos_sale_atomic to consume recipe inventory and write revenue atomically
-    const clientOrderId = `pos-${session.id}`;
-    const { data, error } = await supabase.rpc("finalize_pos_sale_atomic", {
-      _org_id: session.orgId,
-      _location_id: session.locationId,
-      _type: session.orderType,
-      _customer_name: session.customerName || "POS Walk-in Guest",
-      _customer_phone: null,
-      _customer_email: null,
-      _delivery_address: null,
-      _table_number: null,
-      _notes: `POS Attendant: ${session.cashierName} [${session.paymentMethod || 'cash'}]`,
-      _discount_cents: session.discountCents,
-      _tax_rate_basis_points: Math.round(session.taxRatePercent * 100),
-      _items: itemsPayload,
-      _is_simulation: false,
-      _client_order_id: clientOrderId,
-      _payment_method: session.paymentMethod || 'cash',
-    });
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    const res = data as any;
-    return { success: true, orderId: typeof res === "string" ? res : res?.id };
-  } catch (err) {
-    return { success: false, error: (err as Error).message };
-  }
+export async function submitPosSaleToBackend(
+  session: POSSession,
+): Promise<{ success: boolean; orderId?: string | undefined; error?: string | undefined }> {
+  return persistFinalizedPOSSaleAtomic(session);
 }

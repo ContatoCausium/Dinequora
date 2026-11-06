@@ -3,14 +3,24 @@ import { lovable } from "@/integrations/lovable/index";
 import { AuthError, type AuthErrorCode, type AuthService, type AuthUser } from "./types";
 import { requestErrorKind } from "@/lib/request-error";
 
-function mapError(e: { message?: string | undefined; code?: string | undefined; status?: number | undefined } | null | undefined): AuthError {
+function mapError(
+  e:
+    | { message?: string | undefined; code?: string | undefined; status?: number | undefined }
+    | null
+    | undefined,
+): AuthError {
   const msg = (e?.message ?? "").toLowerCase();
   const code = e?.code ?? "";
   let c: AuthErrorCode = requestErrorKind(e);
   if (code === "invalid_credentials" || msg.includes("invalid login")) c = "invalid_credentials";
-  else if (code === "email_not_confirmed" || msg.includes("not confirmed")) c = "email_not_verified";
+  else if (code === "email_not_confirmed" || msg.includes("not confirmed"))
+    c = "email_not_verified";
   else if (code === "user_already_exists" || msg.includes("already registered")) c = "email_taken";
-  else if (msg.includes("email address") && (msg.includes("not allowed") || msg.includes("invalid"))) c = "invalid_email";
+  else if (
+    msg.includes("email address") &&
+    (msg.includes("not allowed") || msg.includes("invalid"))
+  )
+    c = "invalid_email";
   else if (code.startsWith("weak_password") || msg.includes("password")) c = "weak_password";
   else if (e?.status === 429 || msg.includes("rate limit")) c = "rate_limited";
   else if (msg.includes("provider")) c = "provider_unavailable";
@@ -28,7 +38,8 @@ export const supabaseAuth: AuthService = {
       id: u.id,
       email: u.email ?? "",
       emailVerified: Boolean(u.email_confirmed_at),
-      fullName: (u.user_metadata?.["full_name"] as string) ?? (u.user_metadata?.["name"] as string) ?? null,
+      fullName:
+        (u.user_metadata?.["full_name"] as string) ?? (u.user_metadata?.["name"] as string) ?? null,
     };
     return user;
   },
@@ -60,15 +71,23 @@ export const supabaseAuth: AuthService = {
     return { needsVerification: !data.session };
   },
   async signInWithProvider(provider) {
-    const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: origin() + "/auth" });
+    const result = await lovable.auth.signInWithOAuth(provider, {
+      redirect_uri: origin() + "/auth",
+    });
     if (result.error) throw mapError(result.error as { message?: string });
   },
   async resendVerification(email) {
-    const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: origin() + "/auth" } });
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: origin() + "/auth" },
+    });
     if (error) throw mapError(error);
   },
   async sendPasswordReset(email) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: origin() + "/reset-password?recovery=1" });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: origin() + "/reset-password?recovery=1",
+    });
     if (error) throw mapError(error);
   },
   async updatePassword(password) {

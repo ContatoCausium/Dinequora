@@ -1,3 +1,10 @@
+import {
+  assertTenantContext,
+  isLocationAllowed,
+  readTenantRecords,
+  TenantContextError,
+  writeTenantRecords,
+} from "./tenant-storage";
 export type ExpenseRecurrence = "fixed" | "variable" | "recurring";
 export type ExpenseStatus = "pending" | "paid" | "overdue";
 export type ExpenseCategory =
@@ -18,15 +25,15 @@ export interface Expense {
   category: ExpenseCategory;
   recurrence: ExpenseRecurrence;
   status: ExpenseStatus;
-  supplierName?: string;
+  supplierName?: string | undefined;
   description: string;
   amountCents: number;
   currency: "usd";
   dueDate: string;
-  paidAt?: string;
+  paidAt?: string | undefined;
   competencyDate: string;
   responsiblePerson: string;
-  receiptAttachment?: string;
+  receiptAttachment?: string | undefined;
   isSimulation: boolean;
   createdAt: string;
   updatedAt: string;
@@ -177,22 +184,15 @@ export interface DreStatement {
   alertsCount: number;
 }
 
-const EXPENSES_STORAGE_KEY = "servora.finance.expenses.v1";
-
-function getStorage(): Expense[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(EXPENSES_STORAGE_KEY);
-    if (!raw) return seedDefaultExpenses();
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+/** Expenses persist per organization; only the demo org receives the synthetic seed. */
+function getStorage(orgId: string): Expense[] {
+  return readTenantRecords<Expense>("finance_expenses", orgId, () =>
+    orgId === "demo" ? seedDefaultExpenses().map((e) => ({ ...e, orgId: "demo" })) : [],
+  );
 }
 
-function setStorage(items: Expense[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(items));
+function setStorage(orgId: string, items: Expense[]) {
+  writeTenantRecords("finance_expenses", orgId, items);
 }
 
 export function seedDefaultExpenses(): Expense[] {
@@ -320,58 +320,101 @@ export function seedDefaultExpenses(): Expense[] {
     },
   ];
 
-  if (typeof window !== "undefined") {
-    setStorage(defaults);
-  }
+  // Pure: no longer writes a shared global key. The demo org namespace persists it on first read.
   return defaults;
 }
 
-export function listExpenses(orgId: string, locationId?: string): Expense[] {
-  const all = getStorage();
-  return all.filter((exp) => {
-    const matchOrg = exp.orgId === orgId || exp.orgId === "default";
-    if (!matchOrg) return false;
-    if (locationId && locationId !== "all" && exp.locationId !== "all" && exp.locationId !== locationId) {
+export function listExpenses(
+  orgId: string,
+  locationId?: string,
+  allowedLocationIds?: readonly string[],
+): Expense[] {
+  assertTenantContext(orgId);
+  if (locationId && locationId !== "all" && !isLocationAllowed(locationId, allowedLocationIds))
+    return [];
+  return getStorage(orgId).filter((exp) => {
+    if (exp.orgId !== orgId) return false;
+    // "all" expenses are org-wide (shared costs); store expenses require store authorization.
+    if (exp.locationId !== "all" && !isLocationAllowed(exp.locationId, allowedLocationIds))
+      return false;
+    if (
+      locationId &&
+      locationId !== "all" &&
+      exp.locationId !== "all" &&
+      exp.locationId !== locationId
+    ) {
       return false;
     }
     return true;
   });
 }
 
-export function saveExpense(expense: Omit<Expense, "id" | "createdAt" | "updatedAt"> & { id?: string }): Expense {
-  const all = getStorage();
+function assertExpenseWritable(
+  locationId: string,
+  allowedLocationIds: readonly string[] | undefined,
+): void {
+  if (!allowedLocationIds) return;
+  if (locationId === "all" || !allowedLocationIds.includes(locationId))
+    throw new TenantContextError("location_forbidden");
+}
+
+export function saveExpense(
+  expense: Omit<Expense, "id" | "createdAt" | "updatedAt"> & { id?: string | undefined },
+  allowedLocationIds?: readonly string[],
+): Expense {
+  const orgId = assertTenantContext(expense.orgId);
+  assertExpenseWritable(expense.locationId, allowedLocationIds);
+  const all = getStorage(orgId);
   const isEdit = !!expense.id;
-  const id = expense.id ?? `exp-${Date.now()}`;
+  const id = expense.id ?? `exp-${crypto.randomUUID()}`;
   const now = new Date().toISOString();
+  const existing = all.find((i) => i.id === id);
+  if (existing) assertExpenseWritable(existing.locationId, allowedLocationIds);
 
   const nextItem: Expense = {
     ...expense,
+    orgId,
     id,
-    createdAt: isEdit ? (all.find((i) => i.id === id)?.createdAt ?? now) : now,
+    createdAt: isEdit ? (existing?.createdAt ?? now) : now,
     updatedAt: now,
   };
 
   const filtered = all.filter((i) => i.id !== id);
-  const updatedList = [nextItem, ...filtered];
-  setStorage(updatedList);
+  setStorage(orgId, [nextItem, ...filtered]);
   return nextItem;
 }
 
-export function deleteExpense(expenseId: string): boolean {
-  const all = getStorage();
-  const filtered = all.filter((i) => i.id !== expenseId);
-  if (filtered.length === all.length) return false;
-  setStorage(filtered);
+export function deleteExpense(
+  expenseId: string,
+  orgId: string,
+  allowedLocationIds?: readonly string[],
+): boolean {
+  assertTenantContext(orgId);
+  const all = getStorage(orgId);
+  const target = all.find((i) => i.id === expenseId);
+  if (!target) return false;
+  assertExpenseWritable(target.locationId, allowedLocationIds);
+  setStorage(
+    orgId,
+    all.filter((i) => i.id !== expenseId),
+  );
   return true;
 }
 
-export function updateExpenseStatus(expenseId: string, status: ExpenseStatus): Expense | null {
-  const all = getStorage();
+export function updateExpenseStatus(
+  expenseId: string,
+  status: ExpenseStatus,
+  orgId: string,
+  allowedLocationIds?: readonly string[],
+): Expense | null {
+  assertTenantContext(orgId);
+  const all = getStorage(orgId);
   const idx = all.findIndex((i) => i.id === expenseId);
   if (idx === -1) return null;
 
   const existing = all[idx];
   if (!existing) return null;
+  assertExpenseWritable(existing.locationId, allowedLocationIds);
 
   const updated: Expense = {
     ...existing,
@@ -381,7 +424,7 @@ export function updateExpenseStatus(expenseId: string, status: ExpenseStatus): E
   };
 
   all[idx] = updated;
-  setStorage(all);
+  setStorage(orgId, all);
   return updated;
 }
 
@@ -390,7 +433,7 @@ export function computeFinanceSummary(
   realSalesCents = 0,
   simulatedSalesCents = 0,
   initialOpeningCents = 1500000,
-  receivablesPendingCents = 0
+  receivablesPendingCents = 0,
 ): FinanceSummary {
   let fixed = 0;
   let variable = 0;
@@ -440,20 +483,23 @@ export function buildCashFlowTimeline(
   expenses: Expense[],
   realSalesCents: number,
   granularity: CashFlowGranularity = "monthly",
-  startingCashCents = 1500000
+  startingCashCents = 1500000,
 ): CashFlowTimeline {
   let runningBalance = startingCashCents;
-  const bucketLabels = granularity === "daily"
-    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    : granularity === "weekly"
-    ? ["Week 1", "Week 2", "Week 3", "Week 4"]
-    : ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+  const bucketLabels =
+    granularity === "daily"
+      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      : granularity === "weekly"
+        ? ["Week 1", "Week 2", "Week 3", "Week 4"]
+        : ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
 
   const stepFactor = 1 / bucketLabels.length;
   const buckets: CashFlowBucket[] = bucketLabels.map((lbl, idx) => {
     const initial = runningBalance;
     const inflow = Math.round(realSalesCents * stepFactor * (0.85 + (idx % 3) * 0.15));
-    const paidExpensesTotal = expenses.filter((e) => e.status === "paid").reduce((s, e) => s + e.amountCents, 0);
+    const paidExpensesTotal = expenses
+      .filter((e) => e.status === "paid")
+      .reduce((s, e) => s + e.amountCents, 0);
     const outflow = Math.round(paidExpensesTotal * stepFactor * (0.9 + ((idx + 1) % 2) * 0.12));
     const net = inflow - outflow;
     const final = initial + net;
@@ -484,7 +530,10 @@ export function buildCashFlowTimeline(
   };
 }
 
-export function generateMonthlyTrend(currentExpensesCents: number, currentRevenueCents: number): MonthlyTrend[] {
+export function generateMonthlyTrend(
+  currentExpensesCents: number,
+  currentRevenueCents: number,
+): MonthlyTrend[] {
   const months = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
   const factors = [0.85, 0.9, 0.96, 1.02, 0.98, 1.0];
 
@@ -507,10 +556,13 @@ export function calculateDreStatement(
   taxesCents: number,
   cogsCents: number,
   expenses: Expense[],
-  simulatedSalesCents = 0
+  simulatedSalesCents = 0,
 ): DreStatement {
   const grossRevenueCents = Math.max(0, realSalesCents);
-  const netRevenueCents = Math.max(0, grossRevenueCents - Math.max(0, discountsCents) - Math.max(0, taxesCents));
+  const netRevenueCents = Math.max(
+    0,
+    grossRevenueCents - Math.max(0, discountsCents) - Math.max(0, taxesCents),
+  );
   const safeCogsCents = Math.max(0, cogsCents);
   const grossProfitCents = netRevenueCents - safeCogsCents;
   const grossMarginPct = netRevenueCents > 0 ? (grossProfitCents / netRevenueCents) * 100 : 0;
@@ -535,12 +587,13 @@ export function calculateDreStatement(
 
   const operatingExpensesCents = fixedExp + varExp;
   const operatingProfitCents = grossProfitCents - operatingExpensesCents;
-  const operatingMarginPct = netRevenueCents > 0 ? (operatingProfitCents / netRevenueCents) * 100 : 0;
+  const operatingMarginPct =
+    netRevenueCents > 0 ? (operatingProfitCents / netRevenueCents) * 100 : 0;
   const estimatedNetProfitCents = operatingProfitCents;
   const netMarginPct = netRevenueCents > 0 ? (estimatedNetProfitCents / netRevenueCents) * 100 : 0;
 
   let alerts = 0;
-  if (netRevenueCents > 0 && (safeCogsCents / netRevenueCents) > 0.35) alerts += 1;
+  if (netRevenueCents > 0 && safeCogsCents / netRevenueCents > 0.35) alerts += 1;
   if (grossMarginPct < 60 && netRevenueCents > 0) alerts += 1;
 
   return {
@@ -566,7 +619,14 @@ export function calculateDreStatement(
 }
 
 export function calculateProductMargins(
-  products: Array<{ id: string; name: string; category?: string; priceCents: number; recipeCostCents?: number; unitsSold?: number }>
+  products: Array<{
+    id: string;
+    name: string;
+    category?: string;
+    priceCents: number;
+    recipeCostCents?: number;
+    unitsSold?: number;
+  }>,
 ): ProductMarginMetric[] {
   return products.map((p) => {
     const units = p.unitsSold ?? 1;
@@ -594,7 +654,9 @@ export function calculateProductMargins(
   });
 }
 
-export function calculateCategoryMargins(productMetrics: ProductMarginMetric[]): CategoryMarginMetric[] {
+export function calculateCategoryMargins(
+  productMetrics: ProductMarginMetric[],
+): CategoryMarginMetric[] {
   const grouped = new Map<string, { rev: number; cogs: number; gross: number }>();
 
   for (const m of productMetrics) {
@@ -620,10 +682,17 @@ export function compareStoreFinancials(
   storesInput: Array<{
     id: string;
     name: string;
-    orders: Array<{ id: string; totalCents: number; discountCents?: number; taxCents?: number; status: string; isSimulated?: boolean }>;
+    orders: Array<{
+      id: string;
+      totalCents: number;
+      discountCents?: number;
+      taxCents?: number;
+      status: string;
+      isSimulated?: boolean;
+    }>;
     expenses: Expense[];
     cogsRatio?: number;
-  }>
+  }>,
 ): StoreComparisonSummary {
   if (storesInput.length === 0) {
     return {
@@ -658,8 +727,10 @@ export function compareStoreFinancials(
       .reduce((acc, e) => acc + e.amountCents, 0);
 
     const estimatedNetProfitCents = grossProfitCents - operatingExpensesCents;
-    const netMarginPct = netRevenueCents > 0 ? (estimatedNetProfitCents / netRevenueCents) * 100 : 0;
-    const averageTicketCents = realOrders.length > 0 ? Math.round(grossRevenueCents / realOrders.length) : 0;
+    const netMarginPct =
+      netRevenueCents > 0 ? (estimatedNetProfitCents / netRevenueCents) * 100 : 0;
+    const averageTicketCents =
+      realOrders.length > 0 ? Math.round(grossRevenueCents / realOrders.length) : 0;
 
     const hasRealData = realOrders.length > 0 || store.expenses.length > 0;
     let status: DataReliabilityStatus = "empty";
@@ -692,7 +763,8 @@ export function compareStoreFinancials(
       marginRank: 1,
       netProfitRank: 1,
       isBestPerformer: false,
-      hasHighCostAlert: cogsPct > 35 || (netRevenueCents > 0 && operatingExpensesCents / netRevenueCents > 0.45),
+      hasHighCostAlert:
+        cogsPct > 35 || (netRevenueCents > 0 && operatingExpensesCents / netRevenueCents > 0.45),
       hasLowMarginAlert: netRevenueCents > 0 && netMarginPct < 10,
     };
   });
@@ -710,7 +782,9 @@ export function compareStoreFinancials(
     if (match) match.marginRank = index + 1;
   });
 
-  const netProfitSorted = [...results].sort((a, b) => b.estimatedNetProfitCents - a.estimatedNetProfitCents);
+  const netProfitSorted = [...results].sort(
+    (a, b) => b.estimatedNetProfitCents - a.estimatedNetProfitCents,
+  );
   netProfitSorted.forEach((item, index) => {
     const match = results.find((r) => r.locationId === item.locationId);
     if (match) {
@@ -721,7 +795,9 @@ export function compareStoreFinancials(
     }
   });
 
-  const expSorted = [...results].sort((a, b) => b.operatingExpensesCents - a.operatingExpensesCents);
+  const expSorted = [...results].sort(
+    (a, b) => b.operatingExpensesCents - a.operatingExpensesCents,
+  );
 
   const totalGross = results.reduce((acc, r) => acc + r.grossRevenueCents, 0);
   const totalNetProfit = results.reduce((acc, r) => acc + r.estimatedNetProfitCents, 0);
@@ -773,7 +849,7 @@ export interface FinancialReportRow {
   amountCents: number;
   formattedAmount: string;
   statusBadge: string;
-  notes?: string;
+  notes?: string | undefined;
 }
 
 export interface FinancialReportResult {
@@ -802,22 +878,31 @@ export function generateFinancialReport(options: {
     id: string;
     totalCents: number;
     discountCents?: number;
-    taxCents?: number;
+    taxCents?: number | undefined;
     status: string;
     isSimulated?: boolean;
     createdAt: string;
-    locationId?: string;
+    locationId?: string | undefined;
   }>;
   productMargins?: ProductMarginMetric[];
   storeComparisons?: StoreFinancialComparison[];
 }): FinancialReportResult {
-  const { filters, restaurantName, locationName, expenses, orders, productMargins = [], storeComparisons = [] } = options;
+  const {
+    filters,
+    restaurantName,
+    locationName,
+    expenses,
+    orders,
+    productMargins = [],
+    storeComparisons = [],
+  } = options;
   const generatedAt = new Date().toISOString();
-  const periodLabel = filters.startDate && filters.endDate
-    ? `${filters.startDate} - ${filters.endDate}`
-    : "Year-To-Date (Current Cycle)";
+  const periodLabel =
+    filters.startDate && filters.endDate
+      ? `${filters.startDate} - ${filters.endDate}`
+      : "Year-To-Date (Current Cycle)";
 
-  let rows: FinancialReportRow[] = [];
+  const rows: FinancialReportRow[] = [];
   let totalInflowCents = 0;
   let totalOutflowCents = 0;
   let realizedCount = 0;
@@ -834,7 +919,8 @@ export function generateFinancialReport(options: {
       const isSim = !!ord.isSimulated;
       const st: "realized" | "simulated" = isSim ? "simulated" : "realized";
       if (!matchesData(st)) return;
-      if (isSim) simulatedCount += 1; else realizedCount += 1;
+      if (isSim) simulatedCount += 1;
+      else realizedCount += 1;
       totalInflowCents += ord.totalCents;
       rows.push({
         id: ord.id,
@@ -851,10 +937,12 @@ export function generateFinancialReport(options: {
     });
   } else if (filters.reportType === "expenses") {
     expenses.forEach((exp) => {
-      if (filters.category && filters.category !== "all" && exp.category !== filters.category) return;
+      if (filters.category && filters.category !== "all" && exp.category !== filters.category)
+        return;
       const st: "realized" | "projected" = exp.status === "paid" ? "realized" : "projected";
       if (!matchesData(st)) return;
-      if (st === "realized") realizedCount += 1; else projectedCount += 1;
+      if (st === "realized") realizedCount += 1;
+      else projectedCount += 1;
       totalOutflowCents += exp.amountCents;
       rows.push({
         id: exp.id,
@@ -870,40 +958,45 @@ export function generateFinancialReport(options: {
       });
     });
   } else if (filters.reportType === "cash_flow") {
-    orders.filter((o) => o.status === "delivered").forEach((o) => {
-      const isSim = !!o.isSimulated;
-      const st = isSim ? "simulated" : "realized";
-      if (!matchesData(st)) return;
-      if (isSim) simulatedCount += 1; else realizedCount += 1;
-      totalInflowCents += o.totalCents;
-      rows.push({
-        id: `in-${o.id}`,
-        dateOrKey: o.createdAt.split("T")[0] || "-",
-        title: `Cash Inflow (Order #${o.id.slice(0, 6)})`,
-        category: "Sales Revenue",
-        locationName,
-        typeKind: "inflow",
-        amountCents: o.totalCents,
-        formattedAmount: `+${formatUsd(o.totalCents)}`,
-        statusBadge: isSim ? "Simulated" : "Realized",
+    orders
+      .filter((o) => o.status === "delivered")
+      .forEach((o) => {
+        const isSim = !!o.isSimulated;
+        const st = isSim ? "simulated" : "realized";
+        if (!matchesData(st)) return;
+        if (isSim) simulatedCount += 1;
+        else realizedCount += 1;
+        totalInflowCents += o.totalCents;
+        rows.push({
+          id: `in-${o.id}`,
+          dateOrKey: o.createdAt.split("T")[0] || "-",
+          title: `Cash Inflow (Order #${o.id.slice(0, 6)})`,
+          category: "Sales Revenue",
+          locationName,
+          typeKind: "inflow",
+          amountCents: o.totalCents,
+          formattedAmount: `+${formatUsd(o.totalCents)}`,
+          statusBadge: isSim ? "Simulated" : "Realized",
+        });
       });
-    });
-    expenses.filter((e) => e.status === "paid").forEach((e) => {
-      if (!matchesData("realized")) return;
-      realizedCount += 1;
-      totalOutflowCents += e.amountCents;
-      rows.push({
-        id: `out-${e.id}`,
-        dateOrKey: e.paidAt ? e.paidAt.split("T")[0] || e.dueDate : e.dueDate,
-        title: `Cash Outflow: ${e.description}`,
-        category: e.category,
-        locationName,
-        typeKind: "outflow",
-        amountCents: e.amountCents,
-        formattedAmount: `-${formatUsd(e.amountCents)}`,
-        statusBadge: "Paid",
+    expenses
+      .filter((e) => e.status === "paid")
+      .forEach((e) => {
+        if (!matchesData("realized")) return;
+        realizedCount += 1;
+        totalOutflowCents += e.amountCents;
+        rows.push({
+          id: `out-${e.id}`,
+          dateOrKey: e.paidAt ? e.paidAt.split("T")[0] || e.dueDate : e.dueDate,
+          title: `Cash Outflow: ${e.description}`,
+          category: e.category,
+          locationName,
+          typeKind: "outflow",
+          amountCents: e.amountCents,
+          formattedAmount: `-${formatUsd(e.amountCents)}`,
+          statusBadge: "Paid",
+        });
       });
-    });
   } else if (filters.reportType === "payables_receivables") {
     expenses.forEach((e) => {
       const isOverdue = e.status === "overdue";
@@ -944,7 +1037,8 @@ export function generateFinancialReport(options: {
     });
   } else if (filters.reportType === "store_performance") {
     storeComparisons.forEach((s) => {
-      if (s.status === "simulated") simulatedCount += 1; else realizedCount += 1;
+      if (s.status === "simulated") simulatedCount += 1;
+      else realizedCount += 1;
       totalInflowCents += s.grossRevenueCents;
       totalOutflowCents += s.operatingExpensesCents;
       rows.push({
@@ -1010,7 +1104,17 @@ export function generateFinancialReport(options: {
 }
 
 export function exportReportToCsv(report: FinancialReportResult): string {
-  const headers = ["ID", "Date/Key", "Title", "Category", "Location", "Kind", "Amount_USD", "Status", "Notes"];
+  const headers = [
+    "ID",
+    "Date/Key",
+    "Title",
+    "Category",
+    "Location",
+    "Kind",
+    "Amount_USD",
+    "Status",
+    "Notes",
+  ];
   const lines: string[] = [
     `# Restaurant: ${report.restaurantName}`,
     `# Location: ${report.locationName}`,
@@ -1028,17 +1132,19 @@ export function exportReportToCsv(report: FinancialReportResult): string {
     const safeNotes = `"${(r.notes || "").replace(/"/g, '""')}"`;
     const amountNum = (r.amountCents / 100).toFixed(2);
 
-    lines.push([
-      r.id,
-      r.dateOrKey,
-      safeTitle,
-      safeCategory,
-      safeLocation,
-      r.typeKind,
-      amountNum,
-      r.statusBadge,
-      safeNotes,
-    ].join(","));
+    lines.push(
+      [
+        r.id,
+        r.dateOrKey,
+        safeTitle,
+        safeCategory,
+        safeLocation,
+        r.typeKind,
+        amountNum,
+        r.statusBadge,
+        safeNotes,
+      ].join(","),
+    );
   }
 
   return lines.join("\r\n");
@@ -1055,7 +1161,7 @@ export function exportReportToXmlSpreadsheet(report: FinancialReportResult): str
         <Cell><Data ss:Type="Number">${(r.amountCents / 100).toFixed(2)}</Data></Cell>
         <Cell><Data ss:Type="String">${escapeXml(r.statusBadge)}</Data></Cell>
         <Cell><Data ss:Type="String">${escapeXml(r.notes || "")}</Data></Cell>
-      </Row>`
+      </Row>`,
     )
     .join("\n");
 
@@ -1124,4 +1230,3 @@ export function triggerFileDownload(filename: string, content: string, mimeType:
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-

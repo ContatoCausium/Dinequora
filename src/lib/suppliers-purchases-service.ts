@@ -1,3 +1,9 @@
+import {
+  assertLocationAllowed,
+  assertScopeWritable,
+  assertTenantContext,
+  isLocationAllowed,
+} from "./tenant-storage";
 import { recordInventoryMovement } from "./inventory-movements-service";
 import { listInventory, saveInventoryItem } from "./inventory-service";
 
@@ -12,7 +18,7 @@ export interface Supplier {
   phone?: string;
   address?: string;
   suppliedCategories: string[];
-  notes?: string;
+  notes?: string | undefined;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -27,7 +33,7 @@ export interface PurchaseOrderItem {
   quantityReceived: number;
   unitPriceCents: number;
   subtotalCents: number;
-  divergenceNote?: string;
+  divergenceNote?: string | undefined;
 }
 
 export interface PurchaseOrderHistoryEntry {
@@ -37,7 +43,7 @@ export interface PurchaseOrderHistoryEntry {
   fromStatus?: POStatus;
   toStatus: POStatus;
   action: string;
-  notes?: string;
+  notes?: string | undefined;
 }
 
 export interface PurchaseOrder {
@@ -48,15 +54,15 @@ export interface PurchaseOrder {
   supplierId: string;
   supplierName: string;
   status: POStatus;
-  expectedDeliveryDate?: string;
+  expectedDeliveryDate?: string | undefined;
   items: PurchaseOrderItem[];
   subtotalCents: number;
   taxCents: number;
   discountCents: number;
   shippingCents: number;
   totalCents: number;
-  notes?: string;
-  receivingNotes?: string;
+  notes?: string | undefined;
+  receivingNotes?: string | undefined;
   receivedBy?: string;
   receivedAt?: string;
   history: PurchaseOrderHistoryEntry[];
@@ -112,21 +118,38 @@ const DEFAULT_SUPPLIERS: Supplier[] = [
   },
 ];
 
+/** Example suppliers exist only for the demo organization; real organizations start empty. */
+function demoSuppliers(orgId: string): Supplier[] {
+  return orgId === "demo" ? DEFAULT_SUPPLIERS.map((s) => ({ ...s, orgId: "demo" })) : [];
+}
+
 export function listSuppliers(orgId: string): Supplier[] {
-  if (typeof window === "undefined") return DEFAULT_SUPPLIERS;
+  assertTenantContext(orgId);
+  if (typeof window === "undefined") return demoSuppliers(orgId);
   try {
-    const raw = localStorage.getItem(`${SUPPLIERS_KEY_PREFIX}${orgId}`);
+    const raw = localStorage.getItem(`${SUPPLIERS_KEY_PREFIX}${assertTenantContext(orgId)}`);
     if (!raw) {
-      localStorage.setItem(`${SUPPLIERS_KEY_PREFIX}${orgId}`, JSON.stringify(DEFAULT_SUPPLIERS));
-      return DEFAULT_SUPPLIERS;
+      const seed = demoSuppliers(orgId);
+      if (seed.length > 0)
+        localStorage.setItem(`${SUPPLIERS_KEY_PREFIX}${orgId}`, JSON.stringify(seed));
+      return seed;
     }
-    return JSON.parse(raw) as Supplier[];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Keep records saved before this change ("default" examples) instead of dropping them.
+    return (parsed as Supplier[]).filter((s) => s.orgId === orgId || s.orgId === "default");
   } catch {
-    return DEFAULT_SUPPLIERS;
+    return [];
   }
 }
 
-export function saveSupplier(orgId: string, supplier: Partial<Supplier> & { name: string }): Supplier {
+/** Suppliers are organization-wide: store-restricted callers cannot change them. */
+export function saveSupplier(
+  orgId: string,
+  supplier: Partial<Supplier> & { name: string },
+  allowedLocationIds?: readonly string[],
+): Supplier {
+  assertScopeWritable([], allowedLocationIds);
   const current = listSuppliers(orgId);
   const now = new Date().toISOString();
   let saved: Supplier;
@@ -136,6 +159,7 @@ export function saveSupplier(orgId: string, supplier: Partial<Supplier> & { name
       saved = {
         ...current[idx],
         ...supplier,
+        orgId: current[idx].orgId,
         updatedAt: now,
       };
       current[idx] = saved;
@@ -158,7 +182,7 @@ export function saveSupplier(orgId: string, supplier: Partial<Supplier> & { name
     }
   } else {
     saved = {
-      id: `sup-${Date.now()}`,
+      id: `sup-${crypto.randomUUID()}`,
       orgId,
       name: supplier.name,
       contactName: supplier.contactName || "",
@@ -175,30 +199,44 @@ export function saveSupplier(orgId: string, supplier: Partial<Supplier> & { name
   }
 
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${SUPPLIERS_KEY_PREFIX}${orgId}`, JSON.stringify(current));
+    localStorage.setItem(
+      `${SUPPLIERS_KEY_PREFIX}${assertTenantContext(orgId)}`,
+      JSON.stringify(current),
+    );
   }
   return saved;
 }
 
-export function toggleSupplierActive(orgId: string, supplierId: string): Supplier | null {
+export function toggleSupplierActive(
+  orgId: string,
+  supplierId: string,
+  allowedLocationIds?: readonly string[],
+): Supplier | null {
+  assertScopeWritable([], allowedLocationIds);
   const current = listSuppliers(orgId);
   const item = current.find((s) => s.id === supplierId);
   if (!item) return null;
   item.active = !item.active;
   item.updatedAt = new Date().toISOString();
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${SUPPLIERS_KEY_PREFIX}${orgId}`, JSON.stringify(current));
+    localStorage.setItem(
+      `${SUPPLIERS_KEY_PREFIX}${assertTenantContext(orgId)}`,
+      JSON.stringify(current),
+    );
   }
   return item;
 }
 
 export function calculatePOTotals(params: {
   items: PurchaseOrderItem[];
-  taxCents?: number;
-  discountCents?: number;
-  shippingCents?: number;
+  taxCents?: number | undefined;
+  discountCents?: number | undefined;
+  shippingCents?: number | undefined;
 }): { subtotalCents: number; totalCents: number } {
-  const subtotalCents = params.items.reduce((acc, it) => acc + (it.unitPriceCents * it.quantityOrdered), 0);
+  const subtotalCents = params.items.reduce(
+    (acc, it) => acc + it.unitPriceCents * it.quantityOrdered,
+    0,
+  );
   const tax = Math.max(0, params.taxCents || 0);
   const discount = Math.max(0, params.discountCents || 0);
   const shipping = Math.max(0, params.shippingCents || 0);
@@ -206,12 +244,21 @@ export function calculatePOTotals(params: {
   return { subtotalCents, totalCents };
 }
 
-export function listPurchaseOrders(orgId: string, locationId?: string): PurchaseOrder[] {
+export function listPurchaseOrders(
+  orgId: string,
+  locationId?: string,
+  allowedLocationIds?: readonly string[],
+): PurchaseOrder[] {
+  assertTenantContext(orgId);
+  if (locationId && locationId !== "all" && !isLocationAllowed(locationId, allowedLocationIds))
+    return [];
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(`${PO_KEY_PREFIX}${orgId}`);
+    const raw = localStorage.getItem(`${PO_KEY_PREFIX}${assertTenantContext(orgId)}`);
     if (!raw) return [];
-    const all = JSON.parse(raw) as PurchaseOrder[];
+    const all = (JSON.parse(raw) as PurchaseOrder[]).filter(
+      (po) => po.orgId === orgId && isLocationAllowed(po.locationId, allowedLocationIds),
+    );
     if (!locationId || locationId === "all") return all;
     return all.filter((po) => po.locationId === locationId);
   } catch {
@@ -219,7 +266,18 @@ export function listPurchaseOrders(orgId: string, locationId?: string): Purchase
   }
 }
 
-export function savePurchaseOrder(orgId: string, orderData: Partial<PurchaseOrder> & { supplierId: string; locationId: string }, actor: string): PurchaseOrder {
+export function savePurchaseOrder(
+  orgId: string,
+  orderData: Partial<PurchaseOrder> & { supplierId: string; locationId: string },
+  actor: string,
+  allowedLocationIds?: readonly string[],
+): PurchaseOrder {
+  assertTenantContext(orgId);
+  assertLocationAllowed(orderData.locationId, allowedLocationIds);
+  const existingPo = orderData.id
+    ? listPurchaseOrders(orgId).find((p) => p.id === orderData.id)
+    : undefined;
+  if (existingPo) assertLocationAllowed(existingPo.locationId, allowedLocationIds);
   const current = listPurchaseOrders(orgId);
   const suppliers = listSuppliers(orgId);
   const targetSup = suppliers.find((s) => s.id === orderData.supplierId);
@@ -274,7 +332,7 @@ export function savePurchaseOrder(orgId: string, orderData: Partial<PurchaseOrde
     const count = current.length + 1;
     const poNum = `PO-${String(count).padStart(5, "0")}`;
     po = {
-      id: `po-${Date.now()}`,
+      id: `po-${crypto.randomUUID()}`,
       poNumber: poNum,
       orgId,
       locationId: orderData.locationId,
@@ -305,7 +363,7 @@ export function savePurchaseOrder(orgId: string, orderData: Partial<PurchaseOrde
   }
 
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${PO_KEY_PREFIX}${orgId}`, JSON.stringify(current));
+    localStorage.setItem(`${PO_KEY_PREFIX}${assertTenantContext(orgId)}`, JSON.stringify(current));
   }
   return po;
 }
@@ -322,7 +380,8 @@ export function processPOReceiving(
   poId: string,
   receivedItems: ReceiveItemVerification[],
   actor: string,
-  receivingNotes?: string
+  receivingNotes?: string,
+  allowedLocationIds?: readonly string[],
 ): PurchaseOrder {
   const current = listPurchaseOrders(orgId);
   const idx = current.findIndex((p) => p.id === poId);
@@ -330,6 +389,7 @@ export function processPOReceiving(
     throw new Error("Purchase order not found");
   }
   const po = current[idx];
+  assertLocationAllowed(po.locationId, allowedLocationIds);
   if (po.status === "received" || po.status === "cancelled") {
     throw new Error("PO is already finalized and cannot receive more goods");
   }
@@ -358,7 +418,7 @@ export function processPOReceiving(
         itemId: it.inventoryItemId,
         type: "in",
         quantity: check.receivedNow,
-        costCents: check.priceVerifiedCents ?? it.unitPriceCents,
+        unitCostCents: check.priceVerifiedCents ?? it.unitPriceCents,
         reason: `PO ${po.poNumber} Receiving (${po.supplierName})`,
         performedBy: actor,
         sourceLocationId: po.locationId,
@@ -414,16 +474,23 @@ export function processPOReceiving(
 
   current[idx] = updatedPO;
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${PO_KEY_PREFIX}${orgId}`, JSON.stringify(current));
+    localStorage.setItem(`${PO_KEY_PREFIX}${assertTenantContext(orgId)}`, JSON.stringify(current));
   }
   return updatedPO;
 }
 
-export function cancelPurchaseOrder(orgId: string, poId: string, actor: string, reason: string): PurchaseOrder {
+export function cancelPurchaseOrder(
+  orgId: string,
+  poId: string,
+  actor: string,
+  reason: string,
+  allowedLocationIds?: readonly string[],
+): PurchaseOrder {
   const current = listPurchaseOrders(orgId);
   const idx = current.findIndex((p) => p.id === poId);
   if (idx < 0 || !current[idx]) throw new Error("PO not found");
   const po = current[idx];
+  assertLocationAllowed(po.locationId, allowedLocationIds);
   if (po.status === "received") throw new Error("Cannot cancel fully received PO");
 
   const now = new Date().toISOString();
@@ -447,7 +514,7 @@ export function cancelPurchaseOrder(orgId: string, poId: string, actor: string, 
 
   current[idx] = updated;
   if (typeof window !== "undefined") {
-    localStorage.setItem(`${PO_KEY_PREFIX}${orgId}`, JSON.stringify(current));
+    localStorage.setItem(`${PO_KEY_PREFIX}${assertTenantContext(orgId)}`, JSON.stringify(current));
   }
   return updated;
 }

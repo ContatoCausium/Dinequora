@@ -20,16 +20,24 @@ export function rgbToHex({ r, g, b }: RGB) {
   return (
     "#" +
     [r, g, b]
-      .map((x) => Math.round(clamp(x, 0, 255)).toString(16).padStart(2, "0"))
+      .map((x) =>
+        Math.round(clamp(x, 0, 255))
+          .toString(16)
+          .padStart(2, "0"),
+      )
       .join("")
   );
 }
 
 export function rgbToHsl({ r, g, b }: RGB): HSL {
-  const rn = r / 255, gn = g / 255, bn = b / 255;
-  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const rn = r / 255,
+    gn = g / 255,
+    bn = b / 255;
+  const max = Math.max(rn, gn, bn),
+    min = Math.min(rn, gn, bn);
   const l = (max + min) / 2;
-  let h = 0, s = 0;
+  let h = 0,
+    s = 0;
   if (max !== min) {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
@@ -73,7 +81,8 @@ export function luminance(hex: string) {
 
 /** WCAG 2.x contrast ratio between two hex colors. */
 export function contrast(a: string, b: string) {
-  const la = luminance(a), lb = luminance(b);
+  const la = luminance(a),
+    lb = luminance(b);
   const [hi, lo] = la > lb ? [la, lb] : [lb, la];
   return (hi + 0.05) / (lo + 0.05);
 }

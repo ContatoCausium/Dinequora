@@ -1,6 +1,24 @@
-import { listInventory, type InventoryItem, type UnitOfMeasure } from './inventory-service';
+import { listInventory, type InventoryItem, type UnitOfMeasure } from "./inventory-service";
+import {
+  assertTenantContext,
+  isLocationAllowed,
+  readTenantRecords,
+  TenantContextError,
+  writeTenantRecords,
+} from "./tenant-storage";
 
-export type RecipeUnit = 'oz' | 'lb' | 'g' | 'kg' | 'ml' | 'l' | 'units' | 'pack' | 'tsp' | 'tbsp' | 'cup';
+/** Store-restricted callers may only write store-specific recipes in their stores; org-wide recipes need an org-wide caller. */
+function assertRecipeWritable(
+  locationId: string | undefined,
+  allowedLocationIds: readonly string[] | undefined,
+): void {
+  if (!allowedLocationIds) return;
+  if (!locationId || !allowedLocationIds.includes(locationId))
+    throw new TenantContextError("location_forbidden");
+}
+
+export type RecipeUnit =
+  "oz" | "lb" | "g" | "kg" | "ml" | "l" | "units" | "pack" | "tsp" | "tbsp" | "cup";
 
 export interface RecipeIngredient {
   id: string;
@@ -11,14 +29,14 @@ export interface RecipeIngredient {
   wastePercentage: number; // e.g. 5 = 5% scrap/cooking loss
   unitCostCents: number; // snapshot cost per unit in USD cents
   subtotalCostCents: number; // calculated cost with waste
-  notes?: string;
+  notes?: string | undefined;
 }
 
 export interface RecipeHistoryEntry {
   id: string;
   timestamp: string;
   performedBy: string;
-  action: 'created' | 'updated' | 'component_swapped' | 'price_sync';
+  action: "created" | "updated" | "component_swapped" | "price_sync";
   details: string;
 }
 
@@ -27,7 +45,7 @@ export interface ProductRecipe {
   orgId: string;
   productId: string;
   productName: string;
-  locationId?: string;
+  locationId?: string | undefined;
   servings: number;
   yieldQuantity: number;
   yieldUnit: string;
@@ -49,26 +67,24 @@ export interface IngredientAvailabilityAlert {
   isSufficient: boolean;
 }
 
-const RECIPES_STORAGE_KEY = 'servora_product_recipes_v1';
-
 // Basic conversion table relative to standard base (mass in g, vol in ml, counts as 1)
 export function convertUnits(qty: number, from: RecipeUnit, to: UnitOfMeasure): number {
   if (from === to) return qty;
 
   // Weight conversion
-  if (from === 'oz' && to === 'lb') return qty / 16;
-  if (from === 'lb' && to === 'oz') return qty * 16;
-  if (from === 'g' && to === 'lb') return qty * 0.00220462;
-  if (from === 'kg' && to === 'lb') return qty * 2.20462;
-  if (from === 'lb' && to === 'kg') return qty * 0.453592;
+  if (from === "oz" && to === "lb") return qty / 16;
+  if (from === "lb" && to === "oz") return qty * 16;
+  if (from === "g" && to === "lb") return qty * 0.00220462;
+  if (from === "kg" && to === "lb") return qty * 2.20462;
+  if (from === "lb" && to === "kg") return qty * 0.453592;
 
   // Volume conversion
-  if (from === 'tsp' && to === 'gal') return qty * 0.00130208;
-  if (from === 'tbsp' && to === 'gal') return qty * 0.00390625;
-  if (from === 'cup' && to === 'gal') return qty * 0.0625;
-  if (from === 'oz' && to === 'gal') return qty * 0.0078125;
-  if (from === 'ml' && to === 'gal') return qty * 0.000264172;
-  if (from === 'l' && to === 'gal') return qty * 0.264172;
+  if (from === "tsp" && to === "gal") return qty * 0.00130208;
+  if (from === "tbsp" && to === "gal") return qty * 0.00390625;
+  if (from === "cup" && to === "gal") return qty * 0.0625;
+  if (from === "oz" && to === "gal") return qty * 0.0078125;
+  if (from === "ml" && to === "gal") return qty * 0.000264172;
+  if (from === "l" && to === "gal") return qty * 0.264172;
 
   // Default fallback if directly matching or untranslatable unit
   return qty;
@@ -78,7 +94,7 @@ export function calculateIngredientCost(
   inventoryItem: InventoryItem,
   qty: number,
   unit: RecipeUnit,
-  wastePercentage = 0
+  wastePercentage = 0,
 ): { unitCostCents: number; subtotalCostCents: number } {
   const convertedQty = convertUnits(qty, unit, inventoryItem.unit);
   const wasteFactor = 1 + Math.max(0, wastePercentage) / 100;
@@ -93,7 +109,7 @@ export function calculateIngredientCost(
 export function computeRecipeTotals(
   ingredients: RecipeIngredient[],
   servings: number,
-  sellingPriceCents: number
+  sellingPriceCents: number,
 ): {
   totalCostCents: number;
   costPerServingCents: number;
@@ -118,174 +134,191 @@ export function computeRecipeTotals(
 
 const SEED_RECIPES: ProductRecipe[] = [
   {
-    id: 'recipe-smash-classic',
-    orgId: 'demo',
-    productId: 'demo-p-1',
-    productName: 'Classic American Cheeseburger',
-    locationId: 'loc-1',
+    id: "recipe-smash-classic",
+    orgId: "demo",
+    productId: "demo-p-1",
+    productName: "Classic American Cheeseburger",
+    locationId: "loc-1",
     servings: 1,
     yieldQuantity: 1,
-    yieldUnit: 'serving',
+    yieldUnit: "serving",
     ingredients: [
       {
-        id: 'ri-1',
-        inventoryItemId: 'inv-1',
-        name: 'Ground Angus Beef (80/20)',
+        id: "ri-1",
+        inventoryItemId: "inv-1",
+        name: "Ground Angus Beef (80/20)",
         quantity: 0.35,
-        unit: 'lb',
+        unit: "lb",
         wastePercentage: 8,
         unitCostCents: 425,
         subtotalCostCents: 161,
-        notes: '6oz smash patty with sear shrinkage',
+        notes: "6oz smash patty with sear shrinkage",
       },
       {
-        id: 'ri-2',
-        inventoryItemId: 'inv-2',
-        name: 'Artisan Brioche Buns',
+        id: "ri-2",
+        inventoryItemId: "inv-2",
+        name: "Artisan Brioche Buns",
         quantity: 1,
-        unit: 'units',
+        unit: "units",
         wastePercentage: 2,
         unitCostCents: 65,
         subtotalCostCents: 66,
-        notes: 'Toasted with butter',
+        notes: "Toasted with butter",
       },
       {
-        id: 'ri-3',
-        inventoryItemId: 'inv-3',
-        name: 'Sharp Aged Cheddar Slices',
+        id: "ri-3",
+        inventoryItemId: "inv-3",
+        name: "Sharp Aged Cheddar Slices",
         quantity: 0.12,
-        unit: 'lb',
+        unit: "lb",
         wastePercentage: 0,
         unitCostCents: 520,
         subtotalCostCents: 62,
-        notes: '2 thick slices melted',
+        notes: "2 thick slices melted",
       },
       {
-        id: 'ri-4',
-        inventoryItemId: 'inv-6',
-        name: 'Compostable Burger Boxes',
+        id: "ri-4",
+        inventoryItemId: "inv-6",
+        name: "Compostable Burger Boxes",
         quantity: 1,
-        unit: 'units',
+        unit: "units",
         wastePercentage: 0,
         unitCostCents: 22,
         subtotalCostCents: 22,
       },
     ],
-    prepInstructions: '1. Toast brioche on flat-top. 2. Smash patty to 1/4 inch on 425F griddle with pinch salt/pepper. 3. Melt 2 slices sharp cheddar under cloche for 20s. 4. Box immediately.',
+    prepInstructions:
+      "1. Toast brioche on flat-top. 2. Smash patty to 1/4 inch on 425F griddle with pinch salt/pepper. 3. Melt 2 slices sharp cheddar under cloche for 20s. 4. Box immediately.",
     totalCostCents: 311,
     costPerServingCents: 311,
     sellingPriceCents: 1499,
     estimatedMarginPercent: 79.2,
     history: [
       {
-        id: 'h-1',
+        id: "h-1",
         timestamp: new Date(Date.now() - 86400000 * 3).toISOString(),
-        performedBy: 'Executive Chef',
-        action: 'created',
-        details: 'Initial standardized technical recipe created for flagship burger.',
+        performedBy: "Executive Chef",
+        action: "created",
+        details: "Initial standardized technical recipe created for flagship burger.",
       },
     ],
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'recipe-truffle-fries',
-    orgId: 'demo',
-    productId: 'demo-p-2',
-    productName: 'Truffle Parmesan Fries',
-    locationId: 'loc-1',
+    id: "recipe-truffle-fries",
+    orgId: "demo",
+    productId: "demo-p-2",
+    productName: "Truffle Parmesan Fries",
+    locationId: "loc-1",
     servings: 1,
     yieldQuantity: 1,
-    yieldUnit: 'basket',
+    yieldUnit: "basket",
     ingredients: [
       {
-        id: 'ri-5',
-        inventoryItemId: 'inv-5',
-        name: 'Organic Russet Potatoes (50lb)',
+        id: "ri-5",
+        inventoryItemId: "inv-5",
+        name: "Organic Russet Potatoes (50lb)",
         quantity: 0.6,
-        unit: 'lb',
+        unit: "lb",
         wastePercentage: 12,
         unitCostCents: 75,
         subtotalCostCents: 50,
-        notes: 'Hand cut and double blanched',
+        notes: "Hand cut and double blanched",
       },
       {
-        id: 'ri-6',
-        inventoryItemId: 'inv-4',
-        name: 'White Truffle Oil (Italian)',
+        id: "ri-6",
+        inventoryItemId: "inv-4",
+        name: "White Truffle Oil (Italian)",
         quantity: 0.35,
-        unit: 'oz',
+        unit: "oz",
         wastePercentage: 3,
         unitCostCents: 180,
         subtotalCostCents: 65,
-        notes: 'Drizzle immediately after frying',
+        notes: "Drizzle immediately after frying",
       },
     ],
-    prepInstructions: 'Fry at 365F for 3.5 minutes until golden. Toss in steel bowl with sea salt, parsley and truffle oil.',
+    prepInstructions:
+      "Fry at 365F for 3.5 minutes until golden. Toss in steel bowl with sea salt, parsley and truffle oil.",
     totalCostCents: 115,
     costPerServingCents: 115,
     sellingPriceCents: 750,
     estimatedMarginPercent: 84.7,
     history: [
       {
-        id: 'h-2',
+        id: "h-2",
         timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
-        performedBy: 'Kitchen Manager',
-        action: 'created',
-        details: 'Side item technical sheet registered.',
+        performedBy: "Kitchen Manager",
+        action: "created",
+        details: "Side item technical sheet registered.",
       },
     ],
     updatedAt: new Date().toISOString(),
   },
 ];
 
-function readRecipesStore(): ProductRecipe[] { 
-  if (typeof window === 'undefined') return SEED_RECIPES;
-  try {
-    const raw = localStorage.getItem(RECIPES_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(SEED_RECIPES));
-      return SEED_RECIPES;
-    }
-    return JSON.parse(raw);
-  } catch {
-    return SEED_RECIPES;
-  }
+function readRecipesStore(orgId: string): ProductRecipe[] {
+  return readTenantRecords<ProductRecipe>("product_recipes", orgId, () =>
+    orgId === "demo" ? SEED_RECIPES : [],
+  );
 }
 
-function writeRecipesStore(recipes: ProductRecipe[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(RECIPES_STORAGE_KEY, JSON.stringify(recipes));
-  } catch {}
+function writeRecipesStore(orgId: string, recipes: ProductRecipe[]): void {
+  writeTenantRecords("product_recipes", orgId, recipes);
 }
 
-export function listProductRecipes(orgId: string, locationId?: string): ProductRecipe[] {
-  const all = readRecipesStore();
+export function listProductRecipes(
+  orgId: string,
+  locationId?: string,
+  allowedLocationIds?: readonly string[],
+): ProductRecipe[] {
+  assertTenantContext(orgId);
+  if (locationId && locationId !== "all" && !isLocationAllowed(locationId, allowedLocationIds))
+    return [];
+  const all = readRecipesStore(orgId);
   return all.filter((r) => {
-    const matchOrg = r.orgId === orgId || (orgId === 'demo' && r.orgId === 'demo');
-    const matchLoc = !locationId || locationId === 'all' || !r.locationId || r.locationId === locationId;
-    return matchOrg && matchLoc;
+    const matchOrg = r.orgId === orgId;
+    const matchLoc =
+      !locationId || locationId === "all" || !r.locationId || r.locationId === locationId;
+    // Org-wide recipes (no store) are readable by every member; store recipes only by authorized stores.
+    const allowed = !r.locationId || isLocationAllowed(r.locationId, allowedLocationIds);
+    return matchOrg && matchLoc && allowed;
   });
 }
 
-export function getProductRecipe(orgId: string, recipeId: string): ProductRecipe | undefined {
-  return listProductRecipes(orgId).find((r) => r.id === recipeId);
+export function getProductRecipe(
+  orgId: string,
+  recipeId: string,
+  allowedLocationIds?: readonly string[],
+): ProductRecipe | undefined {
+  return listProductRecipes(orgId, undefined, allowedLocationIds).find((r) => r.id === recipeId);
 }
 
-export function saveProductRecipe(orgId: string, recipe: Omit<ProductRecipe, 'id' | 'updatedAt'> & { id?: string }, performedBy = 'Operator'): ProductRecipe {
-  const all = readRecipesStore();
+export function saveProductRecipe(
+  orgId: string,
+  recipe: Omit<ProductRecipe, "id" | "updatedAt"> & { id?: string | undefined },
+  performedBy = "Operator",
+  allowedLocationIds?: readonly string[],
+): ProductRecipe {
+  const all = readRecipesStore(orgId);
+  assertRecipeWritable(recipe.locationId, allowedLocationIds);
+  const existing = recipe.id ? all.find((r) => r.id === recipe.id) : undefined;
+  if (existing) assertRecipeWritable(existing.locationId, allowedLocationIds);
   const now = new Date().toISOString();
   const isNew = !recipe.id;
-  const id = recipe.id || `recipe-${Date.now()}`;
+  const id = recipe.id || `recipe-${crypto.randomUUID()}`;
 
-  const calculated = computeRecipeTotals(recipe.ingredients, recipe.servings, recipe.sellingPriceCents);
+  const calculated = computeRecipeTotals(
+    recipe.ingredients,
+    recipe.servings,
+    recipe.sellingPriceCents,
+  );
 
   const newHistoryEntry: RecipeHistoryEntry = {
     id: `hist-${Date.now()}`,
     timestamp: now,
     performedBy,
-    action: isNew ? 'created' : 'updated',
-    details: isNew ? 'Ficha técnica criada.' : 'Ficha técnica atualizada e custos recalculados.',
+    action: isNew ? "created" : "updated",
+    details: isNew ? "Ficha técnica criada." : "Ficha técnica atualizada e custos recalculados.",
   };
 
   const history = [...(recipe.history || []), newHistoryEntry];
@@ -308,30 +341,44 @@ export function saveProductRecipe(orgId: string, recipe: Omit<ProductRecipe, 'id
     all.unshift(saved);
   }
 
-  writeRecipesStore(all);
+  writeRecipesStore(orgId, all);
   return saved;
 }
 
-export function duplicateProductRecipe(orgId: string, recipeId: string, performedBy = 'Operator'): ProductRecipe {
-  const original = getProductRecipe(orgId, recipeId);
-  if (!original) throw new Error('Receita original não encontrada.');
+export function duplicateProductRecipe(
+  orgId: string,
+  recipeId: string,
+  performedBy = "Operator",
+  allowedLocationIds?: readonly string[],
+): ProductRecipe {
+  const original = getProductRecipe(orgId, recipeId, allowedLocationIds);
+  if (!original) throw new Error("Receita original não encontrada.");
 
-  return saveProductRecipe(orgId, {
-    ...original,
-    id: undefined,
-    productName: `${original.productName} (Cópia)`,
-    history: [],
-  }, performedBy);
+  return saveProductRecipe(
+    orgId,
+    {
+      ...original,
+      id: undefined,
+      productName: `${original.productName} (Cópia)`,
+      history: [],
+    },
+    performedBy,
+    allowedLocationIds,
+  );
 }
 
 export function checkRecipeStockAvailability(
   recipe: ProductRecipe,
   inventoryItems: InventoryItem[],
-  batchCount = 1
+  batchCount = 1,
 ): IngredientAvailabilityAlert[] {
   return recipe.ingredients.map((ing) => {
     const item = inventoryItems.find((i) => i.id === ing.inventoryItemId);
-    const reqInItemUnit = convertUnits(ing.quantity * batchCount, ing.unit, item ? item.unit : 'units');
+    const reqInItemUnit = convertUnits(
+      ing.quantity * batchCount,
+      ing.unit,
+      item ? item.unit : "units",
+    );
     const available = item ? item.quantity : 0;
     return {
       ingredientName: ing.name,
@@ -343,11 +390,16 @@ export function checkRecipeStockAvailability(
   });
 }
 
-export function syncRecipeWithInventoryPrices(orgId: string, recipeId: string, performedBy = 'System'): ProductRecipe {
-  const recipe = getProductRecipe(orgId, recipeId);
-  if (!recipe) throw new Error('Receita não encontrada.');
+export function syncRecipeWithInventoryPrices(
+  orgId: string,
+  recipeId: string,
+  performedBy = "System",
+  allowedLocationIds?: readonly string[],
+): ProductRecipe {
+  const recipe = getProductRecipe(orgId, recipeId, allowedLocationIds);
+  if (!recipe) throw new Error("Receita não encontrada.");
 
-  const inventory = listInventory(orgId, recipe.locationId);
+  const inventory = listInventory(orgId, recipe.locationId, allowedLocationIds);
   const updatedIngredients = recipe.ingredients.map((ing) => {
     const invItem = inventory.find((i) => i.id === ing.inventoryItemId);
     if (!invItem) return ing;
@@ -359,17 +411,30 @@ export function syncRecipeWithInventoryPrices(orgId: string, recipeId: string, p
     };
   });
 
-  return saveProductRecipe(orgId, {
-    ...recipe,
-    ingredients: updatedIngredients,
-  }, performedBy);
+  return saveProductRecipe(
+    orgId,
+    {
+      ...recipe,
+      ingredients: updatedIngredients,
+    },
+    performedBy,
+    allowedLocationIds,
+  );
 }
 
 // Simulation function: computes what ingredients would be deducted by an order without modifying balances
-export function simulateOrderIngredientConsumption(orgId: string, locationId: string, orderProductIds: string[]) {
-  const recipes = listProductRecipes(orgId, locationId);
-  const inventory = listInventory(orgId, locationId);
-  const consumptionMap: Record<string, { itemName: string; totalConsumedQty: number; unit: string; currentStock: number }> = {};
+export function simulateOrderIngredientConsumption(
+  orgId: string,
+  locationId: string,
+  orderProductIds: string[],
+  allowedLocationIds?: readonly string[],
+) {
+  const recipes = listProductRecipes(orgId, locationId, allowedLocationIds);
+  const inventory = listInventory(orgId, locationId, allowedLocationIds);
+  const consumptionMap: Record<
+    string,
+    { itemName: string; totalConsumedQty: number; unit: string; currentStock: number }
+  > = {};
 
   for (const pid of orderProductIds) {
     const recipe = recipes.find((r) => r.productId === pid || r.id === pid);
@@ -377,7 +442,7 @@ export function simulateOrderIngredientConsumption(orgId: string, locationId: st
 
     for (const ing of recipe.ingredients) {
       const invItem = inventory.find((i) => i.id === ing.inventoryItemId);
-      const consumed = convertUnits(ing.quantity, ing.unit, invItem ? invItem.unit : 'units');
+      const consumed = convertUnits(ing.quantity, ing.unit, invItem ? invItem.unit : "units");
       const key = ing.inventoryItemId;
 
       if (!consumptionMap[key]) {

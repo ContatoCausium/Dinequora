@@ -21,6 +21,8 @@ import enInventory from "@/locales/en-US/inventory.json";
 import ptInventory from "@/locales/pt-BR/inventory.json";
 import enFinance from "@/locales/en-US/finance.json";
 import ptFinance from "@/locales/pt-BR/finance.json";
+import enOperations from "@/locales/en-US/operations.json";
+import ptOperations from "@/locales/pt-BR/operations.json";
 
 export const LANGUAGES = [
   { code: "en-US", label: "English (US)", short: "EN" },
@@ -33,13 +35,47 @@ const STORAGE_KEY = "servora.lang";
 if (!i18n.isInitialized) {
   void i18n.use(initReactI18next).init({
     resources: {
-      "en-US": { common: enCommon, dashboard: enDashboard, locations: enLocations, settings: enSettings, auth: enAuth, team: enTeam, control: enControl, menu: enMenu, inventory: enInventory, finance: enFinance },
-      "pt-BR": { common: ptCommon, dashboard: ptDashboard, locations: ptLocations, settings: ptSettings, auth: ptAuth, team: ptTeam, control: ptControl, menu: ptMenu, inventory: ptInventory, finance: ptFinance },
+      "en-US": {
+        common: enCommon,
+        dashboard: enDashboard,
+        locations: enLocations,
+        settings: enSettings,
+        auth: enAuth,
+        team: enTeam,
+        control: enControl,
+        menu: enMenu,
+        inventory: enInventory,
+        finance: enFinance,
+      },
+      "pt-BR": {
+        common: ptCommon,
+        dashboard: ptDashboard,
+        locations: ptLocations,
+        settings: ptSettings,
+        auth: ptAuth,
+        team: ptTeam,
+        control: ptControl,
+        menu: ptMenu,
+        inventory: ptInventory,
+        finance: ptFinance,
+      },
     },
     lng: DEFAULT_LANGUAGE,
     fallbackLng: DEFAULT_LANGUAGE,
     supportedLngs: LANGUAGES.map((l) => l.code),
-    ns: ["common", "dashboard", "locations", "settings", "auth", "team", "control", "menu", "inventory", "finance"],
+    ns: [
+      "common",
+      "dashboard",
+      "locations",
+      "settings",
+      "auth",
+      "team",
+      "control",
+      "menu",
+      "inventory",
+      "finance",
+      "operations",
+    ],
     defaultNS: "common",
     interpolation: { escapeValue: false },
     initAsync: false,
@@ -68,20 +104,50 @@ export function setLanguage(code: LanguageCode) {
 export function applyClientLanguageAfterHydration(code: LanguageCode = resolveClientLanguage()) {
   if (code === i18n.language) return;
   const run = () => setLanguage(code);
-  const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-  if (document.readyState === "complete") (idle ? idle(run) : window.setTimeout(run, 0));
-  else window.addEventListener("load", () => (idle ? idle(run) : window.setTimeout(run, 0)), { once: true });
+  const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number })
+    .requestIdleCallback;
+  if (document.readyState === "complete") {
+    if (idle) idle(run);
+    else window.setTimeout(run, 0);
+  } else
+    window.addEventListener("load", () => (idle ? idle(run) : window.setTimeout(run, 0)), {
+      once: true,
+    });
 }
 
 export default i18n;
 
 // Keep namespaces registered even when the i18n instance was initialised earlier (SSR module reuse).
 const RESOURCES = {
-  "en-US": { common: enCommon, dashboard: enDashboard, locations: enLocations, settings: enSettings, auth: enAuth, team: enTeam, control: enControl, menu: enMenu, inventory: enInventory, finance: enFinance },
-  "pt-BR": { common: ptCommon, dashboard: ptDashboard, locations: ptLocations, settings: ptSettings, auth: ptAuth, team: ptTeam, control: ptControl, menu: ptMenu, inventory: ptInventory, finance: ptFinance },
+  "en-US": {
+    common: enCommon,
+    dashboard: enDashboard,
+    locations: enLocations,
+    settings: enSettings,
+    auth: enAuth,
+    team: enTeam,
+    control: enControl,
+    menu: enMenu,
+    inventory: enInventory,
+    finance: enFinance,
+  },
+  "pt-BR": {
+    common: ptCommon,
+    dashboard: ptDashboard,
+    locations: ptLocations,
+    settings: ptSettings,
+    auth: ptAuth,
+    team: ptTeam,
+    control: ptControl,
+    menu: ptMenu,
+    inventory: ptInventory,
+    finance: ptFinance,
+  },
 };
 for (const [lng, nss] of Object.entries(RESOURCES)) {
   for (const [ns, res] of Object.entries(nss)) {
     i18n.addResourceBundle(lng, ns, res, true, true);
   }
 }
+i18n.addResourceBundle("en-US", "operations", enOperations, true, true);
+i18n.addResourceBundle("pt-BR", "operations", ptOperations, true, true);
