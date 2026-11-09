@@ -7,6 +7,7 @@ import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel } from "@/components/app/page";
 import { AppError, EmptyState } from "@/components/app/states";
 import { fetchBilling } from "@/lib/org-service";
+import { countBillableStores } from "@/lib/access-rules";
 import { fmtCurrency, fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,7 @@ function BillingPage() {
   }
   if (error) return <AppError error={error as Error} reset={() => void refetch()} />;
 
+  const activeStores = countBillableStores(org.locations.map((l) => l.lifecycle ?? "active"));
   const sub = data?.subscription;
   const plan = data?.plans.find((p) => p.id === sub?.plan_id);
   const date = (d: string | null) =>
@@ -83,9 +85,19 @@ function BillingPage() {
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
                   <Item label={t("billing.plan")} value={plan?.name ?? sub.plan_id} />
                   <Item label={t("billing.status")} value={<StatusPill status={sub.status} />} />
+                  {/* Stores in use come from the stores themselves (same count as the Stores page);
+                      the billed quantity is what the billing provider last synced, shown separately. */}
+                  <Item
+                    label={t("billing.activeLocations")}
+                    value={`${activeStores} / ${storeLimit}`}
+                  />
                   <Item
                     label={t("billing.billedLocations")}
-                    value={`${sub.billed_locations} / ${storeLimit}`}
+                    value={
+                      sub.billed_locations === activeStores
+                        ? String(sub.billed_locations)
+                        : t("billing.billedPendingSync", { count: sub.billed_locations })
+                    }
                   />
                   {sub.status === "trialing" && (
                     <Item label={t("billing.trialEnds")} value={date(sub.trial_ends_at)} />

@@ -278,7 +278,8 @@
     "attentionHint": "Suspensões, falta de proprietário, testes terminando, unidades acima do limite e problemas de pagamento.",
     "viewAll": "Ver tudo",
     "nothing": "Nada exige atenção no momento.",
-    "activity": "Atividade recente da plataforma"
+    "activity": "Atividade recente da plataforma",
+    "projectedBadge": "Estimativa"
   },
   "attention": {
     "suspended": "Suspensa",
@@ -299,7 +300,10 @@
     "demos": "Somente demonstração",
     "noMatch": "Nenhuma organização corresponde aos filtros.",
     "override": "Limite personalizado",
-    "trialEnds": "Teste termina em {{date}}"
+    "trialEnds": "Teste termina em {{date}}",
+    "pagination": "Página {{current}} de {{total}}",
+    "prev": "Anterior",
+    "next": "Próxima"
   },
   "sub": {
     "none": "Sem assinatura",
@@ -349,115 +353,12 @@
     "allOrgs": "Todas as organizações",
     "scope": "Escopo",
     "allEvents": "Todos os eventos",
-    "platformOnly": "Apenas ações da plataforma",
-    "searchPlaceholder": "Buscar por ação, alvo, motivo ou payload...",
+    "platformOnly": "Somente ações da plataforma",
+    "searchPlaceholder": "Buscar por ação, alvo, motivo ou conteúdo...",
     "actionFilter": "Filtrar por ação",
     "allActions": "Todas as ações",
-    "detailTitle": "Detalhes do Evento de Auditoria",
-    "metadataPayload": "Metadados e Carga Útil (JSON)"
-  },
-  "settings": {
-    "subtitle": "Identidade da plataforma, definições de planos, status de integrações e controles de segurança aplicados pelo backend.",
-    "identity": "Identidade da plataforma",
-    "identityHint": "Exibido no login, e-mails e na Central de Controle.",
-    "productName": "Nome do produto",
-    "workingName": "Nome de trabalho",
-    "currency": "Moeda de cobrança",
-    "defaultLanguage": "Idioma padrão",
-    "languages": "Idiomas",
-    "integrations": "Saúde das integrações",
-    "integrationsHint": "Nada pago ou externo é ativado sem sua autorização.",
-    "latency": "Respondendo · {{ms}} ms",
-    "int": {
-      "backend": "Backend e banco de dados",
-      "backendDetail": "Verificando…",
-      "authEmail": "Login com e-mail e senha",
-      "authEmailDetail": "Configuração e entrega não foram verificadas nesta sessão.",
-      "google": "Login com Google",
-      "googleDetail": "Configuração e entrega não foram verificadas nesta sessão.",
-      "microsoft": "Login com Microsoft",
-      "microsoftDetail": "Configuração e entrega não foram verificadas nesta sessão.",
-      "stripe": "Cobrança Stripe",
-      "stripeDetail": "Desconectado. Modo de teste preparado aguardando autorização.",
-      "email": "Envio de e-mails",
-      "emailDetail": "Configuração e entrega não foram verificadas nesta sessão."
-    },
-    "state": {
-      "ok": "Respondendo",
-      "off": "Não conectado",
-      "pending": "Verificando",
-      "unverified": "Não verificado",
-      "failed": "Falha na verificação"
-    },
-    "plans": "Planos de assinatura",
-    "plansHint": "Preços mensais por unidade em USD. Definições mudam apenas via atualização revisada de backend.",
-    "placeholder": "Provisório",
-    "col": {
-      "plan": "Plano",
-      "price": "Por unidade / mês",
-      "stores": "Limite de unidades",
-      "trialStores": "Unidades no teste",
-      "trialDays": "Dias de teste"
-    },
-    "security": "Controles de segurança",
-    "securityHint": "Salvaguardas declaradas, não checagens em tempo real.",
-    "sec": {
-      "confirm": "Novas contas devem confirmar o e-mail antes do login.",
-      "noAutoAdmin": "Funções de plataforma nunca são dadas no cadastro; primeiro admin é pontual e auditado.",
-      "isolation": "Dados da organização são lidos apenas pelos membros. Admins da plataforma não têm acesso a dados de negócio.",
-      "storeScope": "Gerentes e equipe visualizam apenas unidades atribuídas.",
-      "auditImmutable": "O registro de auditoria não pode ser editado ou apagado por nenhum usuário.",
-      "reasons": "Toda alteração de plataforma exige um motivo registrado por escrito.",
-      "lastOwner": "O último proprietário e o último admin da plataforma não podem ser removidos.",
-      "suspension": "Organizações suspensas ou sem assinatura ativa não podem fazer alterações; tolerância segue regra configurada."
-    },
-    "governance": "Governança",
-    "adminsLink": "Conceder ou revogar funções da plataforma.",
-    "auditLink": "Revisar alterações sensíveis.",
-    "authorizationNote": "A conexão de pagamentos, e-mails ou outros serviços externos sempre exige autorização explícita.",
-    "noPlans": "Nenhum plano disponível."
-  },
-  "demo": {
-    "subtitle": "Visualize marca, onboarding e fluxos de unidade com dados sintéticos.",
-    "sandboxNote": "Sandbox — roda apenas no navegador. Nada é salvo no banco, nenhuma organização é acessada e dados de clientes não são lidos.",
-    "controls": "Controles do sandbox",
-    "tenant": "Ponto de partida",
-    "blank": "Restaurante fictício em branco",
-    "demoTenant": "demo",
-    "name": "Nome do restaurante",
-    "logo": "Logotipo",
-    "upload": "Envie um logo para extrair cores",
-    "primary": "Primária",
-    "accent": "Destaque",
-    "contrast": "Verificações de contraste: {{pass}}/{{total}}",
-    "reset": "Reiniciar sandbox",
-    "previewOf": "Pré-visualização do workspace",
-    "synthetic": "Dados sintéticos",
-    "kpi": {
-      "gross": "Vendas brutas (7d)",
-      "orders": "Pedidos",
-      "aov": "Ticket médio",
-      "open": "Pedidos abertos"
-    },
-    "onboarding": "Guia de onboarding",
-    "restart": "Reiniciar onboarding",
-    "locations": "Unidades",
-    "usage": "{{used}} de {{limit}} no Growth",
-    "verified": "Verificado",
-    "placeholderSlot": "Disponível",
-    "addStore": "Adicionar unidade fictícia",
-    "limitReached": "Limite do plano atingido — upgrade necessário.",
-    "logoErr": {
-      "type": "Utilize PNG, JPG, SVG ou WebP.",
-      "size": "O arquivo do logo deve ter 2 MB ou menos."
-    }
-  },
-  "auditPage": {
-    "subtitle": "Registro imutável de alterações sensíveis: membros, convites, propriedade, planos, limites e funções da plataforma.",
-    "allOrgs": "Todas as organizações",
-    "scope": "Escopo",
-    "allEvents": "Todos os eventos",
-    "platformOnly": "Somente ações da plataforma"
+    "detailTitle": "Detalhes do evento de auditoria",
+    "metadataPayload": "Metadados e conteúdo (JSON)"
   },
   "settings": {
     "subtitle": "Identidade da plataforma, definição de planos, status das integrações e controles de segurança aplicados no backend.",

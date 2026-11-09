@@ -3,6 +3,7 @@
  * Kept separate from auth so business data and identity can move independently.
  */
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { ORGANIZATIONS, type Location, type Organization } from "@/lib/tenants";
 import type { LocationLifecycle, WeeklyHours } from "@/lib/access-rules";
 
@@ -135,13 +136,26 @@ export function rpcErrorCode(message: string): string {
     "invalid_location",
     "invalid_email",
     "email_mismatch",
+    "permission_denied",
+    "permission_exceeds_own",
+    "invalid_permission",
+    "invalid_profile",
+    "profile_tier_mismatch",
+    "profile_tier_in_use",
+    "profile_in_use",
+    "last_owner",
+    "not_member",
   ];
   return codes.find((c) => message.includes(c)) ?? "unknown";
 }
 
-async function rpc(fn: string, args: Record<string, unknown>) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(fn, args);
+/** Names come from the generated schema, so a renamed/removed SQL function fails type-checking. */
+type RpcName = keyof Database["public"]["Functions"];
+
+async function rpc(fn: RpcName, args: Record<string, unknown>) {
+  // Args are validated server-side by the security-definer function; the dynamic
+  // name prevents per-call arg inference, so this is the single typed boundary.
+  const { data, error } = await supabase.rpc(fn, args as never);
   if (error) throw new Error(rpcErrorCode(error.message));
   return data as unknown;
 }
@@ -209,12 +223,14 @@ export async function createInvitation(
   email: string,
   role: OrgRole,
   locationIds: string[] = [],
+  profileId: string | null = null,
 ) {
   const { data, error } = await supabase.rpc("create_invitation", {
     _org_id: orgDbId,
     _email: email,
     _role: role,
     _location_ids: locationIds,
+    ...(profileId ? { _profile_id: profileId } : {}),
   });
   if (error) throw error;
   return `${window.location.origin}/invite/${data as string}`;
@@ -251,12 +267,16 @@ export async function fetchTeam(orgDbId: string) {
   const [members, invites] = await Promise.all([
     supabase
       .from("organization_members")
-      .select("id, role, user_id, created_at, member_location_access(location_id)")
+      .select(
+        "id, role, user_id, created_at, profile_id, extra_permissions, revoked_permissions, member_location_access(location_id)",
+      )
       .eq("org_id", orgDbId)
       .order("created_at"),
     supabase
       .from("invitations")
-      .select("id, email, role, location_ids, expires_at, accepted_at, revoked_at, created_at")
+      .select(
+        "id, email, role, location_ids, profile_id, expires_at, accepted_at, revoked_at, created_at",
+      )
       .eq("org_id", orgDbId)
       .is("accepted_at", null)
       .is("revoked_at", null)
@@ -284,15 +304,29 @@ export type AuditEntry = {
   actor_id: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
+  location_id: string | null;
+  result: "success" | "denied" | "error";
 };
-/** Owners/managers only (enforced by RLS); returns [] for everyone else. */
-export async function fetchOrgAudit(orgDbId: string, limit = 20): Promise<AuditEntry[]> {
-  const { data, error } = await supabase
+/** Members with team.activity only (enforced by RLS); returns [] for everyone else. */
+export async function fetchOrgAudit(
+  orgDbId: string,
+  limit = 20,
+  filters: {
+    actorId?: string | undefined;
+    locationDbId?: string | undefined;
+    result?: AuditEntry["result"] | undefined;
+  } = {},
+): Promise<AuditEntry[]> {
+  let q = supabase
     .from("audit_logs")
-    .select("id, action, target, actor_id, metadata, created_at")
+    .select("id, action, target, actor_id, metadata, created_at, location_id, result")
     .eq("org_id", orgDbId)
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (filters.actorId) q = q.eq("actor_id", filters.actorId);
+  if (filters.locationDbId) q = q.eq("location_id", filters.locationDbId);
+  if (filters.result) q = q.eq("result", filters.result);
+  const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as AuditEntry[];
 }
@@ -302,7 +336,7 @@ export async function transferOwnership(orgDbId: string, newOwnerUserId: string)
     _org_id: orgDbId,
     _new_owner: newOwnerUserId,
   });
-  if (error) throw new Error(error.message.includes("forbidden") ? "forbidden" : "unknown");
+  if (error) throw new Error(rpcErrorCode(error.message));
 }
 
 export type BillingSummary = {
@@ -394,3 +428,78 @@ export function resolveLogo(
   if (stored) return stored;
   return previousBrand == null ? bundled : undefined;
 }
+
+// ---------------------------------------------------------------- permissions (migration 0018)
+export type PermissionProfile = {
+  id: string;
+  org_id: string | null;
+  key: string;
+  name: string;
+  description: string;
+  tier: "manager" | "staff";
+  permissions: string[];
+  is_system: boolean;
+  archived_at: string | null;
+};
+
+/** Effective permissions of the signed-in user in this organization (owner = full catalog). */
+export async function fetchMyPermissions(orgDbId: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc("my_permissions", { _org_id: orgDbId });
+  if (error) throw new Error(rpcErrorCode(error.message));
+  return data ?? [];
+}
+
+/** System templates plus profiles owned by this organization (RLS: members only). */
+export async function fetchPermissionProfiles(orgDbId: string): Promise<PermissionProfile[]> {
+  const { data, error } = await supabase
+    .from("permission_profiles")
+    .select("id, org_id, key, name, description, tier, permissions, is_system, archived_at")
+    .or(`org_id.is.null,org_id.eq.${orgDbId}`)
+    .is("archived_at", null)
+    .order("is_system", { ascending: false })
+    .order("name");
+  if (error) throw new Error(rpcErrorCode(error.message));
+  return (data ?? []).flatMap((p) => (p.tier === "owner" ? [] : [{ ...p, tier: p.tier }]));
+}
+
+export const savePermissionProfile = (
+  orgDbId: string,
+  v: {
+    id: string | null;
+    name: string;
+    description: string;
+    tier: "manager" | "staff";
+    permissions: string[];
+  },
+) =>
+  rpc("save_permission_profile", {
+    _org_id: orgDbId,
+    _id: v.id,
+    _name: v.name,
+    _description: v.description,
+    _tier: v.tier,
+    _permissions: v.permissions,
+  }) as Promise<string>;
+
+export const archivePermissionProfile = (id: string) =>
+  rpc("archive_permission_profile", { _id: id });
+
+/** Tier + profile + individual adjustments + stores in one audited call. */
+export const setMemberAccess = (
+  memberId: string,
+  v: {
+    role: OrgRole;
+    profileId: string | null;
+    extra: string[];
+    revoked: string[];
+    locationIds: string[];
+  },
+) =>
+  rpc("set_member_access", {
+    _member_id: memberId,
+    _role: v.role,
+    _profile_id: v.profileId,
+    _extra: v.extra,
+    _revoked: v.revoked,
+    _location_ids: v.locationIds,
+  });
