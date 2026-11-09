@@ -1,0 +1,243 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/instrument-serif/latin-400-italic.css";
+
+/* ------------------------------------------------------------------
+   Dinequora design tokens — built on the official brand palette.
+   Emerald #10B981 · Navy #0B1320 · Off-white #F8FAFC
+   Secondary text: #64748B (light surfaces) · #A9B9C9 (dark surfaces)
+------------------------------------------------------------------- */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+
+  --color-emerald: #10b981;
+  --color-emerald-soft: #34d399;
+  --color-emerald-ink: #047857; /* emerald text on light surfaces (AA contrast) */
+  --color-navy: #0b1320;
+  --color-navy-950: #070c15;
+  --color-navy-900: #0e1727;
+  --color-navy-800: #132036;
+  --color-navy-700: #1b2a44;
+  --color-offwhite: #f8fafc;
+  --color-slate: #64748b;
+  --color-mist: #a9b9c9;
+  --color-ink: #0b1320;
+  --color-line-dark: rgb(169 185 201 / 0.14);
+  --color-line-light: rgb(11 19 32 / 0.09);
+  --color-amber: #f59e0b;
+  --color-rose: #f43f5e;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-navy font-sans text-offwhite antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: rgb(16 185 129 / 0.35);
+    color: #f8fafc;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-emerald);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  img {
+    max-width: 100%;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-[1240px] px-5 sm:px-8;
+  }
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[0.72rem] font-semibold tracking-[0.18em] uppercase;
+  }
+  .display {
+    @apply font-semibold tracking-[-0.035em];
+    line-height: 1.02;
+  }
+  .heading {
+    @apply font-semibold tracking-[-0.028em];
+    line-height: 1.08;
+  }
+  .accent-serif {
+    @apply font-serif font-normal italic tracking-[-0.01em];
+  }
+  .hairline-dark {
+    border-color: var(--color-line-dark);
+  }
+  .surface-dark {
+    background: linear-gradient(180deg, rgb(19 32 54 / 0.72), rgb(14 23 39 / 0.72));
+    border: 1px solid var(--color-line-dark);
+  }
+  .grid-fade {
+    background-image:
+      linear-gradient(to right, rgb(169 185 201 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(169 185 201 / 0.06) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  }
+}
+
+/* ---------- Motion ---------- */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 900ms var(--ease-out-quint),
+    transform 900ms var(--ease-out-quint);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes kenburns {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.kenburns {
+  animation: kenburns 14s var(--ease-out-quint) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 1100ms var(--ease-out-quint) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(16 185 129 / 0);
+  }
+}
+.live-dot {
+  animation: pulse-dot 2.2s ease-in-out infinite;
+}
+
+/* WhatsApp button: a soft ring that radiates every few seconds. */
+@keyframes wa-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  70%,
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+.wa-ping {
+  animation: wa-ping 3.2s var(--ease-out-quint) infinite;
+}
+
+/* Contact section: square grid with a few cells that slowly light up. */
+.grid-cells {
+  background-image:
+    linear-gradient(to right, rgb(169 185 201 / 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(169 185 201 / 0.07) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 70% at 30% 40%, black 20%, transparent 75%);
+}
+@keyframes cell-glow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  45%,
+  60% {
+    opacity: 1;
+  }
+}
+.cell-glow {
+  animation: cell-glow 7s ease-in-out infinite;
+  animation-delay: var(--cell-delay, 0s);
+}
+
+/* Auto-rotating tabs: the bar fills over the slide duration; its end advances the slide. */
+@keyframes progress-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.rotate-progress {
+  transform-origin: left center;
+  animation-name: progress-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* Hero notification cards: a slow, subtle float. */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+.float-y {
+  animation: float-y 7s ease-in-out infinite;
+  animation-delay: var(--float-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .wa-ping,
+  .cell-glow,
+  .float-y {
+    animation: none !important;
+  }
+  /* No automatic rotation for visitors who asked for less motion. */
+  .rotate-progress {
+    animation: none !important;
+    transform: scaleX(0);
+  }
+  .cell-glow {
+    opacity: 0.6;
+  }
+  .reveal,
+  .rise,
+  .kenburns,
+  .live-dot {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
