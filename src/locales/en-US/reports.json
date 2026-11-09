@@ -1,0 +1,67 @@
+{
+  "title": "Reports",
+  "subtitle": "Sales, products and results for the selected period — computed from recorded orders and the ledger.",
+  "period": "Period",
+  "periods": {
+    "7d": "7 days",
+    "30d": "30 days",
+    "90d": "90 days"
+  },
+  "exportCsv": "Export CSV",
+  "loadFailed": "Reports could not be loaded.",
+  "retry": "Try again",
+  "kpi": {
+    "netSales": "Net sales",
+    "netSalesHint": "Ledger revenue, net of tax and reversals",
+    "orders": "Orders",
+    "ordersHint": "Excluding cancellations",
+    "avgTicket": "Average ticket",
+    "cogsRate": "COGS",
+    "cogsRateHint": "Of net sales",
+    "grossMargin": "Gross margin",
+    "noRevenue": "No revenue in this period"
+  },
+  "daily": {
+    "title": "Net sales by day",
+    "subtitle": "Paid, non-cancelled orders",
+    "singleDay": "All recorded sales fall on a single day so far — the trend fills in as more days are recorded.",
+    "empty": "No sales in this period."
+  },
+  "byStore": {
+    "title": "By store",
+    "empty": "No sales in this period."
+  },
+  "byChannel": {
+    "title": "By channel",
+    "empty": "No sales in this period."
+  },
+  "products": {
+    "title": "Top products",
+    "subtitle": "Ranked by net sales (item subtotal, before order-level discounts and tax)",
+    "product": "Product",
+    "qty": "Qty sold",
+    "sales": "Sales",
+    "share": "Share",
+    "empty": "No products sold in this period."
+  },
+  "pnl": {
+    "title": "Result for the period",
+    "subtitle": "Expenses use their competency date",
+    "revenue": "Net sales",
+    "cogs": "Cost of goods sold (recipes)",
+    "gross": "Gross profit",
+    "expenses": "Operating expenses",
+    "result": "Result",
+    "cogsNote": "Only items with a recipe card carry cost; products without one count as zero cost.",
+    "purchasesNote": "Stock purchases are not expenses here — their cost enters through COGS when the items are sold."
+  },
+  "csv": {
+    "day": "Day",
+    "store": "Store",
+    "channel": "Channel",
+    "product": "Product",
+    "qty": "Quantity",
+    "sales": "Net sales",
+    "orders": "Orders"
+  }
+}

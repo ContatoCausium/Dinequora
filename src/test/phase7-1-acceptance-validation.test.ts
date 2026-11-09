@@ -70,13 +70,26 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
     expect(forbiddenOrgPatterns.some((p) => isolatedOrg.name.toLowerCase().includes(p))).toBe(
       false,
     );
-    const { data: flowResult, error: flowErr } = await (supabase.rpc as any)(
-      "validate_pos_e2e_acceptance_flow",
-      {
-        _org_id: isolatedOrg.id,
-        _location_id: isolatedLocationId,
-      },
-    );
+    interface FlowValidationResult {
+      idempotence_verified?: boolean;
+      stock_deduction_verified?: boolean;
+      no_recipe_handled_safely?: boolean;
+      consumption_logs_cleared?: boolean;
+      stock_reversal_verified?: boolean;
+      revenue_recorded_and_reversed?: boolean;
+      dre_reflected_correctly?: boolean;
+      phase_7_1_accepted?: boolean;
+    }
+
+    const { data: flowResult, error: flowErr } = await (
+      supabase.rpc as unknown as (...args: unknown[]) => Promise<{
+        data: FlowValidationResult | null;
+        error: { message: string } | null;
+      }>
+    )("validate_pos_e2e_acceptance_flow", {
+      _org_id: isolatedOrg.id,
+      _location_id: isolatedLocationId,
+    });
 
     if (flowResult) {
       expect(flowResult.idempotence_verified).toBe(true);

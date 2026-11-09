@@ -1,36 +1,51 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  FileSpreadsheet,
-  Download,
-  FileText,
-  Printer,
-  Filter,
-  CheckCircle2,
-  AlertTriangle,
-} from "lucide-react";
+import { Download, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/app/page";
+import { StatTile } from "@/components/app/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { fmtDate, fmtMoneyCents, fmtPercent } from "@/lib/format";
 import {
-  generateFinancialReport,
+  DEFAULT_REPORT_TEXT,
   exportReportToCsv,
   exportReportToXmlSpreadsheet,
+  generateFinancialReport,
   triggerFileDownload,
-  formatUsd,
-  type FinancialReportType,
   type Expense,
-  type ProductMarginMetric,
-  type StoreFinancialComparison,
+  type FinancialReportType,
+  type ReportFormatters,
+  type ReportTextKey,
 } from "@/lib/finance-service";
+import {
+  ledgerForLocation,
+  monthlyTrend,
+  type LedgerEntry,
+  type StoreRef,
+  type StoreResult,
+} from "./finance-model";
+
+type DataType = "all" | "realized" | "projected" | "simulated";
+
+const REPORT_TYPES: { value: FinancialReportType; label: string }[] = [
+  { value: "cash_flow", label: "cash_flow" },
+  { value: "revenue", label: "revenue" },
+  { value: "expenses", label: "expenses" },
+  { value: "payables_receivables", label: "payables" },
+  { value: "cogs_margins", label: "margins" },
+  { value: "store_performance", label: "performance" },
+  { value: "monthly_trends", label: "trends" },
+];
 
 interface FinanceReportsProps {
-  orgId: string;
   restaurantName: string;
-  locations: Array<{ id: string; name: string }>;
+  locations: StoreRef[];
   currentLocationId: string;
+  /** Every readable expense, with the effective status (pending past due ⇒ overdue). */
   expenses: Expense[];
+  /** Every readable ledger row (finance_entries). */
+  entries: LedgerEntry[];
   orders: Array<{
     id: string;
     totalCents: number;
@@ -41,8 +56,8 @@ interface FinanceReportsProps {
     createdAt: string;
     locationId?: string;
   }>;
-  productMargins?: ProductMarginMetric[];
-  storeComparisons?: StoreFinancialComparison[];
+  stores: StoreResult[];
+  currentMonth: string;
 }
 
 export function FinanceReports({
@@ -50,36 +65,62 @@ export function FinanceReports({
   locations,
   currentLocationId,
   expenses,
+  entries,
   orders,
-  productMargins = [],
-  storeComparisons = [],
+  stores,
+  currentMonth,
 }: FinanceReportsProps) {
-  const { t } = useTranslation("finance");
+  const { t, i18n } = useTranslation("finance");
+  const lng = i18n.language;
 
   const [reportType, setReportType] = useState<FinancialReportType>("cash_flow");
   const [selectedLocation, setSelectedLocation] = useState<string>(currentLocationId || "all");
-  const [selectedDataType, setSelectedDataType] = useState<
-    "all" | "realized" | "projected" | "simulated"
-  >("all");
+  const [selectedDataType, setSelectedDataType] = useState<DataType>("all");
 
-  const locationName = useMemo(() => {
-    if (selectedLocation === "all") return "All Locations (Consolidated)";
-    return locations.find((l) => l.id === selectedLocation)?.name || "Current Location";
-  }, [selectedLocation, locations]);
+  const locationName =
+    selectedLocation === "all"
+      ? t("reports.allLocationsConsolidated")
+      : (locations.find((l) => l.id === selectedLocation)?.name ?? "");
 
   const report = useMemo(() => {
+    const scopedExpenses =
+      selectedLocation === "all"
+        ? expenses
+        : expenses.filter((e) => e.locationId === selectedLocation);
+    const scopedEntries = ledgerForLocation(entries, locations, selectedLocation);
+    const slugByDbId = new Map(locations.map((l) => [l.dbId, l]));
+    const storeName = (id: string) => locations.find((l) => l.id === id)?.name ?? id;
+    const formatters: ReportFormatters = {
+      text: (key: ReportTextKey, vars) =>
+        t(`reports.text.${key}`, { defaultValue: DEFAULT_REPORT_TEXT[key], ...vars }),
+      money: (cents) => fmtMoneyCents(cents, lng),
+      percent: (ratio) => fmtPercent(ratio, lng),
+      category: (c) => t(`categories.${c}`, { defaultValue: c }),
+      status: (s) => t(`status.${s}`, { defaultValue: s }),
+    };
     return generateFinancialReport({
-      filters: {
-        reportType,
-        locationId: selectedLocation,
-        dataType: selectedDataType,
-      },
+      filters: { reportType, locationId: selectedLocation, dataType: selectedDataType },
       restaurantName,
       locationName,
-      expenses,
-      orders,
-      productMargins,
-      storeComparisons,
+      expenses: scopedExpenses,
+      orders:
+        selectedLocation === "all"
+          ? orders
+          : orders.filter((o) => o.locationId === selectedLocation),
+      ledger: scopedEntries.map((e) => ({
+        id: e.id,
+        createdAt: e.created_at,
+        kind: e.kind,
+        amountCents: e.amount_cents,
+        locationName: slugByDbId.get(e.location_id)?.name ?? locationName,
+      })),
+      stores:
+        selectedLocation === "all"
+          ? stores
+          : stores.filter((s) => s.locationId === selectedLocation),
+      monthlyTrend: monthlyTrend(scopedEntries, scopedExpenses, currentMonth),
+      storeName,
+      formatters,
     });
   }, [
     reportType,
@@ -88,15 +129,19 @@ export function FinanceReports({
     restaurantName,
     locationName,
     expenses,
+    entries,
     orders,
-    productMargins,
-    storeComparisons,
+    stores,
+    locations,
+    currentMonth,
+    lng,
+    t,
   ]);
 
   const handleExportCsv = () => {
     const csv = exportReportToCsv(report);
     triggerFileDownload(`${report.reportType}-${Date.now()}.csv`, csv, "text/csv;charset=utf-8;");
-    toast.success(t("reports.exportedCsv", "CSV export generated"));
+    toast.success(t("reports.exportedCsv"));
   };
 
   const handleExportXmlSpreadsheet = () => {
@@ -106,194 +151,161 @@ export function FinanceReports({
       xml,
       "application/vnd.ms-excel;charset=utf-8;",
     );
-    toast.info(
-      t("reports.exportedXmlNote", "Spreadsheet generated in Excel-compatible XML format"),
-    );
+    toast.success(t("reports.exportedXmlNote"));
   };
 
   const handlePrintPdf = () => {
-    if (typeof window !== "undefined") {
-      window.print();
-    }
+    if (typeof window !== "undefined") window.print();
   };
 
-  return (
-    <div className="space-y-6">
-      <Panel
-        title={t("reports.title", "Financial Reports & Exports")}
-        subtitle={t(
-          "reports.subtitle",
-          "Download clean operational and executive reports in CSV, Excel XML, or Print/PDF format",
-        )}
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={handleExportCsv} className="text-xs h-8">
-              <Download className="mr-1.5 size-3.5" />
-              {t("reports.exportCsv", "Export CSV")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleExportXmlSpreadsheet}
-              className="text-xs h-8"
-            >
-              <FileSpreadsheet className="mr-1.5 size-3.5" />
-              {t("reports.exportExcel", "Export Excel (XML)")}
-            </Button>
-            <Button size="sm" variant="default" onClick={handlePrintPdf} className="text-xs h-8">
-              <Printer className="mr-1.5 size-3.5" />
-              {t("reports.exportPdf", "Print / Save PDF")}
-            </Button>
-          </div>
-        }
-      >
-        {/* Filters bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value as FinancialReportType)}
-              className="h-8 rounded-md border bg-background px-2.5 text-xs text-foreground font-medium"
-            >
-              <option value="cash_flow">
-                {t("reports.types.cash_flow", "Cash Flow Activity")}
-              </option>
-              <option value="revenue">{t("reports.types.revenue", "Revenue & Sales")}</option>
-              <option value="expenses">{t("reports.types.expenses", "Operating Expenses")}</option>
-              <option value="payables_receivables">
-                {t("reports.types.payables", "Accounts Payable")}
-              </option>
-              <option value="cogs_margins">
-                {t("reports.types.margins", "COGS & Product Margins")}
-              </option>
-              <option value="store_performance">
-                {t("reports.types.performance", "Multi-Store Performance")}
-              </option>
-              <option value="monthly_trends">{t("reports.types.trends", "Monthly Trends")}</option>
-            </select>
+  const selectClass = "h-9 rounded-md border bg-background px-2.5 text-xs text-foreground";
 
+  return (
+    <Panel
+      title={t("reports.title")}
+      subtitle={t("reports.subtitle")}
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleExportCsv}>
+            <Download />
+            {t("reports.exportCsv")}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportXmlSpreadsheet}>
+            <FileSpreadsheet />
+            {t("reports.exportExcel")}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handlePrintPdf}>
+            <Printer />
+            {t("reports.exportPdf")}
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label={t("reports.reportType")}
+            value={reportType}
+            onChange={(e) => setReportType(e.target.value as FinancialReportType)}
+            className={`${selectClass} font-medium`}
+          >
+            {REPORT_TYPES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {t(`reports.types.${r.label}`)}
+              </option>
+            ))}
+          </select>
+          {locations.length > 1 && (
             <select
+              aria-label={t("reports.locationFilter")}
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
-              className="h-8 rounded-md border bg-background px-2.5 text-xs text-foreground"
+              className={selectClass}
             >
-              <option value="all">{t("reports.allLocations", "All Locations")}</option>
+              <option value="all">{t("reports.allLocations")}</option>
               {locations.map((loc) => (
                 <option key={loc.id} value={loc.id}>
                   {loc.name}
                 </option>
               ))}
             </select>
-
-            <select
-              value={selectedDataType}
-              onChange={(e) =>
-                setSelectedDataType(
-                  e.target.value as "all" | "realized" | "projected" | "simulated",
-                )
-              }
-              className="h-8 rounded-md border bg-background px-2.5 text-xs text-foreground"
-            >
-              <option value="all">{t("reports.allData", "All Data Types")}</option>
-              <option value="realized">{t("reports.onlyRealized", "Only Realized")}</option>
-              <option value="projected">{t("reports.onlyProjected", "Only Projected")}</option>
-              <option value="simulated">{t("reports.onlySimulated", "Only Simulated")}</option>
-            </select>
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            <span>
-              {report.rows.length} {t("reports.recordsCount", "records found")}
-            </span>
-          </div>
+          )}
+          <select
+            aria-label={t("reports.dataFilter")}
+            value={selectedDataType}
+            onChange={(e) => setSelectedDataType(e.target.value as DataType)}
+            className={selectClass}
+          >
+            <option value="all">{t("reports.allData")}</option>
+            <option value="realized">{t("reports.onlyRealized")}</option>
+            <option value="projected">{t("reports.onlyProjected")}</option>
+            <option value="simulated">{t("reports.onlySimulated")}</option>
+          </select>
         </div>
+        <span className="text-xs text-muted-foreground">
+          {t("reports.recordsCount", { count: report.rows.length })}
+        </span>
+      </div>
 
-        {/* Executive Header Preview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 pb-2">
-          <div className="rounded-lg border bg-muted/10 p-3.5">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {t("reports.periodTotalInflow", "Total Recorded Inflows")}
-            </p>
-            <p className="text-lg font-bold mt-1 text-emerald-600">
-              +{formatUsd(report.totalInflowCents)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{report.periodLabel}</p>
-          </div>
-          <div className="rounded-lg border bg-muted/10 p-3.5">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {t("reports.periodTotalOutflow", "Total Recorded Outflows")}
-            </p>
-            <p className="text-lg font-bold mt-1 text-destructive">
-              -{formatUsd(report.totalOutflowCents)}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">{report.locationName}</p>
-          </div>
-          <div className="rounded-lg border bg-primary/5 border-primary/20 p-3.5">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-primary">
-              {t("reports.netBalance", "Net Operating Balance")}
-            </p>
-            <p className="text-lg font-bold mt-1 text-foreground">
-              {formatUsd(report.netBalanceCents)}
-            </p>
-            <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-              <span>Realized: {report.realizedCount}</span>
-              <span>•</span>
-              <span>Sim: {report.simulatedCount}</span>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-3">
+        <StatTile
+          label={t("reports.periodTotalInflow")}
+          value={fmtMoneyCents(report.totalInflowCents, lng)}
+          hint={report.periodLabel}
+        />
+        <StatTile
+          label={t("reports.periodTotalOutflow")}
+          value={fmtMoneyCents(report.totalOutflowCents, lng)}
+          hint={report.locationName}
+        />
+        <StatTile
+          label={t("reports.netBalance")}
+          value={fmtMoneyCents(report.netBalanceCents, lng)}
+          hint={t("reports.breakdownCounts", {
+            realized: report.realizedCount,
+            projected: report.projectedCount,
+            simulated: report.simulatedCount,
+          })}
+        />
+      </div>
 
-        {/* Table Preview */}
-        <div className="mt-4 overflow-x-auto rounded-md border">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-muted/50 border-b text-muted-foreground uppercase text-[10px] tracking-wider">
-              <tr>
-                <th className="p-3">{t("reports.colDateOrKey", "Date / Key")}</th>
-                <th className="p-3">{t("reports.colTitle", "Title / Item")}</th>
-                <th className="p-3">{t("reports.colCategory", "Category / Details")}</th>
-                <th className="p-3 text-right">{t("reports.colAmount", "Amount (USD)")}</th>
-                <th className="p-3">{t("reports.colStatus", "Status")}</th>
-                <th className="p-3">{t("reports.colNotes", "Notes")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {report.rows.map((row) => (
-                <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="p-3 tabular font-medium text-muted-foreground">{row.dateOrKey}</td>
-                  <td className="p-3 font-semibold text-foreground">{row.title}</td>
-                  <td className="p-3 text-muted-foreground">{row.category}</td>
-                  <td className="p-3 text-right tabular font-bold">
-                    <span
-                      className={
-                        row.typeKind === "inflow"
-                          ? "text-emerald-600"
-                          : row.typeKind === "outflow"
-                            ? "text-destructive"
-                            : "text-foreground"
-                      }
-                    >
-                      {row.formattedAmount}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <Badge variant="outline" className="text-[10px]">
-                      {row.statusBadge}
-                    </Badge>
-                  </td>
-                  <td className="p-3 text-muted-foreground text-[11px]">{row.notes || "-"}</td>
-                </tr>
-              ))}
-              {report.rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                    {t("reports.emptyRecords", "No financial records match the selected criteria.")}
-                  </td>
-                </tr>
+      <div className="mt-4 max-h-[560px] overflow-auto rounded-md border">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 border-b bg-muted text-[11px] text-muted-foreground">
+            <tr>
+              <th className="p-3 font-medium">{t("reports.colDateOrKey")}</th>
+              <th className="p-3 font-medium">{t("reports.colTitle")}</th>
+              {selectedLocation === "all" && (
+                <th className="p-3 font-medium">{t("reports.colStore")}</th>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-    </div>
+              <th className="p-3 font-medium">{t("reports.colCategory")}</th>
+              <th className="p-3 text-right font-medium">{t("reports.colAmount")}</th>
+              <th className="p-3 font-medium">{t("reports.colStatus")}</th>
+              <th className="p-3 font-medium">{t("reports.colNotes")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {report.rows.map((row) => (
+              <tr key={row.id} className="transition-colors hover:bg-muted/40">
+                <td className="tabular whitespace-nowrap p-3 text-muted-foreground">
+                  {row.isoDate
+                    ? fmtDate(row.isoDate, lng, { year: "numeric", month: "short", day: "numeric" })
+                    : reportType === "monthly_trends"
+                      ? fmtDate(`${row.dateOrKey}-01`, lng, { year: "numeric", month: "long" })
+                      : "—"}
+                </td>
+                <td className="p-3 font-medium text-foreground">{row.title}</td>
+                {selectedLocation === "all" && (
+                  <td className="p-3 text-muted-foreground">{row.locationName}</td>
+                )}
+                <td className="p-3 text-muted-foreground">
+                  {reportType === "monthly_trends"
+                    ? fmtDate(`${row.category}-01`, lng, { year: "numeric", month: "long" })
+                    : row.category}
+                </td>
+                <td className="tabular whitespace-nowrap p-3 text-right font-medium text-foreground">
+                  {row.typeKind === "outflow"
+                    ? fmtMoneyCents(-row.amountCents, lng)
+                    : fmtMoneyCents(row.amountCents, lng)}
+                </td>
+                <td className="p-3">
+                  <Badge variant="neutral" className="text-[11px]">
+                    {row.statusBadge}
+                  </Badge>
+                </td>
+                <td className="p-3 text-[11px] text-muted-foreground">{row.notes || "—"}</td>
+              </tr>
+            ))}
+            {report.rows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                  {t("reports.emptyRecords")}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
   );
 }

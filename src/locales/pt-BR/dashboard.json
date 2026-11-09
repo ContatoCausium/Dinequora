@@ -2,10 +2,10 @@
   "title": "Visão executiva",
   "subtitle": "{{scope}} · até {{date}}",
   "range": {
-    "label": "Período",
     "7": "7 dias",
     "30": "30 dias",
-    "90": "90 dias"
+    "90": "90 dias",
+    "label": "Período"
   },
   "kpi": {
     "sectionLabel": "Indicadores-chave de desempenho",
@@ -95,5 +95,122 @@
     "title": "Itens mais vendidos",
     "subtitle": "Unidades vendidas, do cardápio publicado",
     "empty": "Nenhum produto de demonstração disponível ainda."
+  },
+  "home": {
+    "greeting": "Veja como está a {{org}}",
+    "asOf": "{{date}}",
+    "period": "Período",
+    "periods": {
+      "today": "Hoje",
+      "7d": "7 dias",
+      "30d": "30 dias"
+    },
+    "refresh": "Atualizar",
+    "loadFailed": "Não foi possível carregar a visão geral.",
+    "retry": "Tentar novamente",
+    "attention": {
+      "title": "Precisa de atenção",
+      "allClear": "Nada precisa da sua atenção agora.",
+      "overdue_one": "{{count}} conta vencida · {{amount}}",
+      "overdue_other": "{{count}} contas vencidas · {{amount}}",
+      "dueSoon": "{{amount}} a vencer nos próximos 7 dias",
+      "lowStock_one": "{{count}} item no estoque mínimo ou abaixo",
+      "lowStock_other": "{{count}} itens no estoque mínimo ou abaixo",
+      "kitchen_one": "{{count}} pedido em aberto na cozinha",
+      "kitchen_other": "{{count}} pedidos em aberto na cozinha",
+      "receiving_one": "{{count}} pedido de compra aguardando recebimento",
+      "receiving_other": "{{count}} pedidos de compra aguardando recebimento",
+      "open": "Abrir"
+    },
+    "kpi": {
+      "netSales": "Vendas líquidas",
+      "netSalesHint": "Sem impostos e estornos",
+      "orders": "Pedidos",
+      "avgTicket": "Ticket médio {{value}}",
+      "cogs": "CMV",
+      "cogsHint": "{{value}} das vendas líquidas",
+      "gross": "Lucro bruto",
+      "grossHint": "Margem {{value}}",
+      "month": "Resultado do mês",
+      "monthHint": "Lucro bruto − despesas de {{month}}",
+      "noSales": "Ainda sem vendas"
+    },
+    "sales": {
+      "title": "Vendas líquidas por dia",
+      "empty": "Nenhuma venda registrada neste período.",
+      "singleDay": "Todas as vendas até agora estão em um único dia — a tendência aparece conforme novos dias forem registrados.",
+      "stores": "Por loja"
+    },
+    "products": {
+      "title": "Mais vendidos",
+      "empty": "Nenhum produto vendido neste período.",
+      "units_one": "{{count}} vendido",
+      "units_other": "{{count}} vendidos",
+      "viewAll": "Relatório completo"
+    },
+    "finance": {
+      "title": "Contas e custos",
+      "subtitle": "Despesas operacionais registradas",
+      "dueSoon": "Vence em 7 dias",
+      "overdue": "Vencidas",
+      "paid": "Pagas",
+      "personnel": "Pessoal (folha + benefícios)",
+      "operating": "Outros custos operacionais",
+      "open": "Abrir financeiro"
+    },
+    "stock": {
+      "title": "Estoque",
+      "low": "No mínimo ou abaixo",
+      "lowHint": "Itens para repor",
+      "receiving": "Compras a receber",
+      "value": "Valor em estoque",
+      "valueHint": "Quantidade × custo unitário",
+      "movesToday": "Movimentações hoje",
+      "recent": "Últimas movimentações",
+      "recentEmpty": "Nenhuma movimentação registrada ainda.",
+      "openInventory": "Abrir estoque"
+    },
+    "role": {
+      "owner": "Proprietário",
+      "manager": "Gerente",
+      "staff": "Equipe"
+    },
+    "scope": {
+      "all": "Todas as suas lojas",
+      "one": "{{store}}"
+    },
+    "cashier": {
+      "title": "Meu turno",
+      "mySales": "Minhas vendas hoje",
+      "mySalesHint": "Pedidos pagos lançados por você",
+      "myOrders": "Meus pedidos hoje",
+      "avgTicket": "Meu ticket médio",
+      "openStore": "Em aberto na loja",
+      "openStoreHint": "Aguardando, em preparo ou prontos",
+      "recent": "Minhas últimas vendas",
+      "recentEmpty": "Você ainda não lançou vendas hoje.",
+      "newSale": "Nova venda"
+    },
+    "kitchen": {
+      "title": "Cozinha",
+      "queue": "Aguardando",
+      "queueHint": "Pedidos novos e confirmados",
+      "prep": "Em preparo",
+      "ready": "Prontos para retirada",
+      "avgPrep": "Tempo médio de preparo hoje",
+      "avgPrepHint": "Do início até pronto",
+      "noPrepData": "Nenhum pedido finalizado hoje",
+      "minutes": "{{value}} min",
+      "oldest": "Pedidos abertos mais antigos",
+      "oldestEmpty": "A fila da cozinha está vazia.",
+      "openKds": "Abrir tela da cozinha",
+      "age": "há {{value}} min",
+      "avgPrepSample_one": "Início → pronto, {{count}} pedido hoje",
+      "avgPrepSample_other": "Início → pronto, {{count}} pedidos hoje",
+      "onlyInstant_one": "{{count}} mudança instantânea ignorada (não é preparo real)",
+      "onlyInstant_other": "{{count}} mudanças instantâneas ignoradas (não é preparo real)"
+    },
+    "limited": "Exibindo o que suas permissões permitem.",
+    "salesSection": "Vendas e resultado"
   }
 }
