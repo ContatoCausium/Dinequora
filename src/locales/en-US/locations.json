@@ -16,7 +16,9 @@
   "metrics": {
     "sales": "Sales · 30d",
     "orders": "Orders · 30d",
-    "growth": "Growth"
+    "growth": "Growth",
+    "unavailable": "Unavailable",
+    "truncated": "Only the most recent 5,000 orders were included."
   },
   "timezone": "Time zone",
   "hours": "Hours",
@@ -85,5 +87,7 @@
     "invalid_hours": "Check the highlighted opening hours.",
     "address_required": "Add an address before activating this location.",
     "unknown": "Something went wrong. Please try again."
-  }
+  },
+  "recordedNote": "Sales are recorded figures: net of tax, counting only paid, non-cancelled orders from the last 30 days. Growth compares with the previous 30 days.",
+  "setupNote": "Locations marked \"Needs setup\" are placeholders until the owner adds a real name and address."
 }

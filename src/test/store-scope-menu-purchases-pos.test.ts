@@ -61,10 +61,12 @@ function suspended(id: string, locationId: string, orgId = A): SuspendedSale {
     attendantName: "x",
     customerName: "c",
     orderType: "dine_in",
-    items: [],
+    // A held ticket always has at least one line (suspendSession ignores empty carts) and is
+    // recent (held tickets expire after SUSPENDED_SALE_TTL_MS).
+    items: [{ id: "line-1", quantity: 1 }],
     discountCents: 0,
     taxRatePercent: 0,
-    suspendedAt: "2026-01-01T00:00:00.000Z",
+    suspendedAt: new Date().toISOString(),
   } as unknown as SuspendedSale;
 }
 

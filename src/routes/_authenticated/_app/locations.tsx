@@ -40,6 +40,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { computeKpis } from "@/lib/demo-data";
+import { storeMetricsSince, storeSalesMetrics } from "@/lib/location-metrics";
+import { fetchAllOrders } from "@/lib/recorded-data";
 import { fmtCurrency, fmtNumber, fmtPercent } from "@/lib/format";
 import {
   createLocation,
@@ -94,9 +96,19 @@ const TIMEZONES = [
 function LocationsPage() {
   const { t, i18n } = useTranslation("locations");
   const lng = i18n.language;
-  const { org, role, orgDbId, storeLimit, orgStatus, setLocationId, refresh } = useWorkspace();
+  const { org, role, orgDbId, storeLimit, orgStatus, setLocationId, refresh, canAny } =
+    useWorkspace();
   const navigate = useNavigate();
   const isOwner = role === "owner";
+  // Synthetic figures exist only for organizations flagged as demo (organizations.is_demo).
+  // Real organizations see their own recorded sales, and only with a financial permission.
+  const fictional = org.fictional;
+  const canSeeSales = canAny(["dashboard.financials", "finance.view"]);
+  const recorded = useQuery({
+    queryKey: ["locations-sales", org.id],
+    queryFn: () => fetchAllOrders(org.id, "all", storeMetricsSince()),
+    enabled: !fictional && canSeeSales && org.locations.length > 0,
+  });
   const billable = countBillableStores(org.locations.map((l) => l.lifecycle ?? "active"));
   const canAdd = canAddStore(role, billable, storeLimit, orgStatus === "suspended");
   const [creating, setCreating] = useState(false);
@@ -125,7 +137,7 @@ function LocationsPage() {
         eyebrow={
           <>
             <span className="eyebrow">{org.name}</span>
-            <DemoBadge label={t("common:demo.badge")} />
+            {fictional && <DemoBadge label={t("common:demo.badge")} />}
           </>
         }
         title={t("title")}
@@ -184,7 +196,32 @@ function LocationsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {org.locations.map((l) => {
-            const k = computeKpis([l], 30);
+            const metrics = fictional
+              ? (() => {
+                  const k = computeKpis([l], 30);
+                  return [
+                    { k: "sales", v: fmtCurrency(k.gross, lng, true) },
+                    { k: "orders", v: fmtNumber(k.orders, lng, true) },
+                    { k: "growth", v: fmtPercent(k.growth, lng, true) },
+                  ];
+                })()
+              : canSeeSales
+                ? (() => {
+                    if (!recorded.data) {
+                      const v = recorded.isError ? t("metrics.unavailable") : "…";
+                      return ["sales", "orders", "growth"].map((k) => ({ k, v }));
+                    }
+                    const m = storeSalesMetrics(recorded.data.orders, l.id);
+                    return [
+                      { k: "sales", v: fmtCurrency(m.salesCents / 100, lng, true) },
+                      { k: "orders", v: fmtNumber(m.orders, lng, true) },
+                      {
+                        k: "growth",
+                        v: m.growth === null ? "—" : fmtPercent(m.growth, lng, true),
+                      },
+                    ];
+                  })()
+                : null;
             const lc = l.lifecycle ?? "active";
             const assigned = managers.filter((m) => l.dbId && m.location_ids.includes(l.dbId));
             const openDays = DAYS.filter((d) => l.hours?.[d]).length;
@@ -204,18 +241,16 @@ function LocationsPage() {
                   <StatusChip lifecycle={lc} verified={l.status === "verified"} />
                 </div>
 
-                <dl className="grid grid-cols-3 gap-px border-y bg-border">
-                  {[
-                    { k: "sales", v: fmtCurrency(k.gross, lng, true) },
-                    { k: "orders", v: fmtNumber(k.orders, lng, true) },
-                    { k: "growth", v: fmtPercent(k.growth, lng, true) },
-                  ].map((m) => (
-                    <div key={m.k} className="bg-card px-5 py-3">
-                      <dt className="text-[11px] text-muted-foreground">{t(`metrics.${m.k}`)}</dt>
-                      <dd className="tabular mt-0.5 text-sm font-semibold">{m.v}</dd>
-                    </div>
-                  ))}
-                </dl>
+                {metrics && (
+                  <dl className="grid grid-cols-3 gap-px border-y bg-border">
+                    {metrics.map((m) => (
+                      <div key={m.k} className="bg-card px-5 py-3">
+                        <dt className="text-[11px] text-muted-foreground">{t(`metrics.${m.k}`)}</dt>
+                        <dd className="tabular mt-0.5 text-sm font-semibold">{m.v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
 
                 <ul className="flex flex-col gap-2 p-5 text-sm">
                   <Info icon={Globe2} label={t("timezone")} value={l.timezone.replace(/_/g, " ")} />
@@ -280,7 +315,10 @@ function LocationsPage() {
         </div>
       )}
 
-      <p className="mt-6 text-xs text-muted-foreground">{t("placeholderNote")}</p>
+      <p className="mt-6 text-xs text-muted-foreground">
+        {t(fictional ? "placeholderNote" : canSeeSales ? "recordedNote" : "setupNote")}
+        {!fictional && recorded.data?.truncated ? ` ${t("metrics.truncated")}` : ""}
+      </p>
 
       {creating && <CreateDialog onClose={() => setCreating(false)} />}
       {editing && (
