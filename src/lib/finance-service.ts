@@ -7,16 +7,28 @@ import {
 } from "./tenant-storage";
 export type ExpenseRecurrence = "fixed" | "variable" | "recurring";
 export type ExpenseStatus = "pending" | "paid" | "overdue";
-export type ExpenseCategory =
-  | "suppliers"
-  | "taxes"
-  | "rent"
-  | "payroll"
-  | "utilities"
-  | "ingredients"
-  | "maintenance"
-  | "marketing"
-  | "other";
+/**
+ * Single source of truth for expense categories (stored in finance_expenses.payload.category).
+ * "utilities" is kept for records created before energy/water/internet were split out.
+ */
+export const EXPENSE_CATEGORIES = [
+  "rent",
+  "payroll",
+  "benefits",
+  "energy",
+  "water",
+  "internet",
+  "utilities",
+  "maintenance",
+  "marketing",
+  "taxes",
+  "suppliers",
+  "ingredients",
+  "other",
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+/** Personnel cost = salaries/payroll + benefits. */
+export const PERSONNEL_CATEGORIES: readonly ExpenseCategory[] = ["payroll", "benefits"];
 
 export interface Expense {
   id: string;
@@ -479,77 +491,6 @@ export function computeFinanceSummary(
   };
 }
 
-export function buildCashFlowTimeline(
-  expenses: Expense[],
-  realSalesCents: number,
-  granularity: CashFlowGranularity = "monthly",
-  startingCashCents = 1500000,
-): CashFlowTimeline {
-  let runningBalance = startingCashCents;
-  const bucketLabels =
-    granularity === "daily"
-      ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-      : granularity === "weekly"
-        ? ["Week 1", "Week 2", "Week 3", "Week 4"]
-        : ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
-
-  const stepFactor = 1 / bucketLabels.length;
-  const buckets: CashFlowBucket[] = bucketLabels.map((lbl, idx) => {
-    const initial = runningBalance;
-    const inflow = Math.round(realSalesCents * stepFactor * (0.85 + (idx % 3) * 0.15));
-    const paidExpensesTotal = expenses
-      .filter((e) => e.status === "paid")
-      .reduce((s, e) => s + e.amountCents, 0);
-    const outflow = Math.round(paidExpensesTotal * stepFactor * (0.9 + ((idx + 1) % 2) * 0.12));
-    const net = inflow - outflow;
-    const final = initial + net;
-    runningBalance = final;
-
-    return {
-      label: lbl,
-      initialBalanceCents: initial,
-      inflowCents: inflow,
-      outflowCents: outflow,
-      netCents: net,
-      finalBalanceCents: final,
-      entriesCount: Math.max(1, Math.round(expenses.length * stepFactor)),
-    };
-  });
-
-  const totalInflow = buckets.reduce((acc, b) => acc + b.inflowCents, 0);
-  const totalOutflow = buckets.reduce((acc, b) => acc + b.outflowCents, 0);
-
-  return {
-    granularity,
-    buckets,
-    totalInflowCents: totalInflow,
-    totalOutflowCents: totalOutflow,
-    netOperatingCents: totalInflow - totalOutflow,
-    initialOpeningCents: startingCashCents,
-    closingCashCents: runningBalance,
-  };
-}
-
-export function generateMonthlyTrend(
-  currentExpensesCents: number,
-  currentRevenueCents: number,
-): MonthlyTrend[] {
-  const months = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
-  const factors = [0.85, 0.9, 0.96, 1.02, 0.98, 1.0];
-
-  return months.map((m, idx) => {
-    const factor = factors[idx] ?? 1.0;
-    const rev = Math.round(currentRevenueCents * factor);
-    const exp = Math.round(currentExpensesCents * (factor * 0.95));
-    return {
-      month: m,
-      revenueCents: rev,
-      expensesCents: exp,
-      netProfitCents: rev - exp,
-    };
-  });
-}
-
 export function calculateDreStatement(
   realSalesCents: number,
   discountsCents: number,
@@ -841,7 +782,10 @@ export interface FinancialReportFilters {
 
 export interface FinancialReportRow {
   id: string;
+  /** Machine-friendly key used in exports: an ISO date when `isoDate` is set. */
   dateOrKey: string;
+  /** Set when the row is dated, so the UI can format it for the active language. */
+  isoDate?: string | undefined;
   title: string;
   category: string;
   locationName: string;
@@ -850,6 +794,25 @@ export interface FinancialReportRow {
   formattedAmount: string;
   statusBadge: string;
   notes?: string | undefined;
+}
+
+/** Column and header labels carried with the report so exports use the same language as the UI. */
+export interface ReportHeadings {
+  restaurant: string;
+  location: string;
+  report: string;
+  period: string;
+  generatedAt: string;
+  currency: string;
+  colDate: string;
+  colTitle: string;
+  colCategory: string;
+  colLocation: string;
+  colKind: string;
+  colAmount: string;
+  colStatus: string;
+  colNotes: string;
+  sheetName: string;
 }
 
 export interface FinancialReportResult {
@@ -867,6 +830,97 @@ export interface FinancialReportResult {
   projectedCount: number;
   simulatedCount: number;
   rows: FinancialReportRow[];
+  headings: ReportHeadings;
+}
+
+/** Text used inside generated reports. English defaults; the UI passes translated strings. */
+export const DEFAULT_REPORT_TEXT = {
+  title_revenue: "Revenue & Sales Breakdown",
+  title_expenses: "Operating Expenses Detail",
+  title_cash_flow: "Cash Flow Activity Statement",
+  title_payables_receivables: "Accounts Payable & Obligations",
+  title_cogs_margins: "COGS & Gross Margin by Store",
+  title_store_performance: "Multi-Store Financial Performance",
+  title_monthly_trends: "Monthly Trends",
+  periodAll: "All recorded data",
+  order: "Order {{id}}",
+  posSales: "POS sales",
+  revenueEntry: "Recorded revenue (net of tax)",
+  revenueReversal: "Revenue reversal",
+  discount: "Discount: {{amount}}",
+  supplier: "Supplier: {{name}}",
+  cashIn: "Cash in",
+  cashOut: "Cash out: {{description}}",
+  payable: "Payable: {{description}}",
+  storeCogs: "Revenue {{revenue}} · COGS {{cogs}}",
+  grossMargin: "Gross margin {{margin}}",
+  storeRow: "Revenue {{revenue}} · COGS {{cogs}} · Expenses {{expenses}}",
+  monthRow: "Revenue {{revenue}} · COGS {{cogs}} · Expenses {{expenses}}",
+  monthlyTrend: "Monthly result",
+  realized: "Realized",
+  simulated: "Simulated",
+  profitable: "Profitable",
+  loss: "Loss",
+  noData: "No data",
+  marginUnavailable: "n/a",
+  restaurant: "Restaurant",
+  location: "Location",
+  report: "Report",
+  period: "Period",
+  generatedAt: "Generated at",
+  currency: "Currency",
+  colDate: "Date / Key",
+  colTitle: "Title",
+  colCategory: "Category",
+  colLocation: "Location",
+  colKind: "Kind",
+  colAmount: "Amount (USD)",
+  colStatus: "Status",
+  colNotes: "Notes",
+  sheetName: "Financial Report",
+} as const;
+export type ReportTextKey = keyof typeof DEFAULT_REPORT_TEXT;
+
+export interface ReportFormatters {
+  text: (key: ReportTextKey, vars?: Record<string, string | number>) => string;
+  money: (cents: number) => string;
+  percent: (ratio: number) => string;
+  category: (category: string) => string;
+  status: (status: string) => string;
+}
+
+function interpolate(template: string, vars?: Record<string, string | number>) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, k: string) => String(vars?.[k] ?? ""));
+}
+
+export const defaultReportFormatters: ReportFormatters = {
+  text: (key, vars) => interpolate(DEFAULT_REPORT_TEXT[key], vars),
+  money: formatUsd,
+  percent: (r) => `${(r * 100).toFixed(1)}%`,
+  category: (c) => c,
+  status: (s) => s,
+};
+
+/** Ledger revenue rows (finance_entries) already resolved to a store name. */
+export interface ReportLedgerEntry {
+  id: string;
+  createdAt: string;
+  kind: string;
+  amountCents: number;
+  locationName: string;
+}
+
+/** Per-store recorded P&L (same definitions as the Finance screen). */
+export interface ReportStoreResult {
+  locationId: string;
+  locationName: string;
+  revenueCents: number;
+  cogsCents: number;
+  grossProfitCents: number;
+  grossMargin: number | null;
+  expensesCents: number;
+  resultCents: number;
+  hasData: boolean;
 }
 
 export function generateFinancialReport(options: {
@@ -884,23 +938,31 @@ export function generateFinancialReport(options: {
     createdAt: string;
     locationId?: string | undefined;
   }>;
-  productMargins?: ProductMarginMetric[];
-  storeComparisons?: StoreFinancialComparison[];
+  /** When given, revenue and cash inflows come from the ledger instead of order totals. */
+  ledger?: ReportLedgerEntry[] | undefined;
+  stores?: ReportStoreResult[] | undefined;
+  monthlyTrend?:
+    | Array<{
+        month: string;
+        revenueCents: number;
+        cogsCents: number;
+        expensesCents: number;
+        resultCents: number;
+      }>
+    | undefined;
+  /** Resolves a store slug to its display name (for consolidated reports). */
+  storeName?: ((locationId: string) => string) | undefined;
+  formatters?: Partial<ReportFormatters> | undefined;
 }): FinancialReportResult {
-  const {
-    filters,
-    restaurantName,
-    locationName,
-    expenses,
-    orders,
-    productMargins = [],
-    storeComparisons = [],
-  } = options;
+  const { filters, restaurantName, locationName, expenses, orders, ledger, stores = [] } = options;
+  const f: ReportFormatters = { ...defaultReportFormatters, ...options.formatters };
+  const storeOf = (id: string | undefined) =>
+    id && options.storeName ? options.storeName(id) : locationName;
   const generatedAt = new Date().toISOString();
   const periodLabel =
     filters.startDate && filters.endDate
       ? `${filters.startDate} - ${filters.endDate}`
-      : "Year-To-Date (Current Cycle)";
+      : f.text("periodAll");
 
   const rows: FinancialReportRow[] = [];
   let totalInflowCents = 0;
@@ -913,180 +975,260 @@ export function generateFinancialReport(options: {
     if (!filters.dataType || filters.dataType === "all") return true;
     return filters.dataType === st;
   };
+  const day = (iso: string) => iso.slice(0, 10);
+
+  const pushLedgerRevenue = (asCashFlow: boolean) => {
+    for (const entry of ledger ?? []) {
+      const reversal = entry.kind === "reversal_revenue";
+      if (entry.kind !== "revenue" && !reversal) continue;
+      if (!matchesData("realized")) continue;
+      realizedCount += 1;
+      const signed = reversal ? -entry.amountCents : entry.amountCents;
+      totalInflowCents += signed;
+      rows.push({
+        id: `${asCashFlow ? "in-" : ""}${entry.id}`,
+        dateOrKey: day(entry.createdAt),
+        isoDate: day(entry.createdAt),
+        title: asCashFlow
+          ? f.text("cashIn")
+          : f.text(reversal ? "revenueReversal" : "revenueEntry"),
+        category: f.text("posSales"),
+        locationName: entry.locationName,
+        typeKind: "inflow",
+        amountCents: signed,
+        formattedAmount: f.money(signed),
+        statusBadge: f.text("realized"),
+      });
+    }
+  };
 
   if (filters.reportType === "revenue") {
-    orders.forEach((ord) => {
-      const isSim = !!ord.isSimulated;
-      const st: "realized" | "simulated" = isSim ? "simulated" : "realized";
-      if (!matchesData(st)) return;
-      if (isSim) simulatedCount += 1;
-      else realizedCount += 1;
-      totalInflowCents += ord.totalCents;
-      rows.push({
-        id: ord.id,
-        dateOrKey: ord.createdAt ? ord.createdAt.split("T")[0] || "-" : "-",
-        title: `Order #${ord.id.slice(0, 8)}`,
-        category: "POS / Dining Sales",
-        locationName,
-        typeKind: "inflow",
-        amountCents: ord.totalCents,
-        formattedAmount: formatUsd(ord.totalCents),
-        statusBadge: isSim ? "Simulated" : ord.status,
-        notes: ord.discountCents ? `Discount: ${formatUsd(ord.discountCents)}` : undefined,
+    if (ledger) {
+      pushLedgerRevenue(false);
+    } else {
+      orders.forEach((ord) => {
+        const isSim = !!ord.isSimulated;
+        const st: "realized" | "simulated" = isSim ? "simulated" : "realized";
+        if (!matchesData(st)) return;
+        if (isSim) simulatedCount += 1;
+        else realizedCount += 1;
+        totalInflowCents += ord.totalCents;
+        const date = ord.createdAt ? day(ord.createdAt) : "";
+        rows.push({
+          id: ord.id,
+          dateOrKey: date || "-",
+          isoDate: date || undefined,
+          title: f.text("order", { id: ord.id.slice(0, 8) }),
+          category: f.text("posSales"),
+          locationName: storeOf(ord.locationId),
+          typeKind: "inflow",
+          amountCents: ord.totalCents,
+          formattedAmount: f.money(ord.totalCents),
+          statusBadge: isSim ? f.text("simulated") : f.status(ord.status),
+          notes: ord.discountCents
+            ? f.text("discount", { amount: f.money(ord.discountCents) })
+            : undefined,
+        });
       });
-    });
+    }
   } else if (filters.reportType === "expenses") {
     expenses.forEach((exp) => {
+      if (exp.isSimulation && !matchesData("simulated")) return;
       if (filters.category && filters.category !== "all" && exp.category !== filters.category)
         return;
-      const st: "realized" | "projected" = exp.status === "paid" ? "realized" : "projected";
+      const st: "realized" | "projected" | "simulated" = exp.isSimulation
+        ? "simulated"
+        : exp.status === "paid"
+          ? "realized"
+          : "projected";
       if (!matchesData(st)) return;
       if (st === "realized") realizedCount += 1;
+      else if (st === "simulated") simulatedCount += 1;
       else projectedCount += 1;
       totalOutflowCents += exp.amountCents;
       rows.push({
         id: exp.id,
         dateOrKey: exp.dueDate,
+        isoDate: exp.dueDate,
         title: exp.description,
-        category: exp.category,
-        locationName,
+        category: f.category(exp.category),
+        locationName: storeOf(exp.locationId),
         typeKind: "outflow",
         amountCents: exp.amountCents,
-        formattedAmount: `-${formatUsd(exp.amountCents)}`,
-        statusBadge: exp.status,
-        notes: exp.supplierName ? `Supplier: ${exp.supplierName}` : undefined,
+        formattedAmount: `-${f.money(exp.amountCents)}`,
+        statusBadge: f.status(exp.status),
+        notes: exp.supplierName ? f.text("supplier", { name: exp.supplierName }) : undefined,
       });
     });
   } else if (filters.reportType === "cash_flow") {
-    orders
-      .filter((o) => o.status === "delivered")
-      .forEach((o) => {
-        const isSim = !!o.isSimulated;
-        const st = isSim ? "simulated" : "realized";
-        if (!matchesData(st)) return;
-        if (isSim) simulatedCount += 1;
-        else realizedCount += 1;
-        totalInflowCents += o.totalCents;
-        rows.push({
-          id: `in-${o.id}`,
-          dateOrKey: o.createdAt.split("T")[0] || "-",
-          title: `Cash Inflow (Order #${o.id.slice(0, 6)})`,
-          category: "Sales Revenue",
-          locationName,
-          typeKind: "inflow",
-          amountCents: o.totalCents,
-          formattedAmount: `+${formatUsd(o.totalCents)}`,
-          statusBadge: isSim ? "Simulated" : "Realized",
+    if (ledger) {
+      pushLedgerRevenue(true);
+    } else {
+      orders
+        .filter((o) => o.status === "delivered")
+        .forEach((o) => {
+          const isSim = !!o.isSimulated;
+          const st = isSim ? "simulated" : "realized";
+          if (!matchesData(st)) return;
+          if (isSim) simulatedCount += 1;
+          else realizedCount += 1;
+          totalInflowCents += o.totalCents;
+          rows.push({
+            id: `in-${o.id}`,
+            dateOrKey: day(o.createdAt) || "-",
+            isoDate: day(o.createdAt) || undefined,
+            title: f.text("cashIn"),
+            category: f.text("posSales"),
+            locationName: storeOf(o.locationId),
+            typeKind: "inflow",
+            amountCents: o.totalCents,
+            formattedAmount: `+${f.money(o.totalCents)}`,
+            statusBadge: isSim ? f.text("simulated") : f.text("realized"),
+          });
         });
-      });
+    }
     expenses
-      .filter((e) => e.status === "paid")
+      .filter((e) => e.status === "paid" && !e.isSimulation)
       .forEach((e) => {
         if (!matchesData("realized")) return;
         realizedCount += 1;
         totalOutflowCents += e.amountCents;
+        const date = e.paidAt ? day(e.paidAt) : e.dueDate;
         rows.push({
           id: `out-${e.id}`,
-          dateOrKey: e.paidAt ? e.paidAt.split("T")[0] || e.dueDate : e.dueDate,
-          title: `Cash Outflow: ${e.description}`,
-          category: e.category,
-          locationName,
+          dateOrKey: date,
+          isoDate: date,
+          title: f.text("cashOut", { description: e.description }),
+          category: f.category(e.category),
+          locationName: storeOf(e.locationId),
           typeKind: "outflow",
           amountCents: e.amountCents,
-          formattedAmount: `-${formatUsd(e.amountCents)}`,
-          statusBadge: "Paid",
+          formattedAmount: `-${f.money(e.amountCents)}`,
+          statusBadge: f.status("paid"),
         });
       });
   } else if (filters.reportType === "payables_receivables") {
     expenses.forEach((e) => {
-      const isOverdue = e.status === "overdue";
-      const isPending = e.status === "pending";
-      if (!isOverdue && !isPending) return;
+      if (e.isSimulation) return;
+      if (e.status !== "overdue" && e.status !== "pending") return;
+      if (!matchesData("projected")) return;
       projectedCount += 1;
       totalOutflowCents += e.amountCents;
       rows.push({
         id: e.id,
         dateOrKey: e.dueDate,
-        title: `Payable: ${e.description}`,
-        category: e.category,
-        locationName,
+        isoDate: e.dueDate,
+        title: f.text("payable", { description: e.description }),
+        category: f.category(e.category),
+        locationName: storeOf(e.locationId),
         typeKind: "outflow",
         amountCents: e.amountCents,
-        formattedAmount: `-${formatUsd(e.amountCents)}`,
-        statusBadge: e.status,
+        formattedAmount: `-${f.money(e.amountCents)}`,
+        statusBadge: f.status(e.status),
         notes: e.supplierName,
       });
     });
   } else if (filters.reportType === "cogs_margins") {
-    productMargins.forEach((pm) => {
+    stores.forEach((s) => {
+      if (!matchesData("realized")) return;
       realizedCount += 1;
-      totalInflowCents += pm.revenueCents;
-      totalOutflowCents += pm.cogsCents;
+      totalInflowCents += s.revenueCents;
+      totalOutflowCents += s.cogsCents;
       rows.push({
-        id: pm.productId,
-        dateOrKey: pm.category,
-        title: pm.productName,
-        category: `${pm.unitsSold} units · ${pm.grossMarginPct.toFixed(1)}% margin`,
-        locationName,
+        id: `cogs-${s.locationId}`,
+        dateOrKey: "-",
+        title: s.locationName,
+        category:
+          s.grossMargin === null
+            ? f.text("marginUnavailable")
+            : f.text("grossMargin", { margin: f.percent(s.grossMargin) }),
+        locationName: s.locationName,
         typeKind: "metric",
-        amountCents: pm.grossProfitCents,
-        formattedAmount: formatUsd(pm.grossProfitCents),
-        statusBadge: pm.hasHighCostAlert ? "High Cost" : "Healthy",
-        notes: `Rev: ${formatUsd(pm.revenueCents)} | COGS: ${formatUsd(pm.cogsCents)}`,
+        amountCents: s.grossProfitCents,
+        formattedAmount: f.money(s.grossProfitCents),
+        statusBadge: s.hasData ? f.text("realized") : f.text("noData"),
+        notes: f.text("storeCogs", {
+          revenue: f.money(s.revenueCents),
+          cogs: f.money(s.cogsCents),
+        }),
       });
     });
   } else if (filters.reportType === "store_performance") {
-    storeComparisons.forEach((s) => {
-      if (s.status === "simulated") simulatedCount += 1;
-      else realizedCount += 1;
-      totalInflowCents += s.grossRevenueCents;
-      totalOutflowCents += s.operatingExpensesCents;
+    stores.forEach((s) => {
+      if (!matchesData("realized")) return;
+      realizedCount += 1;
+      totalInflowCents += s.revenueCents;
+      totalOutflowCents += s.cogsCents + s.expensesCents;
       rows.push({
         id: s.locationId,
-        dateOrKey: `#${s.netProfitRank} in Profit`,
+        dateOrKey: "-",
         title: s.locationName,
-        category: `${s.orderCount} orders · Ticket: ${formatUsd(s.averageTicketCents)}`,
+        category:
+          s.grossMargin === null
+            ? f.text("marginUnavailable")
+            : f.text("grossMargin", { margin: f.percent(s.grossMargin) }),
         locationName: s.locationName,
         typeKind: "metric",
-        amountCents: s.estimatedNetProfitCents,
-        formattedAmount: formatUsd(s.estimatedNetProfitCents),
-        statusBadge: s.status,
-        notes: `Rev: ${formatUsd(s.grossRevenueCents)} | Margin: ${s.netMarginPct.toFixed(1)}%`,
+        amountCents: s.resultCents,
+        formattedAmount: f.money(s.resultCents),
+        statusBadge: !s.hasData
+          ? f.text("noData")
+          : s.resultCents >= 0
+            ? f.text("profitable")
+            : f.text("loss"),
+        notes: f.text("storeRow", {
+          revenue: f.money(s.revenueCents),
+          cogs: f.money(s.cogsCents),
+          expenses: f.money(s.expensesCents),
+        }),
       });
     });
   } else {
-    const trends = generateMonthlyTrend(totalOutflowCents || 2500000, totalInflowCents || 4200000);
-    trends.forEach((tr, i) => {
+    // Only months that actually have records — never synthesized history.
+    (options.monthlyTrend ?? []).forEach((tr) => {
+      if (!matchesData("realized")) return;
       realizedCount += 1;
       totalInflowCents += tr.revenueCents;
-      totalOutflowCents += tr.expensesCents;
+      totalOutflowCents += tr.cogsCents + tr.expensesCents;
       rows.push({
-        id: `trend-${i}`,
+        id: `trend-${tr.month}`,
         dateOrKey: tr.month,
-        title: `Financial Performance ${tr.month}`,
-        category: "Monthly Trend",
+        title: f.text("monthlyTrend"),
+        category: tr.month,
         locationName,
         typeKind: "metric",
-        amountCents: tr.netProfitCents,
-        formattedAmount: formatUsd(tr.netProfitCents),
-        statusBadge: tr.netProfitCents >= 0 ? "Profitable" : "Loss",
-        notes: `Rev: ${formatUsd(tr.revenueCents)} | Exp: ${formatUsd(tr.expensesCents)}`,
+        amountCents: tr.resultCents,
+        formattedAmount: f.money(tr.resultCents),
+        statusBadge: tr.resultCents >= 0 ? f.text("profitable") : f.text("loss"),
+        notes: f.text("monthRow", {
+          revenue: f.money(tr.revenueCents),
+          cogs: f.money(tr.cogsCents),
+          expenses: f.money(tr.expensesCents),
+        }),
       });
     });
   }
 
-  const reportTitles: Record<FinancialReportType, string> = {
-    revenue: "Revenue & Sales Breakdown",
-    expenses: "Operating Expenses Detail",
-    cash_flow: "Cash Flow Activity Statement",
-    payables_receivables: "Accounts Payable & Obligations",
-    cogs_margins: "COGS & Product Profitability Margin",
-    store_performance: "Multi-Store Financial Performance",
-    monthly_trends: "Historical Monthly Trends & Variance",
+  const headings: ReportHeadings = {
+    restaurant: f.text("restaurant"),
+    location: f.text("location"),
+    report: f.text("report"),
+    period: f.text("period"),
+    generatedAt: f.text("generatedAt"),
+    currency: f.text("currency"),
+    colDate: f.text("colDate"),
+    colTitle: f.text("colTitle"),
+    colCategory: f.text("colCategory"),
+    colLocation: f.text("colLocation"),
+    colKind: f.text("colKind"),
+    colAmount: f.text("colAmount"),
+    colStatus: f.text("colStatus"),
+    colNotes: f.text("colNotes"),
+    sheetName: f.text("sheetName"),
   };
 
   return {
-    title: reportTitles[filters.reportType] || "Executive Financial Report",
+    title: f.text(`title_${filters.reportType}`),
     reportType: filters.reportType,
     generatedAt,
     restaurantName,
@@ -1100,49 +1242,49 @@ export function generateFinancialReport(options: {
     projectedCount,
     simulatedCount,
     rows,
+    headings,
   };
 }
 
+function csvCell(v: string) {
+  return `"${v.replace(/"/g, '""')}"`;
+}
+
 export function exportReportToCsv(report: FinancialReportResult): string {
+  const h = report.headings;
   const headers = [
     "ID",
-    "Date/Key",
-    "Title",
-    "Category",
-    "Location",
-    "Kind",
-    "Amount_USD",
-    "Status",
-    "Notes",
-  ];
+    h.colDate,
+    h.colTitle,
+    h.colCategory,
+    h.colLocation,
+    h.colKind,
+    h.colAmount,
+    h.colStatus,
+    h.colNotes,
+  ].map(csvCell);
   const lines: string[] = [
-    `# Restaurant: ${report.restaurantName}`,
-    `# Location: ${report.locationName}`,
-    `# Report: ${report.title}`,
-    `# Period: ${report.periodLabel}`,
-    `# Generated At: ${report.generatedAt}`,
-    `# Currency: USD`,
+    `# ${h.restaurant}: ${report.restaurantName}`,
+    `# ${h.location}: ${report.locationName}`,
+    `# ${h.report}: ${report.title}`,
+    `# ${h.period}: ${report.periodLabel}`,
+    `# ${h.generatedAt}: ${report.generatedAt}`,
+    `# ${h.currency}: USD`,
     headers.join(","),
   ];
 
   for (const r of report.rows) {
-    const safeTitle = `"${(r.title || "").replace(/"/g, '""')}"`;
-    const safeCategory = `"${(r.category || "").replace(/"/g, '""')}"`;
-    const safeLocation = `"${(r.locationName || "").replace(/"/g, '""')}"`;
-    const safeNotes = `"${(r.notes || "").replace(/"/g, '""')}"`;
-    const amountNum = (r.amountCents / 100).toFixed(2);
-
     lines.push(
       [
         r.id,
         r.dateOrKey,
-        safeTitle,
-        safeCategory,
-        safeLocation,
+        csvCell(r.title || ""),
+        csvCell(r.category || ""),
+        csvCell(r.locationName || ""),
         r.typeKind,
-        amountNum,
-        r.statusBadge,
-        safeNotes,
+        (r.amountCents / 100).toFixed(2),
+        csvCell(r.statusBadge),
+        csvCell(r.notes || ""),
       ].join(","),
     );
   }
@@ -1151,6 +1293,7 @@ export function exportReportToCsv(report: FinancialReportResult): string {
 }
 
 export function exportReportToXmlSpreadsheet(report: FinancialReportResult): string {
+  const h = report.headings;
   const rowsXml = report.rows
     .map(
       (r) => `<Row>
@@ -1182,26 +1325,25 @@ export function exportReportToXmlSpreadsheet(report: FinancialReportResult): str
    <Alignment ss:Vertical="Bottom"/>
   </Style>
   <Style ss:ID="Header">
-   <Font ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>
+   <Font ss:Bold="1"/>
   </Style>
  </Styles>
- <Worksheet ss:Name="Financial Report">
+ <Worksheet ss:Name="${escapeXml(h.sheetName)}">
   <Table>
    <Row>
-    <Cell><Data ss:Type="String">Restaurant: ${escapeXml(report.restaurantName)}</Data></Cell>
-    <Cell><Data ss:Type="String">Location: ${escapeXml(report.locationName)}</Data></Cell>
-    <Cell><Data ss:Type="String">Period: ${escapeXml(report.periodLabel)}</Data></Cell>
-    <Cell><Data ss:Type="String">Generated: ${report.generatedAt}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(`${h.restaurant}: ${report.restaurantName}`)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(`${h.location}: ${report.locationName}`)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(`${h.period}: ${report.periodLabel}`)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(`${h.generatedAt}: ${report.generatedAt}`)}</Data></Cell>
    </Row>
    <Row ss:StyleID="Header">
-    <Cell><Data ss:Type="String">Date / Key</Data></Cell>
-    <Cell><Data ss:Type="String">Description</Data></Cell>
-    <Cell><Data ss:Type="String">Category</Data></Cell>
-    <Cell><Data ss:Type="String">Location</Data></Cell>
-    <Cell><Data ss:Type="String">Amount (USD)</Data></Cell>
-    <Cell><Data ss:Type="String">Status</Data></Cell>
-    <Cell><Data ss:Type="String">Notes</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colDate)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colTitle)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colCategory)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colLocation)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colAmount)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colStatus)}</Data></Cell>
+    <Cell><Data ss:Type="String">${escapeXml(h.colNotes)}</Data></Cell>
    </Row>
    ${rowsXml}
   </Table>
