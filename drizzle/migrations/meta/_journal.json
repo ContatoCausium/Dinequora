@@ -127,6 +127,27 @@
       "when": 1793903853580,
       "tag": "0017_idempotence_and_realtime_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794138785161,
+      "tag": "0018_member_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794142648797,
+      "tag": "0019_permission_performance",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794179764664,
+      "tag": "0020_inventory_cost_permission",
+      "breakpoints": true
     }
   ]
 }
