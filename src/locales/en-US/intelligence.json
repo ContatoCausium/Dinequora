@@ -1,0 +1,217 @@
+{
+  "title": "Servora Intelligence",
+  "description": "Revenue, food cost and stock signals calculated from your recorded operations.",
+  "allStores": "All stores",
+  "demoBadge": "Demo tenant",
+  "dataSource": "Calculated from recorded ledger entries, recipes and inventory, with no AI model involved. {{entries}} ledger entries · {{orders}} orders in the period.",
+  "period": {
+    "label": "Analysis period",
+    "days": "{{count}} days"
+  },
+  "states": {
+    "loadFailed": "Could not load recorded operations",
+    "loadFailedBody": "Check your connection and try again.",
+    "retry": "Try again"
+  },
+  "kpi": {
+    "grossRevenue": "Gross revenue",
+    "netResult": "Net result",
+    "netResultHint": "After recipe cost and expenses",
+    "cmv": "Food cost (COGS)",
+    "cmvHint": "Reference range {{min}}–{{max}}",
+    "noRevenue": "No revenue in the period",
+    "grossMargin": "Gross margin",
+    "recipes_one": "{{count}} recipe registered",
+    "recipes_other": "{{count}} recipes registered",
+    "lowStock": "Low-stock items",
+    "tracked_one": "{{count}} item tracked",
+    "tracked_other": "{{count}} items tracked",
+    "vsPrevious": "{{delta}} vs previous {{days}} days",
+    "noPrior": "No revenue in the previous {{days}} days"
+  },
+  "agent": {
+    "title": "Executive query agent",
+    "subtitle": "Deterministic answers from recorded data. No AI model is used.",
+    "inputLabel": "Ask a question",
+    "placeholder": "e.g. What is my food cost right now?",
+    "ask": "Ask",
+    "suggestionsLabel": "Suggested questions",
+    "suggestions": {
+      "cmv": "What is my current food cost?",
+      "sales": "How much revenue did we record?",
+      "inventory": "Which items are at risk of running out?",
+      "margin": "How are gross margin and expenses?",
+      "suppliers": "How many purchase orders are open?"
+    },
+    "deterministic": "Deterministic",
+    "answeredAt": "Answered {{time}}",
+    "scope": "Last {{days}} days · {{scope}}",
+    "evidence": "Recorded evidence",
+    "method": "How it is calculated",
+    "limitation": "Limitation",
+    "topics": {
+      "cmv": "Food cost (COGS)",
+      "sales": "Sales",
+      "expenses": "Expenses",
+      "margin": "Margin",
+      "profit": "Profitability",
+      "inventory": "Inventory",
+      "waste": "Waste",
+      "suppliers": "Purchasing",
+      "store_performance": "Store performance"
+    },
+    "headlines": {
+      "noRevenue": "No revenue was recorded in the last {{days}} days.",
+      "cmv": "Food cost is {{rate}} of gross revenue in the last {{days}} days.",
+      "finance": "Gross margin is {{rate}} on {{revenue}} of recorded revenue.",
+      "inventory_one": "{{count}} item is at or below its minimum stock.",
+      "inventory_other": "{{count}} items are at or below their minimum stock.",
+      "waste": "Waste is not recorded yet. {{count}} items are at or below minimum stock.",
+      "suppliers": "{{open}} of {{total}} recorded purchase orders are still open.",
+      "stores": "Recorded revenue by store in the last {{days}} days.",
+      "noStores": "No stores are available in your current scope."
+    },
+    "methods": {
+      "cmv": "Food cost = recorded recipe cost (COGS ledger entries, net of reversals) ÷ recorded revenue.",
+      "finance": "Gross margin = (revenue − recipe cost) ÷ revenue. Net result also subtracts active recorded expenses.",
+      "inventory": "An item is low when its recorded quantity is at or below its minimum quantity.",
+      "suppliers": "A purchase order is open while it is not received or cancelled.",
+      "stores": "Revenue per store from recorded ledger entries, net of reversals."
+    },
+    "limits": {
+      "ledger": "Only orders that reached the ledger are counted; external sales channels are not connected.",
+      "waste": "Waste and spoilage are not tracked as separate records yet.",
+      "inventory": "Depends on minimum quantities being set for each item.",
+      "suppliers": "Delivery punctuality needs receiving to be recorded in Servora."
+    },
+    "labels": {
+      "revenue": "Gross revenue",
+      "recipeCost": "Recipe cost",
+      "cmv": "Food cost",
+      "margin": "Gross margin",
+      "expenses": "Expenses",
+      "net": "Net result",
+      "orders": "Orders analysed",
+      "lowStock": "Low-stock items",
+      "tracked": "Items tracked",
+      "purchasesTotal": "Purchase orders",
+      "purchasesOpen": "Open purchase orders",
+      "suppliers": "Suppliers"
+    }
+  },
+  "insights": {
+    "title": "Operational diagnostics",
+    "subtitle": "Rules applied to recorded figures for the selected period.",
+    "filterLabel": "Filter diagnostics",
+    "filters": {
+      "all": "All",
+      "cmv": "Food cost",
+      "inventory": "Inventory",
+      "sales": "Sales"
+    },
+    "levels": {
+      "high": "Needs attention",
+      "medium": "Watch",
+      "low": "On track"
+    },
+    "openModule": "Open module",
+    "emptyTitle": "No diagnostics for this filter",
+    "emptyBody": "Diagnostics appear once orders, recipes or inventory are recorded.",
+    "noRevenue": {
+      "title": "No revenue recorded in the last {{days}} days",
+      "body": "Close orders in the POS so revenue and food cost can be analysed.",
+      "action": "Record sales in the POS to unlock food cost and margin analysis."
+    },
+    "cmvHigh": {
+      "title": "Food cost above the reference range",
+      "body": "Food cost is {{rate}} of revenue, above the {{min}}–{{max}} reference.",
+      "action": "Review prices of high-volume items and the recipe cost of their ingredients."
+    },
+    "cmvOk": {
+      "title": "Food cost within the reference range",
+      "body": "Food cost is {{rate}} of revenue, within or below the {{min}}–{{max}} reference.",
+      "action": "Keep recipe costs updated when supplier prices change."
+    },
+    "lowStock": {
+      "title_one": "{{count}} item at or below minimum stock",
+      "title_other": "{{count}} items at or below minimum stock",
+      "body": "Items may run out before the next delivery.",
+      "byStore": "By store: {{stores}}",
+      "action": "Create a purchase order for the affected items."
+    },
+    "noRecipes": {
+      "title": "No recipes registered",
+      "body": "Without recipes, sales do not generate recipe cost and food cost stays at zero.",
+      "action": "Register recipes for your best-selling items."
+    }
+  },
+  "stores": {
+    "title": "Store comparison",
+    "subtitle": "Recorded revenue, food cost and low-stock items per store.",
+    "revenue": "Revenue",
+    "cmv": "Food cost",
+    "lowStock": "Low stock",
+    "emptyTitle": "No stores in your scope",
+    "emptyBody": "Ask an owner to grant you access to a store."
+  },
+  "whatsapp": {
+    "title": "WhatsApp center",
+    "simulation": "Simulation · no provider connected",
+    "subtitle": "Preview reports and alerts before a WhatsApp Business provider is connected. Nothing is sent.",
+    "tabsLabel": "WhatsApp sections",
+    "tabs": {
+      "preview": "Preview",
+      "schedules": "Schedules",
+      "contacts": "Contacts",
+      "history": "History",
+      "connection": "Connection"
+    },
+    "templateLabel": "Message template",
+    "templates": {
+      "financial_summary": "Financial summary",
+      "revenue_pulse": "Revenue pulse",
+      "cmv_audit": "Food cost",
+      "low_stock_alert": "Low stock",
+      "waste_alert": "Waste alert",
+      "multi_store_comparison": "Store comparison"
+    },
+    "saveTest": "Save simulated test",
+    "saveTestHint": "Add a consented contact to save a simulated test.",
+    "ownerOnly": "Only owners can manage WhatsApp contacts and tests.",
+    "recipient": "Recipient: {{name}}",
+    "sampleRecipient": "Owner",
+    "notSent": "Simulation · not sent",
+    "testSaved": "Simulated test saved. No message was sent.",
+    "schedulesEmptyTitle": "Scheduling is not available yet",
+    "schedulesEmptyBody": "Automatic reports can be scheduled once a WhatsApp Business provider is connected.",
+    "contactsEmptyTitle": "No authorized contacts",
+    "contactsEmptyBody": "Add a contact who has consented to receive messages.",
+    "consentRecorded": "Consent recorded",
+    "roles": {
+      "owner": "Owner / partner",
+      "manager": "General manager",
+      "financial_lead": "Finance lead",
+      "chef": "Chef / kitchen"
+    },
+    "addContact": "Add contact",
+    "contactName": "Full name",
+    "contactPhone": "Phone (with country code)",
+    "contactRole": "Role",
+    "contactRequired": "Name and phone are required.",
+    "contactSaved": "Contact saved with consent recorded.",
+    "historyEmptyTitle": "No simulated tests yet",
+    "historyEmptyBody": "Saved simulated tests appear here. They are never sent.",
+    "draft": "Simulated draft",
+    "connectionStatus": "No provider connected",
+    "connectionBody": "Servora is prepared for the official WhatsApp Business Cloud API. No token or private key is stored in the browser.",
+    "connectionPending": "Connecting a provider requires a verified business number."
+  },
+  "message": {
+    "noValue": "—",
+    "footer": "_Simulation by Servora Intelligence. This message was not sent._",
+    "financial_summary": "*Servora Intelligence · Financial summary*\nHello, *{{name}}*. Recorded figures for the last {{days}} days ({{scope}}):\n\n• Gross revenue: {{revenue}}\n• Net result: {{net}}\n• Food cost (COGS): {{cmv}}\n• Gross margin: {{margin}}\n• Low-stock items: {{lowStock}}",
+    "cmv_audit": "*Servora Intelligence · Food cost review*\nHello, *{{name}}*. Last {{days}} days ({{scope}}):\n\n• Food cost (COGS): {{cmv}}\n• Recipe cost: {{recipeCost}}\n• Gross revenue: {{revenue}}\n• Active recipes: {{recipes}}",
+    "low_stock_alert": "*Servora Intelligence · Low-stock alert*\nHello, *{{name}}*. {{lowStock}} of {{tracked}} tracked items are at or below minimum stock ({{scope}}).\n\nOpen Inventory in Servora to plan the next purchase order.",
+    "pulse": "*Servora Intelligence · Operations update*\nHello, *{{name}}*. Last {{days}} days ({{scope}}):\n\n• Gross revenue: {{revenue}}\n• Orders: {{orders}}"
+  }
+}

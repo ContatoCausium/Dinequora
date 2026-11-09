@@ -4,13 +4,23 @@
  * Nothing here grants restaurant (organization) membership implicitly.
  */
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import type { OrgStatus } from "@/lib/org-service";
 import { requestErrorKind } from "@/lib/request-error";
 
 export type PlanId = "starter" | "growth" | "enterprise";
 export type PlatformOrg = {
-  id: string; name: string; slug: string; status: OrgStatus; plan: PlanId; store_limit: number;
-  store_count: number; member_count: number; owner_count: number; is_demo: boolean; created_at: string;
+  id: string;
+  name: string;
+  slug: string;
+  status: OrgStatus;
+  plan: PlanId;
+  store_limit: number;
+  store_count: number;
+  member_count: number;
+  owner_count: number;
+  is_demo: boolean;
+  created_at: string;
 };
 export type PlatformAudit = {
   id: string;
@@ -30,23 +40,40 @@ export type PlatformAdmin = {
 };
 
 const code = (msg: string) =>
-  ["forbidden", "reason_required", "verification_required", "user_not_found", "last_admin", "not_found"].find((c) =>
-    msg.includes(c),
-  ) ?? "unknown";
+  [
+    "forbidden",
+    "reason_required",
+    "verification_required",
+    "user_not_found",
+    "last_admin",
+    "not_found",
+  ].find((c) => msg.includes(c)) ?? "unknown";
 
-async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(fn, args);
-  if (error) throw new Error(code(error.message) === "unknown" ? requestErrorKind(error) : code(error.message));
+/** Names come from the generated schema, so a renamed/removed SQL function fails type-checking. */
+type RpcName = keyof Database["public"]["Functions"];
+
+async function call<T>(fn: RpcName, args: Record<string, unknown> = {}): Promise<T> {
+  // Args are validated server-side by the security-definer function; the dynamic
+  // name prevents per-call arg inference, so this is the single typed boundary.
+  const { data, error } = await supabase.rpc(fn, args as never);
+  if (error)
+    throw new Error(
+      code(error.message) === "unknown" ? requestErrorKind(error) : code(error.message),
+    );
   return data as T;
 }
 
 export const isPlatformAdmin = async () => {
-  try { return Boolean(await call<boolean>("is_platform_admin")); } catch { return false; }
+  try {
+    return Boolean(await call<boolean>("is_platform_admin"));
+  } catch {
+    return false;
+  }
 };
 
 export const listOrganizations = () => call<PlatformOrg[]>("admin_list_organizations");
-export const listPlatformAudit = (limit = 100) => call<PlatformAudit[]>("admin_list_audit", { _limit: limit });
+export const listPlatformAudit = (limit = 100) =>
+  call<PlatformAudit[]>("admin_list_audit", { _limit: limit });
 export const listPlatformAdmins = () => call<PlatformAdmin[]>("admin_list_platform_admins");
 
 export const updateOrganization = (
@@ -85,7 +112,9 @@ export const setPlatformRole = async (
   if (!grant && role === "platform_admin") {
     const current = await listPlatformAdmins();
     const adminCount = current.filter((a) => a.role === "platform_admin").length;
-    const targetIsAdmin = current.some((a) => a.email.toLowerCase() === email.trim().toLowerCase() && a.role === "platform_admin");
+    const targetIsAdmin = current.some(
+      (a) => a.email.toLowerCase() === email.trim().toLowerCase() && a.role === "platform_admin",
+    );
     if (targetIsAdmin && adminCount <= 1) {
       throw new Error("last_admin");
     }
@@ -107,11 +136,20 @@ export type AuditFilterOptions = {
   endDate?: string | null;
 };
 
-export function filterAuditLogs(logs: PlatformAudit[], options: AuditFilterOptions): PlatformAudit[] {
+export function filterAuditLogs(
+  logs: PlatformAudit[],
+  options: AuditFilterOptions,
+): PlatformAudit[] {
   const query = options.searchQuery?.trim().toLowerCase() ?? "";
   return logs.filter((log) => {
     if (options.orgId === "platform_only" && log.org_id !== null) return false;
-    if (options.orgId && options.orgId !== "all" && options.orgId !== "platform_only" && log.org_id !== options.orgId) return false;
+    if (
+      options.orgId &&
+      options.orgId !== "all" &&
+      options.orgId !== "platform_only" &&
+      log.org_id !== options.orgId
+    )
+      return false;
     if (options.action && options.action !== "all" && log.action !== options.action) return false;
     if (options.startDate && new Date(log.created_at) < new Date(options.startDate)) return false;
     if (options.endDate) {
@@ -148,7 +186,9 @@ export const listOrgInsights = async () =>
 export async function listPlans(): Promise<PlanDef[]> {
   const { data, error } = await supabase
     .from("billing_plans")
-    .select("id,name,price_per_location_cents,currency,default_store_limit,trial_store_limit,trial_days,is_placeholder_pricing")
+    .select(
+      "id,name,price_per_location_cents,currency,default_store_limit,trial_store_limit,trial_days,is_placeholder_pricing",
+    )
     .order("price_per_location_cents");
   if (error) throw new Error(requestErrorKind(error));
   return data as PlanDef[];
@@ -208,15 +248,66 @@ const PLAN_FEATURES: PlanFeature[] = [
 ];
 
 const DEFAULT_PLANS: FullPlanDef[] = [
-  { id: "starter", name: "Starter", description: "Essential tools for a single location", priceMonthlyUsd: 29, priceAnnualUsd: 290, maxLocations: 1, maxEmployees: 10, trialDays: 14, trialStoreLimit: 1, isActive: true, isPlaceholder: true, features: ["basicDashboard", "locationManagement", "teamManagement"], limits: { orders_per_month: 500, menu_items: 100 } },
-  { id: "growth", name: "Growth", description: "Scale to multiple locations with advanced features", priceMonthlyUsd: 79, priceAnnualUsd: 790, maxLocations: 5, maxEmployees: 50, trialDays: 14, trialStoreLimit: 2, isActive: true, isPlaceholder: true, features: ["basicDashboard", "locationManagement", "teamManagement", "brandCustomization", "advancedAnalytics", "multiLocation"], limits: { orders_per_month: 5000, menu_items: 500 } },
-  { id: "enterprise", name: "Enterprise", description: "Unlimited scale with dedicated support and SLA", priceMonthlyUsd: 199, priceAnnualUsd: 1990, maxLocations: 999, maxEmployees: 9999, trialDays: 30, trialStoreLimit: 5, isActive: true, isPlaceholder: true, features: PLAN_FEATURES.map((f) => f.key), limits: { orders_per_month: -1, menu_items: -1 } },
+  {
+    id: "starter",
+    name: "Starter",
+    description: "Essential tools for a single location",
+    priceMonthlyUsd: 29,
+    priceAnnualUsd: 290,
+    maxLocations: 1,
+    maxEmployees: 10,
+    trialDays: 14,
+    trialStoreLimit: 1,
+    isActive: true,
+    isPlaceholder: true,
+    features: ["basicDashboard", "locationManagement", "teamManagement"],
+    limits: { orders_per_month: 500, menu_items: 100 },
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    description: "Scale to multiple locations with advanced features",
+    priceMonthlyUsd: 79,
+    priceAnnualUsd: 790,
+    maxLocations: 5,
+    maxEmployees: 50,
+    trialDays: 14,
+    trialStoreLimit: 2,
+    isActive: true,
+    isPlaceholder: true,
+    features: [
+      "basicDashboard",
+      "locationManagement",
+      "teamManagement",
+      "brandCustomization",
+      "advancedAnalytics",
+      "multiLocation",
+    ],
+    limits: { orders_per_month: 5000, menu_items: 500 },
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    description: "Unlimited scale with dedicated support and SLA",
+    priceMonthlyUsd: 199,
+    priceAnnualUsd: 1990,
+    maxLocations: 999,
+    maxEmployees: 9999,
+    trialDays: 30,
+    trialStoreLimit: 5,
+    isActive: true,
+    isPlaceholder: true,
+    features: PLAN_FEATURES.map((f) => f.key),
+    limits: { orders_per_month: -1, menu_items: -1 },
+  },
 ];
 
-let planDrafts: Map<PlanId, Partial<FullPlanDef>> = new Map();
+const planDrafts: Map<PlanId, Partial<FullPlanDef>> = new Map();
 let planChangeHistory: PlanChangeEntry[] = [];
-let planActiveState: Map<PlanId, boolean> = new Map([
-  ["starter", true], ["growth", true], ["enterprise", true],
+const planActiveState: Map<PlanId, boolean> = new Map([
+  ["starter", true],
+  ["growth", true],
+  ["enterprise", true],
 ]);
 
 export function getPlanFeatures(): PlanFeature[] {
@@ -231,20 +322,27 @@ export async function listFullPlans(): Promise<FullPlanDef[]> {
     const active = planActiveState.get(dp.id) ?? dp.isActive;
     return {
       ...dp,
-      ...(db ? {
-        priceMonthlyUsd: db.price_per_location_cents / 100,
-        maxLocations: db.default_store_limit,
-        trialDays: db.trial_days,
-        trialStoreLimit: db.trial_store_limit,
-        isPlaceholder: db.is_placeholder_pricing,
-      } : {}),
+      ...(db
+        ? {
+            priceMonthlyUsd: db.price_per_location_cents / 100,
+            maxLocations: db.default_store_limit,
+            trialDays: db.trial_days,
+            trialStoreLimit: db.trial_store_limit,
+            isPlaceholder: db.is_placeholder_pricing,
+          }
+        : {}),
       isActive: active,
       ...(draft ?? {}),
     };
   });
 }
 
-export function savePlanDraft(planId: PlanId, changes: Partial<FullPlanDef>, reason: string, actorEmail: string): PlanChangeEntry[] {
+export function savePlanDraft(
+  planId: PlanId,
+  changes: Partial<FullPlanDef>,
+  reason: string,
+  actorEmail: string,
+): PlanChangeEntry[] {
   if (reason.trim().length < 3) throw new Error("reason_required");
   const existing = planDrafts.get(planId) ?? {};
   const merged = { ...existing, ...changes };
@@ -254,7 +352,11 @@ export function savePlanDraft(planId: PlanId, changes: Partial<FullPlanDef>, rea
     id: `pch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     planId,
     field,
-    oldValue: String((DEFAULT_PLANS.find((p) => p.id === planId) as Record<string, unknown> | undefined)?.[field] ?? ""),
+    oldValue: String(
+      (DEFAULT_PLANS.find((p) => p.id === planId) as Record<string, unknown> | undefined)?.[
+        field
+      ] ?? "",
+    ),
     newValue: String(newValue),
     reason,
     status: "draft" as const,
@@ -265,7 +367,11 @@ export function savePlanDraft(planId: PlanId, changes: Partial<FullPlanDef>, rea
   return entries;
 }
 
-export function publishPlanDraft(planId: PlanId, reason: string, actorEmail: string): PlanChangeEntry[] {
+export function publishPlanDraft(
+  planId: PlanId,
+  reason: string,
+  actorEmail: string,
+): PlanChangeEntry[] {
   if (reason.trim().length < 3) throw new Error("reason_required");
   const draft = planDrafts.get(planId);
   if (!draft || Object.keys(draft).length === 0) throw new Error("not_found");
@@ -281,10 +387,17 @@ export function publishPlanDraft(planId: PlanId, reason: string, actorEmail: str
 
 export function discardPlanDraft(planId: PlanId): void {
   planDrafts.delete(planId);
-  planChangeHistory = planChangeHistory.filter((e) => !(e.planId === planId && e.status === "draft"));
+  planChangeHistory = planChangeHistory.filter(
+    (e) => !(e.planId === planId && e.status === "draft"),
+  );
 }
 
-export function togglePlanActive(planId: PlanId, active: boolean, reason: string, actorEmail: string): PlanChangeEntry {
+export function togglePlanActive(
+  planId: PlanId,
+  active: boolean,
+  reason: string,
+  actorEmail: string,
+): PlanChangeEntry {
   if (reason.trim().length < 3) throw new Error("reason_required");
   planActiveState.set(planId, active);
   const entry: PlanChangeEntry = {
@@ -312,16 +425,22 @@ export function hasPlanDraft(planId: PlanId): boolean {
   return !!d && Object.keys(d).length > 0;
 }
 
-export async function simulatePlanImpact(planId: PlanId, changes: Partial<FullPlanDef>): Promise<PlanImpactSummary> {
+export async function simulatePlanImpact(
+  planId: PlanId,
+  changes: Partial<FullPlanDef>,
+): Promise<PlanImpactSummary> {
   const orgs = await listOrganizations();
   const affected = orgs.filter((o) => o.plan === planId && !o.is_demo);
   const details: string[] = [];
   if (changes.maxLocations !== undefined) {
     const overLimit = affected.filter((o) => o.store_count > (changes.maxLocations ?? 999));
-    if (overLimit.length > 0) details.push(`${overLimit.length} org(s) would exceed new location limit`);
+    if (overLimit.length > 0)
+      details.push(`${overLimit.length} org(s) would exceed new location limit`);
   }
   if (changes.priceMonthlyUsd !== undefined) {
-    details.push(`Price change affects ${affected.length} active subscription(s) (simulation only)`);
+    details.push(
+      `Price change affects ${affected.length} active subscription(s) (simulation only)`,
+    );
   }
   if (changes.maxEmployees !== undefined) {
     details.push(`Employee limit change affects ${affected.length} org(s)`);

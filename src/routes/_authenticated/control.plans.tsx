@@ -42,7 +42,19 @@ export const Route = createFileRoute("/_authenticated/control/plans")({
   head: () => ({
     meta: [
       { title: "Plans & pricing · Servora Control Center" },
-      { name: "description", content: "Manage subscription tiers, visual comparisons, draft edits and impact simulations." },
+      {
+        name: "description",
+        content:
+          "Manage subscription tiers, visual comparisons, draft edits and impact simulations.",
+      },
+      { property: "og:title", content: "Plans & pricing · Servora Control Center" },
+      {
+        property: "og:description",
+        content:
+          "Manage subscription tiers, visual comparisons, draft edits and impact simulations.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ControlPlansPage,
@@ -116,8 +128,9 @@ function ControlPlansPage() {
       toast.success(t("plansPage.saved"));
       setEditingPlan(null);
       await loadData();
-    } catch (e: any) {
-      toast.error(t(`errors.${e.message}`, { defaultValue: t("errors.unknown") }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown";
+      toast.error(t(`errors.${msg}`, { defaultValue: t("errors.unknown") }));
     }
   };
 
@@ -131,8 +144,9 @@ function ControlPlansPage() {
       publishPlanDraft(planId, r, user.email ?? "platform_admin");
       toast.success(t("plansPage.publishedSuccess"));
       await loadData();
-    } catch (e: any) {
-      toast.error(t(`errors.${e.message}`, { defaultValue: t("errors.unknown") }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown";
+      toast.error(t(`errors.${msg}`, { defaultValue: t("errors.unknown") }));
     }
   };
 
@@ -153,8 +167,9 @@ function ControlPlansPage() {
       togglePlanActive(plan.id, next, r, user.email ?? "platform_admin");
       toast.success(t(next ? "plansPage.activated" : "plansPage.deactivated"));
       await loadData();
-    } catch (e: any) {
-      toast.error(t(`errors.${e.message}`, { defaultValue: t("errors.unknown") }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown";
+      toast.error(t(`errors.${msg}`, { defaultValue: t("errors.unknown") }));
     }
   };
 
@@ -162,7 +177,9 @@ function ControlPlansPage() {
     <div className="space-y-8">
       <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{t("plansPage.title")}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+            {t("plansPage.title")}
+          </h1>
           <p className="text-sm text-muted-foreground">{t("plansPage.subtitle")}</p>
         </div>
         <Tag tone="warning" className="w-fit">
@@ -172,7 +189,7 @@ function ControlPlansPage() {
       </header>
 
       {loading ? (
-        <LoadingRows count={3} />
+        <LoadingRows rows={3} />
       ) : (
         <>
           {/* 1. Cards dos Planos */}
@@ -196,7 +213,7 @@ function ControlPlansPage() {
                   <div>
                     <div className="flex items-center justify-between">
                       <h2 className="text-xl font-bold tracking-tight">{p.name}</h2>
-                      <Tag tone={p.isActive ? "success" : "neutral"}>
+                      <Tag tone="neutral">
                         {t(p.isActive ? "plansPage.active" : "plansPage.inactive")}
                       </Tag>
                     </div>
@@ -206,10 +223,13 @@ function ControlPlansPage() {
                       <span className="text-3xl font-extrabold tracking-tight">
                         {fmtCurrency(p.priceMonthlyUsd, i18n.language)}
                       </span>
-                      <span className="text-xs text-muted-foreground">{t("plansPage.perMonth")}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t("plansPage.perMonth")}
+                      </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      {fmtCurrency(p.priceAnnualUsd, i18n.language)} {t("plansPage.perYear")} ({t("plansPage.annual")})
+                      {fmtCurrency(p.priceAnnualUsd, i18n.language)} {t("plansPage.perYear")} (
+                      {t("plansPage.annual")})
                     </p>
 
                     <div className="mt-6 space-y-2.5 border-t pt-4 text-xs">
@@ -286,7 +306,7 @@ function ControlPlansPage() {
           {/* 2. Comparativo Visual de Funcionalidades */}
           <Section
             title={t("plansPage.comparison")}
-            subtitle={t("plansPage.comparisonHint")}
+            hint={t("plansPage.comparisonHint")}
             className="overflow-hidden"
           >
             <div className="overflow-x-auto">
@@ -334,10 +354,7 @@ function ControlPlansPage() {
           </Section>
 
           {/* 3. Histórico de Alterações / Auditoria de Planos */}
-          <Section
-            title={t("plansPage.history")}
-            subtitle={t("plansPage.historyHint")}
-          >
+          <Section title={t("plansPage.history")} hint={t("plansPage.historyHint")}>
             {history.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
                 <History className="mx-auto mb-2 size-5 opacity-40" />
@@ -371,9 +388,14 @@ function ControlPlansPage() {
                         </td>
                         <td className="p-3 font-semibold uppercase text-foreground">{h.planId}</td>
                         <td className="p-3 font-mono text-[11px]">{h.field}</td>
-                        <td className="p-3 text-muted-foreground line-through">{h.oldValue || "—"}</td>
+                        <td className="p-3 text-muted-foreground line-through">
+                          {h.oldValue || "—"}
+                        </td>
                         <td className="p-3 font-medium text-foreground">{h.newValue}</td>
-                        <td className="max-w-[200px] truncate p-3 text-muted-foreground" title={h.reason}>
+                        <td
+                          className="max-w-[200px] truncate p-3 text-muted-foreground"
+                          title={h.reason}
+                        >
                           {h.reason}
                         </td>
                         <td className="p-3 text-muted-foreground">{h.actorEmail}</td>
@@ -468,13 +490,16 @@ function ControlPlansPage() {
                   <Sparkles className="size-3.5 text-primary" />
                   {t("plansPage.impact")}
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">{t("plansPage.impactHint")}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {t("plansPage.impactHint")}
+                </p>
                 <div className="mt-2 flex gap-4 text-muted-foreground">
                   <span>
                     {t("plansPage.affectedOrgs")}: <strong>{impact?.affectedOrgs ?? 0}</strong>
                   </span>
                   <span>
-                    {t("plansPage.affectedLocations")}: <strong>{impact?.affectedLocations ?? 0}</strong>
+                    {t("plansPage.affectedLocations")}:{" "}
+                    <strong>{impact?.affectedLocations ?? 0}</strong>
                   </span>
                 </div>
               </div>

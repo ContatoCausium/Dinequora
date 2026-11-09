@@ -71,6 +71,83 @@
       "when": 1793023007248,
       "tag": "0009_phase1_onboarding_step_requirements",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793218099501,
+      "tag": "0010_servora_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793218138465,
+      "tag": "0011_fix_admin_list_platform_admins",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793279155159,
+      "tag": "0012_reconstructed_operational_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793279273496,
+      "tag": "0013_reconstructed_pos_transactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793279510299,
+      "tag": "0014_reconstructed_inventory_receiving",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793280040456,
+      "tag": "0015_receiving_alias_and_request_validation",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793280169571,
+      "tag": "0016_operational_idempotence_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793903853580,
+      "tag": "0017_idempotence_and_realtime_repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794138785161,
+      "tag": "0018_member_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794142648797,
+      "tag": "0019_permission_performance",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794179764664,
+      "tag": "0020_inventory_cost_permission",
+      "breakpoints": true
     }
   ]
 }

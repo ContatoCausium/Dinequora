@@ -26,6 +26,7 @@ const mockItem: MenuItem = {
   prepTimeMinutes: 8,
   active: true,
   locationIds: [],
+  modifierGroups: [],
   createdAt: new Date().toISOString(),
 };
 
@@ -48,7 +49,7 @@ describe("POS Service calculations and lifecycle", () => {
     session = addItemToCart(session, mockItem, [], 2);
     expect(session.cart.length).toBe(1);
     expect(session.subtotalCents).toBe(2400);
-    // 8.875% of 2400 cents = 213 cents
+    // 8.88% (888 bp, the persisted rate) of 2400 cents = 213 cents
     expect(session.taxCents).toBe(213);
     expect(session.totalCents).toBe(2613);
   });
@@ -72,7 +73,7 @@ describe("POS Service calculations and lifecycle", () => {
     expect(session.subtotalCents).toBe(1200);
 
     session = applyDiscount(session, 200);
-    // Taxable base = 1000, 8.875% of 1000 = 89
+    // Taxable base = 1000, 8.88% of 1000 = 89
     expect(session.discountCents).toBe(200);
     expect(session.taxCents).toBe(89);
     expect(session.totalCents).toBe(1089);

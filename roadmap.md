@@ -1,5 +1,15 @@
 # Roadmap
 
+## Backend reconstruction and handoff (current request)
+- [x] Reconstruct operational schema additively; 0012–0016 applied, existing tenants/quarantine preserved.
+- [x] Connect Menu → POS → Orders → KDS with server-confirmed audited RPCs; isolated SQL regression passed.
+- [x] Connect resource persistence and recorded ledger; report limitations in Portuguese handoff.
+- [x] Run local tests and isolated PostgreSQL/RLS checks; 192 local tests passed; public login rendered without runtime errors.
+- [x] Prepare source export and Portuguese handoff documentation.
+- [ ] Hosted authenticated acceptance — blocked: authorized test session/account unavailable.
+- [ ] Verify GitHub main synchronization — blocked: only internal remotes visible; user must verify Project settings.
+- [ ] Complete report/UI homologation — blocked: hosted acceptance unavailable; known product-margin/unit/Realtime limits are itemized in handoff.
+
 ## Done
 - Auth, orgs, memberships, invitations, onboarding, protected routes, auth back arrow
 - Security phase: tenant-isolation audit (43 checks), audit log, store-level access, org cap, last-owner protection

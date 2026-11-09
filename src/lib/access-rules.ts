@@ -14,7 +14,12 @@ export function countBillableStores(statuses: LocationLifecycle[]): number {
   return statuses.filter((s) => s !== "inactive").length;
 }
 
-export function canAddStore(role: OrgRole, billable: number, limit: number, suspended: boolean): boolean {
+export function canAddStore(
+  role: OrgRole,
+  billable: number,
+  limit: number,
+  suspended: boolean,
+): boolean {
   return role === "owner" && !suspended && billable < limit;
 }
 
@@ -37,12 +42,20 @@ export function invitableRoles(role: OrgRole): OrgRole[] {
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 /** Validates a week of opening hours. Overnight (close < open) is allowed; equal times are not. */
 export function validateHours(h: WeeklyHours): string[] {
-  return Object.entries(h).filter(([d, v]) => {
-    if (!DAYS.includes(d as DayKey)) return true;
-    if (v === null) return false;
-    if (!v || typeof v !== "object" || Object.keys(v).length !== 2) return true;
-    return typeof v.open !== "string" || typeof v.close !== "string" || !TIME.test(v.open) || !TIME.test(v.close) || v.open === v.close;
-  }).map(([d]) => d);
+  return Object.entries(h)
+    .filter(([d, v]) => {
+      if (!DAYS.includes(d as DayKey)) return true;
+      if (v === null) return false;
+      if (!v || typeof v !== "object" || Object.keys(v).length !== 2) return true;
+      return (
+        typeof v.open !== "string" ||
+        typeof v.close !== "string" ||
+        !TIME.test(v.open) ||
+        !TIME.test(v.close) ||
+        v.open === v.close
+      );
+    })
+    .map(([d]) => d);
 }
 
 /** A non-owner can invite only into stores they are assigned to; with none, inviting is impossible. */

@@ -1,0 +1,10 @@
+[
+  {"capability":"code","source":"Servora-main.zip","outcome":"migrate","status":"done","next_action":"none"},
+  {"capability":"schema (orgs, locations, team, billing, audit, admin)","source":"drizzle/migrations 0000-0010","outcome":"migrate","status":"applied","next_action":"none"},
+  {"capability":"schema (orders, menu, POS sale RPCs)","source":"drizzle 0011/0012 reference tables absent from the export","outcome":"migrate","status":"blocked","next_action":"Need the orders/menu table definitions; pending SQL kept in docs/pending-migrations"},
+  {"capability":"records","source":"none attached","outcome":"migrate","status":"pending","next_action":"Request CSV/JSON exports of app tables"},
+  {"capability":"auth identities","source":"none attached","outcome":"migrate","status":"pending","next_action":"Request user export (ids, emails)"},
+  {"capability":"auth providers (email, Google, Microsoft)","source":"src/lib/auth","outcome":"migrate","status":"configured","next_action":"verify sign-in"},
+  {"capability":"Stripe billing webhooks","source":"stripe_webhook_events / billing_apply_stripe_event","outcome":"preserve","status":"pending","next_action":"No webhook route in archive; confirm if Stripe is live"},
+  {"capability":"verification","source":"-","outcome":"verify","status":"partial","next_action":"build + route checks"}
+]

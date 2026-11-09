@@ -1,1 +1,20 @@
-project_id = "omjuhgztutegyktcymom"
+project_id = "ilemvaquootxarmisdjb"
+
+# Local development only (`supabase start`). Hosted projects take auth settings from
+# the dashboard, so nothing here affects staging or production.
+[auth]
+site_url = "http://localhost:8081"
+additional_redirect_urls = [
+  "http://localhost:8081/**",
+  "http://127.0.0.1:8081/**",
+  "http://localhost:8080/**",
+  "http://127.0.0.1:8080/**",
+]
+
+[auth.email]
+# Send real confirmation e-mails to the local Inbucket instead of auto-confirming.
+enable_confirmations = true
+max_frequency = "1s"
+
+[auth.rate_limit]
+email_sent = 60

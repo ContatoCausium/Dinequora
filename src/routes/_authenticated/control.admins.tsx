@@ -4,21 +4,57 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Check, Minus, Search, Shield, ShieldAlert, UserPlus, X } from "lucide-react";
 
-import { btnPrimary, inputCls, LoadingRows, Section, Tag, useErr } from "@/components/control/control-ui";
-import { listPlatformAdmins, setPlatformRole, type PlatformAdmin, type PlatformRole } from "@/lib/admin-service";
+import {
+  btnPrimary,
+  inputCls,
+  LoadingRows,
+  Section,
+  Tag,
+  useErr,
+} from "@/components/control/control-ui";
+import {
+  listPlatformAdmins,
+  setPlatformRole,
+  type PlatformAdmin,
+  type PlatformRole,
+} from "@/lib/admin-service";
 import { LoadFailure } from "@/components/control/load-failure";
 import { requestErrorKind, type RequestErrorKind } from "@/lib/request-error";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/control/admins")({
   head: () => ({
     meta: [
       { title: "Administrators · Servora Control Center" },
-      { name: "description", content: "Manage platform administrator and support roles with audited, reason-required changes." },
+      {
+        name: "description",
+        content:
+          "Manage platform administrator and support roles with audited, reason-required changes.",
+      },
       { property: "og:title", content: "Administrators · Servora Control Center" },
-      { property: "og:description", content: "Manage platform administrator and support roles with audited, reason-required changes." },
+      {
+        property: "og:description",
+        content:
+          "Manage platform administrator and support roles with audited, reason-required changes.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -27,16 +63,86 @@ export const Route = createFileRoute("/_authenticated/control/admins")({
 });
 
 const PERMISSIONS_MATRIX = [
-  { action: "managePlatformAdmins", platformAdmin: true, support: false, owner: false, manager: false, staff: false },
-  { action: "viewAuditLogs", platformAdmin: true, support: true, owner: false, manager: false, staff: false },
-  { action: "editOrgSubscription", platformAdmin: true, support: false, owner: false, manager: false, staff: false },
-  { action: "overrideStoreLimit", platformAdmin: true, support: false, owner: false, manager: false, staff: false },
-  { action: "assignOrgOwner", platformAdmin: true, support: false, owner: false, manager: false, staff: false },
-  { action: "suspendOrganization", platformAdmin: true, support: false, owner: false, manager: false, staff: false },
-  { action: "viewOrgMetadata", platformAdmin: true, support: true, owner: false, manager: false, staff: false },
-  { action: "viewRestaurantPrivateData", platformAdmin: false, support: false, owner: true, manager: true, staff: true },
-  { action: "manageRestaurantMembers", platformAdmin: false, support: false, owner: true, manager: true, staff: false },
-  { action: "manageRestaurantLocations", platformAdmin: false, support: false, owner: true, manager: true, staff: false },
+  {
+    action: "managePlatformAdmins",
+    platformAdmin: true,
+    support: false,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "viewAuditLogs",
+    platformAdmin: true,
+    support: true,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "editOrgSubscription",
+    platformAdmin: true,
+    support: false,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "overrideStoreLimit",
+    platformAdmin: true,
+    support: false,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "assignOrgOwner",
+    platformAdmin: true,
+    support: false,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "suspendOrganization",
+    platformAdmin: true,
+    support: false,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "viewOrgMetadata",
+    platformAdmin: true,
+    support: true,
+    owner: false,
+    manager: false,
+    staff: false,
+  },
+  {
+    action: "viewRestaurantPrivateData",
+    platformAdmin: false,
+    support: false,
+    owner: true,
+    manager: true,
+    staff: true,
+  },
+  {
+    action: "manageRestaurantMembers",
+    platformAdmin: false,
+    support: false,
+    owner: true,
+    manager: true,
+    staff: false,
+  },
+  {
+    action: "manageRestaurantLocations",
+    platformAdmin: false,
+    support: false,
+    owner: true,
+    manager: true,
+    staff: false,
+  },
 ] as const;
 
 function Admins() {
@@ -63,13 +169,21 @@ function Admins() {
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true); setLoadError(null);
-    try { setAdmins(await listPlatformAdmins()); }
-    catch (e) { setAdmins(null); setLoadError(requestErrorKind(e)); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setAdmins(await listPlatformAdmins());
+    } catch (e) {
+      setAdmins(null);
+      setLoadError(requestErrorKind(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const filteredAdmins = useMemo(() => {
     if (!admins) return [];
@@ -81,7 +195,10 @@ function Admins() {
     });
   }, [admins, search, roleFilter]);
 
-  const adminCount = useMemo(() => (admins ?? []).filter((a) => a.role === "platform_admin").length, [admins]);
+  const adminCount = useMemo(
+    () => (admins ?? []).filter((a) => a.role === "platform_admin").length,
+    [admins],
+  );
 
   const handleGrant = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +206,8 @@ function Admins() {
       setGrantError(t("errors.reason_required"));
       return;
     }
-    setGrantBusy(true); setGrantError(null);
+    setGrantBusy(true);
+    setGrantError(null);
     try {
       await setPlatformRole(grantEmail.trim(), grantRole, true, grantReason.trim());
       toast.success(t("saved"));
@@ -114,7 +232,8 @@ function Admins() {
       setRevokeError(t("errors.last_admin"));
       return;
     }
-    setRevokeBusy(true); setRevokeError(null);
+    setRevokeBusy(true);
+    setRevokeError(null);
     try {
       await setPlatformRole(revoking.email, revoking.role, false, revokeReason.trim());
       toast.success(t("saved"));
@@ -135,7 +254,13 @@ function Admins() {
           <h1 className="text-[26px] font-semibold tracking-[-0.02em]">{t("nav.admins")}</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("admins.intro")}</p>
         </div>
-        <Button onClick={() => { setGrantError(null); setGrantOpen(true); }} className="inline-flex items-center gap-2">
+        <Button
+          onClick={() => {
+            setGrantError(null);
+            setGrantOpen(true);
+          }}
+          className="inline-flex items-center gap-2"
+        >
           <UserPlus className="size-4" />
           {t("admins.grant")}
         </Button>
@@ -155,7 +280,10 @@ function Admins() {
                   className={`${inputCls} pl-9`}
                 />
                 {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
                     <X className="size-4" />
                   </button>
                 )}
@@ -183,11 +311,14 @@ function Admins() {
               {filteredAdmins.map((a) => {
                 const isLast = a.role === "platform_admin" && adminCount <= 1;
                 return (
-                  <li key={`${a.user_id}-${a.role}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 text-sm">
+                  <li
+                    key={`${a.user_id}-${a.role}`}
+                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 text-sm"
+                  >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{a.email}</p>
                       <div className="mt-0.5 flex items-center gap-2">
-                        <Tag tone={a.role === "platform_admin" ? "danger" : "info"}>
+                        <Tag tone={a.role === "platform_admin" ? "danger" : "neutral"}>
                           {t(`roles.${a.role}`)}
                         </Tag>
                         {isLast && (
@@ -203,7 +334,11 @@ function Admins() {
                       size="sm"
                       disabled={isLast}
                       title={isLast ? t("errors.last_admin") : undefined}
-                      onClick={() => { setRevokeError(null); setRevokeReason(""); setRevoking(a); }}
+                      onClick={() => {
+                        setRevokeError(null);
+                        setRevokeReason("");
+                        setRevoking(a);
+                      }}
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
                       {t("admins.revoke")}
@@ -222,10 +357,18 @@ function Admins() {
               <thead className="border-b text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-semibold">{t("admins.actionCol")}</th>
-                  <th className="px-3 py-3 text-center font-semibold text-destructive">{t("roles.platform_admin")}</th>
-                  <th className="px-3 py-3 text-center font-semibold text-primary">{t("roles.support")}</th>
-                  <th className="px-3 py-3 text-center font-semibold">{t("admins.restaurantOwner")}</th>
-                  <th className="px-3 py-3 text-center font-semibold">{t("admins.restaurantStaff")}</th>
+                  <th className="px-3 py-3 text-center font-semibold text-destructive">
+                    {t("roles.platform_admin")}
+                  </th>
+                  <th className="px-3 py-3 text-center font-semibold text-primary">
+                    {t("roles.support")}
+                  </th>
+                  <th className="px-3 py-3 text-center font-semibold">
+                    {t("admins.restaurantOwner")}
+                  </th>
+                  <th className="px-3 py-3 text-center font-semibold">
+                    {t("admins.restaurantStaff")}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -235,16 +378,32 @@ function Admins() {
                       {t(`admins.matrix.${row.action}`)}
                     </td>
                     <td className="px-3 py-3 text-center">
-                      {row.platformAdmin ? <Check className="mx-auto size-4 text-success" /> : <Minus className="mx-auto size-4 text-muted-foreground/40" />}
+                      {row.platformAdmin ? (
+                        <Check className="mx-auto size-4 text-success" />
+                      ) : (
+                        <Minus className="mx-auto size-4 text-muted-foreground/40" />
+                      )}
                     </td>
                     <td className="px-3 py-3 text-center">
-                      {row.support ? <Check className="mx-auto size-4 text-success" /> : <Minus className="mx-auto size-4 text-muted-foreground/40" />}
+                      {row.support ? (
+                        <Check className="mx-auto size-4 text-success" />
+                      ) : (
+                        <Minus className="mx-auto size-4 text-muted-foreground/40" />
+                      )}
                     </td>
                     <td className="px-3 py-3 text-center">
-                      {row.owner ? <Check className="mx-auto size-4 text-success" /> : <Minus className="mx-auto size-4 text-muted-foreground/40" />}
+                      {row.owner ? (
+                        <Check className="mx-auto size-4 text-success" />
+                      ) : (
+                        <Minus className="mx-auto size-4 text-muted-foreground/40" />
+                      )}
                     </td>
                     <td className="px-3 py-3 text-center">
-                      {row.staff ? <Check className="mx-auto size-4 text-success" /> : <Minus className="mx-auto size-4 text-muted-foreground/40" />}
+                      {row.staff ? (
+                        <Check className="mx-auto size-4 text-success" />
+                      ) : (
+                        <Minus className="mx-auto size-4 text-muted-foreground/40" />
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -283,8 +442,12 @@ function Admins() {
                 value={grantRole}
                 onChange={(e) => setGrantRole(e.target.value as PlatformRole)}
               >
-                <option value="support">{t("roles.support")} ({t("admins.supportDesc")})</option>
-                <option value="platform_admin">{t("roles.platform_admin")} ({t("admins.adminDesc")})</option>
+                <option value="support">
+                  {t("roles.support")} ({t("admins.supportDesc")})
+                </option>
+                <option value="platform_admin">
+                  {t("roles.platform_admin")} ({t("admins.adminDesc")})
+                </option>
               </select>
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
@@ -298,7 +461,11 @@ function Admins() {
                 onChange={(e) => setGrantReason(e.target.value)}
               />
             </label>
-            {grantError && <p role="alert" className="text-sm text-destructive">{grantError}</p>}
+            {grantError && (
+              <p role="alert" className="text-sm text-destructive">
+                {grantError}
+              </p>
+            )}
             <DialogFooter className="mt-2">
               <Button type="button" variant="ghost" onClick={() => setGrantOpen(false)}>
                 {t("edit.cancel")}
@@ -335,13 +502,20 @@ function Admins() {
                 onChange={(e) => setRevokeReason(e.target.value)}
               />
             </label>
-            {revokeError && <p role="alert" className="mt-2 text-sm text-destructive">{revokeError}</p>}
+            {revokeError && (
+              <p role="alert" className="mt-2 text-sm text-destructive">
+                {revokeError}
+              </p>
+            )}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={revokeBusy}>{t("edit.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               disabled={revokeBusy || revokeReason.trim().length < 3}
-              onClick={(e) => { e.preventDefault(); void handleRevoke(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleRevoke();
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {t("admins.confirmRevoke")}

@@ -12,6 +12,11 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import {
+  captureError,
+  installBrowserErrorHandlers,
+  setObservabilityScope,
+} from "../lib/observability";
 import { applyClientLanguageAfterHydration } from "../lib/i18n";
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
@@ -25,9 +30,7 @@ function NotFoundComponent() {
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">{t("states.notFoundTitle")}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t("states.notFoundBody")}
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("states.notFoundBody")}</p>
         <div className="mt-6">
           <Link
             to="/"
@@ -47,15 +50,14 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    captureError(error, { event: "ui.root_error_boundary", critical: true });
   }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold text-foreground">{t("states.errorTitle")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t("states.errorBody")}
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("states.errorBody")}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button
             onClick={() => {
@@ -84,7 +86,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Servora — Restaurant operations platform" },
-      { name: "description", content: "Multi-location restaurant management with white-label branding." },
+      {
+        name: "description",
+        content: "Multi-location restaurant management with white-label branding.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -123,13 +128,24 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
-  useEffect(() => { applyClientLanguageAfterHydration(); }, []);
+  useEffect(() => {
+    applyClientLanguageAfterHydration();
+    installBrowserErrorHandlers();
+  }, []);
 
   // Single auth listener: refresh route guards on identity changes; drop cached data on sign-out.
-  useEffect(() => auth.onChange((event) => {
-    if (event === "signed_out") queryClient.clear();
-    if (event === "signed_in" || event === "signed_out" || event === "user_updated") void router.invalidate();
-  }), [queryClient, router]);
+  useEffect(
+    () =>
+      auth.onChange((event) => {
+        if (event === "signed_out") {
+          queryClient.clear();
+          setObservabilityScope({});
+        }
+        if (event === "signed_in" || event === "signed_out" || event === "user_updated")
+          void router.invalidate();
+      }),
+    [queryClient, router],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -25,6 +25,8 @@ describe("theme engine", () => {
 
   it("keeps body text at WCAG AA contrast", () => {
     const theme = generateTheme({ primary: "#d63c46", accent: "#f2a43a" }, "light");
-    expect(contrastReport(theme).find((r) => r.key === "bodyText")!.ratio).toBeGreaterThanOrEqual(4.5);
+    expect(contrastReport(theme).find((r) => r.key === "bodyText")!.ratio).toBeGreaterThanOrEqual(
+      4.5,
+    );
   });
 });

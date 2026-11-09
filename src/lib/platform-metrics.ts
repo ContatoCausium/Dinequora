@@ -3,18 +3,40 @@
  * figures, and revenue is only "actual" when real billing is connected.
  */
 export type OrgInsight = {
-  id: string; name: string; status: "trial" | "active" | "suspended"; plan: string; is_demo: boolean; created_at: string;
-  store_count: number; active_store_count: number; store_limit: number; has_override: boolean;
-  member_count: number; owner_count: number; owner_email: string | null; pending_invites: number;
-  brand_customized: boolean; sub_status: string | null; trial_ends_at: string | null; billed_locations: number | null;
-  billing_connected: boolean; last_activity: string | null;
+  id: string;
+  name: string;
+  status: "trial" | "active" | "suspended";
+  plan: string;
+  is_demo: boolean;
+  created_at: string;
+  store_count: number;
+  active_store_count: number;
+  store_limit: number;
+  has_override: boolean;
+  member_count: number;
+  owner_count: number;
+  owner_email: string | null;
+  pending_invites: number;
+  brand_customized: boolean;
+  sub_status: string | null;
+  trial_ends_at: string | null;
+  billed_locations: number | null;
+  billing_connected: boolean;
+  last_activity: string | null;
 };
 export type PlanDef = {
-  id: string; name: string; price_per_location_cents: number; currency: string;
-  default_store_limit: number; trial_store_limit: number; trial_days: number; is_placeholder_pricing: boolean;
+  id: string;
+  name: string;
+  price_per_location_cents: number;
+  currency: string;
+  default_store_limit: number;
+  trial_store_limit: number;
+  trial_days: number;
+  is_placeholder_pricing: boolean;
 };
 
-export type AttentionReason = "suspended" | "no_owner" | "trial_expired" | "trial_ending" | "over_limit" | "past_due";
+export type AttentionReason =
+  "suspended" | "no_owner" | "trial_expired" | "trial_ending" | "over_limit" | "past_due";
 
 const DAY = 86_400_000;
 
@@ -56,15 +78,19 @@ export function computeOverview(orgs: OrgInsight[], plans: PlanDef[], now = Date
     : null;
   // Projection at list prices for customers that would be billed today (never shown as revenue).
   const projectedMrrCents = customers
-    .filter((o) => o.status !== "suspended" && o.sub_status !== "trialing" && o.sub_status !== "canceled")
+    .filter(
+      (o) => o.status !== "suspended" && o.sub_status !== "trialing" && o.sub_status !== "canceled",
+    )
     .reduce((a, o) => a + Math.max(o.active_store_count, 1) * (price.get(o.plan) ?? 0), 0);
 
   const trialing = customers.filter((o) => o.sub_status === "trialing");
-  const expired = trialing.filter((o) => o.trial_ends_at && new Date(o.trial_ends_at).getTime() < now).length;
+  const expired = trialing.filter(
+    (o) => o.trial_ends_at && new Date(o.trial_ends_at).getTime() < now,
+  ).length;
   const converted = paying.length;
   const decided = converted + expired;
 
-    return {
+  return {
     customers: customers.length,
     demos: demos.length,
     active: customers.filter((o) => o.status === "active").length,
@@ -86,7 +112,12 @@ export function computeOverview(orgs: OrgInsight[], plans: PlanDef[], now = Date
       active: customers.filter((o) => o.plan === p.id && o.status === "active").length,
       trial: customers.filter((o) => o.plan === p.id && o.status === "trial").length,
     })),
-    trials: { active: trialing.length - expired, expired, converted, rate: decided ? converted / decided : null },
+    trials: {
+      active: trialing.length - expired,
+      expired,
+      converted,
+      rate: decided ? converted / decided : null,
+    },
     attention: orgs
       .map((o) => ({ org: o, reasons: attentionReasons(o, now) }))
       .filter((x) => x.reasons.length > 0),

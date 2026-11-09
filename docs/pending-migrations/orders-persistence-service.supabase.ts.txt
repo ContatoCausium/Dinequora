@@ -1,0 +1,369 @@
+import { supabase } from "@/integrations/supabase/client";
+import type { Order, OrderItem, OrderStatus, OrderType, SelectedModifier } from "./orders-service";
+
+export interface OrderFilterOptions {
+  orgId: string;
+  locationId?: string | undefined;
+  status?: OrderStatus;
+  startDate?: string;
+  endDate?: string;
+  channel?: OrderType;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PersistedOrderResult {
+  orders: Order[];
+  totalCount: number;
+}
+
+export async function fetchPersistedOrders(
+  options: OrderFilterOptions
+): Promise<PersistedOrderResult> {
+  const { orgId, locationId, status, startDate, endDate, channel, limit = 50, offset = 0 } = options;
+  try {
+    let query = supabase
+      .from("orders")
+      .select(
+        `
+        id,
+        org_id,
+        location_id,
+        order_number,
+        type,
+        status,
+        customer_name,
+        customer_phone,
+        customer_email,
+        delivery_address,
+        table_number,
+        subtotal_cents,
+        discount_cents,
+        tax_rate_basis_points,
+        tax_cents,
+        total_cents,
+        notes,
+        is_simulation,
+        created_at,
+        updated_at,
+        order_items (
+          id,
+          product_id,
+          product_name,
+          quantity,
+          unit_price_cents,
+          subtotal_cents,
+          notes,
+          order_item_modifiers (
+            id,
+            option_id,
+            group_name,
+            option_name,
+            price_cents
+          )
+        )
+      `,
+        { count: "exact" }
+      )
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (locationId && locationId !== "all") {
+      query = query.eq("location_id", locationId);
+    }
+    if (status) {
+      query = query.eq("status", status);
+    }
+    if (channel) {
+      query = query.eq("type", channel);
+    }
+    if (startDate) {
+      query = query.gte("created_at", startDate);
+    }
+    if (endDate) {
+      query = query.lte("created_at", endDate);
+    }
+
+    const { data, count, error } = await query;
+    if (error) {
+      return { orders: [], totalCount: 0 };
+    }
+
+    const mappedOrders: Order[] = (data || []).map((row: any) => {
+      const items: OrderItem[] = (row.order_items || []).map((it: any) => {
+        const rawMods = it.order_item_modifiers || [];
+        const modifiers: SelectedModifier[] = rawMods.map((m: any) => ({
+          groupId: m.group_name || "",
+          groupName: m.group_name || "Modifier",
+          optionId: m.option_id || m.id,
+          optionName: m.option_name || "Option",
+          priceCents: m.price_cents || 0,
+        }));
+
+        return {
+          id: it.id,
+          productId: it.product_id || "",
+          productName: it.product_name || "Product",
+          quantity: it.quantity || 1,
+          basePriceCents: it.unit_price_cents || 0,
+          modifiers,
+          subtotalCents: it.subtotal_cents || (it.unit_price_cents * (it.quantity || 1)),
+          notes: it.notes || undefined,
+          isItemReady: false,
+        };
+      });
+
+      const taxBps = row.tax_rate_basis_points ?? 825;
+      return {
+        id: row.id,
+        orgId: row.org_id,
+        locationId: row.location_id,
+        orderNumber: row.order_number || `#${row.id.slice(0, 6)}`,
+        type: (row.type as OrderType) || "dine_in",
+        status: (row.status as OrderStatus) || "new",
+        customer: {
+          name: row.customer_name || "Walk-in",
+          phone: row.customer_phone || "",
+          email: row.customer_email || undefined,
+          tableNumber: row.table_number || undefined,
+          deliveryAddress: row.delivery_address || undefined,
+        },
+        items,
+        subtotalCents: row.subtotal_cents || 0,
+        discountCents: row.discount_cents || 0,
+        taxRatePercent: Number((taxBps / 100).toFixed(3)),
+        taxCents: row.tax_cents || 0,
+        totalCents: row.total_cents || 0,
+        specialInstructions: row.notes || undefined,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at || row.created_at,
+        timeline: [],
+        isSimulated: !!row.is_simulation,
+      };
+    });
+
+    return { orders: mappedOrders, totalCount: count || mappedOrders.length };
+  } catch {
+    return { orders: [], totalCount: 0 };
+  }
+}
+
+export async function persistOrderToSupabase(
+  orgId: string,
+  order: Order
+): Promise<{ success: boolean; orderId?: string; error?: string }> {
+  try {
+    const payloadItems = order.items.map((it) => ({
+      product_id: it.productId && it.productId.length === 36 ? it.productId : null,
+      product_name: it.productName,
+      quantity: it.quantity,
+      unit_price_cents: it.basePriceCents,
+      modifiers: (it.modifiers || []).map((m) => ({
+        option_id: m.optionId && m.optionId.length === 36 ? m.optionId : null,
+        group_name: m.groupName,
+        option_name: m.optionName,
+        price_cents: m.priceCents,
+      })),
+      notes: it.notes || null,
+    }));
+
+    // ponytail: uses create_pos_sale for backend idempotency via client_order_id
+    const clientOrderId = order.id ? `persist-${order.id}` : null;
+    const { data: rpcOrderId, error: rpcErr } = await supabase.rpc("create_pos_sale", {
+      _org_id: orgId,
+      _location_id: order.locationId,
+      _type: order.type,
+      _customer_name: order.customer.name || "Guest",
+      _customer_phone: order.customer.phone || null,
+      _customer_email: order.customer.email || null,
+      _delivery_address: order.customer.deliveryAddress || null,
+      _table_number: order.customer.tableNumber || null,
+      _notes: order.specialInstructions || null,
+      _discount_cents: order.discountCents || 0,
+      _tax_rate_basis_points: Math.round((order.taxRatePercent || 8.25) * 100),
+      _items: payloadItems,
+      _is_simulation: order.isSimulated || false,
+      _client_order_id: clientOrderId,
+    });
+
+    if (!rpcErr && rpcOrderId) {
+      return { success: true, orderId: rpcOrderId };
+    }
+
+    // Fallback direto via insert quando RPC falhar por permissao ou ambiente local
+    if (rpcErr && rpcErr.message && !rpcErr.message.includes("function public.create_pos_sale") && !rpcErr.message.includes("not found")) {
+      return { success: false, error: rpcErr.message };
+    }
+    const isValidUuid = typeof order.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.id);
+    const headerPayload: Record<string, any> = {
+      org_id: orgId,
+      location_id: order.locationId,
+      order_number: order.orderNumber,
+      type: order.type,
+      status: order.status,
+      customer_name: order.customer.name || "Guest",
+      customer_phone: order.customer.phone || null,
+      customer_email: order.customer.email || null,
+      delivery_address: order.customer.deliveryAddress || null,
+      table_number: order.customer.tableNumber || null,
+      subtotal_cents: order.subtotalCents,
+      discount_cents: order.discountCents,
+      tax_rate_basis_points: Math.round((order.taxRatePercent || 8.25) * 100),
+      tax_cents: order.taxCents,
+      total_cents: order.totalCents,
+      notes: order.specialInstructions || null,
+      is_simulation: order.isSimulated || false,
+      client_order_id: clientOrderId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (isValidUuid) {
+      headerPayload.id = order.id;
+    }
+
+    const { data: inserted, error: headerErr } = await supabase
+      .from("orders")
+      .insert(headerPayload)
+      .select("id")
+      .single();
+
+    if (headerErr) {
+      return { success: false, error: headerErr.message };
+    }
+
+    const persistedId = inserted?.id || (isValidUuid ? order.id : undefined);
+    return { success: true, orderId: persistedId };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+export async function cancelOrderWithReversal(
+  orderId: string,
+  reason?: string
+): Promise<{ success: boolean; alreadyCancelled?: boolean; error?: string }> {
+  try {
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (orderData?.status === "cancelled") {
+      return { success: true, alreadyCancelled: true };
+    }
+
+    const { error: cancelErr } = await supabase.rpc("cancel_order_with_reversal", {
+      _order_id: orderId,
+      _reason: reason || "Cancelled with automatic recipe inventory and finance reversal",
+    });
+    if (cancelErr) {
+      return { success: false, error: cancelErr.message };
+    }
+    return { success: true, alreadyCancelled: false };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+export async function persistFinalizedPOSSaleAtomic(
+  session: any,
+  clientOrderId?: string
+): Promise<{ success: boolean; orderId?: string; orderNumber?: string; error?: string }> {
+  try {
+    const payloadItems = (session.cart || []).map((it: any) => ({
+      product_id: it.productId && it.productId.length === 36 ? it.productId : null,
+      product_name: it.productName || "Item",
+      unit_price_cents: it.unitPriceCents || 0,
+      quantity: it.quantity || 1,
+      modifiers: (it.modifiers || []).map((m: any) => ({
+        option_id: m.optionId && m.optionId.length === 36 ? m.optionId : null,
+        group_name: m.groupName || "Modifier",
+        option_name: m.optionName || "Option",
+        price_cents: m.priceCents || 0,
+      })),
+      notes: it.notes || null,
+    }));
+
+    if (payloadItems.length === 0) {
+      return { success: false, error: "O carrinho está vazio." };
+    }
+
+    const txKey = clientOrderId || session.clientOrderId || `pos-tx-${session.id || Date.now()}`;
+    const paymentMethod = session.payment?.method || "cash";
+
+    const { data: rpcOrderId, error: rpcErr } = await supabase.rpc("persist_finalized_pos_sale_atomic", {
+      _org_id: session.orgId,
+      _location_id: session.locationId,
+      _type: session.orderType || "dine_in",
+      _customer_name: session.customerName || "Walk-in",
+      _customer_phone: session.customerPhone || null,
+      _customer_email: session.customerEmail || null,
+      _delivery_address: session.deliveryAddress || null,
+      _table_number: session.tableNumber || null,
+      _notes: session.notes || null,
+      _discount_cents: session.discountCents || 0,
+      _tax_rate_basis_points: session.taxRateBasisPoints || 825,
+      _items: payloadItems,
+      _is_simulation: false,
+      _client_order_id: txKey,
+      _payment_method: paymentMethod,
+    });
+
+    if (rpcErr) {
+      return { success: false, error: rpcErr.message };
+    }
+
+    if (!rpcOrderId) {
+      return { success: false, error: "Resposta vazia do servidor ao registrar venda." };
+    }
+
+    if (rpcErr) {
+      return { success: false, error: rpcErr.message };
+    }
+
+    return { success: true, orderId: rpcOrderId };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+export async function persistOrderStatusTransition(
+  orderId: string,
+  status: OrderStatus
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (status === "cancelled") {
+      // ponytail: cancel_order_with_reversal restores inventory and deletes POS revenue ledger
+      const { error: cancelErr } = await supabase.rpc("cancel_order_with_reversal", {
+        _order_id: orderId,
+        _reason: "Cancelled with automatic recipe inventory and finance reversal",
+      });
+      if (!cancelErr) {
+        return { success: true };
+      }
+    }
+
+    // ponytail: try update_order_status RPC first for audit trail trigger and isolation check
+    const { error: rpcErr } = await supabase.rpc("update_order_status", {
+      _order_id: orderId,
+      _new_status: status,
+      _reason: "KDS operational status transition",
+    });
+
+    if (!rpcErr) {
+      return { success: true };
+    }
+
+    // Direct fallback if RPC fails due to role context or local client testing
+    const { error } = await supabase
+      .from("orders")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", orderId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}

@@ -45,9 +45,12 @@ export const extractLogoColors: BrandExtractor = async (src) => {
     const i = (y * width + x) * 4;
     return data[i + 3]! < 128 ? null : { r: data[i]!, g: data[i + 1]!, b: data[i + 2]! };
   };
-  const corners = [corner(0, 0), corner(width - 1, 0), corner(0, height - 1), corner(width - 1, height - 1)].filter(
-    Boolean,
-  ) as RGB[];
+  const corners = [
+    corner(0, 0),
+    corner(width - 1, 0),
+    corner(0, height - 1),
+    corner(width - 1, height - 1),
+  ].filter(Boolean) as RGB[];
 
   const buckets = new Map<number, { r: number; g: number; b: number; n: number; w: number }>();
   for (let i = 0; i < data.length; i += 4) {
@@ -59,7 +62,11 @@ export const extractLogoColors: BrandExtractor = async (src) => {
     const key = Math.round(h / 15) % 24;
     const b = buckets.get(key) ?? { r: 0, g: 0, b: 0, n: 0, w: 0 };
     const weight = s * (1 - Math.abs(l - 0.5));
-    b.r += px.r * weight; b.g += px.g * weight; b.b += px.b * weight; b.n++; b.w += weight;
+    b.r += px.r * weight;
+    b.g += px.g * weight;
+    b.b += px.b * weight;
+    b.n++;
+    b.w += weight;
     buckets.set(key, b);
   }
 
@@ -67,13 +74,21 @@ export const extractLogoColors: BrandExtractor = async (src) => {
   const candidates = [...buckets.values()]
     .filter((b) => b.n / total > 0.015)
     .sort((x, y) => y.w - x.w)
-    .map((b) => ({ hex: rgbToHex({ r: b.r / b.w, g: b.g / b.w, b: b.b / b.w }), weight: b.n / total }));
+    .map((b) => ({
+      hex: rgbToHex({ r: b.r / b.w, g: b.g / b.w, b: b.b / b.w }),
+      weight: b.n / total,
+    }));
 
   // Keep visually distinct hues only.
   const distinct: ExtractedColor[] = [];
   for (const c of candidates) {
     const h = hexToHsl(c.hex).h;
-    if (distinct.every((d) => Math.min(Math.abs(hexToHsl(d.hex).h - h), 360 - Math.abs(hexToHsl(d.hex).h - h)) > 18))
+    if (
+      distinct.every(
+        (d) =>
+          Math.min(Math.abs(hexToHsl(d.hex).h - h), 360 - Math.abs(hexToHsl(d.hex).h - h)) > 18,
+      )
+    )
       distinct.push(c);
     if (distinct.length === 5) break;
   }
@@ -93,5 +108,7 @@ export async function logoToDataUrl(file: File): Promise<string> {
     if (!context) throw new Error("canvas_unavailable");
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL("image/webp", 0.9);
-  } finally { URL.revokeObjectURL(source); }
+  } finally {
+    URL.revokeObjectURL(source);
+  }
 }

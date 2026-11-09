@@ -77,7 +77,7 @@
     "noSubscription": "Nenhuma assinatura registrada.",
     "plan": "Plano",
     "status": "Status",
-    "billedLocations": "Unidades cobradas / permitidas",
+    "billedLocations": "Unidades faturadas",
     "trialEnds": "Fim do teste",
     "graceEnds": "Fim do período de carência",
     "renews": "Próxima renovação",
@@ -100,6 +100,8 @@
       "unpaid": "Não paga",
       "canceled": "Cancelada",
       "incomplete": "Incompleta"
-    }
+    },
+    "activeLocations": "Unidades ativas / permitidas",
+    "billedPendingSync": "{{count}} (atualiza na próxima sincronização da cobrança)"
   }
 }

@@ -20,9 +20,16 @@ export function onboardingChecklist(i: ChecklistInput): StepState[] {
   const stores = i.locations.some(storeConfigured);
   const team = i.memberCount > 1 || i.pendingInvites > 0;
   const passed = (n: number) => i.persistedStep > n;
-  const opt = (done: boolean, n: number): StepState => (done ? "done" : passed(n) ? "skipped" : "todo");
+  const opt = (done: boolean, n: number): StepState =>
+    done ? "done" : passed(n) ? "skipped" : "todo";
   const required = brand && stores;
-  return [brand ? "done" : "todo", opt(passed(1), 1), stores ? "done" : "todo", opt(team, 3), required && passed(3) ? "done" : "todo"];
+  return [
+    brand ? "done" : "todo",
+    opt(passed(1), 1),
+    stores ? "done" : "todo",
+    opt(team, 3),
+    required && passed(3) ? "done" : "todo",
+  ];
 }
 
 /** The step the owner can advance from, and whether advancing is allowed now. */

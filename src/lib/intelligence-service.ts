@@ -1,6 +1,10 @@
-import { listInventoryItems, getInventoryKpis } from "./inventory-service";
-import { listRecipes, calculateRecipeCost } from "./recipes-service";
-import { listTransactions } from "./finance-service";
+import {
+  listInventoryItems,
+  getInventoryKpis,
+  listRecipes,
+  calculateRecipeCost,
+  listTransactions,
+} from "./intelligence-sources";
 import { listOrders } from "./orders-service";
 import { listSuppliers, listPurchaseOrders } from "./suppliers-purchases-service";
 
@@ -8,7 +12,7 @@ export type InsightImpact = "high" | "medium" | "low" | "opportunity";
 export type ConfidenceLevel = "deterministic" | "statistical_high" | "statistical_medium";
 export type DataOrigin = "real_recorded" | "mixed_verified" | "sample_simulated";
 
-export type AgentQueryTopic = 
+export type AgentQueryTopic =
   | "cmv"
   | "sales"
   | "expenses"
@@ -78,7 +82,7 @@ export interface IntelligenceSummary {
 export function computeIntelligenceSummary(
   orgId: string,
   locationId: string,
-  periodDays: number = 30
+  periodDays: number = 30,
 ): IntelligenceSummary {
   // 1. Coleta determinística de dados reais das camadas de serviço existentes
   const allTx = listTransactions(orgId, locationId);
@@ -90,7 +94,7 @@ export function computeIntelligenceSummary(
   // Filtrar ordens e transações dentro do período aproximado
   const now = Date.now();
   const thresholdMs = periodDays * 86400000;
-  
+
   const periodTx = allTx.filter((t) => {
     const d = new Date(t.date).getTime();
     return !isNaN(d) ? now - d <= thresholdMs : true;
@@ -102,8 +106,13 @@ export function computeIntelligenceSummary(
   });
 
   // Receita bruta via pedidos e transações financeiras realizadas
-  const ordersRevenue = periodOrders.reduce((sum, o) => sum + (o.status !== "cancelled" ? o.totalCents : 0), 0);
-  const txRevenue = periodTx.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amountCents, 0);
+  const ordersRevenue = periodOrders.reduce(
+    (sum, o) => sum + (o.status !== "cancelled" ? o.totalCents : 0),
+    0,
+  );
+  const txRevenue = periodTx
+    .filter((t) => t.type === "income")
+    .reduce((sum, t) => sum + t.amountCents, 0);
   const grossRevenue = Math.max(ordersRevenue, txRevenue);
 
   // Despesas operacionais
@@ -120,7 +129,8 @@ export function computeIntelligenceSummary(
   const calculatedCogs = cogsFromTx > 0 ? cogsFromTx : Math.round(grossRevenue * 0.315);
   const cmvRate = grossRevenue > 0 ? (calculatedCogs / grossRevenue) * 100 : 0;
   const netRevenue = Math.max(0, grossRevenue - calculatedCogs - operatingExpenses);
-  const grossMarginRate = grossRevenue > 0 ? ((grossRevenue - calculatedCogs) / grossRevenue) * 100 : 0;
+  const grossMarginRate =
+    grossRevenue > 0 ? ((grossRevenue - calculatedCogs) / grossRevenue) * 100 : 0;
 
   // Desperdício e estoque baixo
   const estimatedWasteCents = Math.round(invKpis.totalStockValueCents * 0.038);
@@ -141,7 +151,8 @@ export function computeIntelligenceSummary(
       periodAnalyzed: `Últimos ${periodDays} dias`,
       dataOrigin: cogsFromTx > 0 ? "real_recorded" : "mixed_verified",
       confidence: "deterministic",
-      recommendation: "Revise a precificação dos itens de alto volume e renegocie insumos principais como laticínios e carnes nas fichas técnicas.",
+      recommendation:
+        "Revise a precificação dos itens de alto volume e renegocie insumos principais como laticínios e carnes nas fichas técnicas.",
       actionableLink: "/finance",
       metricValue: `${cmvRate.toFixed(1)}%`,
     });
@@ -156,7 +167,8 @@ export function computeIntelligenceSummary(
       periodAnalyzed: `Últimos ${periodDays} dias`,
       dataOrigin: cogsFromTx > 0 ? "real_recorded" : "mixed_verified",
       confidence: "deterministic",
-      recommendation: "Mantenha os pedidos de reposição com fornecedores homologados para evitar oscilações de custos nos ingredientes base.",
+      recommendation:
+        "Mantenha os pedidos de reposição com fornecedores homologados para evitar oscilações de custos nos ingredientes base.",
       actionableLink: "/finance",
       metricValue: `${cmvRate.toFixed(1)}%`,
     });
@@ -168,13 +180,15 @@ export function computeIntelligenceSummary(
       id: "inventory-low",
       title: `${lowStockCount} Insumos com Estoque Crítico ou Zerado`,
       category: "inventory",
-      summary: "Itens essenciais estão abaixo do estoque mínimo de segurança, com risco imediato de ruptura e perda de faturamento.",
+      summary:
+        "Itens essenciais estão abaixo do estoque mínimo de segurança, com risco imediato de ruptura e perda de faturamento.",
       impactLabel: "Risco direto de ruptura de cardápio",
       impactLevel: "high",
       periodAnalyzed: "Tempo real",
       dataOrigin: "real_recorded",
       confidence: "deterministic",
-      recommendation: "Gere uma ordem de compra consolidada para os fornecedores primários e ajuste o lead time de entrega no cadastro de estoque.",
+      recommendation:
+        "Gere uma ordem de compra consolidada para os fornecedores primários e ajuste o lead time de entrega no cadastro de estoque.",
       actionableLink: "/inventory",
       metricValue: `${lowStockCount} itens`,
     });
@@ -184,7 +198,8 @@ export function computeIntelligenceSummary(
   if (recipes.length > 0) {
     const unviableRecipes = recipes.filter((r) => {
       const cost = calculateRecipeCost(r, invItems);
-      const margin = r.targetPriceCents > 0 ? ((r.targetPriceCents - cost) / r.targetPriceCents) * 100 : 0;
+      const margin =
+        r.targetPriceCents > 0 ? ((r.targetPriceCents - cost) / r.targetPriceCents) * 100 : 0;
       return margin < 60;
     });
 
@@ -199,7 +214,8 @@ export function computeIntelligenceSummary(
         periodAnalyzed: "Fichas ativas",
         dataOrigin: "real_recorded",
         confidence: "deterministic",
-        recommendation: "Ajuste o tamanho das porções ou recalibre o preço de venda para manter a margem alvo de 68% a 72%.",
+        recommendation:
+          "Ajuste o tamanho das porções ou recalibre o preço de venda para manter a margem alvo de 68% a 72%.",
         actionableLink: "/inventory",
         metricValue: `${unviableRecipes.length} receitas`,
       });
@@ -217,7 +233,8 @@ export function computeIntelligenceSummary(
     periodAnalyzed: `Últimos ${periodDays} dias`,
     dataOrigin: "sample_simulated",
     confidence: "statistical_high",
-    recommendation: "Treine a equipe de praça fria e açougue nos padrões de pesagem pré-cocção e utilize etiquetagem PEPS ativa.",
+    recommendation:
+      "Treine a equipe de praça fria e açougue nos padrões de pesagem pré-cocção e utilize etiquetagem PEPS ativa.",
     actionableLink: "/inventory",
     metricValue: `~R$ ${(estimatedWasteCents / 100).toFixed(0)}`,
   });
@@ -247,14 +264,72 @@ export function computeIntelligenceSummary(
  */
 export function classifyQueryTopic(query: string): AgentQueryTopic {
   const q = query.toLowerCase();
-  if (q.includes("cmv") || q.includes("custo de mercadoria") || q.includes("food cost")) return "cmv";
-  if (q.includes("venda") || q.includes("faturamento") || q.includes("receita") || q.includes("ticket")) return "sales";
-  if (q.includes("despesa") || q.includes("gasto") || q.includes("custo fixo") || q.includes("operacional")) return "expenses";
-  if (q.includes("margem") || q.includes("markup") || q.includes("rentabilidade")) return "margin";
-  if (q.includes("lucro") || q.includes("ebitda") || q.includes("resultado")) return "profit";
-  if (q.includes("desperd") || q.includes("perda") || q.includes("sobra") || q.includes("descarte")) return "waste";
-  if (q.includes("forneced") || q.includes("compra") || q.includes("pedido de compra") || q.includes("cotacao")) return "suppliers";
-  if (q.includes("loja") || q.includes("unidade") || q.includes("filial") || q.includes("franquia") || q.includes("desempenho")) return "store_performance";
+  if (
+    q.includes("cmv") ||
+    q.includes("custo de mercadoria") ||
+    q.includes("food cost") ||
+    q.includes("cogs")
+  )
+    return "cmv";
+  if (
+    q.includes("venda") ||
+    q.includes("faturamento") ||
+    q.includes("receita") ||
+    q.includes("ticket") ||
+    q.includes("sales") ||
+    q.includes("revenue")
+  )
+    return "sales";
+  if (
+    q.includes("despesa") ||
+    q.includes("gasto") ||
+    q.includes("custo fixo") ||
+    q.includes("operacional") ||
+    q.includes("expense")
+  )
+    return "expenses";
+  if (
+    q.includes("margem") ||
+    q.includes("markup") ||
+    q.includes("rentabilidade") ||
+    q.includes("margin")
+  )
+    return "margin";
+  if (
+    q.includes("lucro") ||
+    q.includes("ebitda") ||
+    q.includes("resultado") ||
+    q.includes("profit")
+  )
+    return "profit";
+  if (
+    q.includes("desperd") ||
+    q.includes("perda") ||
+    q.includes("sobra") ||
+    q.includes("descarte") ||
+    q.includes("waste") ||
+    q.includes("spoil")
+  )
+    return "waste";
+  if (
+    q.includes("forneced") ||
+    q.includes("compra") ||
+    q.includes("pedido de compra") ||
+    q.includes("cotacao") ||
+    q.includes("supplier") ||
+    q.includes("purchase")
+  )
+    return "suppliers";
+  if (
+    q.includes("loja") ||
+    q.includes("unidade") ||
+    q.includes("filial") ||
+    q.includes("franquia") ||
+    q.includes("desempenho") ||
+    q.includes("store") ||
+    q.includes("location")
+  )
+    return "store_performance";
   return "inventory";
 }
 
@@ -266,7 +341,7 @@ export function executeAgentQuery(
   query: string,
   orgId: string,
   locationId: string,
-  periodDays: number = 30
+  periodDays: number = 30,
 ): AgentQueryResponse {
   const topic = classifyQueryTopic(query);
   const summary = computeIntelligenceSummary(orgId, locationId, periodDays);
@@ -293,24 +368,34 @@ export function executeAgentQuery(
           title: "Relatório Executivo de Custo de Mercadorias Vendidas (CMV)",
           summary: `O índice apurado foi de ${cmv.toFixed(1)}%, comparado a uma meta referencial de mercado entre 28% e 32%. Custo total em insumos: R$ ${(cogsCents / 100).toFixed(2)}. Receita base: R$ ${(revCents / 100).toFixed(2)}.`,
           periodAnalyzed: `Últimos ${periodDays} dias (${locationId === "all" ? "Todas as unidades" : "Unidade selecionada"})`,
-          dataOrigin: summary.dataBreakdown.realTransactionsCount > 0 ? "real_recorded" : "mixed_verified",
+          dataOrigin:
+            summary.dataBreakdown.realTransactionsCount > 0 ? "real_recorded" : "mixed_verified",
           numericEvidence: [
             { label: "CMV Nominal", value: `${cmv.toFixed(1)}%`, origin: "real_recorded" },
-            { label: "Custo Total Insumos", value: `R$ ${(cogsCents / 100).toFixed(2)}`, origin: "real_recorded" },
-            { label: "Faturamento Base", value: `R$ ${(revCents / 100).toFixed(2)}`, origin: "real_recorded" },
-            { label: "Meta Ideal", value: "28.0% - 32.0%", origin: "sample_simulated" }
+            {
+              label: "Custo Total Insumos",
+              value: `R$ ${(cogsCents / 100).toFixed(2)}`,
+              origin: "real_recorded",
+            },
+            {
+              label: "Faturamento Base",
+              value: `R$ ${(revCents / 100).toFixed(2)}`,
+              origin: "real_recorded",
+            },
+            { label: "Meta Ideal", value: "28.0% - 32.0%", origin: "sample_simulated" },
           ],
-          calculationExplanation: "CMV = (Insumos consumidos e compras pagas no período) ÷ (Faturamento bruto total de pedidos e receitas financeiras conciliadas) × 100.",
+          calculationExplanation:
+            "CMV = (Insumos consumidos e compras pagas no período) ÷ (Faturamento bruto total de pedidos e receitas financeiras conciliadas) × 100.",
           practicalRecommendations: [
             "Padronizar fichas técnicas e realizar auditoria diária de porcionamento na cozinha.",
             "Homologar alternativas de compra direta para proteínas e queijos, principais vetores de variação.",
-            "Auditar lançamentos de saídas por validade para estancar desvios silenciosos."
+            "Auditar lançamentos de saídas por validade para estancar desvios silenciosos.",
           ],
           limitations: [
             "Oscilações atípicas em dias de promoção não são ponderadas por elasticidade de preço.",
-            "Motor determinístico ativado (sem LLM generativa externa conectada)."
-          ]
-        }
+            "Motor determinístico ativado (sem LLM generativa externa conectada).",
+          ],
+        },
       };
     }
 
@@ -330,27 +415,42 @@ export function executeAgentQuery(
           periodAnalyzed: `Últimos ${periodDays} dias`,
           dataOrigin: "mixed_verified",
           numericEvidence: [
-            { label: "Perda Estimada", value: `R$ ${(wasteCents / 100).toFixed(2)}`, origin: "sample_simulated" },
-            { label: "Estoque Crítico", value: `${summary.lowStockItemCount} itens`, origin: "real_recorded" },
-            { label: "Taxa Média de Quebra", value: "3.8% do estoque médio", origin: "sample_simulated" }
+            {
+              label: "Perda Estimada",
+              value: `R$ ${(wasteCents / 100).toFixed(2)}`,
+              origin: "sample_simulated",
+            },
+            {
+              label: "Estoque Crítico",
+              value: `${summary.lowStockItemCount} itens`,
+              origin: "real_recorded",
+            },
+            {
+              label: "Taxa Média de Quebra",
+              value: "3.8% do estoque médio",
+              origin: "sample_simulated",
+            },
           ],
-          calculationExplanation: "Calculado a partir de movimentações do tipo 'descarte/perda' no módulo de estoque combinadas à taxa histórica de perda do segmento sobre itens perecíveis.",
+          calculationExplanation:
+            "Calculado a partir de movimentações do tipo 'descarte/perda' no módulo de estoque combinadas à taxa histórica de perda do segmento sobre itens perecíveis.",
           practicalRecommendations: [
             "Aplicar rotulagem visual PEPS (Primeiro que Entra, Primeiro que Sai) rigorosa nas câmaras frias.",
             "Implementar pesagem obrigatória de sobras ao fechamento da praça quente.",
-            "Substituir lotes de compra grandes por compras fracionadas semanais com fornecedores locais."
+            "Substituir lotes de compra grandes por compras fracionadas semanais com fornecedores locais.",
           ],
           limitations: [
             "Não foi possível correlacionar quebras com falhas de equipamentos sem sensores IoT ativos.",
-            "Dados baseados em registros determinísticos de estoque."
-          ]
-        }
+            "Dados baseados em registros determinísticos de estoque.",
+          ],
+        },
       };
     }
 
     case "suppliers": {
-      const pendingPo = purchaseOrders.filter(po => po.status === "ordered" || po.status === "draft");
-      const receivedPo = purchaseOrders.filter(po => po.status === "received");
+      const pendingPo = purchaseOrders.filter(
+        (po) => po.status === "sent" || po.status === "draft",
+      );
+      const receivedPo = purchaseOrders.filter((po) => po.status === "received");
       return {
         id: `agent-sup-${Date.now()}`,
         query,
@@ -367,17 +467,18 @@ export function executeAgentQuery(
           numericEvidence: [
             { label: "Fornecedores Ativos", value: `${suppliers.length}`, origin: "real_recorded" },
             { label: "Pedidos Concluídos", value: `${receivedPo.length}`, origin: "real_recorded" },
-            { label: "Pedidos Pendentes", value: `${pendingPo.length}`, origin: "real_recorded" }
+            { label: "Pedidos Pendentes", value: `${pendingPo.length}`, origin: "real_recorded" },
           ],
-          calculationExplanation: "Dados extraídos dos módulos integrados de Gestão de Fornecedores e Ordens de Compra (Fase 5.3).",
+          calculationExplanation:
+            "Dados extraídos dos módulos integrados de Gestão de Fornecedores e Ordens de Compra (Fase 5.3).",
           practicalRecommendations: [
             "Realizar concorrência bimestral para itens de curva A de estoque.",
-            "Exigir confirmação de prazo de entrega para evitar atrasos na produção da cozinha."
+            "Exigir confirmação de prazo de entrega para evitar atrasos na produção da cozinha.",
           ],
           limitations: [
-            "Pontualidade de entrega requer confirmação física de recebimento no sistema."
-          ]
-        }
+            "Pontualidade de entrega requer confirmação física de recebimento no sistema.",
+          ],
+        },
       };
     }
 
@@ -399,23 +500,41 @@ export function executeAgentQuery(
           title: `Relatório de Indicadores Operacionais (${topic.toUpperCase()})`,
           summary: `Faturamento registrado de R$ ${(summary.grossRevenueCents / 100).toFixed(2)}, com margem bruta apurada de ${summary.grossMarginRate.toFixed(1)}% e ${summary.analyzedOrderCount} comandas processadas no período.`,
           periodAnalyzed: `Últimos ${periodDays} dias`,
-          dataOrigin: summary.dataBreakdown.realOrdersCount > 0 ? "real_recorded" : "mixed_verified",
+          dataOrigin:
+            summary.dataBreakdown.realOrdersCount > 0 ? "real_recorded" : "mixed_verified",
           numericEvidence: [
-            { label: "Faturamento Bruto", value: `R$ ${(summary.grossRevenueCents / 100).toFixed(2)}`, origin: "real_recorded" },
-            { label: "Margem Bruta", value: `${summary.grossMarginRate.toFixed(1)}%`, origin: "real_recorded" },
-            { label: "Despesas Operacionais", value: `R$ ${(summary.operatingExpensesCents / 100).toFixed(2)}`, origin: "real_recorded" },
-            { label: "Pedidos Analisados", value: `${summary.analyzedOrderCount}`, origin: "real_recorded" }
+            {
+              label: "Faturamento Bruto",
+              value: `R$ ${(summary.grossRevenueCents / 100).toFixed(2)}`,
+              origin: "real_recorded",
+            },
+            {
+              label: "Margem Bruta",
+              value: `${summary.grossMarginRate.toFixed(1)}%`,
+              origin: "real_recorded",
+            },
+            {
+              label: "Despesas Operacionais",
+              value: `R$ ${(summary.operatingExpensesCents / 100).toFixed(2)}`,
+              origin: "real_recorded",
+            },
+            {
+              label: "Pedidos Analisados",
+              value: `${summary.analyzedOrderCount}`,
+              origin: "real_recorded",
+            },
           ],
-          calculationExplanation: "Margem bruta = (Receita - Custos diretos) / Receita. Cruzamento de pedidos faturados e lançamentos contábeis reais.",
+          calculationExplanation:
+            "Margem bruta = (Receita - Custos diretos) / Receita. Cruzamento de pedidos faturados e lançamentos contábeis reais.",
           practicalRecommendations: [
             "Revisar precificação de itens com margem bruta inferior a 55% no cardápio.",
-            "Manter giro rápido de insumos críticos para evitar encalhe de capital."
+            "Manter giro rápido de insumos críticos para evitar encalhe de capital.",
           ],
           limitations: [
             "Análise não assume correlações de causa externa sem registros contábeis detalhados.",
-            "Execução realizada via motor determinístico local."
-          ]
-        }
+            "Execução realizada via motor determinístico local.",
+          ],
+        },
       };
     }
   }

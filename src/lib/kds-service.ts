@@ -19,7 +19,7 @@ export function calculateElapsedMinutes(createdAtIso: string, now: Date = new Da
 export function getTicketUrgency(
   createdAtIso: string,
   thresholds: KDSThresholds = DEFAULT_THRESHOLDS,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): "normal" | "warning" | "delayed" {
   const minutes = calculateElapsedMinutes(createdAtIso, now);
   if (minutes >= thresholds.delayedMinutes) return "delayed";
@@ -29,16 +29,37 @@ export function getTicketUrgency(
 
 export function assignDefaultStation(productName: string): KitchenStation {
   const lower = productName.toLowerCase();
-  if (lower.includes("burger") || lower.includes("patty") || lower.includes("steak") || lower.includes("smash")) {
+  if (
+    lower.includes("burger") ||
+    lower.includes("patty") ||
+    lower.includes("steak") ||
+    lower.includes("smash")
+  ) {
     return "grill";
   }
-  if (lower.includes("fries") || lower.includes("rings") || lower.includes("crispy") || lower.includes("fried")) {
+  if (
+    lower.includes("fries") ||
+    lower.includes("rings") ||
+    lower.includes("crispy") ||
+    lower.includes("fried")
+  ) {
     return "fryer";
   }
-  if (lower.includes("shake") || lower.includes("soda") || lower.includes("drink") || lower.includes("beer") || lower.includes("wine")) {
+  if (
+    lower.includes("shake") ||
+    lower.includes("soda") ||
+    lower.includes("drink") ||
+    lower.includes("beer") ||
+    lower.includes("wine")
+  ) {
     return "bar";
   }
-  if (lower.includes("salad") || lower.includes("wrap") || lower.includes("taco") || lower.includes("dessert")) {
+  if (
+    lower.includes("salad") ||
+    lower.includes("wrap") ||
+    lower.includes("taco") ||
+    lower.includes("dessert")
+  ) {
     return "assembly";
   }
   return "expo";
@@ -50,7 +71,7 @@ export function filterOrdersByStation(orders: Order[], station: KitchenStation |
     order.items.some((item) => {
       const resolvedStation = item.station || assignDefaultStation(item.productName);
       return resolvedStation === station;
-    })
+    }),
   );
 }
 
@@ -73,7 +94,7 @@ export function mergeKDSOrders(existing: Order[], incoming: Order[]): Order[] {
     }
   }
   return Array.from(map.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 }
 
@@ -87,7 +108,9 @@ export function simulateIncomingOrder(orgId: string, locationId: string): Order 
     type: Math.random() > 0.5 ? "dine_in" : "takeout",
     status: "new",
     customer: {
-      name: ["Alex Reed", "Taylor Swift", "Jordan Lee", "Morgan Fox"][Math.floor(Math.random() * 4)] || "Customer",
+      name:
+        ["Alex Reed", "Taylor Swift", "Jordan Lee", "Morgan Fox"][Math.floor(Math.random() * 4)] ||
+        "Customer",
       phone: "+1 (555) 019-2834",
       tableNumber: `Table ${Math.floor(1 + Math.random() * 12)}`,
     },
@@ -99,7 +122,13 @@ export function simulateIncomingOrder(orgId: string, locationId: string): Order 
         quantity: 1,
         basePriceCents: 1350,
         modifiers: [
-          { groupId: "g1", groupName: "Cook", optionId: "o1", optionName: "Medium Rare", priceCents: 0 }
+          {
+            groupId: "g1",
+            groupName: "Cook",
+            optionId: "o1",
+            optionName: "Medium Rare",
+            priceCents: 0,
+          },
         ],
         subtotalCents: 1350,
         station: "grill",
@@ -115,7 +144,7 @@ export function simulateIncomingOrder(orgId: string, locationId: string): Order 
         subtotalCents: 650,
         station: "fryer",
         isItemReady: false,
-      }
+      },
     ],
     subtotalCents: 2000,
     discountCents: 0,
@@ -126,7 +155,12 @@ export function simulateIncomingOrder(orgId: string, locationId: string): Order 
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     timeline: [
-      { id: `tl-${Date.now()}`, toStatus: "new", timestamp: new Date().toISOString(), authorName: "Simulated KDS Engine" }
+      {
+        id: `tl-${Date.now()}`,
+        toStatus: "new",
+        timestamp: new Date().toISOString(),
+        authorName: "Simulated KDS Engine",
+      },
     ],
     isSimulated: true,
   };

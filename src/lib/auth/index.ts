@@ -14,7 +14,13 @@ export const SOCIAL_PROVIDERS: { id: SocialProvider; enabled: boolean }[] = [
 
 /** Accept only same-origin relative paths for post-auth redirects. */
 export function safeRedirect(path: unknown, fallback = "/"): string {
-  if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) return fallback;
+  if (
+    typeof path !== "string" ||
+    !path.startsWith("/") ||
+    path.startsWith("//") ||
+    path.startsWith("/\\")
+  )
+    return fallback;
   return path;
 }
 

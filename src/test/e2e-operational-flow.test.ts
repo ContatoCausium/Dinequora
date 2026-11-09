@@ -12,7 +12,12 @@ import {
   persistOrderStatusTransition,
   fetchPersistedOrders,
 } from "../lib/orders-persistence-service";
-import { supabase } from "../integrations/supabase/client";
+import * as operational from "../lib/operational.functions";
+vi.mock("../lib/operational.functions", () => ({
+  submitOperationalSale: vi.fn(),
+  changeOperationalOrder: vi.fn(),
+  fetchOperationalOrders: vi.fn(),
+}));
 
 describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () => {
   const isolatedTestOrgId = "88888888-8888-4888-8888-888888888888";
@@ -78,10 +83,15 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
   });
 
   it("Etapa 3: Valida idempotência de requisições POS repetidas por client_order_id", async () => {
-    const mockRpc = vi.spyOn(supabase, "rpc").mockResolvedValue({
-      data: "11111111-2222-3333-4444-555555555555",
-      error: null,
-    } as any);
+    // Local adapter contract only; real PostgreSQL idempotence lives in scripts/security/reconstructed_operations.sql.
+    const mockRpc = vi.spyOn(operational, "submitOperationalSale").mockResolvedValue({
+      success: true,
+      orderId: "11111111-2222-3333-4444-555555555555",
+      orderNumber: "#TEST",
+      totalCents: 1624,
+      subtotalCents: 1500,
+      taxCents: 124,
+    });
 
     const testOrder: Order = {
       id: "order-tx-client-unique-01",
@@ -125,10 +135,9 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
   });
 
   it("Etapa 4: Valida transição de status na cozinha (KDS) de new -> in_prep -> ready", async () => {
-    const mockRpc = vi.spyOn(supabase, "rpc").mockResolvedValue({
-      data: null,
-      error: null,
-    } as any);
+    const mockRpc = vi
+      .spyOn(operational, "changeOperationalOrder")
+      .mockResolvedValue({ success: true });
 
     const transition1 = await persistOrderStatusTransition("test-order-id-123", "in_prep");
     expect(transition1.success).toBe(true);
@@ -151,7 +160,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
         orderNumber: "#ISO-1",
         type: "dine_in",
         status: "ready",
-        customer: { name: "Tenant A" },
+        customer: { name: "Tenant A", phone: "" },
         items: [],
         subtotalCents: 1000,
         discountCents: 0,
@@ -170,7 +179,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
         orderNumber: "#ISO-2",
         type: "takeout",
         status: "new",
-        customer: { name: "Tenant B" },
+        customer: { name: "Tenant B", phone: "" },
         items: [],
         subtotalCents: 2000,
         discountCents: 0,
@@ -185,7 +194,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
     ];
 
     const targetResults = ordersCatalog.filter(
-      (o) => o.orgId === isolatedTestOrgId && o.locationId === isolatedTestLocId
+      (o) => o.orgId === isolatedTestOrgId && o.locationId === isolatedTestLocId,
     );
 
     expect(targetResults.length).toBe(1);
@@ -195,15 +204,9 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
 
   it("Etapa 6: Valida recuperação graciosa e persistência resiliente em oscilação de rede", async () => {
     // Simula erro de conexão e recuperação via fetchPersistedOrders
-    const mockFrom = vi.spyOn(supabase, "from").mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          order: () => ({
-            range: () => Promise.resolve({ data: null, count: 0, error: new Error("network_timeout") }),
-          }),
-        }),
-      }),
-    } as any);
+    const mockFrom = vi
+      .spyOn(operational, "fetchOperationalOrders")
+      .mockRejectedValue(new Error("network_timeout"));
 
     const offlineResult = await fetchPersistedOrders({
       orgId: isolatedTestOrgId,

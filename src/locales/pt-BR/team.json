@@ -64,77 +64,392 @@
       "4": "Conclua o branding e a configuração da loja primeiro."
     }
   },
+  "common": {
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "done": "Concluir",
+    "retry": "Tentar novamente",
+    "loading": "Carregando"
+  },
+  "tabs": {
+    "members": "Membros",
+    "profiles": "Perfis",
+    "activity": "Atividade"
+  },
+  "stats": {
+    "members": "Membros",
+    "membersHint": "{{owners}} proprietários · {{managers}} gerentes · {{staff}} funcionários",
+    "pending": "Convites pendentes",
+    "pendingHint": "Aguardando aceite",
+    "customized": "Acesso personalizado",
+    "customizedHint": "Membros com ajustes individuais",
+    "profiles": "Perfis personalizados",
+    "profilesHint": "Mais {{count}} modelos"
+  },
   "page": {
     "eyebrow": "Configurações",
     "title": "Equipe e acesso",
-    "subtitle": "Pessoas com acesso a {{org}}. Os papéis definem o que cada pessoa pode ver e alterar.",
+    "subtitle": "Pessoas com acesso a {{org}}. O nível define os limites; perfis e ajustes definem exatamente o que cada pessoa pode fazer.",
     "members": "Membros",
+    "membersCount_one": "{{count}} pessoa",
+    "membersCount_other": "{{count}} pessoas",
+    "emptyMembers": "Nenhum membro ainda.",
     "pending": "Convites pendentes",
+    "pendingHint": "Os links de convite não são enviados por e-mail — compartilhe você mesmo.",
     "noPending": "Nenhum convite pendente.",
     "you": "Você",
     "unnamed": "Membro sem nome",
     "expires": "Expira em {{date}}",
-    "revoke": "Cancelar",
+    "expiredShort": "Expirado",
+    "revoke": "Cancelar convite",
     "revoked": "Convite cancelado.",
-    "membersCount_one": "{{count}} pessoa",
-    "membersCount_other": "{{count}} pessoas",
+    "revokeTitle": "Cancelar o convite de {{email}}?",
+    "revokeBody": "O link para de funcionar imediatamente. Você pode convidar a pessoa de novo depois.",
     "allStores": "Todas as unidades",
     "noStores": "Nenhuma unidade atribuída",
     "noStoresAvailable": "Nenhuma unidade disponível para atribuir.",
-    "changeRole": "Alterar função",
-    "roleChanged": "Função atualizada.",
-    "assignStores": "Atribuir unidades",
-    "assignBody": "Escolha quais unidades {{name}} pode acessar.",
-    "storesSaved": "Acesso às unidades atualizado.",
-    "remove": "Remover",
+    "otherStores_one": "{{count}} outra unidade",
+    "otherStores_other": "{{count}} outras unidades",
+    "remove": "Remover membro",
     "removeTitle": "Remover {{name}}?",
     "removeBody": "A pessoa perderá o acesso a {{org}} imediatamente. Isso fica registrado no histórico de atividades.",
     "removed": "Membro removido.",
-    "expired": "Expirado — não pode mais ser aceito"
+    "noAccessTitle": "Você não tem acesso à equipe",
+    "noAccessBody": "Peça a um proprietário a permissão “Equipe · Ver” se precisar ver quem trabalha aqui."
+  },
+  "table": {
+    "member": "Membro",
+    "tier": "Nível",
+    "profile": "Perfil",
+    "stores": "Unidades",
+    "actions": "Ações",
+    "customized": "Personalizado",
+    "fullAccess": "Acesso total",
+    "open": "Abrir acesso de {{name}}"
   },
   "invite": {
+    "open": "Convidar membro",
     "title": "Convidar alguém da equipe",
     "subtitle": "A pessoa terá acesso apenas a esta organização, e somente às unidades escolhidas, após aceitar com o mesmo e-mail.",
     "email": "E-mail",
-    "role": "Papel",
+    "emailInvalid": "Informe um e-mail válido.",
+    "role": "Nível",
+    "stores": "Acesso às unidades",
     "submit": "Criar convite",
     "linkTitle": "Link de convite pronto",
     "linkBody": "Compartilhe este link privado com {{email}}. Ele funciona uma vez e expira em 7 dias.",
+    "notEmailed": "Nenhum e-mail foi enviado. Copie o link e envie você mesmo para a pessoa. Por segurança, ele não poderá ser exibido de novo depois que você sair desta página.",
     "copy": "Copiar link",
     "copied": "Link copiado.",
-    "readOnly": "Apenas proprietários e gerentes podem convidar pessoas.",
-    "error": "Não foi possível criar o convite.",
-    "stores": "Acesso às unidades",
-    "noStores": "Você só pode convidar funcionários para lojas atribuídas a você. Peça a um proprietário que atribua uma loja primeiro."
+    "copyFailed": "Não foi possível copiar. Selecione o link e copie manualmente.",
+    "another": "Convidar outra pessoa",
+    "noStores": "Você só pode convidar funcionários para unidades atribuídas a você. Peça a um proprietário que atribua uma unidade primeiro."
   },
   "roleHelp": {
-    "owner": "Controle total, cobrança e marca",
-    "manager": "Administra as unidades atribuídas e convida funcionários para elas",
-    "staff": "Operação do dia a dia"
+    "owner": "Controle total, cobrança, marca e propriedade",
+    "manager": "Administra as unidades atribuídas e a equipe delas",
+    "staff": "Operação do dia a dia nas unidades atribuídas"
+  },
+  "detail": {
+    "ownerAccess": "Proprietários têm todas as permissões em todas as unidades.",
+    "usesProfile": "Perfil: {{profile}}",
+    "usesDefault": "Usando o padrão do nível",
+    "isYou": "Este é você. Você não pode alterar o próprio acesso — peça a outro proprietário.",
+    "readOnly": "Você pode ver o acesso deste membro, mas não alterá-lo.",
+    "accessSection": "Nível, perfil e unidades",
+    "tier": "Nível",
+    "tierOwnerOnly": "Só proprietários alteram o nível",
+    "profile": "Perfil de permissões",
+    "tierDefault": "Padrão do nível",
+    "profileHint": "Trocar o nível ou o perfil desfaz os ajustes individuais.",
+    "stores": "Unidades",
+    "noStoresHint": "Sem unidades, a pessoa entra no sistema, mas não vê dados de nenhuma unidade.",
+    "permissions": "Permissões",
+    "permissionsOf": "Permissões de {{name}}",
+    "count_one": "{{count}} permissão",
+    "count_other": "{{count}} permissões",
+    "diff": "+{{added}} / −{{removed}} em relação ao salvo",
+    "noPermissionChanges": "sem mudanças de permissão",
+    "resetAdjustments": "Desfazer ajustes",
+    "ownerAll": "O nível proprietário inclui todas as permissões; a matriz aparece só como referência.",
+    "willGrant": "Vai conceder:",
+    "willRemove": "Vai remover:",
+    "exceedsOwn": "Você não pode conceder permissões que não tem: {{list}}. Escolha outro perfil ou desative-as.",
+    "otherActions": "Outras ações",
+    "unsaved": "Alterações não salvas",
+    "upToDate": "Nenhuma alteração pendente",
+    "save": "Salvar acesso",
+    "saved": "Acesso atualizado."
+  },
+  "transfer": {
+    "action": "Transferir propriedade",
+    "title": "Transferir a propriedade para {{name}}?",
+    "body1": "{{name}} passa a ser proprietário(a) de {{org}}, com controle total, incluindo cobrança, marca e equipe.",
+    "body2": "Você passará a ser gerente. Mantém apenas as unidades já atribuídas a você e perde as ações exclusivas de proprietário.",
+    "body3": "Só um proprietário pode desfazer isso. A alteração fica registrada no histórico de atividades.",
+    "confirm": "Transferir propriedade",
+    "done": "{{name}} agora é proprietário(a)."
+  },
+  "matrix": {
+    "module": "Módulo",
+    "columns": {
+      "view": "Ver",
+      "create": "Criar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "approve": "Aprovar",
+      "other": "Outras"
+    },
+    "notApplicable": "Não se aplica",
+    "unavailable": "Não disponível para este nível",
+    "beyondOwn": "Você mesmo não tem esta permissão",
+    "legend": {
+      "added": "adicionada individualmente",
+      "removed": "removida individualmente",
+      "inherited": "As demais vêm do perfil ou do padrão do nível."
+    }
+  },
+  "perm": {
+    "modules": {
+      "dashboard": "Painel",
+      "pos": "PDV",
+      "orders": "Pedidos",
+      "kds": "Tela da cozinha",
+      "menu": "Cardápio",
+      "inventory": "Estoque",
+      "recipes": "Fichas técnicas",
+      "purchases": "Compras",
+      "suppliers": "Fornecedores",
+      "finance": "Financeiro",
+      "expenses": "Despesas",
+      "reports": "Relatórios",
+      "team": "Equipe",
+      "settings": "Configurações"
+    },
+    "actions": {
+      "view": "Ver",
+      "create": "Criar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "approve": "Aprovar",
+      "update": "Atualizar status",
+      "financials": "Números financeiros",
+      "sell": "Vender",
+      "discount": "Desconto",
+      "refund": "Estornar",
+      "operate": "Operar",
+      "adjust": "Ajustar",
+      "transfer": "Transferir",
+      "costs": "Ver custos",
+      "receive": "Receber",
+      "cancel": "Cancelar",
+      "pay": "Pagar",
+      "export": "Exportar",
+      "invite": "Convidar",
+      "manage": "Gerenciar acessos",
+      "activity": "Histórico de atividades",
+      "locations": "Unidades",
+      "branding": "Marca",
+      "billing": "Cobrança"
+    }
+  },
+  "profiles": {
+    "customTitle": "Perfis personalizados",
+    "customSubtitle": "Conjuntos de permissões reutilizáveis desta organização.",
+    "ownerOnly": "Só proprietários criam ou editam perfis.",
+    "systemTitle": "Modelos",
+    "systemSubtitle": "Fornecidos pelo Servora. Somente leitura — duplique um para personalizar.",
+    "template": "Modelo",
+    "new": "Novo perfil",
+    "newTitle": "Novo perfil",
+    "editTitle": "Editar perfil",
+    "editorHint": "As permissões ficam limitadas ao nível. Os membros com este perfil são atualizados ao salvar.",
+    "view": "Ver {{name}}",
+    "edit": "Editar {{name}}",
+    "duplicate": "Duplicar para personalizar",
+    "copyOf": "{{name}} (cópia)",
+    "archive": "Arquivar {{name}}",
+    "archiveInUse_one": "Atribuído a {{count}} membro — mova-o primeiro.",
+    "archiveInUse_other": "Atribuído a {{count}} membros — mova-os primeiro.",
+    "archiveTitle": "Arquivar {{name}}?",
+    "archiveBody": "O perfil some das listas. Não será mais possível atribuí-lo a membros.",
+    "archiveConfirm": "Arquivar perfil",
+    "archived": "Perfil arquivado.",
+    "usedBy_one": "usado por {{count}} membro",
+    "usedBy_other": "usado por {{count}} membros",
+    "emptyTitle": "Nenhum perfil personalizado ainda",
+    "emptyBody": "Duplique um modelo abaixo ou crie um perfil do zero.",
+    "name": "Nome",
+    "description": "Descrição",
+    "tierHint": "O nível define o máximo que este perfil pode incluir.",
+    "tierLocked_one": "Atribuído a {{count}} membro, por isso o nível está bloqueado.",
+    "tierLocked_other": "Atribuído a {{count}} membros, por isso o nível está bloqueado.",
+    "matrixCaption": "Permissões do perfil {{name}}",
+    "affects_one": "Salvar atualiza o acesso de {{count}} membro.",
+    "affects_other": "Salvar atualiza o acesso de {{count}} membros.",
+    "save": "Salvar perfil",
+    "saved": "Perfil salvo.",
+    "system": {
+      "org_admin": {
+        "name": "Administrador da organização",
+        "description": "Tudo, exceto marca, cobrança e propriedade."
+      },
+      "manager": {
+        "name": "Gerente de unidade",
+        "description": "Administra as unidades atribuídas: vendas, estoque, compras, equipe e relatórios."
+      },
+      "cashier": {
+        "name": "Caixa / salão",
+        "description": "Vende no PDV e acompanha os pedidos."
+      },
+      "kitchen": {
+        "name": "Cozinha",
+        "description": "Opera a tela da cozinha e consulta as fichas técnicas."
+      },
+      "stock": {
+        "name": "Estoquista",
+        "description": "Cuida do estoque: itens, contagens, transferências, pedidos de compra e recebimento."
+      },
+      "finance": {
+        "name": "Financeiro",
+        "description": "Contas, despesas, pagamentos e relatórios financeiros."
+      }
+    }
   },
   "activity": {
-    "title": "Atividade recente",
-    "subtitle": "Alterações de membros, convites e unidades nesta organização.",
-    "empty": "Nenhuma atividade ainda."
+    "title": "Atividade",
+    "subtitle": "Quem fez o quê, onde, e se foi permitido. Tentativas recusadas também ficam registradas.",
+    "empty": "Nenhuma atividade ainda.",
+    "emptyFiltered": "Nenhuma atividade corresponde a estes filtros.",
+    "noDenied": "Nenhuma tentativa recusada foi registrada.",
+    "loadFailed": "Não foi possível carregar o histórico de atividades.",
+    "system": "Sistema",
+    "unknownMember": "Membro desconhecido",
+    "otherStore": "Outra unidade",
+    "filters": {
+      "member": "Membro",
+      "allMembers": "Todos os membros",
+      "store": "Unidade",
+      "result": "Resultado",
+      "allResults": "Todos os resultados",
+      "clear": "Limpar filtros"
+    },
+    "cols": {
+      "when": "Quando",
+      "member": "Membro",
+      "action": "Ação",
+      "store": "Unidade",
+      "result": "Resultado"
+    },
+    "result": {
+      "success": "Sucesso",
+      "denied": "Negado",
+      "error": "Erro"
+    },
+    "showing_one": "Exibindo {{count}} registro",
+    "showing_other": "Exibindo {{count}} registros",
+    "loadMore": "Carregar mais",
+    "limitReached": "Exibindo os 200 mais recentes — refine os filtros para ver registros antigos.",
+    "actions": {
+      "member": {
+        "added": "Membro adicionado",
+        "removed": "Membro removido",
+        "role_changed": "Nível alterado",
+        "access_changed": "Acesso alterado",
+        "locations_changed": "Acesso às unidades alterado"
+      },
+      "invitation": {
+        "created": "Convite criado",
+        "revoked": "Convite cancelado",
+        "accepted": "Convite aceito"
+      },
+      "permission_profile": {
+        "saved": "Perfil de permissões salvo",
+        "archived": "Perfil de permissões arquivado"
+      },
+      "ownership": {
+        "transferred": "Propriedade transferida"
+      },
+      "orders": {
+        "created": "Pedido criado",
+        "status_changed": "Status do pedido alterado",
+        "cancelled": "Pedido cancelado",
+        "item_ready": "Item do pedido marcado como pronto"
+      },
+      "pos": {
+        "finalized": "Venda concluída"
+      },
+      "inventory": {
+        "moved": "Movimentação de estoque registrada",
+        "saved": "Item de estoque salvo"
+      },
+      "purchase": {
+        "received": "Compra recebida",
+        "cancelled": "Compra cancelada",
+        "saved": "Pedido de compra salvo"
+      },
+      "menu": {
+        "saved": "Item do cardápio salvo",
+        "archived": "Item do cardápio arquivado"
+      },
+      "expense": {
+        "saved": "Despesa salva"
+      },
+      "recipe": {
+        "saved": "Ficha técnica salva"
+      },
+      "supplier": {
+        "saved": "Fornecedor salvo"
+      },
+      "location": {
+        "created": "Unidade criada",
+        "updated": "Unidade atualizada",
+        "status_changed": "Status da unidade alterado",
+        "managers_changed": "Gerentes da unidade alterados"
+      },
+      "organization": {
+        "created": "Organização criada",
+        "brand_updated": "Marca atualizada",
+        "onboarding_progress": "Progresso da configuração salvo",
+        "test_classified": "Marcada como organização de teste"
+      }
+    }
   },
   "errors": {
-    "last_owner_or_unknown": "Essa alteração não é permitida. Uma organização precisa ter sempre pelo menos um proprietário."
+    "forbidden": "Você não tem permissão para fazer essa alteração.",
+    "permission_denied": "Seu acesso não permite essa ação.",
+    "permission_exceeds_own": "Você não pode conceder permissões que você mesmo não tem.",
+    "invalid_permission": "Uma das permissões não é válida para este nível.",
+    "invalid_profile": "Esse perfil de permissões não está mais disponível. Recarregue e tente novamente.",
+    "profile_tier_mismatch": "O perfil pertence a um nível diferente do selecionado.",
+    "profile_tier_in_use": "Este perfil está atribuído a membros do nível atual, então o nível não pode mudar.",
+    "profile_in_use": "Este perfil ainda está atribuído a membros. Mova-os para outro perfil primeiro.",
+    "last_owner": "Uma organização precisa ter sempre pelo menos um proprietário.",
+    "invalid_location": "Uma das unidades selecionadas não pertence a esta organização.",
+    "invalid_email": "Informe um e-mail válido.",
+    "invalid_name": "Use um nome com 2 a 60 caracteres.",
+    "not_member": "Esta pessoa não é mais membro da organização.",
+    "org_suspended": "Esta organização está suspensa, então as alterações estão bloqueadas.",
+    "subscription_inactive": "A assinatura está inativa, então as alterações estão bloqueadas.",
+    "unknown": "Algo deu errado. Nada foi alterado — tente novamente."
   },
-  "perms": {
-    "title": "Permissões por função",
-    "subtitle": "Aplicadas pelo servidor em cada solicitação.",
-    "action": "Ação",
-    "scoped": "Unidades atribuídas",
-    "yes": "Permitido",
-    "no": "Não permitido",
-    "rows": {
-      "viewDashboard": "Ver desempenho",
-      "editLocations": "Editar dados e horários da unidade",
-      "addLocations": "Adicionar ou desativar unidades",
-      "inviteStaff": "Convidar funcionários",
-      "inviteManagers": "Convidar gerentes ou proprietários",
-      "changeRoles": "Alterar funções",
-      "billing": "Cobrança e plano"
-    }
+  "resetConfirm": {
+    "title": "Redefinir ajustes individuais?",
+    "body_one": "Trocar o nível ou o perfil substitui as permissões de {{name}} pelo padrão novo. O {{count}} ajuste individual abaixo será descartado:",
+    "body_other": "Trocar o nível ou o perfil substitui as permissões de {{name}} pelo padrão novo. Os {{count}} ajustes individuais abaixo serão descartados:",
+    "added": "Adicionadas:",
+    "removed": "Removidas:",
+    "note": "Nada é salvo até você clicar em “Salvar acesso”. Depois, você pode reaplicar ajustes na matriz.",
+    "confirm": "Trocar e redefinir ajustes"
+  },
+  "reissue": {
+    "action": "Novo link",
+    "actionExpired": "Reemitir",
+    "title": "Gerar um novo link de convite para {{email}}?",
+    "body": "Um novo link é criado com o mesmo nível, perfil e lojas, válido por 7 dias. O link anterior deixa de funcionar.",
+    "note": "Nada é enviado por e-mail: o novo link é copiado para você mesmo enviar.",
+    "confirm": "Gerar novo link",
+    "done": "Novo link de convite criado — use “Copiar link” para compartilhar.",
+    "doneCopied": "Novo link de convite criado e copiado para a área de transferência."
   }
 }

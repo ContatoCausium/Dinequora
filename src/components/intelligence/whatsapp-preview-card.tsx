@@ -1,366 +1,384 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { z } from "zod";
 import { useTranslation } from "react-i18next";
+import { CalendarClock, History, PlugZap, Users } from "lucide-react";
+import { toast } from "sonner";
+import { fetchOperationalWhatsApp, saveOperationalRecord } from "@/lib/operational.functions";
 import {
-  MessageSquare, BellRing, ShieldAlert, Sparkles, Check, Smartphone,
-  Calendar, Clock, Send, Users, FileText, CheckCircle2, AlertCircle,
-  Copy, ShieldCheck, History
-} from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+  renderWhatsAppMessage,
+  type WhatsAppContact,
+  type WhatsAppMessageLog,
+  type RecipientRole,
+} from "@/lib/whatsapp-service";
+import type { IntelligenceSummary } from "@/lib/intelligence-service";
+import { fmtDateTime } from "@/lib/format";
+import { useWorkspace } from "@/components/app/workspace-context";
+import { Panel, Segmented } from "@/components/app/page";
+import { EmptyState } from "@/components/app/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
-import {
-  getWhatsAppSettings,
-  saveWhatsAppSettings,
-  listWhatsAppContacts,
-  saveWhatsAppContact,
-  listWhatsAppSchedules,
-  saveWhatsAppSchedule,
-  listWhatsAppLogs,
-  queueSimulatedSend,
-  renderWhatsAppMessage,
-  type WhatsAppTemplateKind,
-  type WhatsAppContact,
-  type WhatsAppScheduleConfig,
-  type WhatsAppReportFrequency,
-  type RecipientRole
-} from "@/lib/whatsapp-service";
-import { useWorkspace } from "@/components/app/workspace-context";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export function WhatsAppPreviewCard() {
-  const { t, i18n } = useTranslation("common");
+const TEMPLATE_KINDS = [
+  "financial_summary",
+  "revenue_pulse",
+  "cmv_audit",
+  "low_stock_alert",
+  "waste_alert",
+  "multi_store_comparison",
+] as const;
+const PREVIEW_TEMPLATES = ["financial_summary", "cmv_audit", "low_stock_alert"] as const;
+type PreviewTemplate = (typeof PREVIEW_TEMPLATES)[number];
+const ROLES = ["owner", "manager", "financial_lead", "chef"] as const;
+const TABS = ["preview", "schedules", "contacts", "history", "connection"] as const;
+
+const contactPayload = z.object({
+  name: z.string(),
+  phone: z.string(),
+  role: z.enum(ROLES),
+  optInDate: z.string(),
+  consentGranted: z.literal(true),
+  active: z.boolean(),
+});
+const messagePayload = z.object({
+  recipientName: z.string(),
+  recipientPhone: z.string(),
+  renderedText: z.string(),
+  templateKind: z.enum(TEMPLATE_KINDS),
+});
+
+/**
+ * Simulated WhatsApp center. No provider is connected: previews render the same recorded summary
+ * the Intelligence page shows, and tests are saved as drafts only (the RPC rejects sent/delivered).
+ */
+export function WhatsAppPreviewCard({
+  summary,
+  periodDays,
+  scopeLabel,
+}: {
+  summary: IntelligenceSummary;
+  periodDays: number;
+  scopeLabel: string;
+}) {
+  const { t, i18n } = useTranslation("intelligence");
   const lng = i18n.language;
-  const { org, locationId, role } = useWorkspace();
-  const canManage = role !== "staff";
+  const { org, role } = useWorkspace();
+  const canManage = role === "owner";
 
-  const [activeTab, setActiveTab] = useState<"preview" | "settings" | "contacts" | "schedules" | "logs">("preview");
-
-  // Data state from service
-  const [settings, setSettings] = useState(() => getWhatsAppSettings(org.id));
-  const [contacts, setContacts] = useState<WhatsAppContact[]>(() => listWhatsAppContacts(org.id));
-  const [schedules, setSchedules] = useState<WhatsAppScheduleConfig[]>(() => listWhatsAppSchedules(org.id));
-  const [logs, setLogs] = useState(() => listWhatsAppLogs(org.id));
-
-  // Preview interactive state
-  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplateKind>("financial_summary");
-  const [previewRecipient, setPreviewRecipient] = useState(contacts[0]?.name || "Diretor de Operações");
-
-  // Form new contact
+  const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
+  const [logs, setLogs] = useState<WhatsAppMessageLog[]>([]);
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [template, setTemplate] = useState<PreviewTemplate>("financial_summary");
   const [newContactName, setNewContactName] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
   const [newContactRole, setNewContactRole] = useState<RecipientRole>("owner");
 
-  const renderedPreview = useMemo(() => {
-    return renderWhatsAppMessage(org.id, locationId, selectedTemplate, previewRecipient, lng);
-  }, [org.id, locationId, selectedTemplate, previewRecipient, lng]);
-
-  const handleSimulateDispatch = () => {
-    const activeContact = contacts[0] || {
-      name: "Diretor de Operações",
-      phone: "+55 (11) 98765-4321"
-    };
-    const created = queueSimulatedSend(org.id, activeContact.name, activeContact.phone, selectedTemplate, lng);
-    setLogs(listWhatsAppLogs(org.id));
-    toast.success(
-      `Prévia enviada em modo demonstração para ${activeContact.name} (${activeContact.phone}). Nenhum SMS ou WhatsApp real foi disparado.`
+  const reloadRecords = useCallback(async () => {
+    const rows = await fetchOperationalWhatsApp({ data: { orgId: org.id } });
+    setContacts(
+      rows
+        .filter((r) => r.kind === "contact")
+        .map((r) => {
+          const p = contactPayload.parse(r.payload);
+          return {
+            id: r.id,
+            orgId: org.id,
+            name: p.name,
+            phone: p.phone,
+            role: p.role,
+            locationIds: [],
+            optInConsent: true,
+            optInDate: p.optInDate,
+            active: p.active,
+          };
+        }),
     );
+    setLogs(
+      rows
+        .filter((r) => r.kind === "message")
+        .map((r) => ({
+          id: r.id,
+          ...messagePayload.parse(r.payload),
+          status: "draft" as const,
+          isDemo: true,
+          createdAt: r.created_at,
+          idempotencyKey: r.id,
+        })),
+    );
+  }, [org.id]);
+
+  useEffect(() => {
+    setContacts([]);
+    setLogs([]);
+    if (canManage) void reloadRecords().catch(() => toast.error(t("operations:failed")));
+  }, [canManage, reloadRecords, t]);
+
+  const recipient = contacts.find((c) => c.active && c.optInConsent);
+  const recipientName = recipient?.name ?? t("whatsapp.sampleRecipient");
+
+  const renderedPreview = useMemo(
+    () => renderWhatsAppMessage({ summary, template, recipientName, lng, periodDays, scopeLabel }),
+    [summary, template, recipientName, lng, periodDays, scopeLabel],
+  );
+
+  const handleSaveTest = async () => {
+    if (!recipient || !canManage || busy) return;
+    setBusy(true);
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          kind: "whatsapp",
+          payload: {
+            kind: "message",
+            recipientName: recipient.name,
+            recipientPhone: recipient.phone,
+            templateKind: template,
+            renderedText: renderedPreview,
+            status: "draft",
+            isSimulation: true,
+          },
+        },
+      });
+      await reloadRecords();
+      toast.success(t("whatsapp.testSaved"));
+    } catch {
+      toast.error(t("operations:failed"));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleAddContact = (e: React.FormEvent) => {
+  const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContactName.trim() || !newContactPhone.trim()) {
-      toast.error("Nome e telefone são obrigatórios");
+      toast.error(t("whatsapp.contactRequired"));
       return;
     }
-    const item: WhatsAppContact = {
-      id: `cnt-${org.id}-${Date.now()}`,
-      orgId: org.id,
-      name: newContactName.trim(),
-      phone: newContactPhone.trim(),
-      role: newContactRole,
-      locationIds: [],
-      optInConsent: true,
-      optInDate: new Date().toISOString(),
-      active: true,
-    };
-    const updated = saveWhatsAppContact(item);
-    setContacts(updated);
+    if (!consent || !canManage || busy) return;
+    setBusy(true);
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          kind: "whatsapp",
+          payload: {
+            kind: "contact",
+            name: newContactName.trim(),
+            phone: newContactPhone.trim(),
+            role: newContactRole,
+            consentGranted: true,
+            optInDate: new Date().toISOString(),
+            active: true,
+          },
+        },
+      });
+      await reloadRecords();
+    } catch {
+      toast.error(t("operations:failed"));
+      return;
+    } finally {
+      setBusy(false);
+    }
     setNewContactName("");
     setNewContactPhone("");
-    toast.success("Contato cadastrado com consentimento opt-in registrado.");
+    setConsent(false);
+    toast.success(t("whatsapp.contactSaved"));
   };
 
+  const ownerOnly = <p className="text-xs text-muted-foreground">{t("whatsapp.ownerOnly")}</p>;
+
   return (
-    <Card className="border-primary/40 bg-card/70 backdrop-blur shadow-sm overflow-hidden">
-      <CardHeader className="p-4 sm:p-5 border-b bg-card/90 pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <MessageSquare className="size-4" />
+    <Panel
+      title={t("whatsapp.title")}
+      subtitle={t("whatsapp.subtitle")}
+      action={
+        <Badge variant="warning" className="shrink-0">
+          {t("whatsapp.simulation")}
+        </Badge>
+      }
+      className="self-start"
+    >
+      <Tabs defaultValue="preview">
+        <TabsList aria-label={t("whatsapp.tabsLabel")} className="h-auto flex-wrap justify-start">
+          {TABS.map((tab) => (
+            <TabsTrigger key={tab} value={tab} className="text-xs">
+              {t(`whatsapp.tabs.${tab}`)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value="preview" className="mt-4 space-y-4">
+          <Segmented<PreviewTemplate>
+            label={t("whatsapp.templateLabel")}
+            value={template}
+            onChange={setTemplate}
+            options={PREVIEW_TEMPLATES.map((k) => ({
+              value: k,
+              label: t(`whatsapp.templates.${k}`),
+            }))}
+          />
+
+          <div className="rounded-xl border bg-muted/40 p-4">
+            <div className="whitespace-pre-wrap rounded-lg border bg-card p-3 text-xs leading-relaxed">
+              {renderedPreview}
             </div>
-            <div>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                Central WhatsApp Business
-                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]">
-                  Simulado · Conector Seguro Inativo
-                </Badge>
-              </CardTitle>
-              <CardDescription className="text-xs mt-0.5">
-                Disparo de resumos financeiros, CMV, alertas de compras e relatórios para a diretoria.
-              </CardDescription>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>{t("whatsapp.recipient", { name: recipientName })}</span>
+              <span>{t("whatsapp.notSent")}</span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-md">
-            <ShieldCheck className="size-3.5 text-primary" />
-            <span>LGPD & Opt-in Controlado</span>
-          </div>
-        </div>
 
-        {/* Abas da Central */}
-        <div className="flex flex-wrap gap-1 pt-3 border-t mt-3">
-          {[
-            { id: "preview", label: "Prévia WhatsApp", icon: Smartphone },
-            { id: "schedules", label: "Agendamentos", icon: Calendar },
-            { id: "contacts", label: "Contatos Autorizados", icon: Users },
-            { id: "logs", label: "Histórico de Envios", icon: History },
-            { id: "settings", label: "Configuração da API", icon: FileText },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <Icon className="size-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-4 sm:p-5 space-y-4 text-xs">
-        {/* ABA 1: PRÉVIA INTERATIVA WHATSAPP */}
-        {activeTab === "preview" && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { id: "financial_summary", label: "Fechamento DRE / Finanças" },
-                  { id: "cmv_audit", label: "CMV & Fichas Técnicas" },
-                  { id: "low_stock_alert", label: "Estoque Crítico" },
-                ].map((tpl) => (
-                  <Button
-                    key={tpl.id}
-                    size="sm"
-                    variant={selectedTemplate === tpl.id ? "default" : "outline"}
-                    onClick={() => setSelectedTemplate(tpl.id as WhatsAppTemplateKind)}
-                    className="h-7 text-xs px-2.5"
-                  >
-                    {tpl.label}
-                  </Button>
-                ))}
-              </div>
-
+          {canManage ? (
+            <div className="space-y-2">
               <Button
-                size="sm"
-                onClick={handleSimulateDispatch}
-                className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="w-full"
+                disabled={!recipient || busy}
+                aria-busy={busy}
+                onClick={() => void handleSaveTest()}
               >
-                <Send className="size-3" /> Disparar Teste Simulado
+                {t("whatsapp.saveTest")}
               </Button>
+              {!recipient && (
+                <p className="text-xs text-muted-foreground">{t("whatsapp.saveTestHint")}</p>
+              )}
             </div>
+          ) : (
+            ownerOnly
+          )}
+        </TabsContent>
 
-            {/* Balão Visual WhatsApp */}
-            <div className="rounded-xl border bg-emerald-950/10 dark:bg-emerald-950/30 p-4 max-w-lg mx-auto shadow-inner">
-              <div className="flex items-center gap-2 pb-2 mb-2 border-b border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
-                <Smartphone className="size-4" />
-                <span className="font-bold text-xs">WhatsApp Business · {org.name}</span>
-                <Badge variant="outline" className="ml-auto text-[9px] bg-background/60">
-                  Criptografia Ponta a Ponta
-                </Badge>
-              </div>
+        <TabsContent value="schedules" className="mt-4">
+          <EmptyState
+            icon={<CalendarClock className="size-5" strokeWidth={1.75} />}
+            title={t("whatsapp.schedulesEmptyTitle")}
+            body={t("whatsapp.schedulesEmptyBody")}
+          />
+        </TabsContent>
 
-              <div className="bg-card/90 rounded-lg p-3 text-foreground whitespace-pre-wrap font-mono text-[11px] leading-relaxed border shadow-xs">
-                {renderedPreview}
-              </div>
-
-              <div className="flex items-center justify-between pt-2 text-[10px] text-muted-foreground">
-                <span>Destinatário: {previewRecipient}</span>
-                <span className="flex items-center gap-1">
-                  <Check className="size-3 text-emerald-500" /> Entregue (Simulação)
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ABA 2: AGENDAMENTOS E FREQUÊNCIA */}
-        {activeTab === "schedules" && (
-          <div className="space-y-3">
-            <p className="text-muted-foreground">
-              Parametrização de disparos automáticos programados por periodicidade e público-alvo.
-            </p>
-            <div className="divide-y rounded-lg border bg-background/50">
-              {schedules.map((sch) => (
-                <div key={sch.id} className="p-3 flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground text-xs">{sch.title}</span>
-                      <Badge variant="secondary" className="text-[9px] uppercase">
-                        {sch.frequency}
+        <TabsContent value="contacts" className="mt-4 space-y-4">
+          {!canManage ? (
+            ownerOnly
+          ) : (
+            <>
+              {contacts.length === 0 ? (
+                <EmptyState
+                  icon={<Users className="size-5" strokeWidth={1.75} />}
+                  title={t("whatsapp.contactsEmptyTitle")}
+                  body={t("whatsapp.contactsEmptyBody")}
+                />
+              ) : (
+                <ul className="divide-y rounded-md border">
+                  {contacts.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-2 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{c.name}</p>
+                        <p className="tabular text-xs text-muted-foreground">
+                          {c.phone} · {t(`whatsapp.roles.${c.role}`)}
+                        </p>
+                      </div>
+                      <Badge variant="success" className="shrink-0">
+                        {t("whatsapp.consentRecorded")}
                       </Badge>
-                    </div>
-                    <p className="text-muted-foreground text-[11px] flex items-center gap-2">
-                      <Clock className="size-3" /> Horário: {sch.scheduledTime} · Modelo: {sch.templateKind}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={sch.enabled}
-                    onCheckedChange={(checked) => {
-                      const updated = saveWhatsAppSchedule({ ...sch, enabled: checked });
-                      setSchedules(updated);
-                      toast.info(`Agendamento "${sch.title}" ${checked ? "ativado" : "pausado"}`);
-                    }}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form onSubmit={handleAddContact} className="space-y-3 rounded-md border p-4">
+                <p className="text-sm font-medium">{t("whatsapp.addContact")}</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <Input
+                    aria-label={t("whatsapp.contactName")}
+                    placeholder={t("whatsapp.contactName")}
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                    className="h-9"
                   />
+                  <Input
+                    aria-label={t("whatsapp.contactPhone")}
+                    placeholder={t("whatsapp.contactPhone")}
+                    type="tel"
+                    value={newContactPhone}
+                    onChange={(e) => setNewContactPhone(e.target.value)}
+                    className="h-9"
+                  />
+                  <select
+                    aria-label={t("whatsapp.contactRole")}
+                    value={newContactRole}
+                    onChange={(e) => setNewContactRole(e.target.value as RecipientRole)}
+                    className="h-9 rounded-md border bg-background px-2 text-sm"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {t(`whatsapp.roles.${r}`)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ABA 3: CONTATOS AUTORIZADOS */}
-        {activeTab === "contacts" && (
-          <div className="space-y-4">
-            <div className="divide-y rounded-lg border bg-background/50">
-              {contacts.map((c) => (
-                <div key={c.id} className="p-3 flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-foreground flex items-center gap-1.5">
-                      {c.name}
-                      <Badge variant="outline" className="text-[9px]">{c.role}</Badge>
-                    </p>
-                    <p className="text-muted-foreground text-[11px] font-mono mt-0.5">{c.phone}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-[10px] text-emerald-600 bg-emerald-500/10 border-emerald-500/20">
-                      <CheckCircle2 className="size-3 mr-1" /> Consentimento Ativo
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Formulário de Adicionar Contato */}
-            <form onSubmit={handleAddContact} className="p-3 rounded-lg border bg-muted/20 space-y-2.5">
-              <p className="font-semibold text-foreground">Adicionar Novo Contato de Alerta</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <Input
-                  placeholder="Nome Completo"
-                  value={newContactName}
-                  onChange={(e) => setNewContactName(e.target.value)}
-                  className="h-8 text-xs"
-                />
-                <Input
-                  placeholder="+55 (11) 90000-0000"
-                  value={newContactPhone}
-                  onChange={(e) => setNewContactPhone(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-                <select
-                  value={newContactRole}
-                  onChange={(e) => setNewContactRole(e.target.value as RecipientRole)}
-                  className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
+                <label className="flex items-start gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                  />
+                  {t("operations:consent")}
+                </label>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={!consent || busy}
+                  aria-busy={busy}
                 >
-                  <option value="owner">Proprietário / Sócio</option>
-                  <option value="manager">Gerente Geral</option>
-                  <option value="financial_lead">Responsável Financeiro</option>
-                  <option value="chef">Chef / Cozinha</option>
-                </select>
-              </div>
-              <Button type="submit" size="sm" variant="outline" className="h-8 text-xs gap-1.5">
-                <Users className="size-3.5" /> Cadastrar Destinatário
-              </Button>
-            </form>
-          </div>
-        )}
+                  {t("whatsapp.addContact")}
+                </Button>
+              </form>
+            </>
+          )}
+        </TabsContent>
 
-        {/* ABA 4: HISTÓRICO DE ENVIOS */}
-        {activeTab === "logs" && (
-          <div className="space-y-3">
-            <div className="divide-y rounded-lg border bg-background/50 overflow-hidden">
+        <TabsContent value="history" className="mt-4">
+          {!canManage ? (
+            ownerOnly
+          ) : logs.length === 0 ? (
+            <EmptyState
+              icon={<History className="size-5" strokeWidth={1.75} />}
+              title={t("whatsapp.historyEmptyTitle")}
+              body={t("whatsapp.historyEmptyBody")}
+            />
+          ) : (
+            <ul className="divide-y rounded-md border">
               {logs.map((log) => (
-                <div key={log.id} className="p-3 flex items-start justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground">{log.recipientName}</span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] ${
-                          log.status === "sent"
-                            ? "text-emerald-600 border-emerald-500/30 bg-emerald-500/10"
-                            : "text-amber-600 border-amber-500/30 bg-amber-500/10"
-                        }`}
-                      >
-                        {log.status === "sent" ? "Enviado (Demo)" : "Agendado"}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground font-mono">{log.idempotencyKey}</span>
-                    </div>
-                    <p className="text-muted-foreground text-[11px]">
-                      {log.templateKind} · {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <li key={log.id} className="flex items-start justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{log.recipientName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t(`whatsapp.templates.${log.templateKind}`)} ·{" "}
+                      {fmtDateTime(log.createdAt, lng)}
                     </p>
                   </div>
-                </div>
+                  <Badge variant="neutral" className="shrink-0">
+                    {t("whatsapp.draft")}
+                  </Badge>
+                </li>
               ))}
-            </div>
+            </ul>
+          )}
+        </TabsContent>
+
+        <TabsContent value="connection" className="mt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <PlugZap className="size-4 text-muted-foreground" aria-hidden />
+            <Badge variant="warning">{t("whatsapp.connectionStatus")}</Badge>
           </div>
-        )}
-
-        {/* ABA 5: CONFIGURAÇÃO MODULAR DA API META */}
-        {activeTab === "settings" && (
-          <div className="space-y-3">
-            <div className="rounded-lg border bg-muted/30 p-3 text-muted-foreground flex items-start gap-2.5">
-              <ShieldAlert className="size-4 text-primary shrink-0 mt-0.5" />
-              <p className="leading-relaxed text-[11px]">
-                O Servora está preparado para acoplar o WhatsApp Business Cloud API oficial da Meta. Nenhum token secreto ou chave privada é exposta no navegador.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-medium text-foreground">Número Corporativo Exibido</label>
-                <Input
-                  value={settings.businessPhoneNumber}
-                  disabled
-                  className="h-8 text-xs font-mono bg-muted/40"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="font-medium text-foreground">WABA Account ID</label>
-                <Input
-                  value={settings.wabaId}
-                  disabled
-                  className="h-8 text-xs font-mono bg-muted/40"
-                />
-              </div>
-            </div>
-
-            <div className="pt-2 flex items-center justify-between text-muted-foreground text-[11px] border-t">
-              <span>Status do Webhook: Meta Webhook Validated</span>
-              <Badge variant="outline" className="text-[9px] text-emerald-600 border-emerald-500/30">
-                Ativo e Monitorado
-              </Badge>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <p className="text-sm text-muted-foreground">{t("whatsapp.connectionBody")}</p>
+          <p className="text-xs text-muted-foreground">{t("whatsapp.connectionPending")}</p>
+        </TabsContent>
+      </Tabs>
+    </Panel>
   );
 }

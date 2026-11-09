@@ -97,8 +97,22 @@ describe("Finance Service - DRE, Margins & Cash Accounting", () => {
 
   it("calculates product margins and generates warnings accurately", () => {
     const products = [
-      { id: "p1", name: "Burger", category: "Burgers", priceCents: 1500, recipeCostCents: 400, unitsSold: 10 },
-      { id: "p2", name: "Steak", category: "Mains", priceCents: 3000, recipeCostCents: 1500, unitsSold: 5 }, // 50% cogs -> alert
+      {
+        id: "p1",
+        name: "Burger",
+        category: "Burgers",
+        priceCents: 1500,
+        recipeCostCents: 400,
+        unitsSold: 10,
+      },
+      {
+        id: "p2",
+        name: "Steak",
+        category: "Mains",
+        priceCents: 3000,
+        recipeCostCents: 1500,
+        unitsSold: 5,
+      }, // 50% cogs -> alert
     ];
 
     const margins = calculateProductMargins(products);
@@ -117,9 +131,45 @@ describe("Finance Service - DRE, Margins & Cash Accounting", () => {
 
   it("aggregates category margins properly", () => {
     const metrics = [
-      { productId: "p1", productName: "Classic", category: "Burgers", unitsSold: 2, revenueCents: 2000, cogsCents: 600, grossProfitCents: 1400, grossMarginPct: 70, cogsPct: 30, hasHighCostAlert: false, hasLowMarginAlert: false },
-      { productId: "p2", productName: "Bacon Double", category: "Burgers", unitsSold: 1, revenueCents: 1500, cogsCents: 450, grossProfitCents: 1050, grossMarginPct: 70, cogsPct: 30, hasHighCostAlert: false, hasLowMarginAlert: false },
-      { productId: "p3", productName: "Shake", category: "Drinks", unitsSold: 1, revenueCents: 500, cogsCents: 100, grossProfitCents: 400, grossMarginPct: 80, cogsPct: 20, hasHighCostAlert: false, hasLowMarginAlert: false },
+      {
+        productId: "p1",
+        productName: "Classic",
+        category: "Burgers",
+        unitsSold: 2,
+        revenueCents: 2000,
+        cogsCents: 600,
+        grossProfitCents: 1400,
+        grossMarginPct: 70,
+        cogsPct: 30,
+        hasHighCostAlert: false,
+        hasLowMarginAlert: false,
+      },
+      {
+        productId: "p2",
+        productName: "Bacon Double",
+        category: "Burgers",
+        unitsSold: 1,
+        revenueCents: 1500,
+        cogsCents: 450,
+        grossProfitCents: 1050,
+        grossMarginPct: 70,
+        cogsPct: 30,
+        hasHighCostAlert: false,
+        hasLowMarginAlert: false,
+      },
+      {
+        productId: "p3",
+        productName: "Shake",
+        category: "Drinks",
+        unitsSold: 1,
+        revenueCents: 500,
+        cogsCents: 100,
+        grossProfitCents: 400,
+        grossMarginPct: 80,
+        cogsPct: 20,
+        hasHighCostAlert: false,
+        hasLowMarginAlert: false,
+      },
     ];
 
     const categories = calculateCategoryMargins(metrics);
@@ -143,11 +193,41 @@ describe("Finance Service - DRE, Margins & Cash Accounting", () => {
       id: "loc-1",
       name: "Store Downtown",
       orders: [
-        { id: "o1", totalCents: 1000000, discountCents: 0, taxCents: 50000, status: "delivered", isSimulated: false },
-        { id: "o2", totalCents: 500000, discountCents: 0, taxCents: 25000, status: "delivered", isSimulated: false },
+        {
+          id: "o1",
+          totalCents: 1000000,
+          discountCents: 0,
+          taxCents: 50000,
+          status: "delivered",
+          isSimulated: false,
+        },
+        {
+          id: "o2",
+          totalCents: 500000,
+          discountCents: 0,
+          taxCents: 25000,
+          status: "delivered",
+          isSimulated: false,
+        },
       ],
       expenses: [
-        { id: "e1", orgId: "test", locationId: "loc-1", category: "rent" as const, recurrence: "fixed" as const, status: "paid" as const, description: "Rent", amountCents: 300000, currency: "usd" as const, dueDate: "2025-05-01", competencyDate: "2025-05-01", responsiblePerson: "Mgr", isSimulation: false, createdAt: "2025-05-01", updatedAt: "2025-05-01" },
+        {
+          id: "e1",
+          orgId: "test",
+          locationId: "loc-1",
+          category: "rent" as const,
+          recurrence: "fixed" as const,
+          status: "paid" as const,
+          description: "Rent",
+          amountCents: 300000,
+          currency: "usd" as const,
+          dueDate: "2025-05-01",
+          competencyDate: "2025-05-01",
+          responsiblePerson: "Mgr",
+          isSimulation: false,
+          createdAt: "2025-05-01",
+          updatedAt: "2025-05-01",
+        },
       ],
     };
 
@@ -155,10 +235,33 @@ describe("Finance Service - DRE, Margins & Cash Accounting", () => {
       id: "loc-2",
       name: "Store Midtown",
       orders: [
-        { id: "o3", totalCents: 2000000, discountCents: 50000, taxCents: 100000, status: "delivered", isSimulated: false },
+        {
+          id: "o3",
+          totalCents: 2000000,
+          discountCents: 50000,
+          taxCents: 100000,
+          status: "delivered",
+          isSimulated: false,
+        },
       ],
       expenses: [
-        { id: "e2", orgId: "test", locationId: "loc-2", category: "utilities" as const, recurrence: "fixed" as const, status: "paid" as const, description: "Electric", amountCents: 200000, currency: "usd" as const, dueDate: "2025-05-01", competencyDate: "2025-05-01", responsiblePerson: "Mgr", isSimulation: false, createdAt: "2025-05-01", updatedAt: "2025-05-01" },
+        {
+          id: "e2",
+          orgId: "test",
+          locationId: "loc-2",
+          category: "utilities" as const,
+          recurrence: "fixed" as const,
+          status: "paid" as const,
+          description: "Electric",
+          amountCents: 200000,
+          currency: "usd" as const,
+          dueDate: "2025-05-01",
+          competencyDate: "2025-05-01",
+          responsiblePerson: "Mgr",
+          isSimulation: false,
+          createdAt: "2025-05-01",
+          updatedAt: "2025-05-01",
+        },
       ],
     };
 
@@ -210,7 +313,7 @@ describe("Finance Service - DRE, Margins & Cash Accounting", () => {
     expect(csv).toContain("Rent lease");
 
     const xml = exportReportToXmlSpreadsheet(report);
-    expect(xml).toContain("progid=\"Excel.Sheet\"");
+    expect(xml).toContain('progid="Excel.Sheet"');
     expect(xml).toContain("Test Bistro");
   });
 });

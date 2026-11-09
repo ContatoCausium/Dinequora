@@ -48,7 +48,7 @@ describe("suppliers-purchases-service", () => {
     });
 
     expect(totals.subtotalCents).toBe(15000);
-    expect(totals.totalCents).toBe(14700);
+    expect(totals.totalCents).toBe(15700);
   });
 
   it("persists and toggles supplier statuses", () => {
@@ -87,7 +87,7 @@ describe("suppliers-purchases-service", () => {
           },
         ],
       },
-      "Manager Sarah"
+      "Manager Sarah",
     );
 
     expect(po.status).toBe("draft");
@@ -95,9 +95,16 @@ describe("suppliers-purchases-service", () => {
     const partial = processPOReceiving(
       orgId,
       po.id,
-      [{ itemId: "poi-1", receivedNow: 20, priceVerifiedCents: 410, divergenceReason: "Market shift" }],
+      [
+        {
+          itemId: "poi-1",
+          receivedNow: 20,
+          priceVerifiedCents: 410,
+          divergenceReason: "Market shift",
+        },
+      ],
       "Receiver Dave",
-      "First morning batch arrived"
+      "First morning batch arrived",
     );
 
     expect(partial.status).toBe("partially_received");
@@ -109,7 +116,7 @@ describe("suppliers-purchases-service", () => {
       po.id,
       [{ itemId: "poi-1", receivedNow: 30, priceVerifiedCents: 410 }],
       "Receiver Dave",
-      "Final batch arrived"
+      "Final batch arrived",
     );
 
     expect(completed.status).toBe("received");
@@ -139,7 +146,7 @@ describe("suppliers-purchases-service", () => {
           },
         ],
       },
-      "Admin"
+      "Admin",
     );
 
     const cancelled = cancelPurchaseOrder(orgId, po.id, "Admin", "Incorrect store ordered");

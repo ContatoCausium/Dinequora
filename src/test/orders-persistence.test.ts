@@ -1,29 +1,50 @@
 import { describe, it, expect } from "vitest";
-import { calculateOrderSummary, calculateItemTotal, type Order, type SelectedModifier } from "../lib/orders-service";
+import {
+  calculateOrderSummary,
+  calculateItemTotal,
+  type Order,
+  type SelectedModifier,
+} from "../lib/orders-service";
 import { persistOrderToSupabase, fetchPersistedOrders } from "../lib/orders-persistence-service";
 
 describe("Orders persistence and multi-tenant integrity", () => {
   it("calculates modifiers total accurately for orders", () => {
     const mods: SelectedModifier[] = [
-      { groupId: "g1", groupName: "Cheese", optionId: "o1", optionName: "Cheddar", priceCents: 150 },
-      { groupId: "g2", groupName: "Bacon", optionId: "o2", optionName: "Crispy Bacon", priceCents: 200 },
+      {
+        groupId: "g1",
+        groupName: "Cheese",
+        optionId: "o1",
+        optionName: "Cheddar",
+        priceCents: 150,
+      },
+      {
+        groupId: "g2",
+        groupName: "Bacon",
+        optionId: "o2",
+        optionName: "Crispy Bacon",
+        priceCents: 200,
+      },
     ];
     const total = calculateItemTotal(1000, 2, mods);
     expect(total).toBe((1000 + 350) * 2);
   });
 
   it("computes order summary with tax correctly", () => {
-    const summary = calculateOrderSummary([
-      {
-        id: "oi-test",
-        productId: "p1",
-        productName: "Test Burger",
-        quantity: 1,
-        basePriceCents: 2000,
-        modifiers: [],
-        subtotalCents: 2000,
-      },
-    ], 10, 500);
+    const summary = calculateOrderSummary(
+      [
+        {
+          id: "oi-test",
+          productId: "p1",
+          productName: "Test Burger",
+          quantity: 1,
+          basePriceCents: 2000,
+          modifiers: [],
+          subtotalCents: 2000,
+        },
+      ],
+      10,
+      500,
+    );
 
     expect(summary.subtotalCents).toBe(2000);
     // (2000 - 500) = 1500; 10% tax = 150; total = 1650
@@ -44,7 +65,15 @@ describe("Orders persistence and multi-tenant integrity", () => {
         productName: "Combo Burger",
         quantity: 2,
         basePriceCents: 1550,
-        modifiers: [{ groupId: "g1", groupName: "Sauce", optionId: "o1", optionName: "Truffle", priceCents: 125 }],
+        modifiers: [
+          {
+            groupId: "g1",
+            groupName: "Sauce",
+            optionId: "o1",
+            optionName: "Truffle",
+            priceCents: 125,
+          },
+        ],
         subtotalCents: (1550 + 125) * 2, // 3350
       },
       {

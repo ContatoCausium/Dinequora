@@ -29,7 +29,9 @@
     "edit": "Edit",
     "delete": "Delete",
     "price": "Price",
-    "modifiers": "Modifiers: {{count}}"
+    "modifiers": "Modifiers: {{count}}",
+    "markUnavailable": "Mark unavailable",
+    "markAvailable": "Mark available"
   },
   "form": {
     "titleNew": "Create Product",

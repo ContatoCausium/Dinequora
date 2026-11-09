@@ -16,7 +16,9 @@
   "metrics": {
     "sales": "Vendas · 30d",
     "orders": "Pedidos · 30d",
-    "growth": "Crescimento"
+    "growth": "Crescimento",
+    "unavailable": "Indisponível",
+    "truncated": "Apenas os 5.000 pedidos mais recentes foram considerados."
   },
   "timezone": "Fuso horário",
   "hours": "Horário",
@@ -85,5 +87,7 @@
     "invalid_hours": "Confira os horários destacados.",
     "address_required": "Adicione um endereço antes de ativar esta unidade.",
     "unknown": "Algo deu errado. Tente novamente."
-  }
+  },
+  "recordedNote": "As vendas são valores registrados: líquidas de impostos, considerando apenas pedidos pagos e não cancelados dos últimos 30 dias. O crescimento compara com os 30 dias anteriores.",
+  "setupNote": "Unidades marcadas como \"Precisa de configuração\" são provisórias até o proprietário informar nome e endereço reais."
 }

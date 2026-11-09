@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { canAddStore, canManageMember, countBillableStores, invitableRoles, validateHours } from "@/lib/access-rules";
+import {
+  canAddStore,
+  canManageMember,
+  countBillableStores,
+  invitableRoles,
+  validateHours,
+} from "@/lib/access-rules";
 
 describe("store limits", () => {
   it("inactive stores do not count toward the plan limit", () => {
@@ -21,7 +27,9 @@ describe("team scope", () => {
     expect(canManageMember(mgr, { role: "manager", locationIds: ["a"] })).toBe(false);
   });
   it("staff manage nobody and cannot invite", () => {
-    expect(canManageMember({ role: "staff", locationIds: ["a"] }, { role: "staff", locationIds: ["a"] })).toBe(false);
+    expect(
+      canManageMember({ role: "staff", locationIds: ["a"] }, { role: "staff", locationIds: ["a"] }),
+    ).toBe(false);
     expect(invitableRoles("staff")).toEqual([]);
   });
   it("managers can only invite staff", () => {
@@ -32,6 +40,11 @@ describe("team scope", () => {
 describe("opening hours", () => {
   it("flags malformed or zero-length days and accepts overnight", () => {
     expect(validateHours({ mon: { open: "11:00", close: "02:00" }, tue: null })).toEqual([]);
-    expect(validateHours({ wed: { open: "25:00", close: "10:00" }, thu: { open: "09:00", close: "09:00" } })).toEqual(["wed", "thu"]);
+    expect(
+      validateHours({
+        wed: { open: "25:00", close: "10:00" },
+        thu: { open: "09:00", close: "09:00" },
+      }),
+    ).toEqual(["wed", "thu"]);
   });
 });

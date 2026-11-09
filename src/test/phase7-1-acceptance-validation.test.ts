@@ -12,19 +12,20 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
   it("validates tenant isolation guard before calling database RPC", () => {
     const candidateOrgName = "marao burgers";
     const isForbidden = forbiddenOrgPatterns.some((pattern) =>
-      candidateOrgName.toLowerCase().includes(pattern)
+      candidateOrgName.toLowerCase().includes(pattern),
     );
     expect(isForbidden).toBe(true);
   });
 
   it("inspects validate_pos_e2e_acceptance_flow or fallback atomic flow on active Supabase", async () => {
-    const envUrl = process.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
-    const envKey = process.env.VITE_SUPABASE_ANON_KEY || "placeholder-key";
+    const envUrl = process.env["VITE_SUPABASE_URL"] || "https://placeholder.supabase.co";
+    const envKey = process.env["VITE_SUPABASE_ANON_KEY"] || "placeholder-key";
     const isLive = !envUrl.includes("placeholder") && !envKey.includes("placeholder");
 
     if (!isLive) {
-      // Report verified local inspection
-      expect(typeof supabase.rpc).toBe("function");
+      // No live credentials (CI, fresh clones): nothing to inspect. Do not touch the client here:
+      // building it requires VITE_SUPABASE_* from a developer's local .env, which CI does not have.
+      expect(isLive).toBe(false);
       return;
     }
 
@@ -42,8 +43,8 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
       return;
     }
 
-    const isolatedOrg = testOrgs.find((o) =>
-      !forbiddenOrgPatterns.some((p) => o.name.toLowerCase().includes(p))
+    const isolatedOrg = testOrgs.find(
+      (o) => !forbiddenOrgPatterns.some((p) => o.name.toLowerCase().includes(p)),
     );
 
     if (!isolatedOrg) {
@@ -67,14 +68,29 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
     // Explicit validation that target is strictly a demo/test organization
     expect(isolatedOrg.is_demo).toBe(true);
     // Confirm safe test environment with zero customer data collision
-    expect(forbiddenOrgPatterns.some(p => isolatedOrg.name.toLowerCase().includes(p))).toBe(false);
-    const { data: flowResult, error: flowErr } = await (supabase.rpc as any)(
-      "validate_pos_e2e_acceptance_flow",
-      {
-        _org_id: isolatedOrg.id,
-        _location_id: isolatedLocationId,
-      }
+    expect(forbiddenOrgPatterns.some((p) => isolatedOrg.name.toLowerCase().includes(p))).toBe(
+      false,
     );
+    interface FlowValidationResult {
+      idempotence_verified?: boolean;
+      stock_deduction_verified?: boolean;
+      no_recipe_handled_safely?: boolean;
+      consumption_logs_cleared?: boolean;
+      stock_reversal_verified?: boolean;
+      revenue_recorded_and_reversed?: boolean;
+      dre_reflected_correctly?: boolean;
+      phase_7_1_accepted?: boolean;
+    }
+
+    const { data: flowResult, error: flowErr } = await (
+      supabase.rpc as unknown as (...args: unknown[]) => Promise<{
+        data: FlowValidationResult | null;
+        error: { message: string } | null;
+      }>
+    )("validate_pos_e2e_acceptance_flow", {
+      _org_id: isolatedOrg.id,
+      _location_id: isolatedLocationId,
+    });
 
     if (flowResult) {
       expect(flowResult.idempotence_verified).toBe(true);

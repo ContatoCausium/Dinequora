@@ -20,7 +20,11 @@
     "controlCenter": "Control Center",
     "more": "More",
     "platform": "Platform",
-    "billing": "Billing"
+    "billing": "Billing",
+    "reports": "Reports",
+    "groupOperations": "Operations",
+    "groupManagement": "Management",
+    "groupAccount": "Account"
   },
   "a11y": {
     "mainNav": "Main navigation",
@@ -28,7 +32,8 @@
     "skipToContent": "Skip to content",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "close": "Close"
   },
   "shell": {
     "switchOrg": "Switch organization",
@@ -51,7 +56,8 @@
     "searchPlaceholder": "Search pages and locations…",
     "noResults": "No results found.",
     "poweredBy": "Powered by Servora",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "notificationsEmpty": "No notifications right now."
   },
   "plans": {
     "starter": "Starter",
@@ -81,5 +87,11 @@
     "notFoundBody": "This page does not exist or has moved.",
     "home": "Go home",
     "controlDenied": "The Control Center is only available to platform administrators."
+  },
+  "access": {
+    "noModuleTitle": "You do not have access to this module",
+    "noModuleBody": "Your permissions in this organization do not include this area. Ask the owner if you need it.",
+    "backHome": "Back to overview",
+    "denied": "You do not have permission for this action."
   }
 }

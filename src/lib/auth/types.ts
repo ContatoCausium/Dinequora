@@ -25,7 +25,10 @@ export type AuthErrorCode =
   | "unknown";
 
 export class AuthError extends Error {
-  constructor(public code: AuthErrorCode, message?: string) {
+  constructor(
+    public code: AuthErrorCode,
+    message?: string,
+  ) {
     super(message ?? code);
   }
 }
@@ -37,7 +40,13 @@ export interface AuthService {
   onChange(cb: (event: AuthEvent) => void): () => void;
   signIn(email: string, password: string): Promise<void>;
   /** Returns true when the user must confirm the email before signing in. */
-  signUp(input: { email: string; password: string; fullName: string; language: string; redirectPath?: string }): Promise<{ needsVerification: boolean }>;
+  signUp(input: {
+    email: string;
+    password: string;
+    fullName: string;
+    language: string;
+    redirectPath?: string;
+  }): Promise<{ needsVerification: boolean }>;
   signInWithProvider(provider: SocialProvider): Promise<void>;
   resendVerification(email: string): Promise<void>;
   sendPasswordReset(email: string): Promise<void>;

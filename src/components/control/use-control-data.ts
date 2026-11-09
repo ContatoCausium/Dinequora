@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { listOrgInsights, listPlans, listPlatformAudit, type OrgInsight, type PlanDef, type PlatformAudit } from "@/lib/admin-service";
+import {
+  listOrgInsights,
+  listPlans,
+  listPlatformAudit,
+  type OrgInsight,
+  type PlanDef,
+  type PlatformAudit,
+} from "@/lib/admin-service";
 
 import { requestErrorKind, type RequestErrorKind } from "@/lib/request-error";
 
@@ -11,13 +18,24 @@ export function useControlData(auditLimit = 200) {
   const [error, setError] = useState<RequestErrorKind | null>(null);
   const [loading, setLoading] = useState(true);
   const reload = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const [orgs, plans, audit] = await Promise.all([listOrgInsights(), listPlans(), listPlatformAudit(auditLimit)]);
+      const [orgs, plans, audit] = await Promise.all([
+        listOrgInsights(),
+        listPlans(),
+        listPlatformAudit(auditLimit),
+      ]);
       setData({ orgs, plans, audit });
-    } catch (e) { setData(null); setError(requestErrorKind(e)); }
-    finally { setLoading(false); }
+    } catch (e) {
+      setData(null);
+      setError(requestErrorKind(e));
+    } finally {
+      setLoading(false);
+    }
   }, [auditLimit]);
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
   return { data, error, loading, reload };
 }

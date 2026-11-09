@@ -1,0 +1,16 @@
+# Line endings: the repository stores LF; checkouts get LF on every OS. This keeps drizzle
+# migration hashes identical across machines (drizzle hashes the file as read from disk).
+* text=auto eol=lf
+
+# Binary assets: never convert.
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary
+*.dump binary

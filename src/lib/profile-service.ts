@@ -7,7 +7,11 @@ const isLang = (v: unknown): v is LanguageCode => LANGUAGES.some((l) => l.code =
 /** Apply the signed-in user's saved language (falls back to device preference). Call from useEffect. */
 export async function applyUserLanguage(userId: string) {
   setLanguage(resolveClientLanguage());
-  const { data } = await supabase.from("profiles").select("preferred_language").eq("id", userId).maybeSingle();
+  const { data } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", userId)
+    .maybeSingle();
   if (isLang(data?.preferred_language)) setLanguage(data.preferred_language);
 }
 

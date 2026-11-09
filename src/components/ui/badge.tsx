@@ -14,6 +14,14 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
+        // Soft status tones (semantic tokens only; ink is mixed toward foreground for AA contrast).
+        success:
+          "border-success/25 bg-success/12 font-medium text-[color-mix(in_oklab,var(--success)_70%,var(--foreground))]",
+        warning:
+          "border-warning/35 bg-warning/15 font-medium text-[color-mix(in_oklab,var(--warning)_45%,var(--foreground))]",
+        danger:
+          "border-destructive/25 bg-destructive/10 font-medium text-[color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
+        neutral: "border-border bg-muted font-medium text-muted-foreground",
       },
     },
     defaultVariants: {

@@ -33,7 +33,10 @@ describe("Authentication Provider Validation (Supabase Integration)", () => {
   });
 
   it("uses real supabase.auth.signInWithPassword when logging in", async () => {
-    (supabase.auth.signInWithPassword as any).mockResolvedValueOnce({ data: { session: {} }, error: null });
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValueOnce({
+      data: { session: {} },
+      error: null,
+    } as never);
     await supabaseAuth.signIn("owner@test.com", "password123");
     expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: "owner@test.com",
@@ -42,10 +45,10 @@ describe("Authentication Provider Validation (Supabase Integration)", () => {
   });
 
   it("uses real supabase.auth.signUp when creating account with metadata and redirect", async () => {
-    (supabase.auth.signUp as any).mockResolvedValueOnce({
+    vi.mocked(supabase.auth.signUp).mockResolvedValueOnce({
       data: { user: { id: "u-123", identities: [{ id: "id-1" }] }, session: {} },
       error: null,
-    });
+    } as never);
 
     const res = await supabaseAuth.signUp({
       email: "newuser@test.com",
@@ -61,7 +64,7 @@ describe("Authentication Provider Validation (Supabase Integration)", () => {
         options: expect.objectContaining({
           data: { full_name: "Chef John", preferred_language: "pt-BR" },
         }),
-      })
+      }),
     );
     expect(res.needsVerification).toBe(false);
   });
@@ -76,6 +79,7 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
 
   it("isolates items by tenant orgId", () => {
     saveInventoryItem("org_tenant_A", {
+      orgId: "org_tenant_A",
       locationId: "loc_A1",
       name: "Organic Flour",
       category: "bakery",
@@ -89,6 +93,7 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
     });
 
     saveInventoryItem("org_tenant_B", {
+      orgId: "org_tenant_B",
       locationId: "loc_B1",
       name: "Brioche Buns",
       category: "bakery",
@@ -108,6 +113,7 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
 
   it("filters inventory correctly by locationId for multi-unit restaurants", () => {
     const item1 = saveInventoryItem("org_multi", {
+      orgId: "org_multi",
       locationId: "downtown",
       name: "Tomatoes",
       category: "produce",
@@ -121,6 +127,7 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
     });
 
     saveInventoryItem("org_multi", {
+      orgId: "org_multi",
       locationId: "uptown",
       name: "Lettuce",
       category: "produce",
@@ -145,7 +152,9 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
     const futureExp = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     expect(isExpiringSoon(futureExp, 7)).toBe(true);
 
-    const farFutureExp = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const farFutureExp = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
     expect(isExpiringSoon(farFutureExp, 7)).toBe(false);
 
     const mockItems: InventoryItem[] = [
@@ -205,6 +214,7 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
 
   it("safely toggles and deletes inventory items", () => {
     const item = saveInventoryItem("org_test", {
+      orgId: "org_test",
       locationId: "loc_1",
       name: "Napkins",
       category: "packaging",
@@ -217,11 +227,11 @@ describe("Inventory Multi-Unit & Safety Isolation Validation", () => {
       active: true,
     });
 
-    toggleInventoryItemActive(item.id, false);
+    toggleInventoryItemActive(item.id, false, "org_test");
     let list = listInventory("org_test", "loc_1");
     expect(list.find((i) => i.id === item.id)?.active).toBe(false);
 
-    deleteInventoryItem(item.id);
+    deleteInventoryItem(item.id, "org_test");
     list = listInventory("org_test", "loc_1");
     expect(list.some((i) => i.id === item.id)).toBe(false);
   });

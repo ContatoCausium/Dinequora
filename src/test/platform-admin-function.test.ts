@@ -12,14 +12,22 @@ vi.mock("@/integrations/supabase/client", () => ({
 describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
   it("returns platform admins matching expected fields (user_id, email, role)", async () => {
     const mockData = [
-      { user_id: "00000000-0000-0000-0000-000000000001", email: "admin@servora.test", role: "platform_admin" },
-      { user_id: "00000000-0000-0000-0000-000000000002", email: "support@servora.test", role: "support" },
+      {
+        user_id: "00000000-0000-0000-0000-000000000001",
+        email: "admin@servora.test",
+        role: "platform_admin",
+      },
+      {
+        user_id: "00000000-0000-0000-0000-000000000002",
+        email: "support@servora.test",
+        role: "support",
+      },
     ];
 
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: mockData,
       error: null,
-    } as any);
+    } as never);
 
     const result = await listPlatformAdmins();
     expect(result).toHaveLength(2);
@@ -34,14 +42,22 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
   it("prevents revoking the sole remaining platform_admin", async () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: [
-        { user_id: "00000000-0000-0000-0000-000000000001", email: "lastadmin@servora.test", role: "platform_admin" },
-        { user_id: "00000000-0000-0000-0000-000000000002", email: "support@servora.test", role: "support" },
+        {
+          user_id: "00000000-0000-0000-0000-000000000001",
+          email: "lastadmin@servora.test",
+          role: "platform_admin",
+        },
+        {
+          user_id: "00000000-0000-0000-0000-000000000002",
+          email: "support@servora.test",
+          role: "support",
+        },
       ],
       error: null,
-    } as any);
+    } as never);
 
     await expect(
-      setPlatformRole("lastadmin@servora.test", "platform_admin", false, "Cleanup temporary admin")
+      setPlatformRole("lastadmin@servora.test", "platform_admin", false, "Cleanup temporary admin"),
     ).rejects.toThrow("last_admin");
   });
 
@@ -50,45 +66,53 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
       // 1st call for listing admins:
       .mockResolvedValueOnce({
         data: [
-          { user_id: "00000000-0000-0000-0000-000000000001", email: "admin1@servora.test", role: "platform_admin" },
-          { user_id: "00000000-0000-0000-0000-000000000002", email: "admin2@servora.test", role: "platform_admin" },
+          {
+            user_id: "00000000-0000-0000-0000-000000000001",
+            email: "admin1@servora.test",
+            role: "platform_admin",
+          },
+          {
+            user_id: "00000000-0000-0000-0000-000000000002",
+            email: "admin2@servora.test",
+            role: "platform_admin",
+          },
         ],
         error: null,
-      } as any)
+      } as never)
       // 2nd call executing rpc admin_set_platform_role:
       .mockResolvedValueOnce({
         data: null,
         error: null,
-      } as any);
+      } as never);
 
     await expect(
-      setPlatformRole("admin2@servora.test", "platform_admin", false, "Deprovisioning account")
+      setPlatformRole("admin2@servora.test", "platform_admin", false, "Deprovisioning account"),
     ).resolves.not.toThrow();
   });
 
   it("denies non-admin execution when RPC returns forbidden", async () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: null,
-      error: { message: "forbidden" },
-    } as any);
+      error: { message: "forbidden", details: "", hint: "", code: "403" },
+    } as never);
 
     await expect(listPlatformAdmins()).rejects.toThrow("forbidden");
   });
 
   it("validates that setPlatformRole enforces reason minimum length", async () => {
-    await expect(
-      setPlatformRole("test@servora.test", "support", true, "  ")
-    ).rejects.toThrow("reason_required");
+    await expect(setPlatformRole("test@servora.test", "support", true, "  ")).rejects.toThrow(
+      "reason_required",
+    );
   });
 
   it("allows support role assignment with valid justification", async () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: null,
       error: null,
-    } as any);
+    } as never);
 
     await expect(
-      setPlatformRole("support@servora.test", "support", true, "Support operations onboard")
+      setPlatformRole("support@servora.test", "support", true, "Support operations onboard"),
     ).resolves.not.toThrow();
   });
 });

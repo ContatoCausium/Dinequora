@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeIntelligenceSummary, executeAgentQuery, classifyQueryTopic } from "@/lib/intelligence-service";
+import {
+  computeIntelligenceSummary,
+  executeAgentQuery,
+  classifyQueryTopic,
+} from "@/lib/intelligence-service";
 
 describe("Servora Intelligence Service (Deterministic Logic)", () => {
   const orgId = "org-demo-1";
@@ -41,6 +45,10 @@ describe("Servora Intelligence Service (Deterministic Logic)", () => {
     expect(classifyQueryTopic("quanto gastei em compras com fornecedores?")).toBe("suppliers");
     expect(classifyQueryTopic("qual foi o descarte e perda?")).toBe("waste");
     expect(classifyQueryTopic("qual faturamento bruto das vendas?")).toBe("sales");
+    expect(classifyQueryTopic("What is my current food cost?")).toBe("cmv");
+    expect(classifyQueryTopic("How much revenue did we record?")).toBe("sales");
+    expect(classifyQueryTopic("How many purchase orders are open?")).toBe("suppliers");
+    expect(classifyQueryTopic("Which items are at risk of running out?")).toBe("inventory");
   });
 
   it("executes agent queries with deterministic routing and full executive breakdown", () => {
@@ -52,11 +60,23 @@ describe("Servora Intelligence Service (Deterministic Logic)", () => {
     expect(responseCmv.report.limitations.length).toBeGreaterThan(0);
     expect(responseCmv.report.calculationExplanation).toBeTruthy();
 
-    const responseWaste = executeAgentQuery("Quanto foi perdido com desperdício e descarte?", orgId, "all", 30);
+    const responseWaste = executeAgentQuery(
+      "Quanto foi perdido com desperdício e descarte?",
+      orgId,
+      "all",
+      30,
+    );
     expect(responseWaste.topic).toBe("waste");
-    expect(responseWaste.report.numericEvidence.some(e => e.label.includes("Perda Estimada"))).toBe(true);
+    expect(
+      responseWaste.report.numericEvidence.some((e) => e.label.includes("Perda Estimada")),
+    ).toBe(true);
 
-    const responseSuppliers = executeAgentQuery("Como estão os fornecedores e ordens de compra?", orgId, "all", 30);
+    const responseSuppliers = executeAgentQuery(
+      "Como estão os fornecedores e ordens de compra?",
+      orgId,
+      "all",
+      30,
+    );
     expect(responseSuppliers.topic).toBe("suppliers");
   });
 });

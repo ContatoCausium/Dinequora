@@ -1,0 +1,67 @@
+{
+  "title": "Relatórios",
+  "subtitle": "Vendas, produtos e resultado do período — calculados a partir dos pedidos registrados e do livro-caixa.",
+  "period": "Período",
+  "periods": {
+    "7d": "7 dias",
+    "30d": "30 dias",
+    "90d": "90 dias"
+  },
+  "exportCsv": "Exportar CSV",
+  "loadFailed": "Não foi possível carregar os relatórios.",
+  "retry": "Tentar novamente",
+  "kpi": {
+    "netSales": "Vendas líquidas",
+    "netSalesHint": "Receita do livro-caixa, sem impostos e estornos",
+    "orders": "Pedidos",
+    "ordersHint": "Sem cancelamentos",
+    "avgTicket": "Ticket médio",
+    "cogsRate": "CMV",
+    "cogsRateHint": "Sobre as vendas líquidas",
+    "grossMargin": "Margem bruta",
+    "noRevenue": "Sem receita no período"
+  },
+  "daily": {
+    "title": "Vendas líquidas por dia",
+    "subtitle": "Pedidos pagos e não cancelados",
+    "singleDay": "Todas as vendas registradas até agora estão em um único dia — a tendência aparece conforme novos dias forem registrados.",
+    "empty": "Nenhuma venda neste período."
+  },
+  "byStore": {
+    "title": "Por loja",
+    "empty": "Nenhuma venda neste período."
+  },
+  "byChannel": {
+    "title": "Por canal",
+    "empty": "Nenhuma venda neste período."
+  },
+  "products": {
+    "title": "Produtos mais vendidos",
+    "subtitle": "Ordenados por vendas (subtotal do item, antes de descontos do pedido e impostos)",
+    "product": "Produto",
+    "qty": "Qtd. vendida",
+    "sales": "Vendas",
+    "share": "Participação",
+    "empty": "Nenhum produto vendido neste período."
+  },
+  "pnl": {
+    "title": "Resultado do período",
+    "subtitle": "Despesas pela data de competência",
+    "revenue": "Vendas líquidas",
+    "cogs": "Custo das mercadorias vendidas (fichas técnicas)",
+    "gross": "Lucro bruto",
+    "expenses": "Despesas operacionais",
+    "result": "Resultado",
+    "cogsNote": "Só itens com ficha técnica têm custo; produtos sem ficha entram com custo zero.",
+    "purchasesNote": "Compras de estoque não são despesas aqui — o custo entra pelo CMV quando os itens são vendidos."
+  },
+  "csv": {
+    "day": "Dia",
+    "store": "Loja",
+    "channel": "Canal",
+    "product": "Produto",
+    "qty": "Quantidade",
+    "sales": "Vendas líquidas",
+    "orders": "Pedidos"
+  }
+}

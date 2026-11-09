@@ -1,6 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { calculateDreStatement, calculateProductMargins, seedDefaultExpenses, type Expense } from "@/lib/finance-service";
-import { convertUnits, calculateIngredientCost, computeRecipeTotals, type RecipeIngredient } from "@/lib/recipes-service";
+import {
+  calculateDreStatement,
+  calculateProductMargins,
+  seedDefaultExpenses,
+  type Expense,
+} from "@/lib/finance-service";
+import {
+  convertUnits,
+  calculateIngredientCost,
+  computeRecipeTotals,
+  type RecipeIngredient,
+} from "@/lib/recipes-service";
 import { calculateChange, applyDiscount, getPOSSession, addItemToCart } from "@/lib/pos-service";
 import { recordInventoryMovement, listInventoryMovements } from "@/lib/inventory-movements-service";
 import type { InventoryItem } from "@/lib/inventory-service";
@@ -133,7 +143,7 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
       taxesCents,
       recipeCogsCents,
       expenses,
-      0
+      0,
     );
 
     expect(dre.grossRevenueCents).toBe(1000000);
@@ -158,7 +168,7 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
   it("differentiates persisted POS sale from unpersisted local cart when cancelling", () => {
     const session = getPOSSession("org-test", "loc-1", "Cashier 1");
     // Cart has not been persisted
-    expect((session as any).persistedOrderId).toBeUndefined();
+    expect(Reflect.get(session, "persistedOrderId")).toBeUndefined();
 
     // Simulated persisted state receipt
     const persistedReceipt = {
@@ -271,7 +281,9 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
 
   it("blocks empty cart sale persistence gracefully before calling RPC", async () => {
     const { persistFinalizedPOSSaleAtomic } = await import("@/lib/orders-persistence-service");
-    const res = await persistFinalizedPOSSaleAtomic({ cart: [], orgId: "test-org", locationId: "test-loc" });
+    const res = await persistFinalizedPOSSaleAtomic(
+      getPOSSession("test-org", "test-loc", "Cashier"),
+    );
     expect(res.success).toBe(false);
     expect(res.error).toBe("O carrinho está vazio.");
   });
@@ -283,11 +295,11 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
 
   it("validates that POS checkout transaction enforces atomic server confirmation", async () => {
     const { persistFinalizedPOSSaleAtomic } = await import("@/lib/orders-persistence-service");
-    const mockSessionWithoutItems = {
-      orgId: "org-acceptance-1",
-      locationId: "loc-acceptance-1",
-      cart: [],
-    };
+    const mockSessionWithoutItems = getPOSSession(
+      "org-acceptance-1",
+      "loc-acceptance-1",
+      "Cashier",
+    );
     const result = await persistFinalizedPOSSaleAtomic(mockSessionWithoutItems);
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
