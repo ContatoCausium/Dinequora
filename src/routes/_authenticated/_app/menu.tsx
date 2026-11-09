@@ -13,6 +13,7 @@ import {
   Search,
   Eye,
   Sparkles,
+  Copy,
   Clock,
   Trash2,
   Edit3,
@@ -52,6 +53,8 @@ import {
   type ModifierOption,
 } from "@/lib/menu-service";
 import { DemoBadge } from "@/components/app/brand-mark";
+import { cn } from "@/lib/utils";
+import { fmtMoneyCents } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/_app/menu")({
   head: () => ({
@@ -74,9 +77,12 @@ export const Route = createFileRoute("/_authenticated/_app/menu")({
 });
 
 function MenuPage() {
-  const { t } = useTranslation("menu");
-  const { org, locationId, role } = useWorkspace();
-  const canManage = role !== "staff";
+  const { t, i18n } = useTranslation("menu");
+  const { org, locationId, role, can, canAny } = useWorkspace();
+  const canManage = canAny(["menu.create", "menu.edit", "menu.delete"]);
+  const canCreate = can("menu.create");
+  const canEdit = can("menu.edit");
+  const canDelete = can("menu.delete");
   // Owners are org-wide; managers/staff are limited to their authorized stores.
   const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
   async function guarded(action: () => void | Promise<void>) {
@@ -415,53 +421,52 @@ function MenuPage() {
           )}
         </Panel>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredItems.map((item) => {
             const cat = categories.find((c) => c.id === item.category);
             return (
-              <div
+              <article
                 key={item.id}
-                className="group flex flex-col justify-between overflow-hidden rounded-xl border bg-card p-4 transition-all hover:shadow-md"
+                className={cn(
+                  "surface group flex flex-col overflow-hidden transition-shadow hover:shadow-pop",
+                  !item.active && "opacity-75",
+                )}
               >
-                <div className="space-y-3">
-                  <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
-                    {item.imageUrl ? (
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-muted-foreground/40">
-                        <ChefHat className="size-10" />
-                      </div>
-                    )}
-                    <div className="absolute right-2 top-2 flex gap-1">
-                      <Badge
-                        variant={item.active ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {item.active ? t("item.available") : t("item.unavailable")}
-                      </Badge>
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
+                  ) : (
+                    <div className="flex size-full items-center justify-center text-muted-foreground/40">
+                      <ChefHat className="size-8" strokeWidth={1.5} />
                     </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold leading-tight">{item.name}</h3>
-                      <span className="tabular text-base font-bold text-primary">
-                        ${(item.priceCents / 100).toFixed(2)}
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {item.description}
-                    </p>
-                  </div>
+                  )}
+                  <Badge
+                    variant={item.active ? "success" : "neutral"}
+                    className="absolute left-3 top-3 bg-card/90 backdrop-blur-sm"
+                  >
+                    {item.active ? t("item.available") : t("item.unavailable")}
+                  </Badge>
                 </div>
 
-                <div className="mt-4 border-t pt-3">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="flex flex-1 flex-col p-4">
+                  {cat && <p className="eyebrow mb-1 truncate">{cat.name}</p>}
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-semibold leading-snug">{item.name}</h3>
+                    <span className="tabular shrink-0 font-semibold">
+                      {fmtMoneyCents(item.priceCents, i18n.language)}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {item.description}
+                  </p>
+
+                  <div className="mt-auto flex items-center gap-3 pt-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <Clock className="size-3.5" />
                       {t("item.prepTime", { min: item.prepTimeMinutes })}
@@ -474,55 +479,55 @@ function MenuPage() {
                     </span>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-1.5">
-                    {canManage ? (
+                  {canManage && (
+                    <div className="mt-3 flex items-center justify-between gap-1.5 border-t pt-3">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs px-2"
+                        disabled={!canEdit}
                         onClick={() => toggleItemActive(item)}
                       >
-                        {item.active ? t("item.unavailable") : t("item.available")}
+                        {item.active ? t("item.markUnavailable") : t("item.markAvailable")}
                       </Button>
-                    ) : (
-                      <span />
-                    )}
-                    <div className="flex items-center gap-1">
-                      {canManage && (
+                      <div className="flex items-center gap-0.5">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="size-8"
+                          aria-label={t("item.duplicate")}
                           title={t("item.duplicate")}
+                          disabled={!canCreate}
                           onClick={() => handleDuplicateItem(item.id)}
                         >
-                          <Sparkles className="size-4" />
+                          <Copy className="size-4" />
                         </Button>
-                      )}
-                      {canManage && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="size-8"
+                          aria-label={t("item.edit")}
+                          title={t("item.edit")}
+                          disabled={!canEdit}
                           onClick={() => openEditItem(item)}
                         >
                           <Edit3 className="size-4" />
                         </Button>
-                      )}
-                      {canManage && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="size-8 text-destructive hover:bg-destructive/10"
+                          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={t("item.delete")}
+                          title={t("item.delete")}
+                          disabled={!canDelete}
                           onClick={() => setDeleteConfirmId(item.id)}
                         >
                           <Trash2 className="size-4" />
                         </Button>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
@@ -787,7 +792,7 @@ function MenuPage() {
                             </p>
                           </div>
                           <p className="font-bold text-sm text-primary mt-2">
-                            ${(item.priceCents / 100).toFixed(2)}
+                            {fmtMoneyCents(item.priceCents, i18n.language)}
                           </p>
                         </div>
                       </div>

@@ -29,7 +29,9 @@
     "edit": "Editar",
     "delete": "Excluir",
     "price": "Preço",
-    "modifiers": "Modificadores: {{count}}"
+    "modifiers": "Modificadores: {{count}}",
+    "markUnavailable": "Marcar indisponível",
+    "markAvailable": "Marcar disponível"
   },
   "form": {
     "titleNew": "Criar Produto",

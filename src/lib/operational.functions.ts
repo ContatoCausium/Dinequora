@@ -114,7 +114,15 @@ export const saveOperationalMenu = createServerFn({ method: "POST" })
       _kind: data.kind,
       _payload: payload,
     });
-    if (error || !id) throw new Error(error?.message ?? "menu_save_failed");
+    if (error || !id)
+      throw await refused(
+        context.supabase,
+        error,
+        s.org.id,
+        `menu.${data.kind}`,
+        undefined,
+        "menu_save_failed",
+      );
     return { id };
   });
 
@@ -134,7 +142,7 @@ export const archiveOperationalMenu = createServerFn({ method: "POST" })
       _kind: data.kind,
       _client_id: data.id,
     });
-    if (error) throw new Error(error.message);
+    if (error) throw await refused(context.supabase, error, s.org.id, `menu.archive_${data.kind}`);
     return { success: true };
   });
 
@@ -172,7 +180,14 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
         })
       : await context.supabase.rpc("create_pos_sale", args);
     if (result.error || !result.data)
-      throw new Error(result.error?.message ?? "sale_not_confirmed");
+      throw await refused(
+        context.supabase,
+        result.error,
+        s.org.id,
+        "pos.sale",
+        s.location.id,
+        "sale_not_confirmed",
+      );
     const { data: order, error } = await context.supabase
       .from("orders")
       .select("order_number,total_cents,tax_cents,subtotal_cents")
@@ -209,7 +224,7 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
     const s = await scope(context.supabase, data.orgId, data.locationId);
     let q = context.supabase
       .from("orders")
-      .select("*,order_items(*,order_item_modifiers(*)),order_status_history(*)", {
+      .select("*,order_items(*,order_item_modifiers(*)),order_status_history(*),payments(status)", {
         count: "exact",
       })
       .eq("org_id", s.org.id)
@@ -264,6 +279,9 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
         createdAt: r.created_at,
         updatedAt: r.updated_at,
         isSimulated: r.is_simulation,
+        createdBy: r.created_by,
+        /** Paid = a payment that was not reversed (what the ledger counts as revenue). */
+        paid: r.payments.some((p) => p.status !== "reversed"),
         timeline: r.order_status_history.map((h) => ({
           id: h.id,
           ...(h.from_status ? { fromStatus: h.from_status } : {}),
@@ -297,7 +315,13 @@ export const changeOperationalOrder = createServerFn({ method: "POST" })
             _new_status: data.status,
             _reason: data.reason,
           });
-    if (result.error) throw new Error(result.error.message);
+    if (result.error)
+      throw await refused(
+        context.supabase,
+        result.error,
+        await orderOrg(context.supabase, data.id),
+        `orders.${data.status}`,
+      );
     return { success: true };
   });
 export const setOperationalItemReady = createServerFn({ method: "POST" })
@@ -308,9 +332,15 @@ export const setOperationalItemReady = createServerFn({ method: "POST" })
       _item_id: data.id,
       _ready: data.ready,
     });
-    if (error) throw new Error(error.message);
+    if (error) throw await refused(context.supabase, error, undefined, "kds.item_ready");
     return { success: true };
   });
+
+/** Readable columns of inventory_items / inventory_movements (costs excluded — migration 0020). */
+const INVENTORY_COLUMNS =
+  "id,org_id,location_id,client_id,name,category,sku,unit,quantity,min_quantity,supplier,expiration_date,active,updated_at";
+const MOVEMENT_COLUMNS =
+  "id,org_id,location_id,inventory_item_id,order_id,delta,kind,client_event_id,reverses_id,reason,actor_id,created_at";
 
 export const fetchOperationalResources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -321,13 +351,13 @@ export const fetchOperationalResources = createServerFn({ method: "POST" })
     // RLS scopes each query, including organization-wide reads by managers.
     const [inventory, recipes, suppliers, purchases, movements, finance, expenses] =
       await Promise.all([
-        c.from("inventory_items").select("*").eq("org_id", s.org.id),
+        c.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", s.org.id),
         c.from("product_recipes").select("*,recipe_ingredients(*)").eq("org_id", s.org.id),
         c.from("suppliers").select("*").eq("org_id", s.org.id),
         c.from("purchase_orders").select("*,purchase_order_items(*)").eq("org_id", s.org.id),
         c
           .from("inventory_movements")
-          .select("*")
+          .select(MOVEMENT_COLUMNS)
           .eq("org_id", s.org.id)
           .order("created_at", { ascending: false })
           .limit(200),
@@ -338,12 +368,24 @@ export const fetchOperationalResources = createServerFn({ method: "POST" })
       [inventory, recipes, suppliers, purchases, movements, finance, expenses].some((r) => r.error)
     )
       throw new Error("resources_read_failed");
+    // Costs are not readable through the table (migration 0020); they come only from the gated
+    // function. Without inventory.costs the answer is "not visible" (null), never a fake zero.
+    const costRead = await c.rpc("inventory_item_costs", { _org_id: s.org.id });
+    if (costRead.error && costRead.error.message !== "permission_denied")
+      throw new Error("resources_read_failed");
+    const costs = costRead.error
+      ? null
+      : new Map((costRead.data ?? []).map((r) => [r.item_id, r.cost_cents]));
     const filter = <T extends { location_id: string }>(rows: T[]) =>
       s.location ? rows.filter((r) => r.location_id === s.location?.id) : rows;
     return {
       orgId: s.org.slug,
       locations: s.locations,
-      inventory: filter(inventory.data ?? []),
+      costsVisible: costs !== null,
+      inventory: filter(inventory.data ?? []).map((i) => ({
+        ...i,
+        cost_cents: costs?.get(i.id) ?? null,
+      })),
       recipes: filter(recipes.data ?? []),
       suppliers: suppliers.data ?? [],
       purchases: filter(purchases.data ?? []),
@@ -387,9 +429,52 @@ export const saveOperationalRecord = createServerFn({ method: "POST" })
       _kind: data.kind,
       _payload: payload,
     });
-    if (error || !id) throw new Error(error?.message ?? "record_save_failed");
+    if (error || !id)
+      throw await refused(
+        context.supabase,
+        error,
+        s.org.id,
+        `${data.kind}.save`,
+        s.location?.id,
+        "record_save_failed",
+      );
     return { id };
   });
+/**
+ * Turns an RPC error into the Error the UI sees. Permission refusals roll back their own transaction
+ * (including its audit row), so they are reported separately via log_access_denied — which records
+ * only the caller's own identity and ignores non-members (migration 0018).
+ */
+async function refused(
+  client: SupabaseClient<Database>,
+  error: { message: string; details?: string | null } | null,
+  orgId: string | undefined,
+  action: string,
+  locationId?: string,
+  fallback = "operation_failed",
+): Promise<Error> {
+  if (error?.message === "permission_denied" && orgId) {
+    await client
+      .rpc("log_access_denied", {
+        _org_id: orgId,
+        _action: action,
+        ...(locationId ? { _location_id: locationId } : {}),
+        ...(error.details ? { _detail: error.details } : {}),
+      })
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  }
+  return new Error(error?.message ?? fallback);
+}
+const orderOrg = async (client: SupabaseClient<Database>, id: string) =>
+  (await client.from("orders").select("org_id").eq("id", id).maybeSingle()).data?.org_id ??
+  undefined;
+const purchaseOrg = async (client: SupabaseClient<Database>, id: string) =>
+  (await client.from("purchase_orders").select("org_id").eq("id", id).maybeSingle()).data?.org_id ??
+  undefined;
+
 const jsonSchema: z.ZodType<import("@/integrations/supabase/types").Json> = z.lazy(() =>
   z.union([
     z.string(),
@@ -432,7 +517,15 @@ export const moveOperationalInventory = createServerFn({ method: "POST" })
       _client_event_id: data.clientEventId,
       ...(target ? { _target_location_id: target.id } : {}),
     });
-    if (error || !id) throw new Error(error?.message ?? "movement_failed");
+    if (error || !id)
+      throw await refused(
+        context.supabase,
+        error,
+        s.org.id,
+        `inventory.${data.type}`,
+        s.location.id,
+        "movement_failed",
+      );
     return { id };
   });
 
@@ -460,7 +553,15 @@ export const receiveOperationalPurchase = createServerFn({ method: "POST" })
       _client_event_id: data.clientEventId,
       _notes: data.notes,
     });
-    if (error || !id) throw new Error(error?.message ?? "receiving_failed");
+    if (error || !id)
+      throw await refused(
+        context.supabase,
+        error,
+        await purchaseOrg(context.supabase, data.id),
+        "purchases.receive",
+        undefined,
+        "receiving_failed",
+      );
     return { id };
   });
 export const cancelOperationalPurchase = createServerFn({ method: "POST" })
@@ -471,7 +572,13 @@ export const cancelOperationalPurchase = createServerFn({ method: "POST" })
       _id: data.id,
       _reason: data.reason,
     });
-    if (error) throw new Error(error.message);
+    if (error)
+      throw await refused(
+        context.supabase,
+        error,
+        await purchaseOrg(context.supabase, data.id),
+        "purchases.cancel",
+      );
     return { success: true };
   });
 

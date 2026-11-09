@@ -1,0 +1,74 @@
+{
+  "title": "Kitchen display",
+  "subtitle": "Tickets routed by station, with waiting time",
+  "connection": {
+    "connected": "Live",
+    "connecting": "Connecting…",
+    "disconnected": "Offline"
+  },
+  "stationsLabel": "Filter by station",
+  "stations": {
+    "all": "All stations",
+    "grill": "Grill",
+    "fryer": "Fryer",
+    "assembly": "Assembly",
+    "bar": "Bar & drinks",
+    "expo": "Expo"
+  },
+  "chime": {
+    "on": "Chime on",
+    "off": "Chime off"
+  },
+  "simulate": "Simulate order",
+  "columns": {
+    "new": "New",
+    "inPrep": "In preparation",
+    "ready": "Ready for pickup",
+    "done": "Completed (recent)"
+  },
+  "empty": {
+    "new": "No new tickets in the queue",
+    "inPrep": "Nothing on the line right now",
+    "ready": "No orders waiting for pickup",
+    "done": "Completed tickets show here"
+  },
+  "actions": {
+    "start": "Start cooking",
+    "ready": "Mark ready",
+    "fulfill": "Fulfill",
+    "reopen": "Reopen"
+  },
+  "orderType": {
+    "dine_in": "Dine in",
+    "takeout": "Takeout",
+    "delivery": "Delivery"
+  },
+  "status": {
+    "new": "New",
+    "confirmed": "Confirmed",
+    "in_prep": "In preparation",
+    "ready": "Ready",
+    "delivered": "Fulfilled",
+    "cancelled": "Cancelled"
+  },
+  "age": {
+    "minutes": "{{count}} min",
+    "hours": "{{hours}}h {{minutes}}m",
+    "days": "{{count}}d",
+    "waiting": "Waiting {{age}}",
+    "late": "Late",
+    "overdue": "Overdue"
+  },
+  "ticket": {
+    "placedAt": "Placed at {{time}}",
+    "note": "Note: {{text}}",
+    "itemReadyAria": "{{name}}: ready. Tap to mark as not ready.",
+    "itemPendingAria": "{{name}}: not ready. Tap to mark as ready."
+  },
+  "toast": {
+    "moved": "Ticket {{number}} moved to {{status}}",
+    "syncFailed": "The ticket could not be updated",
+    "itemFailed": "Item could not be updated",
+    "simulated": "New simulated order received: {{number}}"
+  }
+}

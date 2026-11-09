@@ -71,8 +71,89 @@ export interface CompletedPosSale {
   backendOrderId?: string;
 }
 
+/**
+ * Default POS sales-tax rate in basis points (888 = 8.88%). The backend receives
+ * `Math.round(taxRatePercent * 100)` basis points (see `persistFinalizedPOSSaleAtomic`), so the
+ * cart preview uses exactly the rate that is persisted instead of a more precise one it can't store.
+ */
+export const DEFAULT_POS_TAX_RATE_BASIS_POINTS = 888;
+
+/** Rate actually sent to the backend for this session, in basis points. */
+export function posTaxRateBasisPoints(session: Pick<POSSession, "taxRatePercent">): number {
+  return Math.round(session.taxRatePercent * 100);
+}
+
 const SUSPENDED_STORAGE_PREFIX = "servora.pos.suspended.";
 const HISTORY_STORAGE_PREFIX = "servora.pos.history.";
+
+/**
+ * Held tickets belong to a shift. After this window they are no longer offered for resumption,
+ * so customer names do not linger on a shared terminal and stale carts are not rung up later.
+ */
+export const SUSPENDED_SALE_TTL_MS = 24 * 60 * 60 * 1000;
+export const QUARANTINE_SUSPENDED_PREFIX = "servora.quarantine.pos.suspended.";
+
+const isValidSuspended = (s: unknown, orgId: string): s is SuspendedSale => {
+  if (typeof s !== "object" || s === null) return false;
+  const r = s as Partial<SuspendedSale>;
+  return (
+    typeof r.id === "string" &&
+    r.id !== "" &&
+    (r.orgId === undefined || r.orgId === orgId) &&
+    typeof r.locationId === "string" &&
+    r.locationId !== "" &&
+    Array.isArray(r.items) &&
+    r.items.length > 0 &&
+    typeof r.suspendedAt === "string" &&
+    !Number.isNaN(Date.parse(r.suspendedAt))
+  );
+};
+
+/**
+ * Reads the org's held tickets (key `servora.pos.suspended.<org>`, unchanged for compatibility).
+ * Expired, malformed or unreadable entries are never offered; they are moved (not deleted) to
+ * `servora.quarantine.pos.suspended.<org>` so nothing the user typed is silently destroyed.
+ */
+function readSuspendedStore(orgId: string, now = Date.now()): SuspendedSale[] {
+  const key = `${SUSPENDED_STORAGE_PREFIX}${assertTenantContext(orgId)}`;
+  const raw = localStorage.getItem(key);
+  if (!raw) return [];
+  let entries: unknown[];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    entries = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    entries = [{ unreadable: raw }];
+  }
+  const keep: SuspendedSale[] = [];
+  const quarantine: unknown[] = [];
+  for (const s of entries) {
+    if (isValidSuspended(s, orgId) && now - Date.parse(s.suspendedAt) <= SUSPENDED_SALE_TTL_MS)
+      keep.push(s);
+    else quarantine.push(s);
+  }
+  if (quarantine.length > 0) {
+    try {
+      const qKey = `${QUARANTINE_SUSPENDED_PREFIX}${orgId}`;
+      let prev: unknown = [];
+      try {
+        prev = JSON.parse(localStorage.getItem(qKey) ?? "[]");
+      } catch {
+        prev = [];
+      }
+      const at = new Date(now).toISOString();
+      const stamped = quarantine.map((entry) => ({ quarantinedAt: at, entry }));
+      localStorage.setItem(
+        qKey,
+        JSON.stringify([...(Array.isArray(prev) ? prev : []), ...stamped]),
+      );
+      localStorage.setItem(key, JSON.stringify(keep));
+    } catch {
+      // Storage full/unavailable: leave the original key untouched; just don't offer the entries.
+    }
+  }
+  return keep;
+}
 
 export function calculateChange(tenderedCents: number, totalCents: number): number {
   return Math.max(0, tenderedCents - totalCents);
@@ -87,17 +168,7 @@ export function listSuspendedSales(
   if (locationId && locationId !== "all" && !isLocationAllowed(locationId, allowedLocationIds))
     return [];
   if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem(`${SUSPENDED_STORAGE_PREFIX}${assertTenantContext(orgId)}`);
-  let sales: SuspendedSale[] = [];
-  if (raw) {
-    try {
-      sales = (JSON.parse(raw) as SuspendedSale[]).filter(
-        (s) => s.orgId === undefined || s.orgId === orgId,
-      );
-    } catch {
-      sales = [];
-    }
-  }
+  let sales = readSuspendedStore(orgId);
   sales = sales.filter((s) => isLocationAllowed(s.locationId, allowedLocationIds));
   if (locationId && locationId !== "all") {
     return sales.filter((s) => s.locationId === locationId);
@@ -276,7 +347,7 @@ export function getPOSSession(
     orderType: "dine_in",
     cart: [],
     discountCents: 0,
-    taxRatePercent: 8.875,
+    taxRatePercent: DEFAULT_POS_TAX_RATE_BASIS_POINTS / 100,
     subtotalCents: 0,
     taxCents: 0,
     totalCents: 0,

@@ -1,0 +1,128 @@
+{
+  "searchPlaceholder": "Buscar itens do cardápio…",
+  "searchLabel": "Buscar no cardápio",
+  "simulatedBadge": "Terminal de demonstração",
+  "categoriesLabel": "Categorias do cardápio",
+  "allCategories": "Todos",
+  "addItemAria": "Adicionar {{name}}, {{price}}",
+  "held": {
+    "label": "Em espera",
+    "resumeAria": "Retomar comanda em espera {{name}}",
+    "untitled": "Comanda"
+  },
+  "menu": {
+    "loading": "Carregando cardápio…",
+    "errorTitle": "Não foi possível carregar o cardápio",
+    "errorBody": "Nenhum item é exibido até o cardápio carregar. Verifique a conexão e tente novamente.",
+    "retry": "Tentar novamente",
+    "emptyTitle": "Nenhum item ativo para esta loja",
+    "emptyBody": "Cadastre categorias e produtos ativos na página Cardápio para vendê-los aqui.",
+    "noMatchesTitle": "Nenhum item corresponde à busca",
+    "noMatchesBody": "Tente outro nome ou limpe o filtro de categoria.",
+    "clearFilters": "Limpar filtros"
+  },
+  "ticket": {
+    "title": "Comanda atual",
+    "attendant": "Atendente: {{name}}",
+    "cashierFallback": "Caixa",
+    "orderTypeLabel": "Tipo de pedido",
+    "customerLabel": "Nome do cliente ou mesa",
+    "customerPlaceholder": "Nome do cliente ou mesa",
+    "empty": "Toque nos itens do cardápio para adicioná-los a esta comanda.",
+    "decreaseAria": "Diminuir quantidade de {{name}}",
+    "increaseAria": "Aumentar quantidade de {{name}}",
+    "removeAria": "Remover {{name}}"
+  },
+  "orderType": {
+    "dine_in": "No salão",
+    "takeout": "Para viagem",
+    "delivery": "Entrega"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "discount": "Desconto",
+    "tax": "Imposto ({{rate}})",
+    "total": "Total"
+  },
+  "actions": {
+    "discount": "Desconto",
+    "hold": "Em espera",
+    "clear": "Limpar",
+    "charge": "Cobrar {{amount}}",
+    "cancel": "Cancelar",
+    "apply": "Aplicar",
+    "back": "Voltar",
+    "close": "Fechar",
+    "print": "Imprimir",
+    "addToTicket": "Adicionar à comanda"
+  },
+  "clearDialog": {
+    "title": "Limpar esta comanda?",
+    "body": "Todos os itens da comanda atual serão removidos. Nada foi cobrado ainda.",
+    "confirm": "Limpar comanda"
+  },
+  "modifiers": {
+    "required": "Obrigatório",
+    "optional": "Opcional",
+    "upTo_one": "Escolha {{count}}",
+    "upTo_other": "Escolha até {{count}}",
+    "notesLabel": "Observações do item",
+    "notesPlaceholder": "ex.: sem cebola",
+    "requiredMissing": "Selecione todas as opções obrigatórias antes de adicionar."
+  },
+  "discountDialog": {
+    "title": "Aplicar desconto no pedido",
+    "amountLabel": "Valor do desconto"
+  },
+  "checkout": {
+    "title": "Cobrar {{amount}}",
+    "methodLabel": "Forma de pagamento",
+    "tenderedLabel": "Valor recebido",
+    "change": "Troco: {{amount}}",
+    "insufficient": "O valor recebido é menor que o total.",
+    "confirm": "Confirmar pagamento",
+    "confirming": "Confirmando…"
+  },
+  "methods": {
+    "cash": "Dinheiro",
+    "card": "Crédito / débito",
+    "digital": "Carteira digital"
+  },
+  "receipt": {
+    "dialogTitle": "Recibo",
+    "title": "Recibo de venda",
+    "simulationTitle": "Recibo de simulação",
+    "simulationNote": "Restaurante de demonstração. Nenhum pagamento real foi processado.",
+    "order": "Pedido {{number}}",
+    "cashier": "Caixa: {{name}}",
+    "customer": "Cliente: {{name}}",
+    "subtotal": "Subtotal",
+    "discount": "Desconto",
+    "tax": "Imposto ({{rate}})",
+    "total": "Total pago",
+    "method": "Forma de pagamento",
+    "change": "Troco",
+    "refund": "Cancelar venda"
+  },
+  "cancelDialog": {
+    "title": "Cancelar venda efetivada",
+    "body": "Esta operação cancela o pedido registrado e reverte automaticamente os movimentos de estoque e CMV.",
+    "reasonLabel": "Motivo do cancelamento",
+    "reasonPlaceholder": "ex.: Cliente desistiu, erro de digitação",
+    "defaultReason": "Cancelamento solicitado pelo operador no caixa",
+    "confirm": "Confirmar cancelamento",
+    "confirming": "Cancelando…"
+  },
+  "toast": {
+    "added": "{{name}} adicionado",
+    "cleared": "Comanda limpa",
+    "discountApplied": "Desconto aplicado",
+    "held": "Comanda colocada em espera",
+    "resumed": "Comanda retomada",
+    "saleRecorded": "Venda registrada · Pedido {{number}}",
+    "saleFailed": "A venda NÃO foi confirmada",
+    "alreadyCancelled": "Esta venda já havia sido cancelada.",
+    "cancelled": "Venda cancelada e estoque revertido.",
+    "cancelFailed": "Não foi possível cancelar a venda"
+  }
+}

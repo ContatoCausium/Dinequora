@@ -1,0 +1,128 @@
+{
+  "searchPlaceholder": "Search menu items…",
+  "searchLabel": "Search menu",
+  "simulatedBadge": "Demo terminal",
+  "categoriesLabel": "Menu categories",
+  "allCategories": "All",
+  "addItemAria": "Add {{name}}, {{price}}",
+  "held": {
+    "label": "On hold",
+    "resumeAria": "Resume held ticket {{name}}",
+    "untitled": "Ticket"
+  },
+  "menu": {
+    "loading": "Loading menu…",
+    "errorTitle": "The menu couldn't load",
+    "errorBody": "No items are shown until the menu loads. Check the connection and try again.",
+    "retry": "Try again",
+    "emptyTitle": "No active items for this store",
+    "emptyBody": "Add categories and active products on the Menu page to sell them here.",
+    "noMatchesTitle": "No items match your search",
+    "noMatchesBody": "Try another name or clear the category filter.",
+    "clearFilters": "Clear filters"
+  },
+  "ticket": {
+    "title": "Current ticket",
+    "attendant": "Attendant: {{name}}",
+    "cashierFallback": "Cashier",
+    "orderTypeLabel": "Order type",
+    "customerLabel": "Customer name or table",
+    "customerPlaceholder": "Customer name or table",
+    "empty": "Tap items from the menu to add them to this ticket.",
+    "decreaseAria": "Decrease quantity of {{name}}",
+    "increaseAria": "Increase quantity of {{name}}",
+    "removeAria": "Remove {{name}}"
+  },
+  "orderType": {
+    "dine_in": "Dine in",
+    "takeout": "Takeout",
+    "delivery": "Delivery"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "tax": "Tax ({{rate}})",
+    "total": "Total"
+  },
+  "actions": {
+    "discount": "Discount",
+    "hold": "Hold",
+    "clear": "Clear",
+    "charge": "Charge {{amount}}",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "back": "Back",
+    "close": "Close",
+    "print": "Print",
+    "addToTicket": "Add to ticket"
+  },
+  "clearDialog": {
+    "title": "Clear this ticket?",
+    "body": "All items on the current ticket will be removed. Nothing has been charged yet.",
+    "confirm": "Clear ticket"
+  },
+  "modifiers": {
+    "required": "Required",
+    "optional": "Optional",
+    "upTo_one": "Choose {{count}}",
+    "upTo_other": "Choose up to {{count}}",
+    "notesLabel": "Item notes",
+    "notesPlaceholder": "e.g. no onions",
+    "requiredMissing": "Select all required options before adding."
+  },
+  "discountDialog": {
+    "title": "Apply order discount",
+    "amountLabel": "Discount amount"
+  },
+  "checkout": {
+    "title": "Charge {{amount}}",
+    "methodLabel": "Payment method",
+    "tenderedLabel": "Amount tendered",
+    "change": "Change to return: {{amount}}",
+    "insufficient": "Amount tendered is less than the total.",
+    "confirm": "Confirm payment",
+    "confirming": "Confirming…"
+  },
+  "methods": {
+    "cash": "Cash",
+    "card": "Credit / debit",
+    "digital": "Digital wallet"
+  },
+  "receipt": {
+    "dialogTitle": "Receipt",
+    "title": "Sales receipt",
+    "simulationTitle": "Simulation receipt",
+    "simulationNote": "Demo restaurant. No real payment was processed.",
+    "order": "Order {{number}}",
+    "cashier": "Cashier: {{name}}",
+    "customer": "Customer: {{name}}",
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "tax": "Tax ({{rate}})",
+    "total": "Total paid",
+    "method": "Payment method",
+    "change": "Change",
+    "refund": "Cancel sale"
+  },
+  "cancelDialog": {
+    "title": "Cancel completed sale",
+    "body": "This cancels the recorded order and automatically reverses its stock and cost-of-goods movements.",
+    "reasonLabel": "Cancellation reason",
+    "reasonPlaceholder": "e.g. Customer changed their mind, keying error",
+    "defaultReason": "Cancellation requested by the cashier at the register",
+    "confirm": "Confirm cancellation",
+    "confirming": "Cancelling…"
+  },
+  "toast": {
+    "added": "{{name}} added",
+    "cleared": "Ticket cleared",
+    "discountApplied": "Discount applied",
+    "held": "Ticket put on hold",
+    "resumed": "Ticket resumed",
+    "saleRecorded": "Sale recorded · Order {{number}}",
+    "saleFailed": "The sale was NOT confirmed",
+    "alreadyCancelled": "This sale had already been cancelled.",
+    "cancelled": "Sale cancelled and stock reversed.",
+    "cancelFailed": "The sale could not be cancelled"
+  }
+}

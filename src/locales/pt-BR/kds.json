@@ -1,0 +1,74 @@
+{
+  "title": "Tela da cozinha",
+  "subtitle": "Comandas roteadas por praça, com tempo de espera",
+  "connection": {
+    "connected": "Ao vivo",
+    "connecting": "Conectando…",
+    "disconnected": "Offline"
+  },
+  "stationsLabel": "Filtrar por praça",
+  "stations": {
+    "all": "Todas as praças",
+    "grill": "Chapa",
+    "fryer": "Fritadeira",
+    "assembly": "Montagem",
+    "bar": "Bar e bebidas",
+    "expo": "Expedição"
+  },
+  "chime": {
+    "on": "Som ligado",
+    "off": "Som desligado"
+  },
+  "simulate": "Simular pedido",
+  "columns": {
+    "new": "Novos",
+    "inPrep": "Em preparo",
+    "ready": "Prontos para retirada",
+    "done": "Concluídos (recentes)"
+  },
+  "empty": {
+    "new": "Nenhuma comanda nova na fila",
+    "inPrep": "Nada em preparo agora",
+    "ready": "Nenhum pedido aguardando retirada",
+    "done": "Comandas concluídas aparecem aqui"
+  },
+  "actions": {
+    "start": "Iniciar preparo",
+    "ready": "Marcar pronto",
+    "fulfill": "Entregar",
+    "reopen": "Reabrir"
+  },
+  "orderType": {
+    "dine_in": "No salão",
+    "takeout": "Para viagem",
+    "delivery": "Entrega"
+  },
+  "status": {
+    "new": "Novo",
+    "confirmed": "Confirmado",
+    "in_prep": "Em preparo",
+    "ready": "Pronto",
+    "delivered": "Entregue",
+    "cancelled": "Cancelado"
+  },
+  "age": {
+    "minutes": "{{count}} min",
+    "hours": "{{hours}} h {{minutes}} min",
+    "days": "{{count}} d",
+    "waiting": "Aguardando há {{age}}",
+    "late": "Atrasado",
+    "overdue": "Muito atrasado"
+  },
+  "ticket": {
+    "placedAt": "Feito às {{time}}",
+    "note": "Obs.: {{text}}",
+    "itemReadyAria": "{{name}}: pronto. Toque para marcar como não pronto.",
+    "itemPendingAria": "{{name}}: não pronto. Toque para marcar como pronto."
+  },
+  "toast": {
+    "moved": "Comanda {{number}} movida para {{status}}",
+    "syncFailed": "Não foi possível atualizar a comanda",
+    "itemFailed": "Não foi possível atualizar o item",
+    "simulated": "Novo pedido simulado recebido: {{number}}"
+  }
+}
