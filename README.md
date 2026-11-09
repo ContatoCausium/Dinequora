@@ -20,6 +20,11 @@ Copy `.env.example` to your local environment and configure only the intended de
 
 Migrations are plain PostgreSQL SQL under `drizzle/migrations`, applied in journal order by the managed migration tool. Do not use Drizzle ORM models or regenerate schema from `drizzle/schema.ts`. Empty-environment replay requires managed auth schemas/roles, `auth.uid()`, extensions and Realtime prerequisites. Do not run the security fixture scripts against a customer database.
 
+## Marketing website
+
+The public Dinequora marketing site is a separate Vite project in [`website/`](website/README.md)
+with its own dependencies and CI job. It does not touch the app, Supabase or migrations.
+
 ## Template information
 
 This project was built with [Lovable](https://lovable.dev).
