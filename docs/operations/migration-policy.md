@@ -1,0 +1,72 @@
+# Política de migrations — SQL First
+
+Status: **em vigor** a partir da Fase 1.0. Aplicada automaticamente por
+`scripts/qa/check-migrations.mjs` (job `quality` em modo arquivos; job `security` também contra o
+banco recém-criado).
+
+## Modelo
+
+- O esquema do banco é definido **somente** pelas migrations SQL escritas à mão em
+  `drizzle/migrations/`, aplicadas por `drizzle-kit migrate` na ordem de `meta/_journal.json`.
+- O Drizzle é apenas o **executor**: `drizzle/schema.ts` fica em branco e os snapshots em `meta/`
+  são vazios (0 tabelas). Isso é intencional — não é dívida técnica nem pendência.
+- **Proibido** `drizzle-kit generate` (ou `push`/`introspect` contra qualquer banco compartilhado):
+  com um esquema em branco, ele produziria migrations vazias ou destrutivas. A CI falha se
+  `schema.ts` deixar de estar em branco ou se algum snapshot passar a descrever tabelas, enums,
+  esquemas, sequências, views, papéis ou políticas.
+- Snapshots para 0017 em diante **não** serão criados: não há esquema a registrar.
+- `drizzle-kit` e `drizzle-orm` ficam em versão **exata** no `package.json`, igual ao
+  `package-lock.json`, para que o executor nunca mude sem uma revisão explícita.
+
+## Histórico imutável
+
+- Uma migration que entrou no journal **nunca é editada, renomeada nem removida**. Correções são
+  sempre uma migration nova.
+- `scripts/qa/migration-hashes.json` registra o SHA-256 (fim de linha normalizado para LF) de cada
+  migration do journal e das três órfãs conhecidas. Foi gerado a partir de `main` e conferido
+  contra o registro de migrations aplicadas na demonstração (21 de 21, na mesma ordem).
+- A CI falha se um arquivo deixar de bater com o hash registrado, se uma entrada do journal não
+  tiver hash ou se o manifesto citar algo que não está no journal.
+- As três órfãs (`0010_fix_admin_list_platform_admins`, `0011_create_pos_sale_and_idempotency`,
+  `0012_enable_realtime_orders`) continuam preservadas e nunca executáveis
+  (`docs/operations/migration-orphans.md`).
+
+## Como criar uma migration nova
+
+1. Próximo número livre, nome descritivo em inglês: `NNNN_descricao_curta.sql`.
+2. Acrescentar a entrada no fim de `meta/_journal.json` (`idx` seguinte, `when` maior que o
+   anterior, mesmo formato das existentes).
+3. Registrar o hash: `node scripts/qa/check-migrations.mjs --add-new-hashes` (só acrescenta; nunca
+   reescreve um hash existente).
+4. Regenerar `src/integrations/supabase/types.ts` no mesmo commit.
+5. Testar num banco descartável: aplicar do zero (`scripts/qa/security-suite.sh`) e, se houver
+   dados afetados, ensaiar a atualização numa cópia restaurada da demonstração (nunca na própria
+   demonstração e nunca na CI, porque o dump contém dados de usuários).
+
+## Regras de conteúdo
+
+- **Aditiva por padrão**: colunas novas nulas ou com padrão seguro; constraints novas com
+  `NOT VALID` seguido de `VALIDATE CONSTRAINT` quando houver dados; remoção de coluna/constraint só
+  depois de uma versão inteira sem uso.
+- Mudança de assinatura de RPC → função nova (`_v2`); a antiga permanece até uma remoção planejada.
+- Toda tabela em `public` com **RLS habilitado** e políticas explícitas (a CI falha sem RLS).
+- Toda função `SECURITY DEFINER` com `SET search_path` fixo (a CI falha sem ele).
+- Nenhuma função `SECURITY DEFINER` que grava dados pode ser executável por `anon`.
+- Toda função `SECURITY DEFINER` que grava dados e é executável por `authenticated` precisa estar
+  classificada em `check-migrations.mjs`:
+  - `GUARDED` — usa o catálogo de permissões (`assert_permission`/`has_permission`/
+    `has_any_permission`); é a opção padrão para RPCs novas;
+  - `REVIEWED` — autoriza por outro mecanismo (dono da organização, admin da plataforma, próprio
+    usuário), com o motivo registrado. Entrar nesta lista exige revisão explícita.
+    Uma função nova sem classificação faz a CI falhar (falha fechada).
+- `GRANT`/`REVOKE` explícitos em toda função nova.
+- Nunca dados de demonstração ou de cliente em migrations estruturais; seeds ficam em
+  `scripts/seeds/` (`docs/operations/data-layers-and-marao-production.md`).
+
+## Limitação conhecida
+
+O stack de QA local `dq-rebuild` foi montado a partir de um checkout com fim de linha CRLF, antes do
+`.gitattributes`: as linhas 0010–0017 do seu registro de migrations têm o hash da versão CRLF dos
+mesmos arquivos (conteúdo idêntico). Por isso `check-migrations` com `DB_URL` desse stack acusa
+`applied hash differs`. Não afeta a demonstração, a CI nem bancos novos; o stack pode ser
+recriado quando a limpeza dos ambientes de teste for autorizada.
