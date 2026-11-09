@@ -2,6 +2,20 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { captureError } from "./lib/observability";
+import { configureObservability } from "./lib/observability-config";
+
+// Alert/exception destinations come only from server environment variables; none by default.
+configureObservability(process.env);
+
+/** Method + path only: query strings can carry tokens (auth callbacks, invites). */
+const requestContext = (request: Request) => {
+  try {
+    return { method: request.method, path: new URL(request.url).pathname };
+  } catch {
+    return { method: request.method };
+  }
+};
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -23,6 +37,7 @@ async function getServerEntry(): Promise<ServerEntry> {
 async function normalizeCatastrophicSsrResponse(
   response: Response,
   language: string,
+  request: Request,
 ): Promise<Response> {
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
@@ -31,7 +46,11 @@ async function normalizeCatastrophicSsrResponse(
   const body = await response.clone().text();
   if (!isH3SwallowedErrorBody(body)) return response;
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  captureError(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`), {
+    event: "server.ssr_failed",
+    critical: true,
+    ...requestContext(request),
+  });
   return new Response(renderErrorPage(language), {
     status: 500,
     headers: { "content-type": "text/html; charset=utf-8" },
@@ -53,9 +72,13 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response, language);
+      return await normalizeCatastrophicSsrResponse(response, language, request);
     } catch (error) {
-      console.error(error);
+      captureError(error, {
+        event: "server.request_failed",
+        critical: true,
+        ...requestContext(request),
+      });
       return new Response(renderErrorPage(language), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },

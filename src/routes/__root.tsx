@@ -12,6 +12,11 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import {
+  captureError,
+  installBrowserErrorHandlers,
+  setObservabilityScope,
+} from "../lib/observability";
 import { applyClientLanguageAfterHydration } from "../lib/i18n";
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
@@ -45,6 +50,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    captureError(error, { event: "ui.root_error_boundary", critical: true });
   }, [error]);
 
   return (
@@ -124,13 +130,17 @@ function RootComponent() {
 
   useEffect(() => {
     applyClientLanguageAfterHydration();
+    installBrowserErrorHandlers();
   }, []);
 
   // Single auth listener: refresh route guards on identity changes; drop cached data on sign-out.
   useEffect(
     () =>
       auth.onChange((event) => {
-        if (event === "signed_out") queryClient.clear();
+        if (event === "signed_out") {
+          queryClient.clear();
+          setObservabilityScope({});
+        }
         if (event === "signed_in" || event === "signed_out" || event === "user_updated")
           void router.invalidate();
       }),

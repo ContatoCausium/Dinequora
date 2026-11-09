@@ -1,6 +1,8 @@
 // Captures the original Error out-of-band so server.ts can recover the stack
 // when h3 has already swallowed the throw into a generic 500 Response.
 
+import { redactString } from "./observability";
+
 let lastCapturedError: { error: unknown; at: number } | undefined;
 const TTL_MS = 5_000;
 
@@ -55,9 +57,11 @@ function isErrorLike(value: unknown): value is Error {
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const expanded = args.map((arg) => {
+    if (typeof arg === "string") return redactString(arg);
     if (!isErrorLike(arg)) return arg;
     record(arg);
-    return describeError(arg);
+    // Stacks and messages can embed tokens, keys, card numbers or e-mails: mask before output.
+    return redactString(describeError(arg));
   });
   originalConsoleError(...expanded);
 };

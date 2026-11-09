@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { CircleAlert, PauseCircle, RotateCw } from "lucide-react";
 
+import { captureError } from "@/lib/observability";
 import { cn } from "@/lib/utils";
 
 /** Quiet skeleton block — uses muted token, no shimmer gradients. */
@@ -77,9 +78,12 @@ export function EmptyState({
   return <StateCard icon={icon} title={title} body={body} action={action} />;
 }
 
-export function AppError({ reset }: ErrorComponentProps) {
+export function AppError({ error, reset }: ErrorComponentProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  useEffect(() => {
+    captureError(error, { event: "ui.route_error_boundary" });
+  }, [error]);
   return (
     <StateCard
       tone="danger"
