@@ -1,0 +1,72 @@
+# Dinequora CI. Two required checks; configure them as "required status checks" in the GitHub
+# branch protection of main (and integration/*) so a regression blocks the merge.
+#   quality  - TypeScript, ESLint, Vitest, production build, migration journal integrity
+#   security - fresh disposable Supabase (scripts/qa), migrations from zero, SQL security fixtures,
+#              isolated QA tenant, permission matrix (6 profiles, store scope, tenant isolation)
+# No secrets are used: the QA stack runs inside the runner with Supabase's public local keys.
+# Nothing here deploys, publishes or talks to a hosted Supabase project.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, "integration/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: ESLint
+        run: npx eslint .
+      - name: Vitest
+        run: npx vitest run
+      - name: Build
+        run: npm run build
+      - name: Migration journal integrity (files)
+        run: node scripts/qa/check-migrations.mjs
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start disposable QA Supabase
+        run: >
+          npx --no-install supabase start --workdir scripts/qa
+          -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
+      - name: Security suite
+        env:
+          QA_ARTIFACTS: ${{ runner.temp }}/qa
+        run: bash scripts/qa/security-suite.sh
+      - name: Upload permission matrix report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: permission-matrix
+          path: ${{ runner.temp }}/qa/permission-matrix.txt
+          if-no-files-found: ignore
+      - name: Stop QA Supabase
+        if: always()
+        run: npx --no-install supabase stop --workdir scripts/qa --no-backup

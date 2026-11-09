@@ -1,0 +1,45 @@
+# Disposable QA / CI stack (Dinequora). NOT the commercial demo (that one is ../../../supabase,
+# ports 543xx). Same identity as the local `dq-rebuild` stack: ports 553xx, project_id dq-rebuild.
+# Started with `supabase start --workdir scripts/qa`. It never points at a hosted project and has
+# no seed: the schema comes only from drizzle/migrations, the QA tenant from scripts/qa/seed-qa-org.mjs.
+project_id = "dq-rebuild"
+
+[api]
+enabled = true
+port = 55321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+
+[db]
+port = 55322
+shadow_port = 55320
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false

@@ -42,7 +42,7 @@ END $$;
 SELECT set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000003',false);
 DO $$ BEGIN
  BEGIN PERFORM public.create_pos_sale('bbbbbbbb-0000-4000-8000-000000000001','cccccccc-0000-4000-8000-000000000002','dine_in','bad',_client_order_id=>'cross-store'); RAISE EXCEPTION 'FAIL unauthorized store'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
- BEGIN PERFORM public.cancel_order_with_reversal((SELECT id FROM public.orders LIMIT 1),'staff'); RAISE EXCEPTION 'FAIL staff cancel'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.cancel_order_with_reversal((SELECT id FROM public.orders LIMIT 1),'staff'); RAISE EXCEPTION 'FAIL staff cancel'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'permission_denied' THEN RAISE; END IF; END;
  IF EXISTS(SELECT 1 FROM public.orders WHERE org_id='bbbbbbbb-0000-4000-8000-000000000002') THEN RAISE EXCEPTION 'FAIL tenant RLS'; END IF;
  BEGIN INSERT INTO public.orders(org_id,location_id,order_number,type,client_order_id,request_hash,created_by) VALUES('bbbbbbbb-0000-4000-8000-000000000001','cccccccc-0000-4000-8000-000000000001','hack','dine_in','hack','hack','aaaaaaaa-0000-4000-8000-000000000003'); RAISE EXCEPTION 'FAIL direct insert'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
