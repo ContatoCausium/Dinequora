@@ -30,6 +30,7 @@ import {
   UsersRound,
   Landmark,
   ChartNoAxesCombined,
+  FileBarChart,
   ServerCog,
   CreditCard,
 } from "lucide-react";
@@ -44,6 +45,8 @@ import { useWorkspace } from "./workspace-context";
 import { DemoBadge, OrgLogo, ServoraMark } from "./brand-mark";
 import { EmptyState, SuspendedState } from "./states";
 import { OnboardingProgress } from "./onboarding-progress";
+import { storeConfigured } from "@/lib/onboarding-checklist";
+import { requiredFor } from "@/lib/route-permissions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,34 +73,51 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 type NavTo =
   | "/"
   | "/pos"
+  | "/orders"
   | "/kds"
   | "/menu"
   | "/inventory"
   | "/finance"
+  | "/reports"
   | "/intelligence"
   | "/locations"
   | "/team"
   | "/settings/branding"
   | "/settings/billing";
-// Curated icon set: one stroke weight, restaurant-operations semantics.
-const NAV: { to: NavTo; key: string; icon: typeof Store; managerOnly?: boolean }[] = [
-  { to: "/", key: "overview", icon: Gauge },
-  { to: "/pos", key: "pos", icon: MonitorSmartphone },
-  { to: "/kds", key: "kds", icon: CookingPot },
-  { to: "/menu", key: "menu", icon: BookOpenText },
-  { to: "/inventory", key: "inventory", icon: Boxes },
-  { to: "/finance", key: "finance", icon: Landmark, managerOnly: true },
-  { to: "/intelligence", key: "intelligence", icon: ChartNoAxesCombined, managerOnly: true },
-  { to: "/locations", key: "locations", icon: MapPinned },
-  { to: "/team", key: "employees", icon: UsersRound },
-  { to: "/settings/branding", key: "branding", icon: SwatchBook },
-  { to: "/settings/billing", key: "billing", icon: CreditCard },
+type NavItem = { to: NavTo; key: string; icon: typeof Store };
+// Curated icon set: one stroke weight, restaurant-operations semantics. Grouped by intent.
+const NAV_GROUPS: { key: string; items: NavItem[] }[] = [
+  {
+    key: "groupOperations",
+    items: [
+      { to: "/", key: "overview", icon: Gauge },
+      { to: "/pos", key: "pos", icon: MonitorSmartphone },
+      { to: "/orders", key: "orders", icon: ReceiptText },
+      { to: "/kds", key: "kds", icon: CookingPot },
+      { to: "/menu", key: "menu", icon: BookOpenText },
+      { to: "/inventory", key: "inventory", icon: Boxes },
+    ],
+  },
+  {
+    key: "groupManagement",
+    items: [
+      { to: "/finance", key: "finance", icon: Landmark },
+      { to: "/reports", key: "reports", icon: FileBarChart },
+      { to: "/intelligence", key: "intelligence", icon: ChartNoAxesCombined },
+      { to: "/locations", key: "locations", icon: MapPinned },
+      { to: "/team", key: "employees", icon: UsersRound },
+    ],
+  },
+  {
+    key: "groupAccount",
+    items: [
+      { to: "/settings/branding", key: "branding", icon: SwatchBook },
+      { to: "/settings/billing", key: "billing", icon: CreditCard },
+    ],
+  },
 ];
-const UPCOMING: { key: string; icon: typeof Store }[] = [
-  { key: "liveOps", icon: Activity },
-  { key: "orders", icon: ReceiptText },
-  { key: "analytics", icon: ChartNoAxesCombined },
-];
+const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+const UPCOMING: { key: string; icon: typeof Store }[] = [{ key: "liveOps", icon: Activity }];
 
 function useActive() {
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -107,52 +127,59 @@ function useActive() {
 function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const isActive = useActive();
-  const { isPlatformAdmin, role } = useWorkspace();
-  const isStaff = role === "staff";
+  const { isPlatformAdmin, canAny } = useWorkspace();
+  const visible = (to: string) => {
+    const req = requiredFor(to);
+    return !req || canAny(req);
+  };
   return (
     <nav
       className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4"
       aria-label={t("a11y.mainNav")}
     >
-      <div className="flex flex-col gap-0.5">
-        {!collapsed && <p className="eyebrow px-2 pb-1.5">{t("nav.workspace")}</p>}
-        {NAV.filter((item) => !(item.managerOnly && isStaff)).map(({ to, key, icon: Icon }) => {
-          const active = isActive(to);
-          const link = (
-            <Link
-              key={to}
-              to={to}
-              onClick={onNavigate}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "group relative flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium transition-colors",
-                active
-                  ? "bg-sidebar-accent text-foreground"
-                  : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-foreground",
-                collapsed && "justify-center px-0",
-              )}
-            >
-              <span
-                className={cn(
-                  "inline-flex size-6 shrink-0 items-center justify-center transition-colors",
-                  active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
-                )}
-              >
-                <Icon className="size-[15px]" strokeWidth={1.75} />
-              </span>
-              {!collapsed && <span className="truncate">{t(`nav.${key}`)}</span>}
-            </Link>
-          );
-          return collapsed ? (
-            <Tooltip key={to}>
-              <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <TooltipContent side="right">{t(`nav.${key}`)}</TooltipContent>
-            </Tooltip>
-          ) : (
-            link
-          );
-        })}
-      </div>
+      {NAV_GROUPS.filter((group) => group.items.some((item) => visible(item.to))).map((group) => (
+        <div key={group.key} className="flex flex-col gap-0.5">
+          {!collapsed && <p className="eyebrow px-2 pb-1.5">{t(`nav.${group.key}`)}</p>}
+          {group.items
+            .filter((item) => visible(item.to))
+            .map(({ to, key, icon: Icon }) => {
+              const active = isActive(to);
+              const link = (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "group relative flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium transition-colors",
+                    active
+                      ? "bg-sidebar-accent text-foreground"
+                      : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-foreground",
+                    collapsed && "justify-center px-0",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-flex size-6 shrink-0 items-center justify-center transition-colors",
+                      active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-[15px]" strokeWidth={1.75} />
+                  </span>
+                  {!collapsed && <span className="truncate">{t(`nav.${key}`)}</span>}
+                </Link>
+              );
+              return collapsed ? (
+                <Tooltip key={to}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{t(`nav.${key}`)}</TooltipContent>
+                </Tooltip>
+              ) : (
+                link
+              );
+            })}
+        </div>
+      ))}
       <div className="flex flex-col gap-0.5">
         {!collapsed && <p className="eyebrow px-2 pb-1.5">{t("nav.comingNext")}</p>}
         {UPCOMING.map(({ key, icon: Icon }) => (
@@ -277,7 +304,10 @@ export function LocationSelector({ className }: { className?: string }) {
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{l.name}</span>
               <span className="block truncate text-xs text-muted-foreground">
-                {l.status === "verified" ? l.address : t("shell.configRequired")}
+                {/* "Setup required" only when the store really lacks address or opening hours. */}
+                {l.status === "verified" || storeConfigured(l)
+                  ? l.address
+                  : t("shell.configRequired")}
               </span>
             </span>
             {l.id === locationId && <Check className="size-4 text-primary" />}
@@ -291,7 +321,8 @@ export function LocationSelector({ className }: { className?: string }) {
 function Notifications() {
   const { t } = useTranslation();
   const { org } = useWorkspace();
-  const alerts = operationalAlerts(org.locations);
+  // The sample alerts are synthetic: only demo organizations (organizations.is_demo) get them.
+  const alerts = org.fictional ? operationalAlerts(org.locations) : [];
   return (
     <Popover>
       <PopoverTrigger
@@ -306,8 +337,13 @@ function Notifications() {
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <p className="text-sm font-semibold">{t("shell.notifications")}</p>
-          <DemoBadge label={t("demo.badge")} />
+          {org.fictional && <DemoBadge label={t("demo.badge")} />}
         </div>
+        {alerts.length === 0 && (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+            {t("shell.notificationsEmpty")}
+          </p>
+        )}
         <ul className="max-h-80 divide-y overflow-y-auto">
           {alerts.map((a) => (
             <li key={a.id} className="flex gap-3 px-4 py-3">
@@ -440,14 +476,17 @@ function LanguageQuick() {
 
 function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
   const { t } = useTranslation();
-  const { org, setLocationId } = useWorkspace();
+  const { org, setLocationId, canAny } = useWorkspace();
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput placeholder={t("shell.searchPlaceholder")} />
       <CommandList>
         <CommandEmpty>{t("shell.noResults")}</CommandEmpty>
         <CommandGroup heading={t("nav.workspace")}>
-          {NAV.map((n) => (
+          {NAV.filter((n) => {
+            const req = requiredFor(n.to);
+            return !req || canAny(req);
+          }).map((n) => (
             <CommandItem key={n.to} asChild onSelect={() => setOpen(false)}>
               <Link to={n.to} onClick={() => setOpen(false)}>
                 <n.icon className="size-4" />

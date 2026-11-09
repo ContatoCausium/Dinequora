@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { setObservabilityScope } from "@/lib/observability";
 import { generateTheme, themeToCssVars, type BrandColors } from "@/lib/theme-engine";
 import type { Organization } from "@/lib/tenants";
 import {
@@ -18,6 +19,9 @@ import {
 } from "@/lib/org-service";
 import type { AuthUser } from "@/lib/auth";
 import { applyUserLanguage } from "@/lib/profile-service";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMyPermissions } from "@/lib/org-service";
+import { roleDefaults, type Permission } from "@/lib/permissions";
 
 type Mode = "light" | "dark";
 type StoredBrand = {
@@ -47,6 +51,14 @@ type Ctx = {
   resetBrand: () => Promise<void>;
   restorePrevious: () => Promise<void>;
   hasPrevious: boolean;
+  /**
+   * Effective permissions from the backend (my_permissions). UI hints only — every action and read
+   * is re-checked server-side (RPC asserts + RLS). Falls back to the tier defaults while loading.
+   */
+  permissions: ReadonlySet<string>;
+  permissionsReady: boolean;
+  can: (p: Permission) => boolean;
+  canAny: (ps: readonly Permission[]) => boolean;
 };
 
 const WorkspaceContext = createContext<Ctx | null>(null);
@@ -84,7 +96,28 @@ export function WorkspaceProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Tenant/store scope attached to every log and captured error (ids and role only, no PII).
+  useEffect(() => {
+    setObservabilityScope({
+      orgId: membership.dbId,
+      locationId,
+      userId: user.id,
+      role: membership.role,
+    });
+  }, [membership.dbId, membership.role, locationId, user.id]);
+  useEffect(() => () => setObservabilityScope({}), []);
+
   const brand = useMemo(() => ({ ...org.brand, logoUrl: org.logoUrl }), [org]);
+
+  const permsQuery = useQuery({
+    queryKey: ["my-permissions", membership.dbId, membership.memberId],
+    queryFn: () => fetchMyPermissions(membership.dbId),
+    staleTime: 60_000,
+  });
+  const permissions = useMemo<ReadonlySet<string>>(
+    () => new Set(permsQuery.data ?? roleDefaults(membership.role)),
+    [permsQuery.data, membership.role],
+  );
 
   useEffect(() => {
     const root = document.documentElement;
@@ -150,6 +183,10 @@ export function WorkspaceProvider({
       }
     },
     hasPrevious: Boolean(stored[org.id]?.previous ?? org.previousBrand),
+    permissions,
+    permissionsReady: permsQuery.isSuccess,
+    can: (p) => permissions.has(p),
+    canAny: (ps) => ps.some((p) => permissions.has(p)),
   };
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
