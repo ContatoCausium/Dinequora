@@ -168,7 +168,7 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
   it("differentiates persisted POS sale from unpersisted local cart when cancelling", () => {
     const session = getPOSSession("org-test", "loc-1", "Cashier 1");
     // Cart has not been persisted
-    expect((session as any).persistedOrderId).toBeUndefined();
+    expect(Reflect.get(session, "persistedOrderId")).toBeUndefined();
 
     // Simulated persisted state receipt
     const persistedReceipt = {

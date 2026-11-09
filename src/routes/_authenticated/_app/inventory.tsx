@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   fetchOperationalResources,
   fetchOperationalMenu,
@@ -8,35 +8,41 @@ import {
   receiveOperationalPurchase,
   cancelOperationalPurchase,
 } from "@/lib/operational.functions";
-import { mapResources } from "@/lib/operational-mappers";
+import { mapResources, type MovementKind } from "@/lib/operational-mappers";
 import type { MenuItem } from "@/lib/menu-service";
-import { OperationalCreateDialog } from "@/components/app/operational-create-dialogs";
+import {
+  OperationalCreateDialog,
+  operationalErrorText,
+} from "@/components/app/operational-create-dialogs";
 import { useTranslation } from "react-i18next";
 import {
-  Boxes,
-  Plus,
-  Search,
-  ArrowUpDown,
-  ArrowDownLeft,
-  ArrowUpRight,
-  AlertCircle,
-  History,
-  ShieldAlert,
   ArrowLeftRight,
-  CheckCircle2,
+  ArrowUpDown,
+  Boxes,
   ChefHat,
+  CircleAlert,
   Copy,
+  History,
+  Pencil,
+  Plus,
   RefreshCw,
-  Layers,
+  Search,
+  ShoppingCart,
+  Truck,
+  Send,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel } from "@/components/app/page";
+import { StatTile } from "@/components/app/stat-tile";
+import { EmptyState, Skeleton, StateCard } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -46,44 +52,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  listInventory,
-  saveInventoryItem,
-  type InventoryItem,
-  type InventoryCategory,
-} from "@/lib/inventory-service";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import type { InventoryCategory, InventoryItem } from "@/lib/inventory-service";
+import type { MovementType } from "@/lib/inventory-movements-service";
 import {
-  listInventoryMovements,
-  recordInventoryMovement,
-  type MovementType,
-} from "@/lib/inventory-movements-service";
-import {
-  listProductRecipes,
-  getProductRecipe,
-  saveProductRecipe,
-  duplicateProductRecipe,
-  syncRecipeWithInventoryPrices,
   checkRecipeStockAvailability,
   calculateIngredientCost,
-  computeRecipeTotals,
   type ProductRecipe,
   type RecipeIngredient,
   type RecipeUnit,
 } from "@/lib/recipes-service";
-import {
-  listSuppliers,
-  saveSupplier,
-  toggleSupplierActive,
-  listPurchaseOrders,
-  savePurchaseOrder,
-  processPOReceiving,
-  cancelPurchaseOrder,
-  calculatePOTotals,
-  type Supplier,
-  type PurchaseOrder,
-  type PurchaseOrderItem,
-  type POStatus,
-} from "@/lib/suppliers-purchases-service";
+import type { Supplier, PurchaseOrder, POStatus } from "@/lib/suppliers-purchases-service";
 import { DemoBadge } from "@/components/app/brand-mark";
+import { fmtDate, fmtMoneyCents, fmtPercent, fmtQuantity } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/_app/inventory")({
   head: () => ({
@@ -105,51 +94,142 @@ export const Route = createFileRoute("/_authenticated/_app/inventory")({
   component: InventoryPage,
 });
 
-export function InventoryPage() {
-  const { t } = useTranslation("inventory");
-  const { org, locationId, user, role } = useWorkspace();
-  const canManage = role !== "staff";
-  // Owners are org-wide; managers/staff are limited to their authorized stores.
-  const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
+type Tab = "items" | "movements" | "recipes" | "suppliers" | "purchases";
+const TABS: Tab[] = ["items", "movements", "recipes", "suppliers", "purchases"];
+const CATEGORIES: InventoryCategory[] = [
+  "meat",
+  "produce",
+  "dairy",
+  "bakery",
+  "dry_goods",
+  "beverages",
+  "packaging",
+];
+const MOVE_TYPES: MovementType[] = ["in", "out", "loss", "adjustment", "transfer"];
+/** The backend only accepts receipts for these statuses (receive_operational_purchase). */
+const RECEIVABLE: POStatus[] = ["sent", "partially_received"];
+/** Cancelling is refused once anything was received. */
+const CANCELLABLE: POStatus[] = ["draft", "sent"];
 
-  const [activeTab, setActiveTab] = useState<
-    "items" | "movements" | "recipes" | "suppliers" | "purchases"
-  >("items");
+const KIND_VARIANT: Record<MovementKind, NonNullable<BadgeProps["variant"]>> = {
+  opening: "neutral",
+  receiving: "success",
+  sale: "outline",
+  reversal: "warning",
+  adjustment: "neutral",
+  transfer_in: "outline",
+  transfer_out: "outline",
+};
+const PO_VARIANT: Record<POStatus, NonNullable<BadgeProps["variant"]>> = {
+  draft: "neutral",
+  sent: "outline",
+  partially_received: "warning",
+  received: "success",
+  cancelled: "neutral",
+};
+
+type Movement = ReturnType<typeof mapResources>["movements"][number];
+type RecipeForm = {
+  productName: string;
+  servings: number;
+  yieldUnit: string;
+  sellingPriceCents: number;
+  prepInstructions: string;
+  ingredients: RecipeIngredient[];
+};
+
+function stockStatus(item: InventoryItem): "out" | "low" | "ok" {
+  if (item.quantity <= 0) return "out";
+  if (item.quantity <= item.minQuantity) return "low";
+  return "ok";
+}
+const STATUS_VARIANT = { out: "danger", low: "warning", ok: "success" } as const;
+
+function newIngredient(item: InventoryItem): RecipeIngredient {
+  return {
+    id: `ri-${crypto.randomUUID()}`,
+    inventoryItemId: item.id,
+    name: item.name,
+    quantity: 1,
+    unit: (item.unit as RecipeUnit) || "units",
+    wastePercentage: 0,
+    unitCostCents: item.costCents,
+    subtotalCostCents: item.costCents,
+  };
+}
+
+export function InventoryPage() {
+  const { t, i18n } = useTranslation("inventory");
+  const lng = i18n.language;
+  const { org, locationId, user, can, canAny } = useWorkspace();
+  // UI hints from the member's permissions; the backend re-checks every action (migration 0018).
+  const canCreateItem = can("inventory.create");
+  const canMove = canAny(["inventory.adjust", "inventory.transfer"]);
+  const canEditRecipes = can("recipes.edit");
+  const canBuy = can("purchases.create");
+  const canReceive = can("purchases.receive");
+  const canCancelPO = can("purchases.cancel");
+  const canApprovePO = can("purchases.approve");
+  const canManage =
+    canCreateItem ||
+    canMove ||
+    canEditRecipes ||
+    canBuy ||
+    canReceive ||
+    canCancelPO ||
+    canApprovePO;
+  const isOwner = can("suppliers.edit");
+  const showStore = locationId === "all";
+  const defaultStore = locationId === "all" ? (org.locations[0]?.id ?? "") : locationId;
+
+  const storeName = useCallback(
+    (slug: string | undefined) =>
+      org.locations.find((l) => l.id === slug)?.name ?? t("unknownStore"),
+    [org.locations, t],
+  );
+  const unitLabel = (u: string) => t(`units.${u}`, { defaultValue: u });
+  const qty = (v: number, unit: string) => `${fmtQuantity(v, lng)} ${unitLabel(unit)}`;
+  const money = (cents: number) => fmtMoneyCents(cents, lng);
+  const errText = (e: unknown, fallbackKey: string) => operationalErrorText(t, e, t(fallbackKey));
+
+  const [activeTab, setActiveTab] = useState<Tab>("items");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadTick, setReloadTick] = useState(0);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [recipes, setRecipes] = useState<ProductRecipe[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [movementsTick, setMovementsTick] = useState(0);
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [products, setProducts] = useState<MenuItem[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | InventoryCategory>("all");
+
+  // Recipe dialog
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<ProductRecipe | null>(null);
-  const [recipeFormData, setRecipeFormData] = useState<{
-    productName: string;
-    servings: number;
-    yieldUnit: string;
-    sellingPriceCents: number;
-    prepInstructions: string;
-    ingredients: RecipeIngredient[];
-  }>({
+  const [recipeStore, setRecipeStore] = useState("");
+  const [recipeFormData, setRecipeFormData] = useState<RecipeForm>({
     productName: "",
     servings: 1,
-    yieldUnit: "porção",
+    yieldUnit: "",
     sellingPriceCents: 1200,
     prepInstructions: "",
     ingredients: [],
   });
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  // Movement dialog
   const [movementModalOpen, setMovementModalOpen] = useState(false);
   const [selectedItemForMove, setSelectedItemForMove] = useState<InventoryItem | null>(null);
-
-  // Movement form state
   const [moveType, setMoveType] = useState<MovementType>("in");
   const [moveQty, setMoveQty] = useState<string>("1");
   const [moveReason, setMoveReason] = useState<string>("");
   const [targetLocationId, setTargetLocationId] = useState<string>("");
+  const [moveEventKey, setMoveEventKey] = useState("");
 
+  // Other dialogs
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [poModalOpen, setPOModalOpen] = useState(false);
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
@@ -158,16 +238,18 @@ export function InventoryPage() {
     Record<string, { qty: number; price: number; note: string }>
   >({});
   const [receivingNote, setReceivingNote] = useState("");
-
-  const [movements, setMovements] = useState<ReturnType<typeof mapResources>["movements"]>([]);
-  const [products, setProducts] = useState<MenuItem[]>([]);
-  const [busy, setBusy] = useState(false);
   const [receiptKey, setReceiptKey] = useState("");
+  const [poToCancel, setPoToCancel] = useState<PurchaseOrder | null>(null);
+  // Costs come only from inventory_item_costs() (migration 0020); without inventory.costs the
+  // backend sends none, so every cost, value and margin below is hidden instead of shown as 0.
+  const [costsVisible, setCostsVisible] = useState(false);
+
   const applyData = (
     r: Parameters<typeof mapResources>[0],
     menu: Awaited<ReturnType<typeof fetchOperationalMenu>>,
   ) => {
     const m = mapResources(r);
+    setCostsVisible(m.costsVisible);
     setItems(m.items);
     setRecipes(m.recipes);
     setSuppliers(m.suppliers);
@@ -184,6 +266,7 @@ export function InventoryPage() {
   };
   useEffect(() => {
     let active = true;
+    setLoadState("loading");
     setItems([]);
     setRecipes([]);
     setSuppliers([]);
@@ -194,76 +277,116 @@ export function InventoryPage() {
       fetchOperationalMenu({ data: { orgId: org.id } }),
     ])
       .then(([r, menu]) => {
-        if (active) applyData(r, menu);
+        if (!active) return;
+        applyData(r, menu);
+        setLoadState("ready");
       })
       .catch(() => {
-        if (active) toast.error("Não foi possível carregar os dados");
+        if (active) setLoadState("error");
       });
     return () => {
       active = false;
     };
-  }, [org.id, locationId]);
+  }, [org.id, locationId, reloadTick]);
 
-  const handleOpenRecipeModal = (recipe?: ProductRecipe) => {
+  /** With "All stores", keep each store's records together (store name, then the given order). */
+  const byStore = useCallback(
+    <T extends { locationId?: string | undefined }>(list: T[], name: (x: T) => string): T[] =>
+      showStore
+        ? [...list].sort(
+            (a, b) =>
+              storeName(a.locationId).localeCompare(storeName(b.locationId), lng) ||
+              name(a).localeCompare(name(b), lng),
+          )
+        : list,
+    [showStore, storeName, lng],
+  );
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return byStore(
+      items.filter(
+        (itm) =>
+          (categoryFilter === "all" || itm.category === categoryFilter) &&
+          (itm.name.toLowerCase().includes(q) || itm.sku.toLowerCase().includes(q)),
+      ),
+      (i) => i.name,
+    );
+  }, [items, categoryFilter, search, byStore]);
+  const sortedRecipes = useMemo(() => byStore(recipes, (r) => r.productName), [recipes, byStore]);
+  const sortedPurchases = useMemo(
+    () =>
+      showStore
+        ? [...purchaseOrders].sort((a, b) =>
+            storeName(a.locationId).localeCompare(storeName(b.locationId), lng),
+          )
+        : purchaseOrders,
+    [purchaseOrders, showStore, storeName, lng],
+  );
+
+  const kpis = useMemo(
+    () => ({
+      count: items.length,
+      low: items.filter((i) => stockStatus(i) === "low").length,
+      out: items.filter((i) => stockStatus(i) === "out").length,
+      valueCents: Math.round(items.reduce((s, i) => s + Math.max(0, i.quantity) * i.costCents, 0)),
+    }),
+    [items],
+  );
+
+  // ---------- Recipes ----------
+  const openRecipeModal = (recipe?: ProductRecipe, mode: "edit" | "duplicate" = "edit") => {
     if (recipe) {
-      setSelectedRecipe(recipe);
+      setSelectedRecipe(mode === "edit" ? recipe : null);
+      setRecipeStore(recipe.locationId ?? defaultStore);
       setRecipeFormData({
-        productName: recipe.productName,
+        productName: mode === "edit" ? recipe.productName : "",
         servings: recipe.servings,
         yieldUnit: recipe.yieldUnit,
         sellingPriceCents: recipe.sellingPriceCents,
         prepInstructions: recipe.prepInstructions || "",
-        ingredients: [...recipe.ingredients],
+        ingredients: recipe.ingredients.map((i) =>
+          mode === "edit" ? i : { ...i, id: `ri-${crypto.randomUUID()}` },
+        ),
       });
     } else {
+      const first = items.find((i) => i.locationId === defaultStore);
       setSelectedRecipe(null);
+      setRecipeStore(defaultStore);
       setRecipeFormData({
         productName: "",
         servings: 1,
-        yieldUnit: "porção",
+        yieldUnit: t("recipes.defaultYieldUnit"),
         sellingPriceCents: 1400,
         prepInstructions: "",
-        ingredients: items[0]
-          ? [
-              {
-                id: `ri-${Date.now()}`,
-                inventoryItemId: items[0].id,
-                name: items[0].name,
-                quantity: 1,
-                unit: (items[0].unit as RecipeUnit) || "units",
-                wastePercentage: 0,
-                unitCostCents: items[0].costCents,
-                subtotalCostCents: items[0].costCents,
-              },
-            ]
-          : [],
+        ingredients: first ? [newIngredient(first)] : [],
       });
     }
     setRecipeModalOpen(true);
   };
+  const recipeStoreItems = items.filter((i) => i.locationId === recipeStore);
 
   const handleSaveRecipeForm = async () => {
-    if (!recipeFormData.productName.trim()) {
-      toast.error("Informe o nome do prato ou produto da ficha técnica");
+    if (busy) return;
+    const product = products.find((p) => p.name === recipeFormData.productName.trim());
+    if (!product) {
+      toast.error(t("recipeDialog.productRequired"));
       return;
     }
     if (recipeFormData.ingredients.length === 0) {
-      toast.error("Adicione pelo menos um insumo à ficha técnica");
+      toast.error(t("recipeDialog.ingredientsRequired"));
       return;
     }
-
-    if (busy) return;
+    if (!recipeStore) {
+      toast.error(t("recipeDialog.storeRequired"));
+      return;
+    }
     setBusy(true);
     try {
-      const product = products.find((p) => p.name === recipeFormData.productName.trim());
-      if (!product) throw new Error("Selecione um produto cadastrado no cardápio");
-      const store =
-        selectedRecipe?.locationId ?? (locationId === "all" ? org.locations[0]?.id : locationId);
-      if (!store) throw new Error("Selecione uma loja");
       await saveOperationalRecord({
         data: {
           orgId: org.id,
-          locationId: store,
+          locationId: recipeStore,
           kind: "recipe",
           payload: {
             ...(selectedRecipe ? { id: selectedRecipe.id } : {}),
@@ -278,88 +401,807 @@ export function InventoryPage() {
           },
         },
       });
-      await refreshData();
+      setRecipeModalOpen(false);
+      toast.success(t("recipeDialog.success"));
+      await refreshData().catch(() => setReloadTick((n) => n + 1));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
-      return;
+      toast.error(errText(e, "recipeDialog.failed"));
     } finally {
       setBusy(false);
     }
-
-    setRecipeModalOpen(false);
-    refreshData();
-    toast.success("Ficha técnica salva com sucesso!");
   };
 
-  const handleDuplicateRecipe = (r: ProductRecipe) => {
-    handleOpenRecipeModal(r);
-  };
-  const handleSyncRecipePrices = async (_r: ProductRecipe) => {
+  const handleRefreshCosts = async () => {
+    if (busy) return;
+    setBusy(true);
     try {
       await refreshData();
-      toast.success("Custos atualizados conforme estoque");
+      toast.success(t("recipes.refreshCostsSuccess"));
     } catch {
-      toast.error("Erro ao atualizar custos");
+      toast.error(t("recipes.refreshCostsFailed"));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const filteredItems = useMemo(() => {
-    return items.filter((itm) => {
-      const matchCat = categoryFilter === "all" || itm.category === categoryFilter;
-      const matchSearch =
-        itm.name.toLowerCase().includes(search.toLowerCase()) ||
-        itm.sku.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
-    });
-  }, [items, categoryFilter, search]);
-
+  // ---------- Movements ----------
+  const transferTargets = org.locations.filter(
+    (l) => l.id !== (selectedItemForMove?.locationId ?? defaultStore),
+  );
   const handleOpenMovementModal = (item?: InventoryItem) => {
-    setSelectedItemForMove(item || items[0] || null);
+    const chosen = item ?? filteredItems[0] ?? items[0] ?? null;
+    setSelectedItemForMove(chosen);
     setMoveType("in");
     setMoveQty("1");
     setMoveReason("");
-    const otherLoc = org.locations.find((l) => l.id !== locationId);
-    setTargetLocationId(otherLoc?.id || org.locations[0]?.id || "");
+    setMoveEventKey(crypto.randomUUID());
+    const target = org.locations.find((l) => l.id !== (chosen?.locationId ?? defaultStore));
+    setTargetLocationId(target?.id ?? "");
     setMovementModalOpen(true);
   };
 
   const handleRecordMovement = async () => {
-    if (!selectedItemForMove) return;
-    const qty = parseFloat(moveQty);
-    if (isNaN(qty) || qty <= 0) {
-      toast.error("Informe uma quantidade válida maior que zero");
+    if (!selectedItemForMove || busy) return;
+    const quantity = parseFloat(moveQty);
+    if (isNaN(quantity) || quantity <= 0) {
+      toast.error(t("moveDialog.invalidQuantity"));
       return;
     }
     if (!moveReason.trim()) {
-      toast.error("Informe o motivo ou justificativa da movimentação");
+      toast.error(t("moveDialog.reasonRequired"));
       return;
     }
-
-    const effectiveSource =
-      selectedItemForMove.locationId ||
-      (locationId !== "all" ? locationId : org.locations[0]?.id || "loc-1");
-
+    const source = selectedItemForMove.locationId || defaultStore;
+    setBusy(true);
     try {
       await moveOperationalInventory({
         data: {
           orgId: org.id,
           itemId: selectedItemForMove.id,
           type: moveType,
-          quantity: qty,
+          quantity,
           reason: moveReason.trim(),
-          locationId: effectiveSource,
-          clientEventId: crypto.randomUUID(),
+          locationId: source,
+          clientEventId: moveEventKey,
           ...(moveType === "transfer" ? { targetLocationId } : {}),
         },
       });
-
-      toast.success("Movimentação registrada com sucesso");
+      toast.success(t("moveDialog.success"));
       setMovementModalOpen(false);
-      refreshData();
+      await refreshData().catch(() => setReloadTick((n) => n + 1));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao registrar movimentação");
+      toast.error(errText(err, "moveDialog.failed"));
+    } finally {
+      setBusy(false);
     }
   };
+
+  const performerLabel = (m: Movement) =>
+    !m.performedBy
+      ? t("movements.system")
+      : m.performedBy === user.id
+        ? t("movements.you")
+        : t("movements.teamMember");
+
+  // ---------- Purchases ----------
+  const openReceive = (po: PurchaseOrder) => {
+    setSelectedPOForReceive(po);
+    setReceiptKey(crypto.randomUUID());
+    const initial: Record<string, { qty: number; price: number; note: string }> = {};
+    po.items.forEach((it) => {
+      initial[it.id] = {
+        qty: Math.max(0, it.quantityOrdered - it.quantityReceived),
+        price: it.unitPriceCents / 100,
+        note: "",
+      };
+    });
+    setReceiveInputs(initial);
+    setReceivingNote("");
+    setReceiveModalOpen(true);
+  };
+  const handleConfirmReceive = async () => {
+    if (!selectedPOForReceive || busy) return;
+    setBusy(true);
+    try {
+      const payload = Object.entries(receiveInputs).map(([itemId, val]) => ({
+        itemId,
+        receivedNow: val.qty,
+        priceVerifiedCents: Math.round(val.price * 100),
+        divergenceReason: val.note,
+      }));
+      await receiveOperationalPurchase({
+        data: {
+          id: selectedPOForReceive.id,
+          items: payload,
+          clientEventId: receiptKey,
+          notes: receivingNote,
+        },
+      });
+      setReceiveModalOpen(false);
+      toast.success(t("receiveDialog.success"));
+      await refreshData().catch(() => setReloadTick((n) => n + 1));
+    } catch (e) {
+      toast.error(errText(e, "receiveDialog.failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const handleCancelPO = async (po: PurchaseOrder) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await cancelOperationalPurchase({ data: { id: po.id, reason: t("purchases.cancelReason") } });
+      toast.success(t("purchases.cancelSuccess"));
+      await refreshData().catch(() => setReloadTick((n) => n + 1));
+    } catch (e) {
+      toast.error(errText(e, "purchases.cancelFailed"));
+    } finally {
+      setBusy(false);
+      setPoToCancel(null);
+    }
+  };
+
+  /** Draft → sent through the same audited save RPC (it only accepts draft/sent and locks after receipts). */
+  const handleSendPO = async (po: PurchaseOrder) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await saveOperationalRecord({
+        data: {
+          orgId: org.id,
+          locationId: po.locationId,
+          kind: "purchase",
+          payload: {
+            id: po.id,
+            supplierId: po.supplierId,
+            supplierName: po.supplierName,
+            status: "sent",
+            discountCents: po.discountCents,
+            taxCents: po.taxCents,
+            shippingCents: po.shippingCents,
+            notes: po.notes,
+            items: po.items.map((i) => ({
+              inventoryItemId: i.inventoryItemId,
+              quantityOrdered: i.quantityOrdered,
+              unitPriceCents: i.unitPriceCents,
+            })),
+          },
+        },
+      });
+      toast.success(t("purchases.sendSuccess"));
+      await refreshData().catch(() => setReloadTick((n) => n + 1));
+    } catch (e) {
+      toast.error(errText(e, "purchases.sendFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ---------- Suppliers ----------
+  const handleToggleSupplier = async (sup: Supplier) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await saveOperationalRecord({
+        data: { orgId: org.id, kind: "supplier", payload: { ...sup, active: !sup.active } },
+      });
+      toast.success(t("suppliers.statusUpdated"));
+      await refreshData().catch(() => setReloadTick((n) => n + 1));
+    } catch (e) {
+      toast.error(errText(e, "suppliers.statusFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const storeLine = (slug: string | undefined) =>
+    showStore ? (
+      <p className="mt-0.5 truncate text-xs text-muted-foreground">{storeName(slug)}</p>
+    ) : null;
+
+  // ---------- Header actions (one primary per tab) ----------
+  const headerActions = (() => {
+    if (!canManage) return null;
+    if (activeTab === "recipes")
+      return (
+        <>
+          {costsVisible && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRefreshCosts}
+              disabled={busy || loadState !== "ready"}
+              title={t("recipes.refreshCostsHint")}
+            >
+              <RefreshCw className="mr-1.5 size-4" />
+              {t("recipes.refreshCosts")}
+            </Button>
+          )}
+          {canEditRecipes && (
+            <Button size="sm" onClick={() => openRecipeModal()} disabled={loadState !== "ready"}>
+              <Plus className="mr-1.5 size-4" />
+              {t("recipes.newRecipe")}
+            </Button>
+          )}
+        </>
+      );
+    if (activeTab === "suppliers")
+      return isOwner ? (
+        <Button size="sm" onClick={() => setSupplierModalOpen(true)}>
+          <Plus className="mr-1.5 size-4" />
+          {t("suppliers.newSupplier")}
+        </Button>
+      ) : null;
+    if (activeTab === "purchases")
+      return canBuy ? (
+        <Button
+          size="sm"
+          onClick={() => setPOModalOpen(true)}
+          disabled={loadState !== "ready" || suppliers.length === 0 || items.length === 0}
+        >
+          <Plus className="mr-1.5 size-4" />
+          {t("purchases.newPO")}
+        </Button>
+      ) : null;
+    return (
+      <>
+        {canCreateItem && (
+          <Button size="sm" variant="outline" onClick={() => setItemModalOpen(true)}>
+            <Plus className="mr-1.5 size-4" />
+            {t("actions.newItem")}
+          </Button>
+        )}
+        {canMove && (
+          <Button
+            size="sm"
+            onClick={() => handleOpenMovementModal()}
+            disabled={loadState !== "ready" || items.length === 0}
+            title={items.length === 0 ? t("moveDialog.noItems") : undefined}
+          >
+            <ArrowUpDown className="mr-1.5 size-4" />
+            {t("actions.registerMovement")}
+          </Button>
+        )}
+      </>
+    );
+  })();
+
+  // ---------- Tab bodies ----------
+  const renderItems = () => (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative max-w-sm flex-1">
+          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            aria-label={t("items.searchLabel")}
+            placeholder={t("items.searchPlaceholder")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <select
+          aria-label={t("categories.label")}
+          className="h-9 rounded-md border bg-background px-3 text-sm sm:w-56"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value as "all" | InventoryCategory)}
+        >
+          <option value="all">{t("categories.all")}</option>
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {t(`categories.${c}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="surface">
+          <EmptyState
+            icon={<Boxes className="size-5" strokeWidth={1.75} />}
+            title={t("items.emptyTitle")}
+            body={t("items.emptyBody")}
+            action={
+              canCreateItem ? (
+                <Button size="sm" variant="outline" onClick={() => setItemModalOpen(true)}>
+                  <Plus className="mr-1.5 size-4" />
+                  {t("actions.newItem")}
+                </Button>
+              ) : undefined
+            }
+          />
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="surface">
+          <EmptyState
+            icon={<Search className="size-5" strokeWidth={1.75} />}
+            title={t("items.noMatchTitle")}
+            body={t("items.noMatchBody")}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredItems.map((item) => {
+            const status = stockStatus(item);
+            const meta = [item.sku ? t("items.sku", { sku: item.sku }) : "", item.supplier]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <div key={item.id} className="surface flex flex-col p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold" title={item.name}>
+                      {item.name}
+                    </h3>
+                    {meta && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>
+                    )}
+                    {storeLine(item.locationId)}
+                  </div>
+                  <Badge variant={STATUS_VARIANT[status]} className="shrink-0">
+                    {t(`status.${status}`)}
+                  </Badge>
+                </div>
+                <div className="mt-4 flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-xs text-muted-foreground">{t("items.onHand")}</span>
+                    <p className="tabular text-[22px] font-semibold leading-tight tracking-[-0.02em]">
+                      {fmtQuantity(item.quantity, lng)}{" "}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {unitLabel(item.unit)}
+                      </span>
+                    </p>
+                  </div>
+                  <dl className="text-right text-xs">
+                    <dt className="text-muted-foreground">{t("items.minimum")}</dt>
+                    <dd className="tabular font-medium">{qty(item.minQuantity, item.unit)}</dd>
+                    {costsVisible && (
+                      <>
+                        <dt className="mt-1 text-muted-foreground">{t("items.unitCost")}</dt>
+                        <dd className="tabular font-medium">{money(item.costCents)}</dd>
+                      </>
+                    )}
+                  </dl>
+                </div>
+                {canMove && (
+                  <div className="mt-3 flex justify-end border-t pt-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenMovementModal(item)}
+                      aria-label={t("actions.moveItem", { name: item.name })}
+                    >
+                      <ArrowUpDown className="mr-1.5 size-3.5" />
+                      {t("actions.move")}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMovements = () => (
+    <Panel title={t("movements.title")} subtitle={t("movements.subtitle")} bodyClassName="p-0 pt-3">
+      {movements.length === 0 ? (
+        <EmptyState
+          icon={<History className="size-5" strokeWidth={1.75} />}
+          title={t("movements.emptyTitle")}
+          body={t("movements.emptyBody")}
+        />
+      ) : (
+        <div className="max-h-[640px] overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-card">
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="px-5 py-2 font-medium">{t("movements.date")}</th>
+                <th className="px-3 py-2 font-medium">{t("movements.item")}</th>
+                <th className="px-3 py-2 font-medium">{t("movements.type")}</th>
+                <th className="px-3 py-2 text-right font-medium">{t("movements.change")}</th>
+                <th className="px-3 py-2 text-right font-medium">
+                  {t("movements.resultingBalance")}
+                </th>
+                <th className="px-3 py-2 font-medium">{t("movements.reason")}</th>
+                <th className="px-5 py-2 font-medium">{t("movements.performedBy")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {movements.map((m) => (
+                <tr key={m.id} className="align-top hover:bg-muted/40">
+                  <td className="tabular whitespace-nowrap px-5 py-2.5 text-xs text-muted-foreground">
+                    {fmtDate(m.createdAt, lng, {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZoneName: "short",
+                    })}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className="font-medium">{m.itemName}</span>
+                    {storeLine(m.locationId)}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <Badge variant={KIND_VARIANT[m.kind]} className="whitespace-nowrap">
+                      {t(`movements.kinds.${m.kind}`)}
+                    </Badge>
+                  </td>
+                  <td className="tabular whitespace-nowrap px-3 py-2.5 text-right font-medium">
+                    {m.quantityDelta > 0 ? "+" : ""}
+                    {qty(m.quantityDelta, m.unit)}
+                  </td>
+                  <td className="tabular whitespace-nowrap px-3 py-2.5 text-right">
+                    {m.resultingQuantity === null ? "—" : qty(m.resultingQuantity, m.unit)}
+                  </td>
+                  <td className="max-w-xs px-3 py-2.5 text-muted-foreground">
+                    <span className="line-clamp-2" title={m.reason}>
+                      {m.reason}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-2.5 text-muted-foreground">
+                    {performerLabel(m)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+
+  const renderRecipes = () =>
+    sortedRecipes.length === 0 ? (
+      <div className="surface">
+        <EmptyState
+          icon={<ChefHat className="size-5" strokeWidth={1.75} />}
+          title={t("recipes.emptyTitle")}
+          body={t("recipes.emptyBody")}
+          action={
+            canEditRecipes ? (
+              <Button size="sm" variant="outline" onClick={() => openRecipeModal()}>
+                <Plus className="mr-1.5 size-4" />
+                {t("recipes.createFirst")}
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
+    ) : (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {sortedRecipes.map((rec) => {
+          const hasMissing = checkRecipeStockAvailability(rec, items).some((a) => !a.isSufficient);
+          return (
+            <div key={rec.id} className="surface flex flex-col p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-semibold" title={rec.productName}>
+                    {rec.productName}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t("recipes.yield", {
+                      quantity: fmtQuantity(rec.servings, lng),
+                      unit: rec.yieldUnit,
+                    })}
+                  </p>
+                  {storeLine(rec.locationId)}
+                </div>
+                <Badge variant={hasMissing ? "warning" : "success"} className="shrink-0">
+                  {hasMissing ? t("recipes.insufficient") : t("recipes.sufficient")}
+                </Badge>
+              </div>
+
+              <dl
+                className={`mt-3 grid gap-2 rounded-md bg-muted/50 p-2.5 text-xs ${costsVisible ? "grid-cols-3" : "grid-cols-1"}`}
+              >
+                {costsVisible && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("recipes.costPerServing")}</dt>
+                    <dd className="tabular mt-0.5 text-sm font-semibold">
+                      {money(rec.costPerServingCents)}
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-muted-foreground">{t("recipes.sellingPrice")}</dt>
+                  <dd className="tabular mt-0.5 text-sm font-semibold">
+                    {money(rec.sellingPriceCents)}
+                  </dd>
+                </div>
+                {costsVisible && (
+                  <div>
+                    <dt className="text-muted-foreground">{t("recipes.margin")}</dt>
+                    <dd className="tabular mt-0.5 text-sm font-semibold">
+                      {fmtPercent(rec.estimatedMarginPercent / 100, lng)}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
+              <div className="mt-3 flex-1 text-xs">
+                <p className="mb-1 font-medium text-muted-foreground">
+                  {t("recipes.ingredientsTitle", { count: rec.ingredients.length })}
+                </p>
+                <ul className="max-h-36 divide-y overflow-y-auto rounded-md border">
+                  {rec.ingredients.map((ing) => (
+                    <li
+                      key={ing.id}
+                      className="flex items-center justify-between gap-2 px-2 py-1.5"
+                    >
+                      <span className="truncate">{ing.name}</span>
+                      <span className="tabular shrink-0 text-muted-foreground">
+                        {qty(ing.quantity, ing.unit)}
+                        {costsVisible && <> · {money(ing.subtotalCostCents)}</>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {canEditRecipes && (
+                <div className="mt-3 flex justify-end gap-2 border-t pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openRecipeModal(rec, "duplicate")}
+                    aria-label={t("recipes.duplicateLabel", { name: rec.productName })}
+                  >
+                    <Copy className="mr-1.5 size-3.5" />
+                    {t("recipes.duplicate")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openRecipeModal(rec)}
+                    aria-label={t("recipes.editLabel", { name: rec.productName })}
+                  >
+                    <Pencil className="mr-1.5 size-3.5" />
+                    {t("recipes.edit")}
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+
+  const renderSuppliers = () =>
+    suppliers.length === 0 ? (
+      <div className="surface">
+        <EmptyState
+          icon={<Truck className="size-5" strokeWidth={1.75} />}
+          title={t("suppliers.emptyTitle")}
+          body={isOwner ? t("suppliers.emptyBody") : t("suppliers.ownerOnly")}
+          action={
+            isOwner ? (
+              <Button size="sm" variant="outline" onClick={() => setSupplierModalOpen(true)}>
+                <Plus className="mr-1.5 size-4" />
+                {t("suppliers.newSupplier")}
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
+    ) : (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {suppliers.map((sup) => (
+          <div key={sup.id} className="surface flex flex-col p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold">{sup.name}</h3>
+                {sup.contactName && (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {t("suppliers.contact", { name: sup.contactName })}
+                  </p>
+                )}
+              </div>
+              <Badge variant={sup.active ? "success" : "neutral"} className="shrink-0">
+                {sup.active ? t("suppliers.active") : t("suppliers.inactive")}
+              </Badge>
+            </div>
+            {(sup.email || sup.phone || sup.address) && (
+              <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                {sup.email && (
+                  <>
+                    <dt className="text-muted-foreground">{t("suppliers.email")}</dt>
+                    <dd className="truncate">{sup.email}</dd>
+                  </>
+                )}
+                {sup.phone && (
+                  <>
+                    <dt className="text-muted-foreground">{t("suppliers.phone")}</dt>
+                    <dd className="truncate">{sup.phone}</dd>
+                  </>
+                )}
+                {sup.address && (
+                  <>
+                    <dt className="text-muted-foreground">{t("suppliers.address")}</dt>
+                    <dd className="truncate">{sup.address}</dd>
+                  </>
+                )}
+              </dl>
+            )}
+            {sup.notes && (
+              <p className="mt-3 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                {sup.notes}
+              </p>
+            )}
+            {isOwner && (
+              <div className="mt-3 flex justify-end border-t pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void handleToggleSupplier(sup)}
+                >
+                  {sup.active ? t("suppliers.deactivate") : t("suppliers.reactivate")}
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+
+  const renderPurchases = () =>
+    sortedPurchases.length === 0 ? (
+      <div className="surface">
+        <EmptyState
+          icon={<ShoppingCart className="size-5" strokeWidth={1.75} />}
+          title={t("purchases.emptyTitle")}
+          body={
+            suppliers.length === 0 ? t("purchases.emptyNeedsSupplier") : t("purchases.emptyBody")
+          }
+        />
+      </div>
+    ) : (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {sortedPurchases.map((po) => {
+          const receivable = canReceive && RECEIVABLE.includes(po.status);
+          const cancellable = canCancelPO && CANCELLABLE.includes(po.status);
+          const hint =
+            po.status === "draft" || po.status === "received" || po.status === "cancelled"
+              ? t(`purchases.receiveHint.${po.status}`)
+              : null;
+          return (
+            <div key={po.id} className="surface flex flex-col p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-sm font-semibold">{po.poNumber}</span>
+                  <p className="mt-0.5 truncate text-xs font-medium">{po.supplierName}</p>
+                  {storeLine(po.locationId)}
+                </div>
+                <Badge variant={PO_VARIANT[po.status]} className="shrink-0">
+                  {t(`purchases.statuses.${po.status}`)}
+                </Badge>
+              </div>
+
+              <div className="mt-3 flex-1 text-xs">
+                <p className="mb-1 font-medium text-muted-foreground">
+                  {t("purchases.itemsTitle", { count: po.items.length })}
+                </p>
+                <ul className="max-h-32 divide-y overflow-y-auto rounded-md border">
+                  {po.items.map((it) => (
+                    <li key={it.id} className="px-2 py-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{it.name}</span>
+                        <span className="tabular shrink-0">{qty(it.quantityOrdered, it.unit)}</span>
+                      </div>
+                      {it.quantityReceived > 0 && (
+                        <p className="tabular text-muted-foreground">
+                          {t("purchases.receivedOf", {
+                            received: fmtQuantity(it.quantityReceived, lng),
+                            ordered: fmtQuantity(it.quantityOrdered, lng),
+                            unit: unitLabel(it.unit),
+                          })}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-3 flex items-baseline justify-between text-xs">
+                <span className="text-muted-foreground">
+                  {po.expectedDeliveryDate
+                    ? t("purchases.expectedOn", { date: fmtDate(po.expectedDeliveryDate, lng) })
+                    : t("purchases.createdOn", { date: fmtDate(po.createdAt, lng) })}
+                </span>
+                <span className="tabular text-right">
+                  <span className="mr-1.5 text-muted-foreground">{t("purchases.total")}</span>
+                  <span className="text-base font-semibold">{money(po.totalCents)}</span>
+                </span>
+              </div>
+
+              {canManage && (receivable || cancellable || hint) && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                  {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : <span />}
+                  <div className="flex items-center gap-2">
+                    {cancellable && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setPoToCancel(po)}
+                      >
+                        {t("purchases.cancelOrder")}
+                      </Button>
+                    )}
+                    {po.status === "draft" && canApprovePO && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void handleSendPO(po)}
+                      >
+                        <Send className="mr-1.5 size-3.5" />
+                        {t("purchases.sendToSupplier")}
+                      </Button>
+                    )}
+                    {receivable && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => openReceive(po)}
+                      >
+                        <Truck className="mr-1.5 size-3.5" />
+                        {t("purchases.receiveGoods")}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+
+  const body =
+    loadState === "loading" ? (
+      <div
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        role="status"
+        aria-label={t("load.loading")}
+      >
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-40 rounded-xl" />
+        ))}
+      </div>
+    ) : loadState === "error" ? (
+      <div className="surface">
+        <StateCard
+          tone="danger"
+          icon={<CircleAlert className="size-5" strokeWidth={1.75} />}
+          title={t("load.errorTitle")}
+          body={t("load.errorBody")}
+          action={
+            <Button variant="outline" size="sm" onClick={() => setReloadTick((n) => n + 1)}>
+              <RefreshCw className="mr-1.5 size-3.5" />
+              {t("actions.retry")}
+            </Button>
+          }
+        />
+      </div>
+    ) : activeTab === "items" ? (
+      renderItems()
+    ) : activeTab === "movements" ? (
+      renderMovements()
+    ) : activeTab === "recipes" ? (
+      renderRecipes()
+    ) : activeTab === "suppliers" ? (
+      renderSuppliers()
+    ) : (
+      renderPurchases()
+    );
+
+  const scopeHint = locationId === "all" ? t("allStores") : storeName(locationId);
+  const selectedRecipeProduct = recipeFormData.productName;
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -367,519 +1209,67 @@ export function InventoryPage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            {org.fictional && (
-              <DemoBadge label={t("simulatedBadge", { defaultValue: "Simulação Interativa" })} />
-            )}
+            {org.fictional && <DemoBadge label={t("simulatedBadge")} />}
           </div>
         }
         title={t("title")}
         description={t("subtitle")}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 text-xs mr-2">
-              <button
-                onClick={() => setActiveTab("items")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  activeTab === "items"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t("title")}
-              </button>
-              <button
-                onClick={() => setActiveTab("movements")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  activeTab === "movements"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Movimentações
-              </button>
-              <button
-                onClick={() => setActiveTab("recipes")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  activeTab === "recipes"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t("recipes.tab", { defaultValue: "Fichas Técnicas" })}
-              </button>
-              <button
-                onClick={() => setActiveTab("suppliers")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  activeTab === "suppliers"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t("suppliers.tab", { defaultValue: "Fornecedores" })}
-              </button>
-              <button
-                onClick={() => setActiveTab("purchases")}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  activeTab === "purchases"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t("purchases.tab", { defaultValue: "Compras (PO)" })}
-              </button>
-            </div>
-
-            {canManage && activeTab === "recipes" && (
-              <Button size="sm" onClick={() => handleOpenRecipeModal()}>
-                <Plus className="mr-1.5 size-4" />
-                {t("recipes.newRecipe", { defaultValue: "Nova Ficha Técnica" })}
-              </Button>
-            )}
-            {canManage && activeTab === "suppliers" && (
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditingSupplier(null);
-                  setSupplierModalOpen(true);
-                }}
-              >
-                <Plus className="mr-1.5 size-4" />
-                {t("suppliers.newSupplier", { defaultValue: "Novo Fornecedor" })}
-              </Button>
-            )}
-            {canManage && activeTab === "purchases" && (
-              <Button size="sm" onClick={() => setPOModalOpen(true)}>
-                <Plus className="mr-1.5 size-4" />
-                {t("purchases.newPO", { defaultValue: "Novo Pedido (PO)" })}
-              </Button>
-            )}
-            {canManage && (activeTab === "items" || activeTab === "movements") && (
-              <Button size="sm" variant="outline" onClick={() => setItemModalOpen(true)}>
-                <Plus className="mr-1.5 size-4" />
-                {t("operations:create.inventory")}
-              </Button>
-            )}
-            {canManage && (activeTab === "items" || activeTab === "movements") && (
-              <Button size="sm" onClick={() => handleOpenMovementModal()}>
-                <ArrowUpDown className="mr-1.5 size-4" />
-                Registrar Movimento
-              </Button>
-            )}
-          </div>
-        }
+        actions={headerActions}
       />
 
-      {activeTab === "suppliers" ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {suppliers.map((sup) => (
-              <div
-                key={sup.id}
-                className="rounded-xl border bg-card p-4 flex flex-col justify-between shadow-xs"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-bold text-sm">{sup.name}</h3>
-                      {sup.contactName && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Contato: {sup.contactName}
-                        </p>
-                      )}
-                    </div>
-                    <Badge variant={sup.active ? "outline" : "secondary"} className="text-[10px]">
-                      {sup.active ? "Ativo" : "Inativo"}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                    {sup.email && <p>E-mail: {sup.email}</p>}
-                    {sup.phone && <p>Tel: {sup.phone}</p>}
-                    {sup.address && <p className="truncate">End: {sup.address}</p>}
-                  </div>
-                  {sup.notes && (
-                    <p className="mt-3 text-[11px] bg-muted/40 p-2 rounded text-muted-foreground italic">
-                      {sup.notes}
-                    </p>
-                  )}
-                </div>
-                <div className="mt-4 pt-3 border-t flex justify-end gap-2">
-                  {canManage && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={async () => {
-                        try {
-                          await saveOperationalRecord({
-                            data: {
-                              orgId: org.id,
-                              kind: "supplier",
-                              payload: { ...sup, active: !sup.active },
-                            },
-                          });
-                        } catch {
-                          toast.error("Fornecedores só podem ser alterados pelo proprietário");
-                          return;
-                        }
-                        refreshData();
-                        toast.success("Status do fornecedor atualizado");
-                      }}
-                    >
-                      {sup.active ? "Desativar" : "Reativar"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : activeTab === "purchases" ? (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {purchaseOrders.map((po) => (
-              <div
-                key={po.id}
-                className="rounded-xl border bg-card p-4 flex flex-col justify-between shadow-xs"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="font-mono font-bold text-sm text-primary">
-                        {po.poNumber}
-                      </span>
-                      <p className="font-medium text-xs mt-0.5">{po.supplierName}</p>
-                    </div>
-                    <Badge
-                      variant={
-                        po.status === "received"
-                          ? "default"
-                          : po.status === "cancelled"
-                            ? "destructive"
-                            : "outline"
-                      }
-                      className="text-[10px] capitalize"
-                    >
-                      {po.status.replace("_", " ")}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 flex items-baseline justify-between border-t pt-2 text-xs">
-                    <span className="text-muted-foreground">Total Ordem</span>
-                    <span className="font-bold text-base text-foreground">
-                      ${(po.totalCents / 100).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-muted-foreground">
-                    <span>{po.items.length} itens pedidos</span>
-                    {po.expectedDeliveryDate && <span> · Entrega: {po.expectedDeliveryDate}</span>}
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t flex items-center justify-between gap-2">
-                  {po.status !== "received" && po.status !== "cancelled" && canManage ? (
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        setSelectedPOForReceive(po);
-                        setReceiptKey(crypto.randomUUID());
-                        const initial: Record<
-                          string,
-                          { qty: number; price: number; note: string }
-                        > = {};
-                        po.items.forEach((it) => {
-                          initial[it.id] = {
-                            qty: Math.max(0, it.quantityOrdered - it.quantityReceived),
-                            price: it.unitPriceCents / 100,
-                            note: "",
-                          };
-                        });
-                        setReceiveInputs(initial);
-                        setReceivingNote("");
-                        setReceiveModalOpen(true);
-                      }}
-                    >
-                      {t("purchases.receiveGoods", { defaultValue: "Receber Itens" })}
-                    </Button>
-                  ) : (
-                    <span />
-                  )}
-                  {po.status === "draft" && canManage && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-destructive hover:bg-destructive/10"
-                      onClick={async () => {
-                        try {
-                          await cancelOperationalPurchase({
-                            data: { id: po.id, reason: "Cancelado pelo usuário" },
-                          });
-                        } catch {
-                          toast.error("Pedido de compra fora das suas unidades autorizadas");
-                          return;
-                        }
-                        refreshData();
-                        toast.success("Pedido de compra cancelado");
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : activeTab === "recipes" ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {recipes.map((rec) => {
-              const availability = checkRecipeStockAvailability(rec, items);
-              const hasMissing = availability.some((a) => !a.isSufficient);
-              return (
-                <div
-                  key={rec.id}
-                  className="rounded-xl border bg-card p-4 flex flex-col justify-between shadow-xs transition-all hover:border-primary/50"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-bold text-sm leading-tight">{rec.productName}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Rendimento: {rec.servings} {rec.yieldUnit}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={hasMissing ? "destructive" : "outline"}
-                        className="text-[10px]"
-                      >
-                        {hasMissing
-                          ? t("recipes.insufficient", { defaultValue: "Insumo Baixo" })
-                          : t("recipes.sufficient", { defaultValue: "Disponível" })}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-muted/30 p-2 text-center text-xs">
-                      <div>
-                        <span className="text-[10px] text-muted-foreground">Custo/Porção</span>
-                        <p className="font-bold text-sm text-foreground">
-                          ${(rec.costPerServingCents / 100).toFixed(2)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-muted-foreground">Venda</span>
-                        <p className="font-bold text-sm text-foreground">
-                          ${(rec.sellingPriceCents / 100).toFixed(2)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-muted-foreground">Margem</span>
-                        <p
-                          className={`font-bold text-sm ${rec.estimatedMarginPercent >= 70 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600"}`}
-                        >
-                          {rec.estimatedMarginPercent}%
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 space-y-1.5 text-xs">
-                      <span className="font-medium text-muted-foreground text-[11px]">
-                        {rec.ingredients.length} Ingredientes Calculados:
-                      </span>
-                      <div className="divide-y rounded-md border p-1.5 bg-background/50 max-h-36 overflow-y-auto">
-                        {rec.ingredients.map((ing) => (
-                          <div
-                            key={ing.id}
-                            className="flex items-center justify-between py-1 text-[11px]"
-                          >
-                            <span className="truncate max-w-[150px]">{ing.name}</span>
-                            <span className="font-mono text-muted-foreground">
-                              {ing.quantity} {ing.unit} (${(ing.subtotalCostCents / 100).toFixed(2)}
-                              )
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t flex flex-wrap justify-between gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs px-2"
-                      onClick={() => handleSyncRecipePrices(rec)}
-                      title="Atualizar custos"
-                    >
-                      <RefreshCw className="size-3 mr-1" /> Custos
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={() => handleDuplicateRecipe(rec)}
-                      >
-                        <Copy className="size-3 mr-1" /> Copiar
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={() => handleOpenRecipeModal(rec)}
-                      >
-                        Editar
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {recipes.length === 0 && (
-              <div className="col-span-full rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-                <ChefHat className="mx-auto size-8 mb-2 opacity-40" />
-                <p className="font-medium">Nenhuma ficha técnica cadastrada nesta unidade.</p>
-                <Button size="sm" onClick={() => handleOpenRecipeModal()} className="mt-3">
-                  <Plus className="size-3.5 mr-1" /> Criar Primeira Ficha Técnica
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : activeTab === "items" ? (
-        <div className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar insumo ou código..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-xl border bg-card p-4 flex flex-col justify-between shadow-xs"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-semibold text-sm leading-tight">{item.name}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        SKU: {item.sku} · {item.supplier}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={item.quantity <= item.minQuantity ? "destructive" : "outline"}
-                      className="text-[10px]"
-                    >
-                      {item.quantity <= 0
-                        ? "Esgotado"
-                        : item.quantity <= item.minQuantity
-                          ? "Estoque Baixo"
-                          : "Normal"}
-                    </Badge>
-                  </div>
-                  <div className="mt-4 flex items-baseline justify-between border-t pt-3">
-                    <div>
-                      <span className="text-xs text-muted-foreground">Quantidade</span>
-                      <p className="text-lg font-bold">
-                        {item.quantity} {item.unit}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-muted-foreground">Mínimo</span>
-                      <p className="text-sm font-medium">
-                        {item.minQuantity} {item.unit}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => handleOpenMovementModal(item)}
-                  >
-                    <ArrowUpDown className="size-3 mr-1" /> Movimentar
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <Panel
-          title="Histórico de Movimentações Auditável"
-          subtitle="Rastreabilidade ponta a ponta de saldo, perdas, ajustes e transferências"
+      {loadState === "ready" && (
+        <div
+          className={`grid grid-cols-2 gap-4 ${costsVisible ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
         >
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="py-2 px-3 font-medium">Data/Hora</th>
-                  <th className="py-2 px-3 font-medium">Insumo</th>
-                  <th className="py-2 px-3 font-medium">Tipo</th>
-                  <th className="py-2 px-3 font-medium">Variação</th>
-                  <th className="py-2 px-3 font-medium">Saldo Resultante</th>
-                  <th className="py-2 px-3 font-medium">Motivo</th>
-                  <th className="py-2 px-3 font-medium">Responsável</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {movements.map((m) => (
-                  <tr key={m.id} className="hover:bg-muted/30">
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-muted-foreground">
-                      {new Date(m.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-2.5 px-3 font-medium">{m.itemName}</td>
-                    <td className="py-2.5 px-3 capitalize">
-                      <Badge variant="outline" className="text-[10px]">
-                        {m.type === "in"
-                          ? "Entrada"
-                          : m.type === "out"
-                            ? "Saída"
-                            : m.type === "loss"
-                              ? "Perda"
-                              : m.type === "transfer"
-                                ? "Transferência"
-                                : "Ajuste"}
-                      </Badge>
-                    </td>
-                    <td
-                      className={`py-2.5 px-3 font-semibold ${m.quantityDelta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}
-                    >
-                      {m.quantityDelta > 0 ? `+${m.quantityDelta}` : m.quantityDelta}
-                    </td>
-                    <td className="py-2.5 px-3 font-mono">{m.resultingQuantity}</td>
-                    <td className="py-2.5 px-3 text-muted-foreground truncate max-w-xs">
-                      {m.reason}
-                    </td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{m.performedBy}</td>
-                  </tr>
-                ))}
-                {movements.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-6 text-center text-muted-foreground">
-                      Nenhuma movimentação registrada nesta unidade.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
+          <StatTile
+            label={t("kpis.items")}
+            value={fmtQuantity(kpis.count, lng, 0)}
+            hint={scopeHint}
+          />
+          <StatTile
+            label={t("kpis.lowStock")}
+            value={fmtQuantity(kpis.low, lng, 0)}
+            hint={t("kpis.atOrBelowMin")}
+            tone={kpis.low > 0 ? "warning" : "neutral"}
+          />
+          <StatTile
+            label={t("kpis.outOfStock")}
+            value={fmtQuantity(kpis.out, lng, 0)}
+            hint={t("kpis.zeroOnHand")}
+            tone={kpis.out > 0 ? "negative" : "neutral"}
+          />
+          {costsVisible && (
+            <StatTile
+              label={t("kpis.stockValue")}
+              value={money(kpis.valueCents)}
+              hint={t("kpis.valueHint")}
+            />
+          )}
+        </div>
       )}
 
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)}>
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+          <TabsList aria-label={t("tabsLabel")} className="h-10">
+            {TABS.map((tab) => (
+              <TabsTrigger key={tab} value={tab} className="px-3.5">
+                {t(`tabs.${tab}`)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+      </Tabs>
+
+      {body}
+
       <OperationalCreateDialog
+        purchaseStatus={canApprovePO ? "sent" : "draft"}
         kind="inventory"
         open={itemModalOpen}
         onOpenChange={setItemModalOpen}
         orgId={org.id}
-        locationId={locationId === "all" ? org.locations[0]?.id : locationId}
+        locationId={locationId === "all" ? undefined : locationId}
+        locations={org.locations}
         items={items}
         suppliers={suppliers}
         onSaved={refreshData}
@@ -899,38 +1289,62 @@ export function InventoryPage() {
         open={poModalOpen}
         onOpenChange={setPOModalOpen}
         orgId={org.id}
-        locationId={locationId === "all" ? org.locations[0]?.id : locationId}
-        items={items.filter(
-          (i) => i.locationId === (locationId === "all" ? org.locations[0]?.id : locationId),
-        )}
+        locationId={locationId === "all" ? undefined : locationId}
+        locations={org.locations}
+        items={items}
         suppliers={suppliers}
         onSaved={refreshData}
       />
-      {/* Modal de Ficha Técnica */}
+
+      {/* Recipe card dialog */}
       <Dialog open={recipeModalOpen} onOpenChange={setRecipeModalOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {selectedRecipe ? "Editar Ficha Técnica" : "Nova Ficha Técnica (BOM)"}
+              {selectedRecipe ? t("recipeDialog.titleEdit") : t("recipeDialog.titleNew")}
             </DialogTitle>
-            <DialogDescription>
-              Configure quantidades, perdas, rendimento e calcule o custo unitário e margem líquida
-              por porção.
-            </DialogDescription>
+            <DialogDescription>{t("recipeDialog.description")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-sm">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5 col-span-2">
-                <Label>Nome do Prato / Receita</Label>
+              {!selectedRecipe && org.locations.length > 1 && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="recipe-store">{t("recipeDialog.store")}</Label>
+                  <select
+                    id="recipe-store"
+                    className="h-9 w-full rounded-md border bg-background px-3"
+                    value={recipeStore}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setRecipeStore(next);
+                      const first = items.find((i) => i.locationId === next);
+                      // Ingredients must belong to the recipe's own store.
+                      setRecipeFormData({
+                        ...recipeFormData,
+                        ingredients: first ? [newIngredient(first)] : [],
+                      });
+                    }}
+                  >
+                    {org.locations.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="col-span-2 space-y-1.5">
+                <Label htmlFor="recipe-product">{t("recipeDialog.product")}</Label>
                 <select
+                  id="recipe-product"
                   className="h-9 w-full rounded-md border bg-background px-3"
-                  value={recipeFormData.productName}
+                  value={selectedRecipeProduct}
                   onChange={(e) =>
                     setRecipeFormData({ ...recipeFormData, productName: e.target.value })
                   }
                 >
-                  <option value="">Selecione um produto</option>
+                  <option value="">{t("recipeDialog.productPlaceholder")}</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.name}>
                       {p.name}
@@ -939,8 +1353,9 @@ export function InventoryPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>Porções / Rendimento</Label>
+                <Label htmlFor="recipe-servings">{t("recipeDialog.servings")}</Label>
                 <Input
+                  id="recipe-servings"
                   type="number"
                   min="1"
                   value={recipeFormData.servings}
@@ -953,15 +1368,20 @@ export function InventoryPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Preço de Venda Estimado (USD)</Label>
+                <Label htmlFor="recipe-price">{t("recipeDialog.sellingPrice")}</Label>
                 <Input
+                  id="recipe-price"
                   type="number"
                   step="0.50"
+                  min="0"
                   value={(recipeFormData.sellingPriceCents / 100).toFixed(2)}
                   onChange={(e) =>
                     setRecipeFormData({
                       ...recipeFormData,
-                      sellingPriceCents: Math.round(parseFloat(e.target.value || "0") * 100),
+                      sellingPriceCents: Math.max(
+                        0,
+                        Math.round(parseFloat(e.target.value || "0") * 100),
+                      ),
                     })
                   }
                 />
@@ -970,49 +1390,43 @@ export function InventoryPage() {
 
             <div className="space-y-2 border-t pt-3">
               <div className="flex items-center justify-between">
-                <Label className="font-bold">
-                  Composição de Ingredientes ({recipeFormData.ingredients.length})
-                </Label>
+                <span className="text-sm font-medium">
+                  {t("recipeDialog.ingredients", { count: recipeFormData.ingredients.length })}
+                </span>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs"
+                  disabled={recipeStoreItems.length === 0}
                   onClick={() => {
-                    if (!items[0]) return;
+                    const first = recipeStoreItems[0];
+                    if (!first) return;
                     setRecipeFormData({
                       ...recipeFormData,
-                      ingredients: [
-                        ...recipeFormData.ingredients,
-                        {
-                          id: `ri-${Date.now()}`,
-                          inventoryItemId: items[0].id,
-                          name: items[0].name,
-                          quantity: 1,
-                          unit: (items[0].unit as RecipeUnit) || "units",
-                          wastePercentage: 0,
-                          unitCostCents: items[0].costCents,
-                          subtotalCostCents: items[0].costCents,
-                        },
-                      ],
+                      ingredients: [...recipeFormData.ingredients, newIngredient(first)],
                     });
                   }}
                 >
-                  <Plus className="size-3 mr-1" /> Adicionar Insumo
+                  <Plus className="mr-1.5 size-3.5" />
+                  {t("recipeDialog.addIngredient")}
                 </Button>
               </div>
+              {recipeStoreItems.length === 0 && (
+                <p className="text-xs text-muted-foreground">{t("recipeDialog.noStoreItems")}</p>
+              )}
 
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
                 {recipeFormData.ingredients.map((ing, idx) => (
                   <div
                     key={ing.id}
-                    className="rounded-lg border p-2 text-xs grid grid-cols-12 gap-2 items-center bg-muted/20"
+                    className="grid grid-cols-12 items-center gap-2 rounded-md border bg-muted/30 p-2 text-xs"
                   >
                     <div className="col-span-5">
                       <select
+                        aria-label={t("recipeDialog.ingredient", { index: idx + 1 })}
                         value={ing.inventoryItemId}
                         onChange={(e) => {
-                          const chosen = items.find((i) => i.id === e.target.value);
+                          const chosen = recipeStoreItems.find((i) => i.id === e.target.value);
                           if (!chosen) return;
                           const updated = [...recipeFormData.ingredients];
                           const costs = calculateIngredientCost(
@@ -1030,53 +1444,58 @@ export function InventoryPage() {
                           };
                           setRecipeFormData({ ...recipeFormData, ingredients: updated });
                         }}
-                        className="w-full h-8 rounded border bg-background px-2 text-xs truncate"
+                        className="h-8 w-full truncate rounded-md border bg-background px-2 text-xs"
                       >
-                        {items.map((i) => (
+                        {recipeStoreItems.map((i) => (
                           <option key={i.id} value={i.id}>
-                            {i.name} (${(i.costCents / 100).toFixed(2)}/{i.unit})
+                            {costsVisible
+                              ? t("recipeDialog.ingredientOption", {
+                                  name: i.name,
+                                  price: money(i.costCents),
+                                  unit: unitLabel(i.unit),
+                                })
+                              : i.name}
                           </option>
                         ))}
                       </select>
                     </div>
-                    <div className="col-span-3 flex items-center gap-1">
+                    <div className="col-span-4 flex items-center gap-1.5">
                       <Input
+                        aria-label={t("recipeDialog.ingredientQuantity", { index: idx + 1 })}
                         type="number"
                         step="0.05"
                         min="0.01"
                         value={ing.quantity}
                         onChange={(e) => {
-                          const qty = Math.max(0.001, parseFloat(e.target.value || "0"));
+                          const q = Math.max(0.001, parseFloat(e.target.value || "0"));
                           const chosen =
-                            items.find((i) => i.id === ing.inventoryItemId) || items[0];
+                            recipeStoreItems.find((i) => i.id === ing.inventoryItemId) ??
+                            recipeStoreItems[0];
                           const updated = [...recipeFormData.ingredients];
                           const costs = chosen
-                            ? calculateIngredientCost(chosen, qty, ing.unit, ing.wastePercentage)
+                            ? calculateIngredientCost(chosen, q, ing.unit, ing.wastePercentage)
                             : { unitCostCents: 0, subtotalCostCents: 0 };
                           updated[idx] = {
                             ...ing,
-                            quantity: qty,
+                            quantity: q,
                             subtotalCostCents: costs.subtotalCostCents,
                           };
                           setRecipeFormData({ ...recipeFormData, ingredients: updated });
                         }}
                         className="h-8 text-xs"
                       />
-                      <span className="text-[10px] text-muted-foreground uppercase">
-                        {ing.unit}
-                      </span>
+                      <span className="shrink-0 text-muted-foreground">{unitLabel(ing.unit)}</span>
                     </div>
-                    <div className="col-span-3 text-right">
-                      <span className="font-bold font-mono text-xs">
-                        ${(ing.subtotalCostCents / 100).toFixed(2)}
-                      </span>
+                    <div className="tabular col-span-2 text-right font-medium">
+                      {costsVisible ? money(ing.subtotalCostCents) : "—"}
                     </div>
                     <div className="col-span-1 text-right">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="size-6 text-destructive"
+                        className="size-8 text-muted-foreground hover:text-destructive"
+                        aria-label={t("recipeDialog.removeIngredient", { name: ing.name })}
                         onClick={() => {
                           setRecipeFormData({
                             ...recipeFormData,
@@ -1084,7 +1503,7 @@ export function InventoryPage() {
                           });
                         }}
                       >
-                        ✕
+                        <X className="size-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -1092,10 +1511,11 @@ export function InventoryPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5 border-t pt-2">
-              <Label>Instruções de Preparo (KDS / Linha)</Label>
+            <div className="space-y-1.5 border-t pt-3">
+              <Label htmlFor="recipe-prep">{t("recipeDialog.prepInstructions")}</Label>
               <Input
-                placeholder="Ex: Grelhar por 3 min cada lado, aplicar queijo sob abafador..."
+                id="recipe-prep"
+                placeholder={t("recipeDialog.prepPlaceholder")}
                 value={recipeFormData.prepInstructions}
                 onChange={(e) =>
                   setRecipeFormData({ ...recipeFormData, prepInstructions: e.target.value })
@@ -1106,47 +1526,55 @@ export function InventoryPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setRecipeModalOpen(false)}>
-              Cancelar
+              {t("actions.cancel")}
             </Button>
-            <Button onClick={handleSaveRecipeForm}>Salvar Ficha Técnica</Button>
+            <Button onClick={handleSaveRecipeForm} disabled={busy} aria-busy={busy}>
+              {t("recipeDialog.save")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Recebimento de PO */}
+      {/* Purchase receiving dialog */}
       <Dialog open={receiveModalOpen} onOpenChange={setReceiveModalOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Conferência de Recebimento ({selectedPOForReceive?.poNumber})</DialogTitle>
-            <DialogDescription>
-              Verifique quantidades entregues e divergências de preço na fatura. Saldo adicionado ao
-              estoque automaticamente.
-            </DialogDescription>
+            <DialogTitle>
+              {t("receiveDialog.title", { number: selectedPOForReceive?.poNumber ?? "" })}
+            </DialogTitle>
+            <DialogDescription>{t("receiveDialog.description")}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2 text-xs">
+          <div className="space-y-3 py-2 text-sm">
             {selectedPOForReceive?.items.map((it) => {
-              const currentInput = receiveInputs[it.id] || {
+              const currentInput = receiveInputs[it.id] ?? {
                 qty: 0,
                 price: it.unitPriceCents / 100,
                 note: "",
               };
               return (
-                <div key={it.id} className="rounded-lg border p-2.5 bg-muted/20 space-y-1.5">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-bold text-sm">{it.name}</p>
-                      <p className="text-muted-foreground">
-                        Pedido: {it.quantityOrdered} {it.unit} (Já entregue: {it.quantityReceived})
+                <div key={it.id} className="space-y-2 rounded-md border bg-muted/30 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{it.name}</p>
+                      <p className="tabular text-xs text-muted-foreground">
+                        {t("receiveDialog.ordered", {
+                          quantity: fmtQuantity(it.quantityOrdered, lng),
+                          unit: unitLabel(it.unit),
+                          received: fmtQuantity(it.quantityReceived, lng),
+                        })}
                       </p>
                     </div>
-                    <span className="font-mono font-medium">
-                      Acordado: ${(it.unitPriceCents / 100).toFixed(2)}
+                    <span className="tabular shrink-0 text-xs text-muted-foreground">
+                      {t("receiveDialog.agreedPrice", { price: money(it.unitPriceCents) })}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div>
-                      <Label className="text-[11px]">Qtd Recebida Agora</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`recv-qty-${it.id}`} className="text-xs">
+                        {t("receiveDialog.receivedNow")}
+                      </Label>
                       <Input
+                        id={`recv-qty-${it.id}`}
                         type="number"
                         step="0.5"
                         min="0"
@@ -1159,14 +1587,18 @@ export function InventoryPage() {
                             [it.id]: { ...currentInput, qty: v },
                           });
                         }}
-                        className="h-7 text-xs"
+                        className="h-8 text-xs"
                       />
                     </div>
-                    <div>
-                      <Label className="text-[11px]">Preço Unit. Verificado (USD)</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor={`recv-price-${it.id}`} className="text-xs">
+                        {t("receiveDialog.verifiedPrice")}
+                      </Label>
                       <Input
+                        id={`recv-price-${it.id}`}
                         type="number"
                         step="0.10"
+                        min="0"
                         value={currentInput.price}
                         onChange={(e) => {
                           const v = Math.max(0, parseFloat(e.target.value || "0"));
@@ -1175,17 +1607,18 @@ export function InventoryPage() {
                             [it.id]: { ...currentInput, price: v },
                           });
                         }}
-                        className="h-7 text-xs"
+                        className="h-8 text-xs"
                       />
                     </div>
                   </div>
                 </div>
               );
             })}
-            <div className="space-y-1 pt-2">
-              <Label>Observação de Entrega / Lacre</Label>
+            <div className="space-y-1.5 pt-1">
+              <Label htmlFor="recv-note">{t("receiveDialog.note")}</Label>
               <Input
-                placeholder="Ex: Lacre conferido sem avarias, lote conferido..."
+                id="recv-note"
+                placeholder={t("receiveDialog.notePlaceholder")}
                 value={receivingNote}
                 onChange={(e) => setReceivingNote(e.target.value)}
               />
@@ -1193,126 +1626,141 @@ export function InventoryPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReceiveModalOpen(false)}>
-              Cancelar
+              {t("actions.cancel")}
             </Button>
-            <Button
-              disabled={busy}
-              onClick={async () => {
-                if (!selectedPOForReceive || busy) return;
-                setBusy(true);
-                try {
-                  const payload = Object.entries(receiveInputs).map(([itemId, val]) => ({
-                    itemId,
-                    receivedNow: val.qty,
-                    priceVerifiedCents: Math.round(val.price * 100),
-                    divergenceReason: val.note,
-                  }));
-                  await receiveOperationalPurchase({
-                    data: {
-                      id: selectedPOForReceive.id,
-                      items: payload,
-                      clientEventId: receiptKey,
-                      notes: receivingNote,
-                    },
-                  });
-                  setReceiveModalOpen(false);
-                  refreshData();
-                  toast.success("Recebimento auditado e integrado ao estoque com sucesso!");
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Erro ao registrar recebimento");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              Confirmar Entrada de Estoque
+            <Button disabled={busy} aria-busy={busy} onClick={handleConfirmReceive}>
+              {t("receiveDialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Movimentação */}
+      {/* Cancel purchase order confirmation */}
+      <AlertDialog open={poToCancel !== null} onOpenChange={(o) => !o && setPoToCancel(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("purchases.cancelConfirmTitle", { number: poToCancel?.poNumber ?? "" })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("purchases.cancelConfirmBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>{t("purchases.keepOrder")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (poToCancel) void handleCancelPO(poToCancel);
+              }}
+            >
+              {t("purchases.cancelConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Stock movement dialog */}
       <Dialog open={movementModalOpen} onOpenChange={setMovementModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Registrar Movimentação de Estoque</DialogTitle>
-            <DialogDescription>
-              Entrada, saída, perda, ajuste de inventário ou transferência entre filiais
-              autorizadas.
-            </DialogDescription>
+            <DialogTitle>{t("moveDialog.title")}</DialogTitle>
+            <DialogDescription>{t("moveDialog.description")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-sm">
             <div className="space-y-1.5">
-              <Label>Insumo</Label>
+              <Label htmlFor="move-item">{t("moveDialog.item")}</Label>
               <select
-                value={selectedItemForMove?.id || ""}
+                id="move-item"
+                value={selectedItemForMove?.id ?? ""}
                 onChange={(e) => {
-                  const itm = items.find((i) => i.id === e.target.value);
-                  setSelectedItemForMove(itm || null);
+                  const itm = items.find((i) => i.id === e.target.value) ?? null;
+                  setSelectedItemForMove(itm);
+                  const target = org.locations.find(
+                    (l) => l.id !== (itm?.locationId ?? defaultStore),
+                  );
+                  setTargetLocationId(target?.id ?? "");
                 }}
                 className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
               >
-                {items.map((i) => (
+                {byStore(items, (i) => i.name).map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.name} ({i.quantity} {i.unit} disponíveis)
+                    {t("moveDialog.itemOption", {
+                      name: showStore ? `${i.name} (${storeName(i.locationId)})` : i.name,
+                      quantity: fmtQuantity(i.quantity, lng),
+                      unit: unitLabel(i.unit),
+                    })}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Tipo de Movimentação</Label>
-              <div className="grid grid-cols-5 gap-1 text-xs">
-                {(["in", "out", "loss", "adjustment", "transfer"] as MovementType[]).map(
-                  (tType) => (
-                    <Button
-                      key={tType}
-                      type="button"
-                      size="sm"
-                      variant={moveType === tType ? "default" : "outline"}
-                      onClick={() => setMoveType(tType)}
-                      className="h-8 px-1 text-[11px] capitalize"
-                    >
-                      {tType === "in"
-                        ? "Entrada"
-                        : tType === "out"
-                          ? "Saída"
-                          : tType === "loss"
-                            ? "Perda"
-                            : tType === "adjustment"
-                              ? "Ajuste"
-                              : "Transf."}
-                    </Button>
-                  ),
-                )}
+              <span className="text-sm font-medium" id="move-type-label">
+                {t("moveDialog.type")}
+              </span>
+              <div
+                role="radiogroup"
+                aria-labelledby="move-type-label"
+                className="grid grid-cols-3 gap-1.5 sm:grid-cols-5"
+              >
+                {MOVE_TYPES.map((tType) => (
+                  <Button
+                    key={tType}
+                    type="button"
+                    size="sm"
+                    role="radio"
+                    aria-checked={moveType === tType}
+                    variant={moveType === tType ? "secondary" : "outline"}
+                    onClick={() => setMoveType(tType)}
+                    className={
+                      moveType === tType
+                        ? "h-9 px-1 text-xs ring-1 ring-foreground/20"
+                        : "h-9 px-1 text-xs"
+                    }
+                  >
+                    {tType === "transfer" && <ArrowLeftRight className="mr-1 size-3" />}
+                    {t(`moveDialog.types.${tType}`)}
+                  </Button>
+                ))}
               </div>
+              {moveType === "loss" && (
+                <p className="text-xs text-muted-foreground">{t("moveDialog.lossHint")}</p>
+              )}
             </div>
 
             {moveType === "transfer" && (
               <div className="space-y-1.5">
-                <Label>Unidade de Destino</Label>
-                <select
-                  value={targetLocationId}
-                  onChange={(e) => setTargetLocationId(e.target.value)}
-                  className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
-                >
-                  {org.locations
-                    .filter((l) => l.id !== locationId)
-                    .map((l) => (
+                <Label htmlFor="move-target">{t("moveDialog.targetStore")}</Label>
+                {transferTargets.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t("moveDialog.noTargetStore")}</p>
+                ) : (
+                  <select
+                    id="move-target"
+                    value={targetLocationId}
+                    onChange={(e) => setTargetLocationId(e.target.value)}
+                    className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm"
+                  >
+                    {transferTargets.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.name}
                       </option>
                     ))}
-                </select>
+                  </select>
+                )}
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label>
-                {moveType === "adjustment" ? "Nova Quantidade Contada" : "Quantidade a Movimentar"}
+              <Label htmlFor="move-qty">
+                {moveType === "adjustment"
+                  ? t("moveDialog.countedQuantity")
+                  : t("moveDialog.quantity")}
+                {selectedItemForMove ? ` (${unitLabel(selectedItemForMove.unit)})` : ""}
               </Label>
               <Input
+                id="move-qty"
                 type="number"
                 step="0.5"
                 min="0.1"
@@ -1322,9 +1770,10 @@ export function InventoryPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Motivo / Justificativa</Label>
+              <Label htmlFor="move-reason">{t("moveDialog.reason")}</Label>
               <Input
-                placeholder="Ex: Recebimento de carga, refugo de corte, remanejamento de salão..."
+                id="move-reason"
+                placeholder={t("moveDialog.reasonPlaceholder")}
                 value={moveReason}
                 onChange={(e) => setMoveReason(e.target.value)}
               />
@@ -1333,9 +1782,19 @@ export function InventoryPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setMovementModalOpen(false)}>
-              Cancelar
+              {t("actions.cancel")}
             </Button>
-            <Button onClick={handleRecordMovement}>Confirmar Registro</Button>
+            <Button
+              onClick={handleRecordMovement}
+              disabled={
+                busy ||
+                !selectedItemForMove ||
+                (moveType === "transfer" && transferTargets.length === 0)
+              }
+              aria-busy={busy}
+            >
+              {t("moveDialog.submit")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

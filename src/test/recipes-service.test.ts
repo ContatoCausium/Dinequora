@@ -5,6 +5,7 @@ import {
   computeRecipeTotals,
   checkRecipeStockAvailability,
   type RecipeIngredient,
+  type ProductRecipe,
 } from "../lib/recipes-service";
 import type { InventoryItem } from "../lib/inventory-service";
 
@@ -72,16 +73,75 @@ describe("Recipes & Bill of Materials (BOM) Service", () => {
   });
 
   it("flags insufficient ingredients correctly", () => {
-    const recipe: any = {
+    const recipe: ProductRecipe = {
+      id: "recipe-1",
+      orgId: "org-test",
+      productId: "prod-1",
+      productName: "Test Bread",
+      servings: 1,
+      yieldQuantity: 1,
+      yieldUnit: "unit",
+      totalCostCents: 0,
+      costPerServingCents: 0,
+      sellingPriceCents: 0,
+      estimatedMarginPercent: 0,
+      history: [],
+      updatedAt: new Date().toISOString(),
       ingredients: [
-        { inventoryItemId: "inv-1", name: "Flour", quantity: 10, unit: "lb" },
-        { inventoryItemId: "inv-2", name: "Yeast", quantity: 2, unit: "lb" },
+        {
+          id: "ri-1",
+          inventoryItemId: "inv-1",
+          name: "Flour",
+          quantity: 10,
+          unit: "lb",
+          wastePercentage: 0,
+          unitCostCents: 0,
+          subtotalCostCents: 0,
+        },
+        {
+          id: "ri-2",
+          inventoryItemId: "inv-2",
+          name: "Yeast",
+          quantity: 2,
+          unit: "lb",
+          wastePercentage: 0,
+          unitCostCents: 0,
+          subtotalCostCents: 0,
+        },
       ],
     };
 
-    const inventory: any = [
-      { id: "inv-1", quantity: 5, unit: "lb" }, // Insufficient (needs 10)
-      { id: "inv-2", quantity: 20, unit: "lb" }, // Sufficient
+    const inventory: InventoryItem[] = [
+      {
+        id: "inv-1",
+        orgId: "org-test",
+        locationId: "loc-1",
+        name: "Flour",
+        category: "dry_goods",
+        sku: "FL-1",
+        unit: "lb",
+        quantity: 5,
+        minQuantity: 0,
+        costCents: 0,
+        supplier: "Test Supplier",
+        active: true,
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "inv-2",
+        orgId: "org-test",
+        locationId: "loc-1",
+        name: "Yeast",
+        category: "dry_goods",
+        sku: "YS-1",
+        unit: "lb",
+        quantity: 20,
+        minQuantity: 0,
+        costCents: 0,
+        supplier: "Test Supplier",
+        active: true,
+        updatedAt: new Date().toISOString(),
+      },
     ];
 
     const alerts = checkRecipeStockAvailability(recipe, inventory, 1);

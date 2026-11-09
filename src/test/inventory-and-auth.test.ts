@@ -33,10 +33,10 @@ describe("Authentication Provider Validation (Supabase Integration)", () => {
   });
 
   it("uses real supabase.auth.signInWithPassword when logging in", async () => {
-    (supabase.auth.signInWithPassword as any).mockResolvedValueOnce({
+    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValueOnce({
       data: { session: {} },
       error: null,
-    });
+    } as never);
     await supabaseAuth.signIn("owner@test.com", "password123");
     expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: "owner@test.com",
@@ -45,10 +45,10 @@ describe("Authentication Provider Validation (Supabase Integration)", () => {
   });
 
   it("uses real supabase.auth.signUp when creating account with metadata and redirect", async () => {
-    (supabase.auth.signUp as any).mockResolvedValueOnce({
+    vi.mocked(supabase.auth.signUp).mockResolvedValueOnce({
       data: { user: { id: "u-123", identities: [{ id: "id-1" }] }, session: {} },
       error: null,
-    });
+    } as never);
 
     const res = await supabaseAuth.signUp({
       email: "newuser@test.com",

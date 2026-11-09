@@ -15,6 +15,37 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/** Backend error codes the inventory screens explain in plain language (inventory:errors.*). */
+const KNOWN_ERROR_CODES = [
+  "permission_denied",
+  "forbidden",
+  "location_forbidden",
+  "location_required",
+  "invalid_quantity",
+  "invalid_movement",
+  "invalid_transfer",
+  "incompatible_units",
+  "idempotency_conflict",
+  "purchase_locked",
+  "invalid_receipt",
+  "invalid_receipt_quantity",
+  "invalid_price",
+  "received_purchase_requires_return",
+  "org_suspended",
+  "subscription_inactive",
+] as const;
+
+/** Maps a server error to a translated message; unknown errors fall back to `fallback`. */
+export function operationalErrorText(
+  t: (key: string) => string,
+  error: unknown,
+  fallback: string,
+): string {
+  const raw = error instanceof Error ? error.message : "";
+  const code = KNOWN_ERROR_CODES.find((c) => raw === c || raw.includes(c));
+  return code ? t(`inventory:errors.${code}`) : fallback;
+}
+
 export function OperationalCreateDialog({
   kind,
   open,
@@ -24,6 +55,8 @@ export function OperationalCreateDialog({
   items,
   suppliers,
   onSaved,
+  locations,
+  purchaseStatus = "sent",
 }: {
   kind: "inventory" | "supplier" | "purchase";
   open: boolean;
@@ -33,8 +66,16 @@ export function OperationalCreateDialog({
   items: InventoryItem[];
   suppliers: Supplier[];
   onSaved: () => Promise<void>;
+  /** Stores the user may pick from (e.g. when "All stores" is selected); items are filtered to it. */
+  locations?: { id: string; name: string }[] | undefined;
+  /** "draft" when the user may create but not approve (send) purchase orders. */
+  purchaseStatus?: "draft" | "sent" | undefined;
 }) {
   const { t } = useTranslation("operations");
+  const [storeId, setStoreId] = useState("");
+  const pickStore = kind !== "supplier" && (locations?.length ?? 0) > 1 && !locationId;
+  const effectiveLocationId = pickStore ? storeId || locations?.[0]?.id : locationId;
+  const storeItems = pickStore ? items.filter((i) => i.locationId === effectiveLocationId) : items;
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [price, setPrice] = useState("0");
@@ -50,13 +91,13 @@ export function OperationalCreateDialog({
     if (busy) return;
     const q = Number(quantity);
     const cents = Math.round(Number(price) * 100);
-    const chosen = items.find((i) => i.id === (itemId || items[0]?.id));
+    const chosen = storeItems.find((i) => i.id === (itemId || storeItems[0]?.id));
     const sup = supplierId || suppliers[0]?.id;
     if (!Number.isFinite(q) || q < 0 || !Number.isSafeInteger(cents) || cents < 0) {
       toast.error(t("invalid"));
       return;
     }
-    if (kind !== "supplier" && !locationId) {
+    if (kind !== "supplier" && !effectiveLocationId) {
       toast.error(t("storeRequired"));
       return;
     }
@@ -77,7 +118,7 @@ export function OperationalCreateDialog({
           ? { name, contactName: contact, active: true, suppliedCategories: [] }
           : {
               supplierId: sup ?? "",
-              status: "sent",
+              status: purchaseStatus,
               discountCents: Math.round(Number(discount) * 100),
               taxCents: Math.round(Number(tax) * 100),
               shippingCents: Math.round(Number(shipping) * 100),
@@ -88,13 +129,20 @@ export function OperationalCreateDialog({
     setBusy(true);
     try {
       await saveOperationalRecord({
-        data: { orgId, ...(locationId ? { locationId } : {}), kind, payload },
+        data: {
+          orgId,
+          ...(kind !== "supplier" && effectiveLocationId
+            ? { locationId: effectiveLocationId }
+            : {}),
+          kind,
+          payload,
+        },
       });
       await onSaved();
       onOpenChange(false);
       toast.success(t("saved"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("failed"));
+      toast.error(operationalErrorText(t, e, t("failed")));
     } finally {
       setBusy(false);
     }
@@ -106,6 +154,26 @@ export function OperationalCreateDialog({
           <DialogTitle>{t(`create.${kind}`)}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          {pickStore && (
+            <div>
+              <Label htmlFor={`new-${kind}-store`}>{t("inventory:createDialog.store")}</Label>
+              <select
+                id={`new-${kind}-store`}
+                className="h-9 w-full rounded-md border bg-background px-3"
+                value={effectiveLocationId ?? ""}
+                onChange={(e) => {
+                  setStoreId(e.target.value);
+                  setItemId("");
+                }}
+              >
+                {locations?.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {kind !== "purchase" && (
             <div>
               <Label htmlFor={`new-${kind}-name`}>{t("name")}</Label>
@@ -150,10 +218,10 @@ export function OperationalCreateDialog({
                 <select
                   id="po-item"
                   className="h-9 w-full rounded-md border bg-background px-3"
-                  value={itemId || items[0]?.id || ""}
+                  value={itemId || storeItems[0]?.id || ""}
                   onChange={(e) => setItemId(e.target.value)}
                 >
-                  {items.map((i) => (
+                  {storeItems.map((i) => (
                     <option key={i.id} value={i.id}>
                       {i.name}
                     </option>
@@ -198,7 +266,9 @@ export function OperationalCreateDialog({
                 onChange={(e) => setUnit(e.target.value)}
               >
                 {["units", "pack", "lb", "oz", "kg", "gal"].map((u) => (
-                  <option key={u}>{u}</option>
+                  <option key={u} value={u}>
+                    {t(`inventory:units.${u}`)}
+                  </option>
                 ))}
               </select>
             </div>
