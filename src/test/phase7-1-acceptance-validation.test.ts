@@ -23,8 +23,9 @@ describe("Phase 7.1: POS E2E Acceptance Flow Database Function", () => {
     const isLive = !envUrl.includes("placeholder") && !envKey.includes("placeholder");
 
     if (!isLive) {
-      // Report verified local inspection
-      expect(typeof supabase.rpc).toBe("function");
+      // No live credentials (CI, fresh clones): nothing to inspect. Do not touch the client here:
+      // building it requires VITE_SUPABASE_* from a developer's local .env, which CI does not have.
+      expect(isLive).toBe(false);
       return;
     }
 
