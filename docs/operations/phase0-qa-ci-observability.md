@@ -20,6 +20,9 @@ venda próprios para testar isolamento. Senhas são geradas e gravadas só no `C
   fixtures SQL (`reconstructed_operations/hardening/purchases`) → seed do QA → `permission_matrix.mjs` (144 verificações:
   seis perfis, escopo de loja, isolamento entre organizações, custos de estoque, admin da plataforma).
 - Sem segredos, sem deploy, sem acesso a projeto hospedado.
+- O Supabase CLI não é dependência do projeto: o job **security** instala a versão fixa **3.0.0** com
+  `supabase/setup-cli@v1` e chama `supabase` direto (nada de `npx`, que no runner não acharia o CLI).
+  Localmente, use a mesma versão no PATH; a suíte não depende de pacotes npm globais.
 - **Para bloquear merge** é preciso ativar _branch protection_ no GitHub exigindo `ci / quality` e
   `ci / security` (ação no GitHub, pendente de autorização).
 

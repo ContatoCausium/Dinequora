@@ -69,4 +69,10 @@ foi antecipado (commit 3) porque PDV e KDS o importam.
 | 12  | `279cc81` | 10       | feat(i18n): en-US/pt-BR parity and formatting                                              |
 | 13  | `b44df97` | 6        | fix(data): real organizations never see synthetic figures on Locations                     |
 | 14  | `06df149` | 10       | test(security): isolated QA tenant, CI security suite, seed layers and fixture fixes       |
-| 15  | (este)    | 11       | docs: phase 0 plans, migration orphans, data layers, local config and route tree           |
+| 15  | `e654847` | 11       | docs: phase 0 plans, migration orphans, data layers, local config and route tree           |
+| 16  | `8d443cc` | 1        | test(ci): acceptance test no longer depends on a developer .env                            |
+| 17  | (este)    | 4        | fix(ci): install a pinned Supabase CLI 3.0.0 for the security job                          |
+
+O commit 17 corrige um defeito achado na auditoria final: o job `security` chamava
+`npx --no-install supabase`, mas o CLI só existia instalado globalmente na máquina de
+desenvolvimento; no runner do GitHub o passo falharia (`npx canceled due to missing packages`).

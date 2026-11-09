@@ -3,7 +3,7 @@
 # local stack). Never run it against the commercial demo or a hosted project: every step below
 # refuses anything other than the QA ports (55321 API / 55322 DB).
 #
-#   npx supabase start --workdir scripts/qa -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
+#   supabase start --workdir scripts/qa -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
 #   bash scripts/qa/security-suite.sh
 #
 # Steps (any failure stops the suite with a non-zero exit, which blocks the merge in CI):
@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-eval "$(npx --no-install supabase status --workdir scripts/qa -o env 2>/dev/null | grep -E '^(API_URL|DB_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
+eval "$(supabase status --workdir scripts/qa -o env 2>/dev/null | grep -E '^(API_URL|DB_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
 [[ "${API_URL:-}" =~ ^http://(127\.0\.0\.1|localhost):55321$ ]] || { echo "Refusing: QA API must be on 55321 (got '${API_URL:-}')"; exit 2; }
 [[ "${DB_URL:-}" =~ @(127\.0\.0\.1|localhost):55322/postgres$ ]] || { echo "Refusing: QA DB must be on 55322"; exit 2; }
 

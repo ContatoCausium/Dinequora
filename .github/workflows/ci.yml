@@ -52,9 +52,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The Supabase CLI is not a project dependency; install a pinned version on the runner.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.0.0
       - name: Start disposable QA Supabase
         run: >
-          npx --no-install supabase start --workdir scripts/qa
+          supabase start --workdir scripts/qa
           -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
       - name: Security suite
         env:
@@ -69,4 +73,4 @@ jobs:
           if-no-files-found: ignore
       - name: Stop QA Supabase
         if: always()
-        run: npx --no-install supabase stop --workdir scripts/qa --no-backup
+        run: supabase stop --workdir scripts/qa --no-backup
