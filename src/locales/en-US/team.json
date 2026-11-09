@@ -64,77 +64,392 @@
       "4": "Finish branding and store setup first."
     }
   },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "done": "Done",
+    "retry": "Try again",
+    "loading": "Loading"
+  },
+  "tabs": {
+    "members": "Members",
+    "profiles": "Profiles",
+    "activity": "Activity"
+  },
+  "stats": {
+    "members": "Members",
+    "membersHint": "{{owners}} owners · {{managers}} managers · {{staff}} staff",
+    "pending": "Pending invitations",
+    "pendingHint": "Waiting to be accepted",
+    "customized": "Customized access",
+    "customizedHint": "Members with individual adjustments",
+    "profiles": "Custom profiles",
+    "profilesHint": "Plus {{count}} templates"
+  },
   "page": {
     "eyebrow": "Settings",
     "title": "Team & access",
-    "subtitle": "People who can access {{org}}. Roles control what each person can see and change.",
+    "subtitle": "People who can access {{org}}. Tiers set the limits; profiles and adjustments set exactly what each person can do.",
     "members": "Members",
+    "membersCount_one": "{{count}} person",
+    "membersCount_other": "{{count}} people",
+    "emptyMembers": "No members yet.",
     "pending": "Pending invitations",
+    "pendingHint": "Invitation links are not emailed — share them yourself.",
     "noPending": "No pending invitations.",
     "you": "You",
     "unnamed": "Unnamed member",
     "expires": "Expires {{date}}",
+    "expiredShort": "Expired",
     "revoke": "Withdraw",
     "revoked": "Invitation withdrawn.",
-    "membersCount_one": "{{count}} person",
-    "membersCount_other": "{{count}} people",
+    "revokeTitle": "Withdraw the invitation for {{email}}?",
+    "revokeBody": "The link stops working immediately. You can invite them again later.",
     "allStores": "All stores",
     "noStores": "No stores assigned",
     "noStoresAvailable": "No stores available to assign.",
-    "changeRole": "Change role",
-    "roleChanged": "Role updated.",
-    "assignStores": "Assign stores",
-    "assignBody": "Choose which stores {{name}} can access.",
-    "storesSaved": "Store access updated.",
-    "remove": "Remove",
+    "otherStores_one": "{{count}} other store",
+    "otherStores_other": "{{count}} other stores",
+    "remove": "Remove member",
     "removeTitle": "Remove {{name}}?",
     "removeBody": "They will immediately lose access to {{org}}. This is recorded in the activity log.",
     "removed": "Member removed.",
-    "expired": "Expired — can no longer be accepted"
+    "noAccessTitle": "You don't have access to the team",
+    "noAccessBody": "Ask an owner for the “Team · View” permission if you need to see who works here."
+  },
+  "table": {
+    "member": "Member",
+    "tier": "Tier",
+    "profile": "Profile",
+    "stores": "Stores",
+    "actions": "Actions",
+    "customized": "Customized",
+    "fullAccess": "Full access",
+    "open": "Open access for {{name}}"
   },
   "invite": {
+    "open": "Invite member",
     "title": "Invite a teammate",
-    "subtitle": "They'll get access only to this organization, and only to the stores you choose, after accepting with the same email.",
+    "subtitle": "They get access only to this organization, and only to the stores you choose, after accepting with the same email.",
     "email": "Email",
-    "role": "Role",
+    "emailInvalid": "Enter a valid email address.",
+    "role": "Tier",
+    "stores": "Store access",
     "submit": "Create invitation",
     "linkTitle": "Invitation link ready",
     "linkBody": "Share this private link with {{email}}. It works once and expires in 7 days.",
+    "notEmailed": "No email was sent. Copy the link and share it with the person yourself. For security it can't be shown again after you leave this page.",
     "copy": "Copy link",
     "copied": "Link copied.",
-    "readOnly": "Only owners and managers can invite people.",
-    "error": "We couldn't create that invitation.",
-    "stores": "Store access",
+    "copyFailed": "Couldn't copy. Select the link and copy it manually.",
+    "another": "Invite someone else",
     "noStores": "You can invite staff only to stores assigned to you. Ask an owner to assign you a store first."
   },
   "roleHelp": {
-    "owner": "Full control, billing and branding",
-    "manager": "Runs assigned stores and invites staff to them",
-    "staff": "Day-to-day operations"
+    "owner": "Full control, billing, branding and ownership",
+    "manager": "Runs assigned stores and manages staff in them",
+    "staff": "Day-to-day operations in assigned stores"
+  },
+  "detail": {
+    "ownerAccess": "Owners have every permission in every store.",
+    "usesProfile": "Profile: {{profile}}",
+    "usesDefault": "Using the tier default",
+    "isYou": "This is you. You can't change your own access — ask another owner.",
+    "readOnly": "You can view this member's access but not change it.",
+    "accessSection": "Tier, profile and stores",
+    "tier": "Tier",
+    "tierOwnerOnly": "Only owners change tiers",
+    "profile": "Permission profile",
+    "tierDefault": "Tier default",
+    "profileHint": "Changing the tier or profile resets individual adjustments.",
+    "stores": "Stores",
+    "noStoresHint": "Without stores this person can sign in but won't see any store data.",
+    "permissions": "Permissions",
+    "permissionsOf": "Permissions of {{name}}",
+    "count_one": "{{count}} permission",
+    "count_other": "{{count}} permissions",
+    "diff": "+{{added}} / −{{removed}} vs. saved",
+    "noPermissionChanges": "no permission changes",
+    "resetAdjustments": "Reset adjustments",
+    "ownerAll": "Owner tier includes every permission; the matrix is shown for reference.",
+    "willGrant": "Will grant:",
+    "willRemove": "Will remove:",
+    "exceedsOwn": "You can't grant permissions you don't have: {{list}}. Pick another profile or turn them off.",
+    "otherActions": "Other actions",
+    "unsaved": "Unsaved changes",
+    "upToDate": "No unsaved changes",
+    "save": "Save access",
+    "saved": "Access updated."
+  },
+  "transfer": {
+    "action": "Transfer ownership",
+    "title": "Transfer ownership to {{name}}?",
+    "body1": "{{name}} becomes an owner of {{org}} with full control, including billing, branding and the team.",
+    "body2": "You will become a manager. You keep only the stores already assigned to you and lose owner-only actions.",
+    "body3": "Only an owner can undo this. The change is recorded in the activity log.",
+    "confirm": "Transfer ownership",
+    "done": "{{name}} is now an owner."
+  },
+  "matrix": {
+    "module": "Module",
+    "columns": {
+      "view": "View",
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "approve": "Approve",
+      "other": "Other"
+    },
+    "notApplicable": "Not applicable",
+    "unavailable": "Not available for this tier",
+    "beyondOwn": "You don't have this permission yourself",
+    "legend": {
+      "added": "added individually",
+      "removed": "removed individually",
+      "inherited": "Others come from the profile or tier default."
+    }
+  },
+  "perm": {
+    "modules": {
+      "dashboard": "Dashboard",
+      "pos": "POS",
+      "orders": "Orders",
+      "kds": "Kitchen display",
+      "menu": "Menu",
+      "inventory": "Inventory",
+      "recipes": "Recipes",
+      "purchases": "Purchases",
+      "suppliers": "Suppliers",
+      "finance": "Finance",
+      "expenses": "Expenses",
+      "reports": "Reports",
+      "team": "Team",
+      "settings": "Settings"
+    },
+    "actions": {
+      "view": "View",
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "approve": "Approve",
+      "update": "Update status",
+      "financials": "Financial figures",
+      "sell": "Sell",
+      "discount": "Discount",
+      "refund": "Refund",
+      "operate": "Operate",
+      "adjust": "Adjust",
+      "transfer": "Transfer",
+      "costs": "View costs",
+      "receive": "Receive",
+      "cancel": "Cancel",
+      "pay": "Pay",
+      "export": "Export",
+      "invite": "Invite",
+      "manage": "Manage access",
+      "activity": "Activity log",
+      "locations": "Stores",
+      "branding": "Branding",
+      "billing": "Billing"
+    }
+  },
+  "profiles": {
+    "customTitle": "Custom profiles",
+    "customSubtitle": "Reusable permission sets for this organization.",
+    "ownerOnly": "Only owners create or edit profiles.",
+    "systemTitle": "Templates",
+    "systemSubtitle": "Provided by Servora. Read-only — duplicate one to customize it.",
+    "template": "Template",
+    "new": "New profile",
+    "newTitle": "New profile",
+    "editTitle": "Edit profile",
+    "editorHint": "Permissions are capped to the tier. Members using this profile update when you save.",
+    "view": "View {{name}}",
+    "edit": "Edit {{name}}",
+    "duplicate": "Duplicate to customize",
+    "copyOf": "{{name}} (copy)",
+    "archive": "Archive {{name}}",
+    "archiveInUse_one": "Assigned to {{count}} member — move them first.",
+    "archiveInUse_other": "Assigned to {{count}} members — move them first.",
+    "archiveTitle": "Archive {{name}}?",
+    "archiveBody": "The profile disappears from the lists. Members can no longer be assigned to it.",
+    "archiveConfirm": "Archive profile",
+    "archived": "Profile archived.",
+    "usedBy_one": "used by {{count}} member",
+    "usedBy_other": "used by {{count}} members",
+    "emptyTitle": "No custom profiles yet",
+    "emptyBody": "Duplicate a template below or create a profile from scratch.",
+    "name": "Name",
+    "description": "Description",
+    "tierHint": "Tier sets the maximum this profile can include.",
+    "tierLocked_one": "Assigned to {{count}} member, so the tier is locked.",
+    "tierLocked_other": "Assigned to {{count}} members, so the tier is locked.",
+    "matrixCaption": "Permissions of the profile {{name}}",
+    "affects_one": "Saving updates the access of {{count}} member.",
+    "affects_other": "Saving updates the access of {{count}} members.",
+    "save": "Save profile",
+    "saved": "Profile saved.",
+    "system": {
+      "org_admin": {
+        "name": "Organization admin",
+        "description": "Everything except branding, billing and ownership."
+      },
+      "manager": {
+        "name": "Store manager",
+        "description": "Runs assigned stores: sales, stock, purchases, team and reports."
+      },
+      "cashier": {
+        "name": "Cashier / front of house",
+        "description": "Sells at the POS and follows orders."
+      },
+      "kitchen": {
+        "name": "Kitchen",
+        "description": "Works the kitchen display and reads recipes."
+      },
+      "stock": {
+        "name": "Stock keeper",
+        "description": "Keeps stock: items, counts, transfers, purchase orders and receiving."
+      },
+      "finance": {
+        "name": "Finance",
+        "description": "Bills, expenses, payments and financial reports."
+      }
+    }
   },
   "activity": {
-    "title": "Recent activity",
-    "subtitle": "Membership, invitation and store changes in this organization.",
-    "empty": "No activity yet."
+    "title": "Activity",
+    "subtitle": "Who did what, where, and whether it was allowed. Refused attempts are recorded too.",
+    "empty": "No activity yet.",
+    "emptyFiltered": "No activity matches these filters.",
+    "noDenied": "No refused attempts were recorded.",
+    "loadFailed": "Couldn't load the activity log.",
+    "system": "System",
+    "unknownMember": "Unknown member",
+    "otherStore": "Other store",
+    "filters": {
+      "member": "Member",
+      "allMembers": "All members",
+      "store": "Store",
+      "result": "Result",
+      "allResults": "All results",
+      "clear": "Clear filters"
+    },
+    "cols": {
+      "when": "When",
+      "member": "Member",
+      "action": "Action",
+      "store": "Store",
+      "result": "Result"
+    },
+    "result": {
+      "success": "Success",
+      "denied": "Denied",
+      "error": "Error"
+    },
+    "showing_one": "Showing {{count}} entry",
+    "showing_other": "Showing {{count}} entries",
+    "loadMore": "Load more",
+    "limitReached": "Showing the latest 200 — narrow the filters to see older entries.",
+    "actions": {
+      "member": {
+        "added": "Member added",
+        "removed": "Member removed",
+        "role_changed": "Tier changed",
+        "access_changed": "Access changed",
+        "locations_changed": "Store access changed"
+      },
+      "invitation": {
+        "created": "Invitation created",
+        "revoked": "Invitation withdrawn",
+        "accepted": "Invitation accepted"
+      },
+      "permission_profile": {
+        "saved": "Permission profile saved",
+        "archived": "Permission profile archived"
+      },
+      "ownership": {
+        "transferred": "Ownership transferred"
+      },
+      "orders": {
+        "created": "Order created",
+        "status_changed": "Order status changed",
+        "cancelled": "Order cancelled",
+        "item_ready": "Order item marked ready"
+      },
+      "pos": {
+        "finalized": "Sale completed"
+      },
+      "inventory": {
+        "moved": "Stock movement recorded",
+        "saved": "Inventory item saved"
+      },
+      "purchase": {
+        "received": "Purchase received",
+        "cancelled": "Purchase cancelled",
+        "saved": "Purchase order saved"
+      },
+      "menu": {
+        "saved": "Menu item saved",
+        "archived": "Menu item archived"
+      },
+      "expense": {
+        "saved": "Expense saved"
+      },
+      "recipe": {
+        "saved": "Recipe saved"
+      },
+      "supplier": {
+        "saved": "Supplier saved"
+      },
+      "location": {
+        "created": "Store created",
+        "updated": "Store updated",
+        "status_changed": "Store status changed",
+        "managers_changed": "Store managers changed"
+      },
+      "organization": {
+        "created": "Organization created",
+        "brand_updated": "Branding updated",
+        "onboarding_progress": "Setup progress saved",
+        "test_classified": "Marked as test organization"
+      }
+    }
   },
   "errors": {
-    "last_owner_or_unknown": "That change isn't allowed. An organization must always keep at least one owner."
+    "forbidden": "You don't have permission to make this change.",
+    "permission_denied": "Your access doesn't allow this action.",
+    "permission_exceeds_own": "You can't give someone permissions you don't have yourself.",
+    "invalid_permission": "One of the permissions isn't valid for this tier.",
+    "invalid_profile": "That permission profile is no longer available. Reload and try again.",
+    "profile_tier_mismatch": "The profile belongs to a different tier than the one selected.",
+    "profile_tier_in_use": "This profile is assigned to members of its current tier, so its tier can't change.",
+    "profile_in_use": "This profile is still assigned to members. Move them to another profile first.",
+    "last_owner": "An organization must always keep at least one owner.",
+    "invalid_location": "One of the selected stores doesn't belong to this organization.",
+    "invalid_email": "Enter a valid email address.",
+    "invalid_name": "Use a name between 2 and 60 characters.",
+    "not_member": "This person is no longer a member of the organization.",
+    "org_suspended": "This organization is suspended, so changes are blocked.",
+    "subscription_inactive": "The subscription is inactive, so changes are blocked.",
+    "unknown": "Something went wrong. Nothing was changed — try again."
   },
-  "perms": {
-    "title": "Permissions by role",
-    "subtitle": "Enforced by the server for every request.",
-    "action": "Action",
-    "scoped": "Assigned stores",
-    "yes": "Allowed",
-    "no": "Not allowed",
-    "rows": {
-      "viewDashboard": "View performance",
-      "editLocations": "Edit store details and hours",
-      "addLocations": "Add or deactivate stores",
-      "inviteStaff": "Invite staff",
-      "inviteManagers": "Invite managers or owners",
-      "changeRoles": "Change roles",
-      "billing": "Billing and plan"
-    }
+  "resetConfirm": {
+    "title": "Reset individual adjustments?",
+    "body_one": "Changing the tier or profile replaces {{name}}'s permissions with the new defaults. The {{count}} individual adjustment below will be discarded:",
+    "body_other": "Changing the tier or profile replaces {{name}}'s permissions with the new defaults. The {{count}} individual adjustments below will be discarded:",
+    "added": "Added:",
+    "removed": "Removed:",
+    "note": "Nothing is saved until you press “Save access”. You can re-apply adjustments afterwards in the matrix.",
+    "confirm": "Change and reset adjustments"
+  },
+  "reissue": {
+    "action": "New link",
+    "actionExpired": "Reissue",
+    "title": "Issue a new invitation link for {{email}}?",
+    "body": "A new link is created with the same tier, profile and stores, valid for 7 days. The previous link stops working.",
+    "note": "Nothing is e-mailed: the new link is copied so you can send it yourself.",
+    "confirm": "Issue new link",
+    "done": "New invitation link created — use “Copy link” to share it.",
+    "doneCopied": "New invitation link created and copied to the clipboard."
   }
 }
