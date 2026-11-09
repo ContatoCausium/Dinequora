@@ -1,0 +1,31 @@
+{
+  "$comment": "SHA-256 of each migration as published (LF-normalized). Generated from main cd89e66 on 2026-11-09 and verified against the applied tracker of the demo and QA databases. Never edit an entry; add new ones with: node scripts/qa/check-migrations.mjs --add-new-hashes",
+  "migrations": {
+    "0000_auth_orgs_memberships": "587b6b52ee28e6d7d315736a168b29e78980e9b616204171921b0bc56ebabd40",
+    "0001_tenant_hardening_audit_control_center": "b513414d3bafbec779790414e17a85af17abc50c938035fcbeaa93cccf244343",
+    "0002_members_audit_allow_org_delete": "2093f69c18ff459e20000a11fbf78071eba90481bbeb9dc91490accde8f73f0e",
+    "0003_locations_team_billing_bootstrap": "b343d4e40e53663d4c56c1b29d3a072b52d3d9d4482d4cafb071a40c2f0177ab",
+    "0004_plan_entitlements_and_billing_prep": "de0479310c6c14110842d7fd2c0483b816f36c12231a5094741c9ce1586ce10a",
+    "0005_admin_org_insights": "6444a3362470b01b2ec5d3f9bb0f527f4d24ad252e4606b7c13924a171f35aa6",
+    "0006_restaurant_onboarding_branding": "94b8ac80bc1451f814eb38056c652d6f12a515479800620a1845b264b72aa5ba",
+    "0007_phase0_location_hours_validation": "1e3b5ec495db612ef635eb1ced53ca35a1d1727ae0c6372e2ac338218d1816c7",
+    "0008_phase1_atomic_location_save": "c53abf1432d7d1b276dbd55de265938377de07740b3319ac92740323f1168428",
+    "0009_phase1_onboarding_step_requirements": "492926320d258bad927a780ab771817394e8335b4cee5d7c11f805356d6f1e44",
+    "0010_servora_types": "899c2f3451cd679c0b81f238ce0c1e0a540e79da7fef426022018237a4cbf994",
+    "0011_fix_admin_list_platform_admins": "f46ea5bc093864c1447adac4596bcce1531a3bf104b818c1aa5041e339b1dc02",
+    "0012_reconstructed_operational_schema": "e840072cd18617a36fe0aa1ccd76e95c241aad3aad3ce4b8c1b652086edc420a",
+    "0013_reconstructed_pos_transactions": "0de1291b41206ec4e430141ece02628296de3bdd735ec97c0e18042cee5437e4",
+    "0014_reconstructed_inventory_receiving": "f48cddaf02762cd8075cf101ac2a0e258d8011c9ad6c9fc35608c5b5ffd61fe2",
+    "0015_receiving_alias_and_request_validation": "1d58c6c8b7b0f22c14716c08fd8054b837f4a915f072e0315f4fec273b452878",
+    "0016_operational_idempotence_hardening": "853aca873b43ddba5e277f082e2b6c3de6b9d54c526a19935d431ea5ce7d8388",
+    "0017_idempotence_and_realtime_repair": "42d2f33b3dab9df7a667febfad19bf8e423f7422f869a41abd3d7af4a020894c",
+    "0018_member_permissions": "065fa8080741ecf753d980b28a233adee0ef78ba2ab330a0e5c80e9d5f4e8627",
+    "0019_permission_performance": "f036f2f3f33c8b78d8efce0a9f43fb3aed620d0174f5a30734dbcfb3281491d7",
+    "0020_inventory_cost_permission": "84a0de717168b7c05a61a135d94bd49283cb9615f5809c80ce5530cb504478d3"
+  },
+  "orphans": {
+    "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",
+    "0011_create_pos_sale_and_idempotency.sql": "d090aa6884b1457265781ac8a0b1b979dd85b65d4ef633c86e32ff164c8e9380",
+    "0012_enable_realtime_orders.sql": "f969e5e4aae79b3ffa709b149a58a97508f14b7c3cf9c1d0b836e3cc8a63a8a7"
+  }
+}
