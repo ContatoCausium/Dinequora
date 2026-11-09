@@ -4,6 +4,7 @@
  * Nothing here grants restaurant (organization) membership implicitly.
  */
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import type { OrgStatus } from "@/lib/org-service";
 import { requestErrorKind } from "@/lib/request-error";
 
@@ -48,9 +49,13 @@ const code = (msg: string) =>
     "not_found",
   ].find((c) => msg.includes(c)) ?? "unknown";
 
-async function call<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(fn, args);
+/** Names come from the generated schema, so a renamed/removed SQL function fails type-checking. */
+type RpcName = keyof Database["public"]["Functions"];
+
+async function call<T>(fn: RpcName, args: Record<string, unknown> = {}): Promise<T> {
+  // Args are validated server-side by the security-definer function; the dynamic
+  // name prevents per-call arg inference, so this is the single typed boundary.
+  const { data, error } = await supabase.rpc(fn, args as never);
   if (error)
     throw new Error(
       code(error.message) === "unknown" ? requestErrorKind(error) : code(error.message),

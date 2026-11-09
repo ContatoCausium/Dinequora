@@ -27,7 +27,7 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: mockData,
       error: null,
-    } as any);
+    } as never);
 
     const result = await listPlatformAdmins();
     expect(result).toHaveLength(2);
@@ -54,7 +54,7 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
         },
       ],
       error: null,
-    } as any);
+    } as never);
 
     await expect(
       setPlatformRole("lastadmin@servora.test", "platform_admin", false, "Cleanup temporary admin"),
@@ -78,12 +78,12 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
           },
         ],
         error: null,
-      } as any)
+      } as never)
       // 2nd call executing rpc admin_set_platform_role:
       .mockResolvedValueOnce({
         data: null,
         error: null,
-      } as any);
+      } as never);
 
     await expect(
       setPlatformRole("admin2@servora.test", "platform_admin", false, "Deprovisioning account"),
@@ -93,8 +93,8 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
   it("denies non-admin execution when RPC returns forbidden", async () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: null,
-      error: { message: "forbidden" },
-    } as any);
+      error: { message: "forbidden", details: "", hint: "", code: "403" },
+    } as never);
 
     await expect(listPlatformAdmins()).rejects.toThrow("forbidden");
   });
@@ -109,7 +109,7 @@ describe("Fase 2.4 - admin_list_platform_admins and admin protections", () => {
     vi.mocked(supabase.rpc).mockResolvedValueOnce({
       data: null,
       error: null,
-    } as any);
+    } as never);
 
     await expect(
       setPlatformRole("support@servora.test", "support", true, "Support operations onboard"),

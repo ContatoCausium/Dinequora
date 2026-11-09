@@ -14,17 +14,22 @@ export type Database = {
           actor_id: string | null;
           created_at: string;
           id: string;
-          metadata: Json;
+          location_id: string | null;
+          metadata: NonNullable<Json>;
           org_id: string | null;
+          result: string;
           target: string | null;
         };
+        ComputedFields: never;
         Insert: {
           action: string;
           actor_id?: string | null;
           created_at?: string;
           id?: string;
-          metadata?: Json;
+          location_id?: string | null;
+          metadata?: NonNullable<Json>;
           org_id?: string | null;
+          result?: string;
           target?: string | null;
         };
         Update: {
@@ -32,8 +37,10 @@ export type Database = {
           actor_id?: string | null;
           created_at?: string;
           id?: string;
-          metadata?: Json;
+          location_id?: string | null;
+          metadata?: NonNullable<Json>;
           org_id?: string | null;
+          result?: string;
           target?: string | null;
         };
         Relationships: [
@@ -397,10 +404,12 @@ export type Database = {
           invited_by: string;
           location_ids: string[];
           org_id: string;
+          profile_id: string | null;
           revoked_at: string | null;
           role: Database["public"]["Enums"]["org_role"];
           token_hash: string;
         };
+        ComputedFields: never;
         Insert: {
           accepted_at?: string | null;
           created_at?: string;
@@ -410,6 +419,7 @@ export type Database = {
           invited_by: string;
           location_ids?: string[];
           org_id: string;
+          profile_id?: string | null;
           revoked_at?: string | null;
           role?: Database["public"]["Enums"]["org_role"];
           token_hash: string;
@@ -423,6 +433,7 @@ export type Database = {
           invited_by?: string;
           location_ids?: string[];
           org_id?: string;
+          profile_id?: string | null;
           revoked_at?: string | null;
           role?: Database["public"]["Enums"]["org_role"];
           token_hash?: string;
@@ -433,6 +444,13 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invitations_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "permission_profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -859,22 +877,32 @@ export type Database = {
       organization_members: {
         Row: {
           created_at: string;
+          extra_permissions: string[];
           id: string;
           org_id: string;
+          profile_id: string | null;
+          revoked_permissions: string[];
           role: Database["public"]["Enums"]["org_role"];
           user_id: string;
         };
+        ComputedFields: never;
         Insert: {
           created_at?: string;
+          extra_permissions?: string[];
           id?: string;
           org_id: string;
+          profile_id?: string | null;
+          revoked_permissions?: string[];
           role?: Database["public"]["Enums"]["org_role"];
           user_id: string;
         };
         Update: {
           created_at?: string;
+          extra_permissions?: string[];
           id?: string;
           org_id?: string;
+          profile_id?: string | null;
+          revoked_permissions?: string[];
           role?: Database["public"]["Enums"]["org_role"];
           user_id?: string;
         };
@@ -884,6 +912,13 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_members_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "permission_profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -1492,6 +1527,60 @@ export type Database = {
           },
         ];
       };
+      permission_profiles: {
+        Row: {
+          archived_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          description: string;
+          id: string;
+          is_system: boolean;
+          key: string;
+          name: string;
+          org_id: string | null;
+          permissions: string[];
+          tier: Database["public"]["Enums"]["org_role"];
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          archived_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          id?: string;
+          is_system?: boolean;
+          key: string;
+          name: string;
+          org_id?: string | null;
+          permissions?: string[];
+          tier: Database["public"]["Enums"]["org_role"];
+          updated_at?: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          id?: string;
+          is_system?: boolean;
+          key?: string;
+          name?: string;
+          org_id?: string | null;
+          permissions?: string[];
+          tier?: Database["public"]["Enums"]["org_role"];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "permission_profiles_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1640,6 +1729,7 @@ export type Database = {
           _email: string;
           _location_ids?: string[];
           _org_id: string;
+          _profile_id?: string;
           _role: Database["public"]["Enums"]["org_role"];
         };
         Returns: string;
@@ -1896,6 +1986,61 @@ export type Database = {
       valid_location_hours: { Args: { _hours: Json }; Returns: boolean };
       write_audit: {
         Args: { _action: string; _meta: Json; _org: string; _target: string };
+        Returns: undefined;
+      };
+      has_permission: {
+        Args: { _location_id?: string; _org_id: string; _perm: string };
+        Returns: boolean;
+      };
+      has_any_permission: {
+        Args: { _location_id?: string; _org_id: string; _perms: string[] };
+        Returns: boolean;
+      };
+      my_permissions: { Args: { _org_id: string }; Returns: string[] };
+      inventory_item_costs: {
+        Args: { _org_id: string };
+        Returns: { item_id: string; cost_cents: number }[];
+      };
+      inventory_movement_costs: {
+        Args: { _org_id: string; _movement_ids: string[] };
+        Returns: { movement_id: string; unit_cost_cents: number }[];
+      };
+      log_access_denied: {
+        Args: { _action: string; _detail?: string; _location_id?: string; _org_id: string };
+        Returns: undefined;
+      };
+      save_permission_profile: {
+        Args: {
+          _description: string;
+          _id: string;
+          _name: string;
+          _org_id: string;
+          _permissions: string[];
+          _tier: Database["public"]["Enums"]["org_role"];
+        };
+        Returns: string;
+      };
+      archive_permission_profile: { Args: { _id: string }; Returns: undefined };
+      set_member_access: {
+        Args: {
+          _extra: string[];
+          _location_ids: string[];
+          _member_id: string;
+          _profile_id: string;
+          _revoked: string[];
+          _role: Database["public"]["Enums"]["org_role"];
+        };
+        Returns: undefined;
+      };
+      permission_catalog: { Args: Record<PropertyKey, never>; Returns: string[] };
+      role_ceiling: { Args: { _role: Database["public"]["Enums"]["org_role"] }; Returns: string[] };
+      role_default_permissions: {
+        Args: { _role: Database["public"]["Enums"]["org_role"] };
+        Returns: string[];
+      };
+      member_permissions: { Args: { _member_id: string }; Returns: string[] };
+      assert_permission: {
+        Args: { _location_id?: string; _org_id: string; _perm: string };
         Returns: undefined;
       };
     };

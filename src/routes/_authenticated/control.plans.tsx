@@ -128,8 +128,9 @@ function ControlPlansPage() {
       toast.success(t("plansPage.saved"));
       setEditingPlan(null);
       await loadData();
-    } catch (e: any) {
-      toast.error(t(`errors.${e.message}`, { defaultValue: t("errors.unknown") }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown";
+      toast.error(t(`errors.${msg}`, { defaultValue: t("errors.unknown") }));
     }
   };
 
@@ -143,8 +144,9 @@ function ControlPlansPage() {
       publishPlanDraft(planId, r, user.email ?? "platform_admin");
       toast.success(t("plansPage.publishedSuccess"));
       await loadData();
-    } catch (e: any) {
-      toast.error(t(`errors.${e.message}`, { defaultValue: t("errors.unknown") }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown";
+      toast.error(t(`errors.${msg}`, { defaultValue: t("errors.unknown") }));
     }
   };
 
@@ -165,8 +167,9 @@ function ControlPlansPage() {
       togglePlanActive(plan.id, next, r, user.email ?? "platform_admin");
       toast.success(t(next ? "plansPage.activated" : "plansPage.deactivated"));
       await loadData();
-    } catch (e: any) {
-      toast.error(t(`errors.${e.message}`, { defaultValue: t("errors.unknown") }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown";
+      toast.error(t(`errors.${msg}`, { defaultValue: t("errors.unknown") }));
     }
   };
 
