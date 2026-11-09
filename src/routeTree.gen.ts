@@ -25,7 +25,9 @@ import { Route as AuthenticatedAppInventoryRouteImport } from './routes/_authent
 import { Route as AuthenticatedAppKdsRouteImport } from './routes/_authenticated/_app/kds'
 import { Route as AuthenticatedAppLocationsRouteImport } from './routes/_authenticated/_app/locations'
 import { Route as AuthenticatedAppMenuRouteImport } from './routes/_authenticated/_app/menu'
+import { Route as AuthenticatedAppOrdersRouteImport } from './routes/_authenticated/_app/orders'
 import { Route as AuthenticatedAppPosRouteImport } from './routes/_authenticated/_app/pos'
+import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/_app/reports'
 import { Route as AuthenticatedAppTeamRouteImport } from './routes/_authenticated/_app/team'
 import { Route as AuthenticatedControlIndexRouteImport } from './routes/_authenticated/control.index'
 import { Route as AuthenticatedControlAdminsRouteImport } from './routes/_authenticated/control.admins'
@@ -119,9 +121,19 @@ const AuthenticatedAppMenuRoute = AuthenticatedAppMenuRouteImport.update({
   path: '/menu',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
+const AuthenticatedAppOrdersRoute = AuthenticatedAppOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
 const AuthenticatedAppPosRoute = AuthenticatedAppPosRouteImport.update({
   id: '/pos',
   path: '/pos',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
+const AuthenticatedAppReportsRoute = AuthenticatedAppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
 const AuthenticatedAppTeamRoute = AuthenticatedAppTeamRouteImport.update({
@@ -205,7 +217,9 @@ export interface FileRoutesByFullPath {
   '/kds': typeof AuthenticatedAppKdsRoute
   '/locations': typeof AuthenticatedAppLocationsRoute
   '/menu': typeof AuthenticatedAppMenuRoute
+  '/orders': typeof AuthenticatedAppOrdersRoute
   '/pos': typeof AuthenticatedAppPosRoute
+  '/reports': typeof AuthenticatedAppReportsRoute
   '/team': typeof AuthenticatedAppTeamRoute
   '/control/admins': typeof AuthenticatedControlAdminsRoute
   '/control/audit': typeof AuthenticatedControlAuditRoute
@@ -232,7 +246,9 @@ export interface FileRoutesByTo {
   '/kds': typeof AuthenticatedAppKdsRoute
   '/locations': typeof AuthenticatedAppLocationsRoute
   '/menu': typeof AuthenticatedAppMenuRoute
+  '/orders': typeof AuthenticatedAppOrdersRoute
   '/pos': typeof AuthenticatedAppPosRoute
+  '/reports': typeof AuthenticatedAppReportsRoute
   '/team': typeof AuthenticatedAppTeamRoute
   '/control/admins': typeof AuthenticatedControlAdminsRoute
   '/control/audit': typeof AuthenticatedControlAuditRoute
@@ -262,7 +278,9 @@ export interface FileRoutesById {
   '/_authenticated/_app/kds': typeof AuthenticatedAppKdsRoute
   '/_authenticated/_app/locations': typeof AuthenticatedAppLocationsRoute
   '/_authenticated/_app/menu': typeof AuthenticatedAppMenuRoute
+  '/_authenticated/_app/orders': typeof AuthenticatedAppOrdersRoute
   '/_authenticated/_app/pos': typeof AuthenticatedAppPosRoute
+  '/_authenticated/_app/reports': typeof AuthenticatedAppReportsRoute
   '/_authenticated/_app/team': typeof AuthenticatedAppTeamRoute
   '/_authenticated/control/admins': typeof AuthenticatedControlAdminsRoute
   '/_authenticated/control/audit': typeof AuthenticatedControlAuditRoute
@@ -293,7 +311,9 @@ export interface FileRouteTypes {
     | '/kds'
     | '/locations'
     | '/menu'
+    | '/orders'
     | '/pos'
+    | '/reports'
     | '/team'
     | '/control/admins'
     | '/control/audit'
@@ -320,7 +340,9 @@ export interface FileRouteTypes {
     | '/kds'
     | '/locations'
     | '/menu'
+    | '/orders'
     | '/pos'
+    | '/reports'
     | '/team'
     | '/control/admins'
     | '/control/audit'
@@ -349,7 +371,9 @@ export interface FileRouteTypes {
     | '/_authenticated/_app/kds'
     | '/_authenticated/_app/locations'
     | '/_authenticated/_app/menu'
+    | '/_authenticated/_app/orders'
     | '/_authenticated/_app/pos'
+    | '/_authenticated/_app/reports'
     | '/_authenticated/_app/team'
     | '/_authenticated/control/admins'
     | '/_authenticated/control/audit'
@@ -487,11 +511,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppMenuRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/orders': {
+      id: '/_authenticated/_app/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof AuthenticatedAppOrdersRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/_app/pos': {
       id: '/_authenticated/_app/pos'
       path: '/pos'
       fullPath: '/pos'
       preLoaderRoute: typeof AuthenticatedAppPosRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/reports': {
+      id: '/_authenticated/_app/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AuthenticatedAppReportsRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
     '/_authenticated/_app/team': {
@@ -581,7 +619,9 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppKdsRoute: typeof AuthenticatedAppKdsRoute
   AuthenticatedAppLocationsRoute: typeof AuthenticatedAppLocationsRoute
   AuthenticatedAppMenuRoute: typeof AuthenticatedAppMenuRoute
+  AuthenticatedAppOrdersRoute: typeof AuthenticatedAppOrdersRoute
   AuthenticatedAppPosRoute: typeof AuthenticatedAppPosRoute
+  AuthenticatedAppReportsRoute: typeof AuthenticatedAppReportsRoute
   AuthenticatedAppTeamRoute: typeof AuthenticatedAppTeamRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppSettingsBillingRoute: typeof AuthenticatedAppSettingsBillingRoute
@@ -595,7 +635,9 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppKdsRoute: AuthenticatedAppKdsRoute,
   AuthenticatedAppLocationsRoute: AuthenticatedAppLocationsRoute,
   AuthenticatedAppMenuRoute: AuthenticatedAppMenuRoute,
+  AuthenticatedAppOrdersRoute: AuthenticatedAppOrdersRoute,
   AuthenticatedAppPosRoute: AuthenticatedAppPosRoute,
+  AuthenticatedAppReportsRoute: AuthenticatedAppReportsRoute,
   AuthenticatedAppTeamRoute: AuthenticatedAppTeamRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppSettingsBillingRoute: AuthenticatedAppSettingsBillingRoute,

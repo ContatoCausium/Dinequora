@@ -5,6 +5,7 @@ import { WorkspaceProvider } from "@/components/app/workspace-context";
 import { fetchMemberships } from "@/lib/org-service";
 import { isPlatformAdmin } from "@/lib/admin-service";
 import { AppPending, AppError } from "@/components/app/states";
+import { RouteGuard } from "@/components/app/route-guard";
 
 export const Route = createFileRoute("/_authenticated/_app")({
   loader: async ({ context }) => {
@@ -34,7 +35,9 @@ function AppLayout() {
       onRefresh={() => void router.invalidate()}
     >
       <AppShell>
-        <Outlet />
+        <RouteGuard>
+          <Outlet />
+        </RouteGuard>
       </AppShell>
     </WorkspaceProvider>
   );
