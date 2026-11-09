@@ -45,6 +45,10 @@ describe("Servora Intelligence Service (Deterministic Logic)", () => {
     expect(classifyQueryTopic("quanto gastei em compras com fornecedores?")).toBe("suppliers");
     expect(classifyQueryTopic("qual foi o descarte e perda?")).toBe("waste");
     expect(classifyQueryTopic("qual faturamento bruto das vendas?")).toBe("sales");
+    expect(classifyQueryTopic("What is my current food cost?")).toBe("cmv");
+    expect(classifyQueryTopic("How much revenue did we record?")).toBe("sales");
+    expect(classifyQueryTopic("How many purchase orders are open?")).toBe("suppliers");
+    expect(classifyQueryTopic("Which items are at risk of running out?")).toBe("inventory");
   });
 
   it("executes agent queries with deterministic routing and full executive breakdown", () => {

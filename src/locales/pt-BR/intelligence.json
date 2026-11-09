@@ -1,0 +1,217 @@
+{
+  "title": "Servora Intelligence",
+  "description": "Receita, CMV e sinais de estoque calculados a partir das operações registradas.",
+  "allStores": "Todas as lojas",
+  "demoBadge": "Restaurante demo",
+  "dataSource": "Calculado a partir de lançamentos, fichas técnicas e estoque registrados, sem nenhum modelo de IA. {{entries}} lançamentos · {{orders}} pedidos no período.",
+  "period": {
+    "label": "Período de análise",
+    "days": "{{count}} dias"
+  },
+  "states": {
+    "loadFailed": "Não foi possível carregar as operações registradas",
+    "loadFailedBody": "Verifique sua conexão e tente novamente.",
+    "retry": "Tentar novamente"
+  },
+  "kpi": {
+    "grossRevenue": "Receita bruta",
+    "netResult": "Resultado líquido",
+    "netResultHint": "Após custo das fichas e despesas",
+    "cmv": "CMV",
+    "cmvHint": "Faixa de referência {{min}}–{{max}}",
+    "noRevenue": "Sem receita no período",
+    "grossMargin": "Margem bruta",
+    "recipes_one": "{{count}} ficha técnica cadastrada",
+    "recipes_other": "{{count}} fichas técnicas cadastradas",
+    "lowStock": "Itens com estoque baixo",
+    "tracked_one": "{{count}} item monitorado",
+    "tracked_other": "{{count}} itens monitorados",
+    "vsPrevious": "{{delta}} vs. {{days}} dias anteriores",
+    "noPrior": "Sem receita nos {{days}} dias anteriores"
+  },
+  "agent": {
+    "title": "Agente executivo de consultas",
+    "subtitle": "Respostas determinísticas a partir de dados registrados. Nenhum modelo de IA é usado.",
+    "inputLabel": "Faça uma pergunta",
+    "placeholder": "Ex.: Qual é o meu CMV atual?",
+    "ask": "Consultar",
+    "suggestionsLabel": "Perguntas sugeridas",
+    "suggestions": {
+      "cmv": "Qual é o meu CMV atual?",
+      "sales": "Quanto de receita registramos?",
+      "inventory": "Quais itens têm risco de ruptura?",
+      "margin": "Como estão a margem bruta e as despesas?",
+      "suppliers": "Quantos pedidos de compra estão em aberto?"
+    },
+    "deterministic": "Determinístico",
+    "answeredAt": "Respondido {{time}}",
+    "scope": "Últimos {{days}} dias · {{scope}}",
+    "evidence": "Evidências registradas",
+    "method": "Como é calculado",
+    "limitation": "Limitação",
+    "topics": {
+      "cmv": "CMV",
+      "sales": "Vendas",
+      "expenses": "Despesas",
+      "margin": "Margem",
+      "profit": "Rentabilidade",
+      "inventory": "Estoque",
+      "waste": "Desperdício",
+      "suppliers": "Compras",
+      "store_performance": "Desempenho das lojas"
+    },
+    "headlines": {
+      "noRevenue": "Nenhuma receita foi registrada nos últimos {{days}} dias.",
+      "cmv": "O CMV está em {{rate}} da receita bruta nos últimos {{days}} dias.",
+      "finance": "A margem bruta está em {{rate}} sobre {{revenue}} de receita registrada.",
+      "inventory_one": "{{count}} item está no estoque mínimo ou abaixo dele.",
+      "inventory_other": "{{count}} itens estão no estoque mínimo ou abaixo dele.",
+      "waste": "O desperdício ainda não é registrado. {{count}} itens estão no estoque mínimo ou abaixo dele.",
+      "suppliers": "{{open}} de {{total}} pedidos de compra registrados ainda estão em aberto.",
+      "stores": "Receita registrada por loja nos últimos {{days}} dias.",
+      "noStores": "Nenhuma loja está disponível no seu escopo atual."
+    },
+    "methods": {
+      "cmv": "CMV = custo das fichas registrado (lançamentos de CMV, já descontados os estornos) ÷ receita registrada.",
+      "finance": "Margem bruta = (receita − custo das fichas) ÷ receita. O resultado líquido também desconta as despesas ativas registradas.",
+      "inventory": "Um item está baixo quando a quantidade registrada é igual ou menor que a quantidade mínima.",
+      "suppliers": "Um pedido de compra fica em aberto enquanto não é recebido nem cancelado.",
+      "stores": "Receita por loja a partir dos lançamentos registrados, já descontados os estornos."
+    },
+    "limits": {
+      "ledger": "Somente pedidos que chegaram aos lançamentos são contados; canais de venda externos não estão conectados.",
+      "waste": "Desperdício e perdas ainda não são registrados separadamente.",
+      "inventory": "Depende de cada item ter uma quantidade mínima configurada.",
+      "suppliers": "A pontualidade de entrega depende do registro do recebimento no Servora."
+    },
+    "labels": {
+      "revenue": "Receita bruta",
+      "recipeCost": "Custo das fichas",
+      "cmv": "CMV",
+      "margin": "Margem bruta",
+      "expenses": "Despesas",
+      "net": "Resultado líquido",
+      "orders": "Pedidos analisados",
+      "lowStock": "Itens com estoque baixo",
+      "tracked": "Itens monitorados",
+      "purchasesTotal": "Pedidos de compra",
+      "purchasesOpen": "Pedidos de compra em aberto",
+      "suppliers": "Fornecedores"
+    }
+  },
+  "insights": {
+    "title": "Diagnósticos operacionais",
+    "subtitle": "Regras aplicadas aos números registrados no período selecionado.",
+    "filterLabel": "Filtrar diagnósticos",
+    "filters": {
+      "all": "Todos",
+      "cmv": "CMV",
+      "inventory": "Estoque",
+      "sales": "Vendas"
+    },
+    "levels": {
+      "high": "Requer atenção",
+      "medium": "Acompanhar",
+      "low": "Dentro do esperado"
+    },
+    "openModule": "Abrir módulo",
+    "emptyTitle": "Nenhum diagnóstico para este filtro",
+    "emptyBody": "Os diagnósticos aparecem quando pedidos, fichas técnicas ou estoque são registrados.",
+    "noRevenue": {
+      "title": "Nenhuma receita registrada nos últimos {{days}} dias",
+      "body": "Feche pedidos no PDV para que receita e CMV possam ser analisados.",
+      "action": "Registre vendas no PDV para liberar a análise de CMV e margem."
+    },
+    "cmvHigh": {
+      "title": "CMV acima da faixa de referência",
+      "body": "O CMV está em {{rate}} da receita, acima da referência de {{min}}–{{max}}.",
+      "action": "Revise os preços dos itens de maior volume e o custo dos insumos nas fichas."
+    },
+    "cmvOk": {
+      "title": "CMV dentro da faixa de referência",
+      "body": "O CMV está em {{rate}} da receita, dentro ou abaixo da referência de {{min}}–{{max}}.",
+      "action": "Mantenha o custo das fichas atualizado quando os preços dos fornecedores mudarem."
+    },
+    "lowStock": {
+      "title_one": "{{count}} item no estoque mínimo ou abaixo",
+      "title_other": "{{count}} itens no estoque mínimo ou abaixo",
+      "body": "Os itens podem acabar antes da próxima entrega.",
+      "byStore": "Por loja: {{stores}}",
+      "action": "Crie um pedido de compra para os itens afetados."
+    },
+    "noRecipes": {
+      "title": "Nenhuma ficha técnica cadastrada",
+      "body": "Sem fichas técnicas, as vendas não geram custo e o CMV fica zerado.",
+      "action": "Cadastre fichas técnicas para os itens mais vendidos."
+    }
+  },
+  "stores": {
+    "title": "Comparativo entre lojas",
+    "subtitle": "Receita, CMV e itens com estoque baixo registrados por loja.",
+    "revenue": "Receita",
+    "cmv": "CMV",
+    "lowStock": "Estoque baixo",
+    "emptyTitle": "Nenhuma loja no seu escopo",
+    "emptyBody": "Peça a um proprietário para liberar seu acesso a uma loja."
+  },
+  "whatsapp": {
+    "title": "Central WhatsApp",
+    "simulation": "Simulação · nenhum provedor conectado",
+    "subtitle": "Visualize relatórios e alertas antes de conectar um provedor do WhatsApp Business. Nada é enviado.",
+    "tabsLabel": "Seções do WhatsApp",
+    "tabs": {
+      "preview": "Prévia",
+      "schedules": "Agendamentos",
+      "contacts": "Contatos",
+      "history": "Histórico",
+      "connection": "Conexão"
+    },
+    "templateLabel": "Modelo de mensagem",
+    "templates": {
+      "financial_summary": "Resumo financeiro",
+      "revenue_pulse": "Pulso de receita",
+      "cmv_audit": "CMV",
+      "low_stock_alert": "Estoque baixo",
+      "waste_alert": "Alerta de desperdício",
+      "multi_store_comparison": "Comparativo de lojas"
+    },
+    "saveTest": "Salvar teste simulado",
+    "saveTestHint": "Adicione um contato com consentimento para salvar um teste simulado.",
+    "ownerOnly": "Somente proprietários podem gerenciar contatos e testes do WhatsApp.",
+    "recipient": "Destinatário: {{name}}",
+    "sampleRecipient": "Proprietário",
+    "notSent": "Simulação · não enviada",
+    "testSaved": "Teste simulado salvo. Nenhuma mensagem foi enviada.",
+    "schedulesEmptyTitle": "Agendamentos ainda não disponíveis",
+    "schedulesEmptyBody": "Relatórios automáticos poderão ser agendados quando um provedor do WhatsApp Business for conectado.",
+    "contactsEmptyTitle": "Nenhum contato autorizado",
+    "contactsEmptyBody": "Adicione um contato que consentiu em receber mensagens.",
+    "consentRecorded": "Consentimento registrado",
+    "roles": {
+      "owner": "Proprietário / sócio",
+      "manager": "Gerente geral",
+      "financial_lead": "Responsável financeiro",
+      "chef": "Chef / cozinha"
+    },
+    "addContact": "Adicionar contato",
+    "contactName": "Nome completo",
+    "contactPhone": "Telefone (com código do país)",
+    "contactRole": "Função",
+    "contactRequired": "Nome e telefone são obrigatórios.",
+    "contactSaved": "Contato salvo com consentimento registrado.",
+    "historyEmptyTitle": "Nenhum teste simulado ainda",
+    "historyEmptyBody": "Os testes simulados salvos aparecem aqui. Eles nunca são enviados.",
+    "draft": "Rascunho simulado",
+    "connectionStatus": "Nenhum provedor conectado",
+    "connectionBody": "O Servora está preparado para a API oficial WhatsApp Business Cloud. Nenhum token ou chave privada é armazenado no navegador.",
+    "connectionPending": "Conectar um provedor exige um número comercial verificado."
+  },
+  "message": {
+    "noValue": "—",
+    "footer": "_Simulação do Servora Intelligence. Esta mensagem não foi enviada._",
+    "financial_summary": "*Servora Intelligence · Resumo financeiro*\nOlá, *{{name}}*. Números registrados nos últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Resultado líquido: {{net}}\n• CMV: {{cmv}}\n• Margem bruta: {{margin}}\n• Itens com estoque baixo: {{lowStock}}",
+    "cmv_audit": "*Servora Intelligence · Revisão de CMV*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• CMV: {{cmv}}\n• Custo das fichas: {{recipeCost}}\n• Faturamento bruto: {{revenue}}\n• Fichas técnicas ativas: {{recipes}}",
+    "low_stock_alert": "*Servora Intelligence · Alerta de estoque baixo*\nOlá, *{{name}}*. {{lowStock}} de {{tracked}} itens monitorados estão no estoque mínimo ou abaixo ({{scope}}).\n\nAbra o Estoque no Servora para planejar o próximo pedido de compra.",
+    "pulse": "*Servora Intelligence · Atualização operacional*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Pedidos: {{orders}}"
+  }
+}

@@ -264,31 +264,60 @@ export function computeIntelligenceSummary(
  */
 export function classifyQueryTopic(query: string): AgentQueryTopic {
   const q = query.toLowerCase();
-  if (q.includes("cmv") || q.includes("custo de mercadoria") || q.includes("food cost"))
+  if (
+    q.includes("cmv") ||
+    q.includes("custo de mercadoria") ||
+    q.includes("food cost") ||
+    q.includes("cogs")
+  )
     return "cmv";
   if (
     q.includes("venda") ||
     q.includes("faturamento") ||
     q.includes("receita") ||
-    q.includes("ticket")
+    q.includes("ticket") ||
+    q.includes("sales") ||
+    q.includes("revenue")
   )
     return "sales";
   if (
     q.includes("despesa") ||
     q.includes("gasto") ||
     q.includes("custo fixo") ||
-    q.includes("operacional")
+    q.includes("operacional") ||
+    q.includes("expense")
   )
     return "expenses";
-  if (q.includes("margem") || q.includes("markup") || q.includes("rentabilidade")) return "margin";
-  if (q.includes("lucro") || q.includes("ebitda") || q.includes("resultado")) return "profit";
-  if (q.includes("desperd") || q.includes("perda") || q.includes("sobra") || q.includes("descarte"))
+  if (
+    q.includes("margem") ||
+    q.includes("markup") ||
+    q.includes("rentabilidade") ||
+    q.includes("margin")
+  )
+    return "margin";
+  if (
+    q.includes("lucro") ||
+    q.includes("ebitda") ||
+    q.includes("resultado") ||
+    q.includes("profit")
+  )
+    return "profit";
+  if (
+    q.includes("desperd") ||
+    q.includes("perda") ||
+    q.includes("sobra") ||
+    q.includes("descarte") ||
+    q.includes("waste") ||
+    q.includes("spoil")
+  )
     return "waste";
   if (
     q.includes("forneced") ||
     q.includes("compra") ||
     q.includes("pedido de compra") ||
-    q.includes("cotacao")
+    q.includes("cotacao") ||
+    q.includes("supplier") ||
+    q.includes("purchase")
   )
     return "suppliers";
   if (
@@ -296,7 +325,9 @@ export function classifyQueryTopic(query: string): AgentQueryTopic {
     q.includes("unidade") ||
     q.includes("filial") ||
     q.includes("franquia") ||
-    q.includes("desempenho")
+    q.includes("desempenho") ||
+    q.includes("store") ||
+    q.includes("location")
   )
     return "store_performance";
   return "inventory";

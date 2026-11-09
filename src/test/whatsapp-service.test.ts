@@ -13,6 +13,7 @@ import {
   type WhatsAppContact,
   type WhatsAppScheduleConfig,
 } from "@/lib/whatsapp-service";
+import type { IntelligenceSummary } from "@/lib/intelligence-service";
 
 describe("Servora Intelligence — WhatsApp Service", () => {
   const orgId = "org-test-wa-123";
@@ -54,24 +55,67 @@ describe("Servora Intelligence — WhatsApp Service", () => {
     expect(saved.some((c) => c.phone === "+55 (11) 97777-6666")).toBe(true);
   });
 
-  it("renders deterministic WhatsApp message templates correctly in pt and en", () => {
-    const msgPt = renderWhatsAppMessage(
-      orgId,
-      "all",
-      "financial_summary",
-      "Carlos Eduardo",
-      "pt-BR",
-    );
-    expect(msgPt).toContain("SERVORA INTELLIGENCE");
+  const summary: IntelligenceSummary = {
+    grossRevenueCents: 123456,
+    netRevenueCents: 50000,
+    foodCostCents: 37037,
+    cmvRate: 30,
+    grossMarginRate: 70,
+    operatingExpensesCents: 36419,
+    estimatedWasteCents: 0,
+    lowStockItemCount: 3,
+    activeRecipeCount: 4,
+    analyzedOrderCount: 12,
+    dataBreakdown: { realTransactionsCount: 20, realOrdersCount: 12, inventoryCount: 9 },
+    insights: [],
+  };
+
+  it("renders the page summary (cents, not 100x) in the selected language", () => {
+    const msgEn = renderWhatsAppMessage({
+      summary,
+      template: "financial_summary",
+      recipientName: "Charles",
+      lng: "en-US",
+      periodDays: 7,
+      scopeLabel: "Downtown",
+    });
+    expect(msgEn).toContain("Charles");
+    expect(msgEn).toContain("Gross revenue: $1,234.56");
+    expect(msgEn).toContain("Food cost (COGS): 30%");
+    expect(msgEn).toContain("Low-stock items: 3");
+    expect(msgEn).toContain("last 7 days (Downtown)");
+    expect(msgEn).toContain("not sent");
+
+    const msgPt = renderWhatsAppMessage({
+      summary,
+      template: "financial_summary",
+      recipientName: "Carlos Eduardo",
+      lng: "pt-BR",
+    });
     expect(msgPt).toContain("Carlos Eduardo");
-    expect(msgPt).toContain("Faturamento Bruto");
+    expect(msgPt).toContain("Faturamento bruto");
+    expect(msgPt).toContain("Todas as lojas");
+    expect(msgPt).not.toContain("Gross revenue");
 
-    const msgEn = renderWhatsAppMessage(orgId, "all", "financial_summary", "Charles", "en-US");
-    expect(msgEn).toContain("Executive Briefing");
-    expect(msgEn).toContain("Gross Revenue");
+    const lowStockPt = renderWhatsAppMessage({
+      summary,
+      template: "low_stock_alert",
+      recipientName: "Ana",
+      lng: "pt-BR",
+    });
+    expect(lowStockPt).toContain("Alerta de estoque baixo");
+    expect(lowStockPt).toContain("3 de 9");
+  });
 
-    const lowStockPt = renderWhatsAppMessage(orgId, "all", "low_stock_alert", "Ana", "pt-BR");
-    expect(lowStockPt).toContain("ALERTA OPERACIONAL");
+  it("shows no rate when no revenue was recorded", () => {
+    const msg = renderWhatsAppMessage({
+      summary: { ...summary, grossRevenueCents: 0, cmvRate: 0, grossMarginRate: 0 },
+      template: "cmv_audit",
+      recipientName: "Ana",
+      lng: "en-US",
+    });
+    expect(msg).toContain("Food cost (COGS): —");
+    expect(msg).toContain("$0.00");
   });
 
   it("handles schedules configuration and pauses", () => {
@@ -89,7 +133,7 @@ describe("Servora Intelligence — WhatsApp Service", () => {
   it("queues simulated send and retains idempotency key", () => {
     const log = queueSimulatedSend(orgId, "Diretoria", "+55 (11) 90000-0000", "cmv_audit", "pt-BR");
     expect(log.isDemo).toBe(true);
-    expect(log.status).toBe("sent");
+    expect(log.status).toBe("draft");
     expect(log.idempotencyKey).toBeDefined();
 
     const allLogs = listWhatsAppLogs(orgId);
