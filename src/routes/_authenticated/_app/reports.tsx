@@ -51,7 +51,12 @@ function ReportsPage() {
         fetchAllOrders(org.id, locationId, since),
         fetchOperationalResources({ data: { orgId: org.id, locationId } }),
       ]);
-      return { orders: orders.orders, ordersTotal: orders.total, resources };
+      return {
+        orders: orders.orders,
+        ordersTotal: orders.total,
+        ordersTruncated: orders.truncated,
+        resources,
+      };
     },
   });
 
@@ -150,11 +155,12 @@ function ReportsPage() {
         </div>
       ) : (
         <>
-          {query.data && query.data.orders.length < query.data.ordersTotal && (
+          {query.data?.ordersTruncated && (
             <div className="mb-4">
               <OrdersTruncatedNotice
                 shown={query.data.orders.length}
                 total={query.data.ordersTotal}
+                truncated
               />
             </div>
           )}

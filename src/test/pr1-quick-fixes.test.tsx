@@ -152,14 +152,19 @@ describe("order history in Finance and Reports", () => {
 
   it("the notice appears only when older orders are missing, in both languages", async () => {
     await i18n.changeLanguage("en-US");
-    const { container, rerender } = render(<OrdersTruncatedNotice shown={450} total={450} />);
+    const { container, rerender } = render(
+      <OrdersTruncatedNotice shown={450} total={450} truncated={false} />,
+    );
     expect(container).toBeEmptyDOMElement();
-    rerender(<OrdersTruncatedNotice shown={5000} total={9000} />);
+    // a sale arriving mid-read makes total exceed what was read, but nothing was cut: no notice
+    rerender(<OrdersTruncatedNotice shown={458} total={459} truncated={false} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<OrdersTruncatedNotice shown={5000} total={9000} truncated />);
     expect(screen.getByRole("status")).toHaveTextContent(
       "These figures include the 5000 most recent orders out of 9000.",
     );
     await i18n.changeLanguage("pt-BR");
-    rerender(<OrdersTruncatedNotice shown={5000} total={9000} />);
+    rerender(<OrdersTruncatedNotice shown={5000} total={9000} truncated />);
     expect(screen.getByRole("status")).toHaveTextContent(
       "Estes números incluem os 5000 pedidos mais recentes de um total de 9000.",
     );

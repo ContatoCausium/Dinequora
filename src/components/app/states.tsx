@@ -125,10 +125,18 @@ export function SuspendedState({ reason }: { reason: string | null }) {
   );
 }
 
-/** Shown when a screen could load only the most recent part of the order history. */
-export function OrdersTruncatedNotice({ shown, total }: { shown: number; total: number }) {
+/** Shown when the browser cap stopped reading the order history (fetchAllOrders `truncated`). */
+export function OrdersTruncatedNotice({
+  shown,
+  total,
+  truncated,
+}: {
+  shown: number;
+  total: number;
+  truncated: boolean;
+}) {
   const { t } = useTranslation();
-  if (shown >= total) return null;
+  if (!truncated || shown >= total) return null;
   return (
     <div
       role="status"

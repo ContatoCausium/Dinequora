@@ -103,7 +103,7 @@ export function FinancePage() {
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [entries, setEntries] = useState<Resources["finance"]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [ordersTotal, setOrdersTotal] = useState(0);
+  const [ordersMeta, setOrdersMeta] = useState({ total: 0, truncated: false });
   const [tab, setTab] = useState<Tab>("overview");
 
   // Same paged loader as Reports (this used to be a single page of 200): the history up to the
@@ -117,7 +117,7 @@ export function FinancePage() {
       expenses: mapResources(r).expenses,
       entries: r.finance,
       orders: o.orders,
-      ordersTotal: o.total,
+      ordersMeta: { total: o.total, truncated: o.truncated },
     };
   }, [org.id]);
 
@@ -127,7 +127,7 @@ export function FinancePage() {
       setAllExpenses(d.expenses);
       setEntries(d.entries);
       setOrders(d.orders);
-      setOrdersTotal(d.ordersTotal);
+      setOrdersMeta(d.ordersMeta);
       setState("ready");
     } catch {
       setState("error");
@@ -146,7 +146,7 @@ export function FinancePage() {
         setAllExpenses(d.expenses);
         setEntries(d.entries);
         setOrders(d.orders);
-        setOrdersTotal(d.ordersTotal);
+        setOrdersMeta(d.ordersMeta);
         setState("ready");
       })
       .catch(() => {
@@ -538,7 +538,11 @@ export function FinancePage() {
             )}
 
             <TabsContent value="reports" className="mt-4 space-y-4">
-              <OrdersTruncatedNotice shown={orders.length} total={ordersTotal} />
+              <OrdersTruncatedNotice
+                shown={orders.length}
+                total={ordersMeta.total}
+                truncated={ordersMeta.truncated}
+              />
               <FinanceReports
                 restaurantName={org.name}
                 locations={stores}

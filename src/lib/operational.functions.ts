@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { menuItemSchema, modifierGroupsSchema, saleInputSchema } from "./operational-contracts";
+import { orderListQuery } from "./orders-query";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
 async function scope(client: SupabaseClient<Database>, orgId: string, locationId?: string) {
@@ -224,20 +225,21 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const s = await scope(context.supabase, data.orgId, data.locationId);
-    let q = context.supabase
-      .from("orders")
-      .select("*,order_items(*,order_item_modifiers(*)),order_status_history(*),payments(status)", {
-        count: "exact",
-      })
-      .eq("org_id", s.org.id)
-      .order("created_at", { ascending: false })
-      .range(data.offset, data.offset + data.limit - 1);
-    if (s.location) q = q.eq("location_id", s.location.id);
-    if (data.status) q = q.eq("status", data.status);
-    if (data.channel) q = q.eq("type", data.channel);
-    if (data.startDate) q = q.gte("created_at", data.startDate);
-    if (data.endDate) q = q.lte("created_at", data.endDate);
-    const { data: rows, error, count } = await q;
+    // Total order (created_at, id): see orders-query.ts. Shared with the database integration test.
+    const {
+      data: rows,
+      error,
+      count,
+    } = await orderListQuery(context.supabase, {
+      orgId: s.org.id,
+      locationId: s.location?.id,
+      status: data.status,
+      channel: data.channel,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      offset: data.offset,
+      limit: data.limit,
+    });
     if (error) throw new Error("orders_read_failed");
     return {
       totalCount: count ?? 0,
