@@ -8,6 +8,8 @@ export interface OrderListParams {
   orgId: string;
   locationId?: string | undefined;
   status?: Database["public"]["Enums"]["order_status"] | undefined;
+  /** Any of these statuses (the kitchen board reads only open tickets). */
+  statuses?: readonly Database["public"]["Enums"]["order_status"][] | undefined;
   channel?: Database["public"]["Enums"]["order_type"] | undefined;
   startDate?: string | undefined;
   endDate?: string | undefined;
@@ -33,6 +35,7 @@ export function orderListQuery(client: SupabaseClient<Database>, p: OrderListPar
     .range(p.offset, p.offset + p.limit - 1);
   if (p.locationId) q = q.eq("location_id", p.locationId);
   if (p.status) q = q.eq("status", p.status);
+  if (p.statuses?.length) q = q.in("status", [...p.statuses]);
   if (p.channel) q = q.eq("type", p.channel);
   if (p.startDate) q = q.gte("created_at", p.startDate);
   if (p.endDate) q = q.lte("created_at", p.endDate);

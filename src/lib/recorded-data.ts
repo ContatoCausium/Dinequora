@@ -8,25 +8,35 @@ export const ORDER_HISTORY_CAP = 5000; // protects the browser; the UI says when
 const PAGE = ORDER_PAGE_SIZE;
 const HARD_CAP = ORDER_HISTORY_CAP;
 
+/** One page request: what the fetchOperationalOrders server function accepts. */
+export interface OrderPageRequest {
+  data: {
+    orgId: string;
+    locationId: string;
+    limit: number;
+    offset: number;
+    startDate?: string;
+    status?: OrderStatus;
+    statuses?: OrderStatus[];
+  };
+}
+export type OrderPageSource = (
+  req: OrderPageRequest,
+) => Promise<{ orders: RecordedOrder[]; totalCount: number }>;
+
+type OrderFilter = Omit<OrderPageRequest["data"], "limit" | "offset">;
+
 /**
- * Every recorded order visible to the user (RLS + store scope apply server-side), newest first,
- * each order exactly once.
+ * Reads every page of one filtered order list, newest first, each order exactly once.
  *
  * Pages are read by offset over a total order (created_at, id — see orders-query.ts). An order
  * created while the pages are being read shifts later pages by one row; the repeated row is
- * dropped here (by id), and the new order is simply picked up on the next load.
- *
- * `since` is an ISO timestamp lower bound. `truncated` is true only when the browser cap stopped
- * the read with older orders left unread. `fetchPage` defaults to the server function; tests pass
- * their own page source.
+ * dropped here (by id), and the new order is simply picked up on the next load. `truncated` is
+ * true only when the browser cap stopped the read with older orders left unread.
  */
-export async function fetchAllOrders(
-  orgId: string,
-  locationId: string,
-  since?: string,
-  fetchPage: (req: {
-    data: { orgId: string; locationId: string; limit: number; offset: number; startDate?: string };
-  }) => Promise<{ orders: RecordedOrder[]; totalCount: number }> = fetchOperationalOrders,
+async function readAllPages(
+  filter: OrderFilter,
+  fetchPage: OrderPageSource,
 ): Promise<{ orders: RecordedOrder[]; total: number; truncated: boolean }> {
   const byId = new Map<string, RecordedOrder>();
   let total = 0;
@@ -36,21 +46,51 @@ export async function fetchAllOrders(
       stoppedAtCap = true;
       break;
     }
-    const page = await fetchPage({
-      data: {
-        orgId,
-        locationId,
-        limit: PAGE,
-        offset,
-        ...(since ? { startDate: since } : {}),
-      },
-    });
+    const page = await fetchPage({ data: { ...filter, limit: PAGE, offset } });
     total = page.totalCount;
     for (const order of page.orders) if (!byId.has(order.id)) byId.set(order.id, order);
     if (page.orders.length < PAGE || byId.size >= total) break;
   }
   const orders = [...byId.values()];
   return { orders, total, truncated: stoppedAtCap && orders.length < total };
+}
+
+/**
+ * Every recorded order visible to the user (RLS + store scope apply server-side), newest first,
+ * each order exactly once. `since` is an ISO timestamp lower bound. `fetchPage` defaults to the
+ * server function; tests pass their own page source.
+ */
+export async function fetchAllOrders(
+  orgId: string,
+  locationId: string,
+  since?: string,
+  fetchPage: OrderPageSource = fetchOperationalOrders,
+): Promise<{ orders: RecordedOrder[]; total: number; truncated: boolean }> {
+  return readAllPages({ orgId, locationId, ...(since ? { startDate: since } : {}) }, fetchPage);
+}
+
+/** Most recent delivered tickets shown in the last column (unchanged from the previous board). */
+export const KITCHEN_RECENT_DELIVERED = 10;
+
+/**
+ * The kitchen board: EVERY open ticket (all pages, however many newer orders exist) plus the most
+ * recent delivered ones, each order exactly once. The previous board read the 100 most recent
+ * orders of any status and filtered them in the browser, so an open ticket disappeared as soon as
+ * 100 newer orders existed.
+ */
+export async function fetchKitchenBoard(
+  orgId: string,
+  locationId: string,
+  fetchPage: OrderPageSource = fetchOperationalOrders,
+): Promise<{ orders: RecordedOrder[]; openTotal: number; truncated: boolean }> {
+  // Open = still the kitchen's work (OPEN_STATUSES below).
+  const open = await readAllPages({ orgId, locationId, statuses: [...OPEN_STATUSES] }, fetchPage);
+  const delivered = await fetchPage({
+    data: { orgId, locationId, status: "delivered", limit: KITCHEN_RECENT_DELIVERED, offset: 0 },
+  });
+  const byId = new Map(open.orders.map((o) => [o.id, o]));
+  for (const order of delivered.orders) if (!byId.has(order.id)) byId.set(order.id, order);
+  return { orders: [...byId.values()], openTotal: open.total, truncated: open.truncated };
 }
 
 /** Paid orders count toward sales; open tickets and cancellations don't. */

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -32,10 +32,10 @@ import {
   simulateIncomingOrder,
 } from "@/lib/kds-service";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  fetchPersistedOrders,
-  persistOrderStatusTransition,
-} from "@/lib/orders-persistence-service";
+import { persistOrderStatusTransition } from "@/lib/orders-persistence-service";
+import { fetchKitchenBoard } from "@/lib/recorded-data";
+import { createRefreshScheduler } from "@/lib/refresh-scheduler";
+import { OrdersTruncatedNotice } from "@/components/app/states";
 import { setOperationalItemReady } from "@/lib/operational.functions";
 
 export const Route = createFileRoute("/_authenticated/_app/kds")({
@@ -112,82 +112,76 @@ export function KDSPage() {
     "connected" | "connecting" | "disconnected"
   >("connecting");
 
-  const refreshPersistedData = async () => {
-    try {
-      const res = await fetchPersistedOrders({
-        orgId: org.id,
-        locationId: locationId === "all" ? undefined : locationId,
-        limit: 100,
-      });
-      if (res.unavailable) {
-        setConnectionStatus("disconnected");
-        return;
-      }
-      setOrders(res.orders);
-    } catch (err) {
-      captureError(err, { event: "kds.fetch_failed" });
-    }
-  };
+  // Open tickets beyond the browser cap (5,000) are announced instead of silently dropped.
+  const [boardMeta, setBoardMeta] = useState({ openTotal: 0, truncated: false });
+  // Reloads for the current store (set by the effect below; actions await fresh data through it).
+  const refreshRef = useRef<() => Promise<void>>(async () => undefined);
+  // Read by the realtime handler without re-subscribing when the sound is toggled.
+  const audioAlertsRef = useRef(audioAlerts);
+  audioAlertsRef.current = audioAlerts;
 
-  // Initial fetch from database + 15s safety backup sync
+  // Board data: every open ticket + the latest delivered ones (fetchKitchenBoard), reloaded on
+  // every realtime change and every 15 s as a safety net. Reloads are serialized and bursts are
+  // merged (createRefreshScheduler), so an older response never overwrites a newer one. A response
+  // that arrives after the store changed is discarded.
   useEffect(() => {
+    let active = true;
     setOrders([]);
-    void refreshPersistedData();
-    const interval = setInterval(() => {
-      setNowTick(Date.now());
-      void refreshPersistedData();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [org.id, locationId]);
-
-  // Realtime subscription with explicit unmount cleanup
-  useEffect(() => {
-    let isMounted = true;
+    setBoardMeta({ openTotal: 0, truncated: false });
     setConnectionStatus("connecting");
 
-    const channelName = `kds-orders-${org.id}-${locationId}`;
+    const scheduler = createRefreshScheduler(async () => {
+      try {
+        const board = await fetchKitchenBoard(org.id, locationId);
+        if (!active) return;
+        setOrders(board.orders);
+        setBoardMeta({ openTotal: board.openTotal, truncated: board.truncated });
+      } catch (err) {
+        if (!active) return;
+        // Keep the tickets already on screen; the badge tells the kitchen the data may be stale.
+        setConnectionStatus("disconnected");
+        captureError(err, { event: "kds.fetch_failed" });
+      }
+    });
+    refreshRef.current = scheduler.now;
+    void scheduler.now();
+
+    const interval = setInterval(() => {
+      setNowTick(Date.now());
+      void scheduler.request();
+    }, 15000);
+
     const channel = supabase
-      .channel(channelName)
+      .channel(`kds-orders-${org.id}-${locationId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-          filter: `org_id=eq.${orgDbId}`,
-        },
-        async (payload) => {
-          if (!isMounted) return;
+        { event: "*", schema: "public", table: "orders", filter: `org_id=eq.${orgDbId}` },
+        (payload) => {
+          if (!active) return;
           // Target location check
           const row = payload.new;
           const locDbId = org.locations.find((l) => l.id === locationId)?.dbId;
           if (locationId !== "all" && "location_id" in row && row["location_id"] !== locDbId) {
             return;
           }
-
-          if (payload.eventType === "INSERT" && audioAlerts) {
-            playNewTicketChime();
-          }
-
-          await refreshPersistedData();
+          if (payload.eventType === "INSERT" && audioAlertsRef.current) playNewTicketChime();
+          void scheduler.request();
         },
       )
       .subscribe((status) => {
-        if (!isMounted) return;
-        if (status === "SUBSCRIBED") {
-          setConnectionStatus("connected");
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        if (!active) return;
+        if (status === "SUBSCRIBED") setConnectionStatus("connected");
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")
           setConnectionStatus("disconnected");
-        } else if (status === "CLOSED") {
-          setConnectionStatus("disconnected");
-        }
       });
 
     return () => {
-      isMounted = false;
+      active = false;
+      scheduler.stop();
+      clearInterval(interval);
       void supabase.removeChannel(channel);
     };
-  }, [org.id, locationId, audioAlerts]);
+  }, [org.id, locationId]);
 
   const filteredOrders = useMemo(() => {
     const list = orders.filter(
@@ -219,7 +213,7 @@ export function KDSPage() {
     setPending(setPendingOrders, order.id, true);
     try {
       const res = await persistOrderStatusTransition(order.id, next);
-      await refreshPersistedData();
+      await refreshRef.current();
       if (!res.success) {
         toast.error(t("toast.syncFailed"));
       } else {
@@ -236,7 +230,7 @@ export function KDSPage() {
     setPending(setPendingItems, itemId, true);
     try {
       await setOperationalItemReady({ data: { id: itemId, ready: !item.isItemReady } });
-      await refreshPersistedData();
+      await refreshRef.current();
     } catch {
       toast.error(t("toast.itemFailed"));
     } finally {
@@ -337,6 +331,12 @@ export function KDSPage() {
           )}
         </div>
       </div>
+
+      <OrdersTruncatedNotice
+        shown={filteredOrders.filter((o) => o.status !== "delivered").length}
+        total={boardMeta.openTotal}
+        truncated={boardMeta.truncated}
+      />
 
       {/* Kanban Board Layout */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-4 lg:overflow-hidden">
