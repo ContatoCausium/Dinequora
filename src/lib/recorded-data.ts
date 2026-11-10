@@ -35,9 +35,16 @@ type OrderFilter = Omit<OrderPageRequest["data"], "limit" | "offset">;
  * dropped here (by id), and the new order is simply picked up on the next load. `truncated` is
  * true only when the browser cap stopped the read with older orders left unread.
  */
+/** Optional hooks of a long read: stop when aborted, report each page that arrives. */
+export interface PagedReadOptions {
+  signal?: AbortSignal | undefined;
+  onPage?: (() => void) | undefined;
+}
+
 async function readAllPages(
   filter: OrderFilter,
   fetchPage: OrderPageSource,
+  opts: PagedReadOptions = {},
 ): Promise<{ orders: RecordedOrder[]; total: number; truncated: boolean }> {
   const byId = new Map<string, RecordedOrder>();
   let total = 0;
@@ -47,7 +54,9 @@ async function readAllPages(
       stoppedAtCap = true;
       break;
     }
+    if (opts.signal?.aborted) throw new DOMException("read abandoned", "AbortError");
     const page = await fetchPage({ data: { ...filter, limit: PAGE, offset } });
+    opts.onPage?.();
     total = page.totalCount;
     for (const order of page.orders) if (!byId.has(order.id)) byId.set(order.id, order);
     if (page.orders.length < PAGE || byId.size >= total) break;
@@ -101,15 +110,19 @@ export async function fetchKitchenBoard(
   orgId: string,
   locationId: string,
   fetchPage: OrderPageSource = fetchOperationalOrders,
+  opts: PagedReadOptions = {},
 ): Promise<KitchenBoard> {
   // Open = still the kitchen's work (OPEN_STATUSES below).
   const open = await readAllPages(
     { orgId, locationId, statuses: [...OPEN_STATUSES], oldestFirst: true },
     fetchPage,
+    opts,
   );
+  if (opts.signal?.aborted) throw new DOMException("read abandoned", "AbortError");
   const delivered = await fetchPage({
     data: { orgId, locationId, status: "delivered", limit: KITCHEN_RECENT_DELIVERED, offset: 0 },
   });
+  opts.onPage?.();
   const byId = new Map(open.orders.map((o) => [o.id, o]));
   for (const order of delivered.orders) if (!byId.has(order.id)) byId.set(order.id, order);
   return {

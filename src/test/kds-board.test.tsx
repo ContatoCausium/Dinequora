@@ -406,3 +406,68 @@ describe("P5: kitchen cap notice", () => {
     await i18n.changeLanguage("en-US");
   });
 });
+
+describe("P3: stall deadline — a large board that keeps answering still loads", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("progress() restarts the 20 s: a 60 s read that answers every 15 s completes", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    let done = false;
+    const s = createRefreshScheduler(
+      async (signal, progress) => {
+        for (let i = 0; i < 4; i++) {
+          await new Promise((r) => setTimeout(r, 15_000)); // one page every 15 s
+          progress();
+        }
+        if (!signal.aborted) done = true;
+      },
+      { delayMs: 0, onTimeout },
+    );
+    void s.now();
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(done).toBe(true);
+    s.stop();
+  });
+
+  it("a page that never answers is still cut 20 s after the last answer", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    let signal!: AbortSignal;
+    const s = createRefreshScheduler(
+      async (sig, progress) => {
+        signal = sig;
+        await new Promise((r) => setTimeout(r, 15_000));
+        progress(); // first page answered at 15 s
+        await new Promise<void>(() => undefined); // second page hangs
+      },
+      { delayMs: 0, onTimeout },
+    );
+    void s.now();
+    await vi.advanceTimersByTimeAsync(34_000);
+    expect(onTimeout).not.toHaveBeenCalled(); // 19 s after the last answer
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(true);
+    s.stop();
+  });
+
+  it("fetchKitchenBoard reports every page and stops requesting pages once abandoned", async () => {
+    const db = database(rows(1000, "new", "o", 0));
+    let pages = 0;
+    await fetchKitchenBoard("org", "all", db.fetchPage, { onPage: () => pages++ });
+    expect(pages).toBe(6); // 5 pages of open tickets + the delivered page
+    const controller = new AbortController();
+    let calls = 0;
+    const abandoning = async (req: OrderPageRequest) => {
+      calls++;
+      if (calls === 2) controller.abort(); // the deadline fired while page 2 was loading
+      return db.fetchPage(req);
+    };
+    await expect(
+      fetchKitchenBoard("org", "all", abandoning, { signal: controller.signal }),
+    ).rejects.toThrow(/abandoned/);
+    expect(calls).toBe(2); // no page 3, 4, 5...
+  });
+});

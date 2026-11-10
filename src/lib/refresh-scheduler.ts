@@ -7,10 +7,12 @@
  *   reflected because the follow-up starts after it.
  * - `request()` waits `delayMs` to gather a burst; `now()` runs as soon as possible. Both resolve
  *   once a run that started after the call has finished (callers can await fresh data).
- * - Every run has a deadline (`timeoutMs`, 20 s by default). A run that has not settled by then is
- *   abandoned: its AbortSignal fires, `onTimeout` is called, waiters are released and the next run
- *   can start. The task must not apply its result when the signal is aborted, so a late response
- *   never overwrites newer data.
+ * - Stall deadline (`timeoutMs`, 20 s by default): a run that receives NO answer for that long is
+ *   abandoned — its AbortSignal fires, `onTimeout` is called, waiters are released and the next run
+ *   can start. The task calls `progress()` whenever a request answers (e.g. each page of a long
+ *   read), which restarts the 20 s, so a large board that keeps receiving pages loads completely
+ *   while a stalled request is still cut. The task must not apply its result when the signal is
+ *   aborted, so a late response never overwrites newer data.
  * - `stop()` (screen closed, store changed) aborts the running task's signal and cancels anything
  *   pending; nothing runs afterwards.
  *
@@ -31,7 +33,7 @@ export interface RefreshSchedulerOptions {
 export const REFRESH_TIMEOUT_MS = 20_000;
 
 export function createRefreshScheduler(
-  task: (signal: AbortSignal) => Promise<void>,
+  task: (signal: AbortSignal, progress: () => void) => Promise<void>,
   options: RefreshSchedulerOptions | number = {},
 ): RefreshScheduler {
   const opts = typeof options === "number" ? { delayMs: options } : options;
@@ -61,14 +63,20 @@ export function createRefreshScheduler(
       for (const resolve of serving) resolve();
       if (waiting.length > 0 && !stopped) arm(0);
     };
-    const deadline = setTimeout(() => {
+    const expire = () => {
       if (settled) return;
       controller.abort();
       opts.onTimeout?.();
       finish();
-    }, timeoutMs);
+    };
+    let deadline = setTimeout(expire, timeoutMs);
+    const progress = () => {
+      if (settled || controller.signal.aborted) return;
+      clearTimeout(deadline);
+      deadline = setTimeout(expire, timeoutMs);
+    };
     void Promise.resolve()
-      .then(() => task(controller.signal))
+      .then(() => task(controller.signal, progress))
       .catch(() => undefined)
       .finally(finish);
   };

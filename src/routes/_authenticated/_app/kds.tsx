@@ -124,9 +124,10 @@ export function KDSPage() {
 
   // Board data: every open ticket + the latest delivered ones (fetchKitchenBoard), reloaded on
   // every realtime change and every 15 s as a safety net. Reloads are serialized and bursts are
-  // merged (createRefreshScheduler), so an older response never overwrites a newer one. Each reload
-  // has a 20 s deadline: a stalled request is abandoned (its late answer is ignored), the next
-  // reload runs and the action buttons are released. A response for a previous store is discarded.
+  // merged (createRefreshScheduler), so an older response never overwrites a newer one. A reload
+  // that gets no answer for 20 s is abandoned (its late answer is ignored, it stops requesting
+  // pages), the next reload runs and the action buttons are released. Every page that answers
+  // restarts the 20 s, so a very large board still loads. A response for a previous store is dropped.
   useEffect(() => {
     let active = true;
     setOrders([]);
@@ -135,9 +136,13 @@ export function KDSPage() {
     setConnectionStatus("connecting");
 
     const scheduler = createRefreshScheduler(
-      async (signal) => {
+      async (signal, progress) => {
         try {
-          const board = await fetchKitchenBoard(org.id, locationId);
+          // Each page that answers restarts the 20 s stall deadline (large boards keep loading).
+          const board = await fetchKitchenBoard(org.id, locationId, undefined, {
+            signal,
+            onPage: progress,
+          });
           if (!active || signal.aborted) return; // store changed, or abandoned after the deadline
           setOrders(board.orders);
           setBoardMeta({
