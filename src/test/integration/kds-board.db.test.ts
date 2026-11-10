@@ -159,6 +159,9 @@ describe.skipIf(!ENABLED)(
 
     it("realtime: the board's subscription receives new tickets and status changes of its own org only", async () => {
       const events: RealtimePostgresChangesPayload<Record<string, unknown>>[] = [];
+      // The board's client authenticates realtime with the signed-in session, as in the app.
+      const { data: session } = await owner.auth.getSession();
+      await owner.realtime.setAuth(session.session?.access_token ?? null);
       const subscribed = new Promise<void>((resolve, reject) => {
         owner
           .channel(`kds-test-${Date.now()}`)
@@ -179,6 +182,20 @@ describe.skipIf(!ENABLED)(
         while (!pred() && Date.now() < end) await new Promise((r) => setTimeout(r, 100));
         return pred();
       };
+      // On a freshly started stack the realtime server starts streaming changes a few seconds
+      // after the first subscription: insert warm-up tickets until one arrives (at most 90 s).
+      let live = false;
+      for (let i = 1; i <= 30 && !live; i++) {
+        insert(`rt-warm${i}`, 1, "new", "now()");
+        const warmId = sql(
+          `select id from public.orders where client_order_id = 'kds-rt-warm${i}-1'`,
+        );
+        live = await waitFor(
+          () => events.some((e) => (e.new as Record<string, unknown>)["id"] === warmId),
+          3_000,
+        );
+      }
+      expect(live, "realtime delivered no event for the organization's orders").toBe(true);
 
       insert("rt", 1, "new", "now()");
       const id = sql(`select id from public.orders where client_order_id = 'kds-rt-1'`);
