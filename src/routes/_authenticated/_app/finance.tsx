@@ -4,11 +4,8 @@ import { useTranslation } from "react-i18next";
 import { CircleAlert, Plus, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  fetchOperationalOrders,
-  fetchOperationalResources,
-  saveOperationalRecord,
-} from "@/lib/operational.functions";
+import { fetchOperationalResources, saveOperationalRecord } from "@/lib/operational.functions";
+import { fetchAllOrders } from "@/lib/recorded-data";
 import { mapResources, type Resources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
 import {
@@ -23,7 +20,7 @@ import { fmtMoneyCents, fmtPercent } from "@/lib/format";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader } from "@/components/app/page";
 import { DemoBadge } from "@/components/app/brand-mark";
-import { Skeleton, StateCard } from "@/components/app/states";
+import { OrdersTruncatedNotice, Skeleton, StateCard } from "@/components/app/states";
 import { StatTile } from "@/components/app/stat-tile";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -66,9 +63,9 @@ import {
 export const Route = createFileRoute("/_authenticated/_app/finance")({
   head: () => ({
     meta: [
-      { title: "Financial Management · Servora" },
+      { title: "Financial Management · Dinequora" },
       { name: "description", content: "Recorded restaurant revenue, expenses and recipe cost." },
-      { property: "og:title", content: "Financial Management · Servora" },
+      { property: "og:title", content: "Financial Management · Dinequora" },
       {
         property: "og:description",
         content: "Recorded restaurant revenue, expenses and recipe cost.",
@@ -87,6 +84,11 @@ export function FinancePage() {
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
   const { org, locationId, user, can, canAny } = useWorkspace();
+  // Same rule as Reports and the Overview: the selected store zone, or the first store zone for "all".
+  const timeZone =
+    (locationId === "all"
+      ? org.locations[0]?.timezone
+      : org.locations.find((l) => l.id === locationId)?.timezone) ?? undefined;
   // Owners and managers manage expenses; RLS/RPCs still enforce store scope on the server.
   const canManage = canAny(["expenses.create", "expenses.edit", "expenses.pay", "expenses.delete"]);
   const stores = org.locations;
@@ -101,14 +103,22 @@ export function FinancePage() {
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [entries, setEntries] = useState<Resources["finance"]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersMeta, setOrdersMeta] = useState({ total: 0, truncated: false });
   const [tab, setTab] = useState<Tab>("overview");
 
+  // Same paged loader as Reports (this used to be a single page of 200): the history up to the
+  // browser cap, and the screen says so when older orders could not be included.
   const load = useCallback(async () => {
     const [r, o] = await Promise.all([
       fetchOperationalResources({ data: { orgId: org.id } }),
-      fetchOperationalOrders({ data: { orgId: org.id, limit: 200 } }),
+      fetchAllOrders(org.id, "all"),
     ]);
-    return { expenses: mapResources(r).expenses, entries: r.finance, orders: o.orders };
+    return {
+      expenses: mapResources(r).expenses,
+      entries: r.finance,
+      orders: o.orders,
+      ordersMeta: { total: o.total, truncated: o.truncated },
+    };
   }, [org.id]);
 
   const reload = useCallback(async () => {
@@ -117,6 +127,7 @@ export function FinancePage() {
       setAllExpenses(d.expenses);
       setEntries(d.entries);
       setOrders(d.orders);
+      setOrdersMeta(d.ordersMeta);
       setState("ready");
     } catch {
       setState("error");
@@ -135,6 +146,7 @@ export function FinancePage() {
         setAllExpenses(d.expenses);
         setEntries(d.entries);
         setOrders(d.orders);
+        setOrdersMeta(d.ordersMeta);
         setState("ready");
       })
       .catch(() => {
@@ -159,8 +171,8 @@ export function FinancePage() {
   const summary = useMemo(() => summarizeExpenses(expenses, today), [expenses, today]);
   const result = financialResult({ ...ledger, expensesCents: summary.totalCents });
   const trend = useMemo(
-    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7)),
-    [scopedEntries, expenses, today],
+    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7), timeZone),
+    [scopedEntries, expenses, today, timeZone],
   );
   const forecast = useMemo(() => cashOutForecast(expenses, 6, today), [expenses, today]);
   const last28RevenueCents = useMemo(() => {
@@ -525,7 +537,12 @@ export function FinancePage() {
               </TabsContent>
             )}
 
-            <TabsContent value="reports" className="mt-4">
+            <TabsContent value="reports" className="mt-4 space-y-4">
+              <OrdersTruncatedNotice
+                shown={orders.length}
+                total={ordersMeta.total}
+                truncated={ordersMeta.truncated}
+              />
               <FinanceReports
                 restaurantName={org.name}
                 locations={stores}
@@ -535,6 +552,7 @@ export function FinancePage() {
                 orders={orders}
                 stores={perStore}
                 currentMonth={today.slice(0, 7)}
+                timeZone={timeZone}
               />
             </TabsContent>
           </Tabs>

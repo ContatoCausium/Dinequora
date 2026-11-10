@@ -7,7 +7,7 @@ import { Download, FileBarChart, RefreshCw, ShieldAlert } from "lucide-react";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { StatTile } from "@/components/app/stat-tile";
-import { EmptyState, Skeleton, StateCard } from "@/components/app/states";
+import { EmptyState, OrdersTruncatedNotice, Skeleton, StateCard } from "@/components/app/states";
 import { ColumnSeries, RankedBars, downloadCsv } from "@/components/app/charts";
 import { Button } from "@/components/ui/button";
 import { fetchOperationalResources } from "@/lib/operational.functions";
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/_app/reports")({
   head: () => ({
     meta: [
-      { title: "Reports · Servora" },
+      { title: "Reports · Dinequora" },
       { name: "description", content: "Sales, product and result reports from recorded data." },
     ],
   }),
@@ -51,7 +51,12 @@ function ReportsPage() {
         fetchAllOrders(org.id, locationId, since),
         fetchOperationalResources({ data: { orgId: org.id, locationId } }),
       ]);
-      return { orders: orders.orders, resources };
+      return {
+        orders: orders.orders,
+        ordersTotal: orders.total,
+        ordersTruncated: orders.truncated,
+        resources,
+      };
     },
   });
 
@@ -150,6 +155,15 @@ function ReportsPage() {
         </div>
       ) : (
         <>
+          {query.data?.ordersTruncated && (
+            <div className="mb-4">
+              <OrdersTruncatedNotice
+                shown={query.data.orders.length}
+                total={query.data.ordersTotal}
+                truncated
+              />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatTile
               label={t("kpi.netSales")}

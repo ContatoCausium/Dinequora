@@ -31,7 +31,11 @@
     "empty": "Tap items from the menu to add them to this ticket.",
     "decreaseAria": "Decrease quantity of {{name}}",
     "increaseAria": "Increase quantity of {{name}}",
-    "removeAria": "Remove {{name}}"
+    "removeAria": "Remove {{name}}",
+    "mobileSummary_one": "{{count}} item · {{total}}",
+    "mobileSummary_other": "{{count}} items · {{total}}",
+    "mobileEmpty": "The ticket is empty",
+    "view": "View ticket"
   },
   "orderType": {
     "dine_in": "Dine in",

@@ -43,12 +43,12 @@ export const Route = createFileRoute("/_authenticated/control/organizations")({
   validateSearch: search,
   head: () => ({
     meta: [
-      { title: "Organizations · Servora Control Center" },
+      { title: "Organizations · Dinequora Control Center" },
       {
         name: "description",
         content: "Review organizations, ownership, trials, location usage and onboarding progress.",
       },
-      { property: "og:title", content: "Organizations · Servora Control Center" },
+      { property: "og:title", content: "Organizations · Dinequora Control Center" },
       {
         property: "og:description",
         content: "Review organizations, ownership, trials, location usage and onboarding progress.",

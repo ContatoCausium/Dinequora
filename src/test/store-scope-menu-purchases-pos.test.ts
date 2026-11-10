@@ -22,12 +22,9 @@ import {
   listSuspendedSales,
   suspendSale,
   removeSuspendedSale,
-  listPosHistory,
-  recordCompletedSale,
   getPOSSession,
   resumeSession,
   type SuspendedSale,
-  type CompletedPosSale,
 } from "@/lib/pos-service";
 import { listOrders, updateOrderStatus, toggleOrderItemReady } from "@/lib/orders-service";
 import { TenantContextError } from "@/lib/tenant-storage";
@@ -181,16 +178,9 @@ describe("POS — store scope", () => {
     expect(listSuspendedSales(A).map((s) => s.id)).toEqual(["s2"]);
   });
 
-  it("refuses to open a POS session or record a sale in an unauthorized store", () => {
+  it("refuses to open a POS session in an unauthorized store", () => {
+    // Sales themselves are recorded only by the server RPC, which enforces store scope in SQL.
     expect(() => getPOSSession(A, "loc_2", "c", ["loc_1"])).toThrow(TenantContextError);
-    const sale = {
-      id: "h1",
-      orderNumber: "#1",
-      orgId: A,
-      locationId: "loc_2",
-    } as unknown as CompletedPosSale;
-    expect(() => recordCompletedSale(A, sale, ["loc_1"])).toThrow(TenantContextError);
-    expect(listPosHistory(A)).toEqual([]);
   });
 
   it("rejects missing context", () => {

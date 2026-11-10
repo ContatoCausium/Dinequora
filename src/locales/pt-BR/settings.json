@@ -2,7 +2,7 @@
   "eyebrow": "Configurações",
   "branding": {
     "title": "Identidade visual",
-    "subtitle": "Envie o logotipo de {{org}} e o Servora sugere um tema claro e escuro acessível. A identidade visual é apenas estética e nunca altera permissões de acesso.",
+    "subtitle": "Envie o logotipo de {{org}} e o Dinequora sugere um tema claro e escuro acessível. A identidade visual é apenas estética e nunca altera permissões de acesso.",
     "restore": "Restaurar anterior",
     "reset": "Restaurar padrão",
     "apply": "Aplicar tema"
@@ -72,7 +72,7 @@
     "eyebrow": "Configurações",
     "title": "Cobrança",
     "subtitle": "Assinatura e cobrança de {{org}}.",
-    "notConnected": "Os pagamentos online ainda não estão conectados, então nenhum cartão é cobrado. Os planos e preços aqui são provisórios e, por enquanto, alterados pela equipe Servora.",
+    "notConnected": "Os pagamentos online ainda não estão conectados, então nenhum cartão é cobrado. Os planos e preços aqui são provisórios e, por enquanto, alterados pela equipe Dinequora.",
     "subscription": "Assinatura",
     "noSubscription": "Nenhuma assinatura registrada.",
     "plan": "Plano",
@@ -102,6 +102,8 @@
       "incomplete": "Incompleta"
     },
     "activeLocations": "Unidades ativas / permitidas",
-    "billedPendingSync": "{{count}} (atualiza na próxima sincronização da cobrança)"
+    "billedPendingSync": "{{count}} — ainda sem sincronização: os pagamentos online não estão conectados",
+    "planUpTo_one": "Até {{total}} / mês com {{count}} unidade",
+    "planUpTo_other": "Até {{total}} / mês com {{count}} unidades"
   }
 }

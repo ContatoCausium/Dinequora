@@ -16,7 +16,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { ServoraMark } from "@/components/app/brand-mark";
+import { BrandMark } from "@/components/app/brand-mark";
 import { AppError, AppPending } from "@/components/app/states";
 import { toast } from "sonner";
 import i18n from "@/lib/i18n";
@@ -34,17 +34,17 @@ const PLATFORM_BRAND = { primary: "#2e3a4b", accent: "#a8875a" };
 export const Route = createFileRoute("/_authenticated/control")({
   head: () => ({
     meta: [
-      { title: "Control Center · Servora" },
+      { title: "Control Center · Dinequora" },
       {
         name: "description",
         content:
-          "Servora platform administration: organizations, plans, demo studio, audit log and settings.",
+          "Dinequora platform administration: organizations, plans, demo studio, audit log and settings.",
       },
-      { property: "og:title", content: "Control Center · Servora" },
+      { property: "og:title", content: "Control Center · Dinequora" },
       {
         property: "og:description",
         content:
-          "Servora platform administration: organizations, plans, demo studio, audit log and settings.",
+          "Dinequora platform administration: organizations, plans, demo studio, audit log and settings.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -106,9 +106,9 @@ function ControlLayout() {
     <div className="min-h-screen bg-background md:grid md:grid-cols-[232px_minmax(0,1fr)]">
       <aside className="sticky top-0 z-30 min-w-0 border-b bg-sidebar md:h-screen md:border-b-0 md:border-r">
         <div className="flex h-14 items-center gap-2.5 px-4 md:h-16 md:px-5">
-          <ServoraMark className="size-6 text-primary" />
+          <BrandMark className="size-6 text-primary" />
           <div className="leading-tight">
-            <p className="text-sm font-semibold tracking-tight">Servora</p>
+            <p className="text-sm font-semibold tracking-tight">Dinequora</p>
             <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {t("badge")}
             </p>

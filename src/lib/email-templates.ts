@@ -21,21 +21,21 @@ type Copy = { subject: string; heading: string; body: string; cta?: string; foot
 const COPY: Record<EmailLang, Record<EmailKind, (v: EmailVars) => Copy>> = {
   "en-US": {
     confirm_account: () => ({
-      subject: "Confirm your Servora account",
+      subject: "Confirm your Dinequora account",
       heading: "Confirm your email",
       body: "Tap the button below to confirm your email address and finish creating your account.",
       cta: "Confirm email",
       footer: "If you didn't create an account, you can ignore this email.",
     }),
     password_reset: () => ({
-      subject: "Reset your Servora password",
+      subject: "Reset your Dinequora password",
       heading: "Reset your password",
       body: "We received a request to reset your password. This link expires in 1 hour and can be used once.",
       cta: "Choose a new password",
       footer: "If you didn't request this, your password stays the same.",
     }),
     invitation: (v) => ({
-      subject: `You're invited to ${v.orgName ?? "a restaurant"} on Servora`,
+      subject: `You're invited to ${v.orgName ?? "a restaurant"} on Dinequora`,
       heading: `Join ${v.orgName ?? "the team"}`,
       body: `${v.inviterName ?? "A manager"} invited you to join as ${v.role ?? "a team member"}. Accept with this same email address. The invitation expires in 7 days.`,
       cta: "Accept invitation",
@@ -48,7 +48,7 @@ const COPY: Record<EmailLang, Record<EmailKind, (v: EmailVars) => Copy>> = {
       footer: "You can review access anytime in Team & access.",
     }),
     security_notice: (v) => ({
-      subject: "Security notice for your Servora account",
+      subject: "Security notice for your Dinequora account",
       heading: "A security-related change was made",
       body: v.detail ?? "A sensitive change was made to your account.",
       footer:
@@ -57,21 +57,21 @@ const COPY: Record<EmailLang, Record<EmailKind, (v: EmailVars) => Copy>> = {
   },
   "pt-BR": {
     confirm_account: () => ({
-      subject: "Confirme sua conta Servora",
+      subject: "Confirme sua conta Dinequora",
       heading: "Confirme seu e-mail",
       body: "Toque no botão abaixo para confirmar seu e-mail e concluir a criação da conta.",
       cta: "Confirmar e-mail",
       footer: "Se você não criou uma conta, ignore este e-mail.",
     }),
     password_reset: () => ({
-      subject: "Redefina sua senha Servora",
+      subject: "Redefina sua senha Dinequora",
       heading: "Redefinir senha",
       body: "Recebemos um pedido para redefinir sua senha. Este link expira em 1 hora e pode ser usado uma vez.",
       cta: "Escolher nova senha",
       footer: "Se você não pediu isso, sua senha continua a mesma.",
     }),
     invitation: (v) => ({
-      subject: `Você foi convidado para ${v.orgName ?? "um restaurante"} no Servora`,
+      subject: `Você foi convidado para ${v.orgName ?? "um restaurante"} no Dinequora`,
       heading: `Entre para ${v.orgName ?? "a equipe"}`,
       body: `${v.inviterName ?? "Um gerente"} convidou você como ${v.role ?? "membro da equipe"}. Aceite com este mesmo e-mail. O convite expira em 7 dias.`,
       cta: "Aceitar convite",
@@ -84,7 +84,7 @@ const COPY: Record<EmailLang, Record<EmailKind, (v: EmailVars) => Copy>> = {
       footer: "Revise os acessos a qualquer momento em Equipe e acesso.",
     }),
     security_notice: (v) => ({
-      subject: "Aviso de segurança da sua conta Servora",
+      subject: "Aviso de segurança da sua conta Dinequora",
       heading: "Uma alteração de segurança foi feita",
       body: v.detail ?? "Uma alteração sensível foi feita na sua conta.",
       footer:
@@ -105,7 +105,7 @@ export function renderEmail(kind: EmailKind, lang: EmailLang, vars: EmailVars = 
   const c = COPY[lang][kind](vars);
   const color = safeColor(vars.brandColor);
   const url = safeUrl(vars.actionUrl);
-  const brand = esc(vars.orgName ?? "Servora");
+  const brand = esc(vars.orgName ?? "Dinequora");
   const html = `<!doctype html><html lang="${lang}"><body style="margin:0;background:#ffffff;font-family:Geist,Helvetica,Arial,sans-serif;color:#111827">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" style="max-width:520px" cellpadding="0" cellspacing="0">

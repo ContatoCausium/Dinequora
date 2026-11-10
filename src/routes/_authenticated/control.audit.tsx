@@ -21,15 +21,15 @@ import type { PlatformAudit } from "@/lib/admin-service";
 export const Route = createFileRoute("/_authenticated/control/audit")({
   head: () => ({
     meta: [
-      { title: "Audit log · Servora Control Center" },
+      { title: "Audit log · Dinequora Control Center" },
       {
         name: "description",
-        content: "Immutable record of sensitive changes across the Servora platform.",
+        content: "Immutable record of sensitive changes across the Dinequora platform.",
       },
-      { property: "og:title", content: "Audit log · Servora Control Center" },
+      { property: "og:title", content: "Audit log · Dinequora Control Center" },
       {
         property: "og:description",
-        content: "Immutable record of sensitive changes across the Servora platform.",
+        content: "Immutable record of sensitive changes across the Dinequora platform.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

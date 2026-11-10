@@ -4,7 +4,7 @@
  *   VITE_SUPPORT_EMAIL   e.g. the Dinequora support mailbox once its domain and inbox are confirmed.
  *
  * Unset (today) means "no support address": callers must hide the contact instead of inventing
- * one. The demo support tickets in support-service.ts keep their fictional addresses.
+ * one. Not used by any screen yet: the app shows no support contact until a screen adopts this.
  */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 

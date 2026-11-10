@@ -52,12 +52,12 @@ import { RecordedOverview } from "@/components/app/recorded-overview";
 export const Route = createFileRoute("/_authenticated/_app/")({
   head: () => ({
     meta: [
-      { title: "Executive overview · Servora" },
+      { title: "Executive overview · Dinequora" },
       {
         name: "description",
         content: "Consolidated and per-location sales, orders and operational alerts.",
       },
-      { property: "og:title", content: "Executive overview · Servora" },
+      { property: "og:title", content: "Executive overview · Dinequora" },
       {
         property: "og:description",
         content: "Consolidated and per-location sales, orders and operational alerts.",

@@ -64,7 +64,7 @@ O destino exato de cada variável depende da hospedagem escolhida (seção 2).
 | `VITE_SUPABASE_PUBLISHABLE_KEY`                       | Navegador (embutida no build)                             | Variáveis de build da hospedagem                | Pública (protegida pelo RLS)   |
 | `SUPABASE_URL`                                        | Servidor (SSR)                                            | Variáveis de execução da hospedagem             | Pública                        |
 | `SUPABASE_PUBLISHABLE_KEY`                            | Servidor (SSR)                                            | Variáveis de execução da hospedagem             | Pública                        |
-| `VITE_SUPPORT_EMAIL`                                  | Navegador (`platform-contact.ts`; vazia = contato oculto) | Variáveis de build da hospedagem                | Pública                        |
+| `VITE_SUPPORT_EMAIL`                                  | Navegador (`platform-contact.ts`; ainda sem uso em telas) | Variáveis de build da hospedagem                | Pública                        |
 | `OBSERVABILITY_ENVIRONMENT`                           | Servidor                                                  | Variáveis de execução (ex.: `production`)       | Pública                        |
 | `OBSERVABILITY_ALERT_WEBHOOK_URL`                     | Servidor                                                  | Secret de servidor da hospedagem                | **Secreta**                    |
 | `RESEND_API_KEY`                                      | Servidor: envio da aplicação (quando implementado)        | Secret de servidor da hospedagem                | **Credencial secreta**         |
@@ -331,11 +331,11 @@ como estão, **sem substituição global**, até um plano de rebranding próprio
   `0010_servora_types`, que nunca muda;
 - contas de demonstração `@servora.test`;
 - nomes de variáveis `LOVABLE_*` e `VITE_SUPABASE_*`;
-- endereço fictício `support@servora.app` dos chamados de demonstração em `support-service.ts`
-  (dados demo, não é contato real). O contato de suporte real vem de `VITE_SUPPORT_EMAIL`
-  (`platform-contact.ts`); sem ela, a interface esconde o contato. Valor previsto:
-  `support@dinequora.com`, só depois que a caixa postal ou o encaminhamento for confirmado
-  (seção 8);
+- o endereço fictício `support@servora.app` existia só nos chamados de demonstração de
+  `support-service.ts`, removido por não ter uso. O contato de suporte real virá de
+  `VITE_SUPPORT_EMAIL`, lido por `platform-contact.ts` — que **ainda não é usado por nenhuma
+  tela**: hoje o app não exibe contato de suporte. Valor previsto: `support@dinequora.com`, só
+  depois que a caixa postal ou o encaminhamento for confirmado (seção 8);
 - nomes das pastas locais das worktrees.
 
 ## 13. Autorizações exigidas

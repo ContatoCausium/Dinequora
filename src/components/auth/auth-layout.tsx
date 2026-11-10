@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
 
-import { ServoraMark } from "@/components/app/brand-mark";
+import { BrandMark } from "@/components/app/brand-mark";
 import {
   FALLBACK_BRAND,
   generateTheme,
@@ -52,7 +52,7 @@ export function AuthLayout({
       <div className="flex flex-col px-6 py-6 sm:px-10">
         <header className="flex items-center justify-between">
           <Link to="/auth" className="inline-flex items-center gap-2.5">
-            <ServoraMark className="size-7 text-foreground" />
+            <BrandMark className="size-7 text-foreground" />
             <span className="text-[15px] font-semibold tracking-tight">{t("brand.product")}</span>
           </Link>
           <div
@@ -83,7 +83,7 @@ export function AuthLayout({
             {children}
           </div>
         </main>
-        <p className="text-center text-xs text-muted-foreground lg:text-left">© 2026 Servora</p>
+        <p className="text-center text-xs text-muted-foreground lg:text-left">© 2026 Dinequora</p>
       </div>
 
       <aside className="relative hidden overflow-hidden border-l bg-sidebar lg:flex lg:flex-col lg:justify-between lg:p-12">

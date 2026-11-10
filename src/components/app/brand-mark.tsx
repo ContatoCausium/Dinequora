@@ -35,13 +35,25 @@ export function DemoBadge({ label, className }: { label: string; className?: str
   );
 }
 
-export function ServoraMark({ className }: { className?: string }) {
+/** Dinequora brand icon (official artwork from website/public/brand/dinequora_icone_transparente.svg). */
+export function BrandMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <rect width="32" height="32" rx="8" fill="currentColor" />
-      <path d="M9 19.5c0 2.2 3 3.5 7 3.5s7-1.3 7-3.5H9Z" fill="var(--background)" />
-      <path d="M10 17.5a6 6 0 0 1 12 0H10Z" fill="var(--background)" opacity=".7" />
-      <circle cx="16" cy="9.5" r="1.6" fill="var(--background)" />
+    <svg viewBox="0 0 200 200" className={className} role="img" aria-label="Dinequora">
+      <path
+        fill="#10B981"
+        d="M24 14H97C145 14 176 48 176 95C176 144 145 176 96 176H48C56 164 66 153 78 147H96C128 147 146 128 146 96C146 64 128 44 96 44H66C45 44 32 33 24 14Z"
+      />
+      <path
+        fill="#10B981"
+        d="M36 48C45 58 56 64 66 69C75 74 79 83 79 94V111C62 122 48 142 36 163Z"
+      />
+      <path
+        fill="#10B981"
+        d="M39 178C49 141 66 122 90 112C107 105 124 103 137 99C128 122 113 132 94 137C72 143 55 155 43 178Z"
+      />
     </svg>
   );
 }
+
+/** @deprecated Former name of {@link BrandMark}; kept so older imports keep working. */
+export const ServoraMark = BrandMark;

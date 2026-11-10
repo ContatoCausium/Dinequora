@@ -28,12 +28,12 @@ import {
 export const Route = createFileRoute("/_authenticated/_app/team")({
   head: () => ({
     meta: [
-      { title: "Team & access · Servora" },
+      { title: "Team & access · Dinequora" },
       {
         name: "description",
         content: "Invite employees, assign stores, set permission profiles and review access.",
       },
-      { property: "og:title", content: "Team & access · Servora" },
+      { property: "og:title", content: "Team & access · Dinequora" },
       {
         property: "og:description",
         content: "Invite employees, assign stores, set permission profiles and review access.",
@@ -144,9 +144,15 @@ function TeamPage() {
           label={t("stats.members")}
           value={team.isPending ? "—" : members.length}
           hint={t("stats.membersHint", {
-            owners: members.filter((m) => m.role === "owner").length,
-            managers: members.filter((m) => m.role === "manager").length,
-            staff: members.filter((m) => m.role === "staff").length,
+            owners: t("stats.ownersCount", {
+              count: members.filter((m) => m.role === "owner").length,
+            }),
+            managers: t("stats.managersCount", {
+              count: members.filter((m) => m.role === "manager").length,
+            }),
+            staff: t("stats.staffCount", {
+              count: members.filter((m) => m.role === "staff").length,
+            }),
           })}
         />
         <StatTile

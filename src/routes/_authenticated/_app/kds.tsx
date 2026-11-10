@@ -41,12 +41,12 @@ import { setOperationalItemReady } from "@/lib/operational.functions";
 export const Route = createFileRoute("/_authenticated/_app/kds")({
   head: () => ({
     meta: [
-      { title: "Kitchen Display System (KDS) · Servora" },
+      { title: "Kitchen Display System (KDS) · Dinequora" },
       {
         name: "description",
         content: "Authorized restaurant kitchen tickets and recorded status transitions.",
       },
-      { property: "og:title", content: "Kitchen Display System (KDS) · Servora" },
+      { property: "og:title", content: "Kitchen Display System (KDS) · Dinequora" },
       {
         property: "og:description",
         content: "Authorized restaurant kitchen tickets and recorded status transitions.",

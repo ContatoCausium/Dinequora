@@ -131,8 +131,8 @@
       "cogsHint": "{{value}} of net sales",
       "gross": "Gross profit",
       "grossHint": "Margin {{value}}",
-      "month": "Result this month",
-      "monthHint": "Gross profit − expenses of {{month}}",
+      "month": "Result · month to date",
+      "monthHint": "Gross profit since the 1st − expenses with {{month}} competency",
       "noSales": "No sales yet"
     },
     "sales": {
@@ -168,7 +168,9 @@
       "movesToday": "Movements today",
       "recent": "Latest movements",
       "recentEmpty": "No stock movements recorded yet.",
-      "openInventory": "Open inventory"
+      "openInventory": "Open inventory",
+      "of": "{{qty}} · min {{min}}",
+      "empty": "No items at or below their minimum."
     },
     "role": {
       "owner": "Owner",

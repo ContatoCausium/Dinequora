@@ -191,16 +191,12 @@ export function WhatsAppPreviewCard({
   const ownerOnly = <p className="text-xs text-muted-foreground">{t("whatsapp.ownerOnly")}</p>;
 
   return (
-    <Panel
-      title={t("whatsapp.title")}
-      subtitle={t("whatsapp.subtitle")}
-      action={
-        <Badge variant="warning" className="shrink-0">
-          {t("whatsapp.simulation")}
-        </Badge>
-      }
-      className="self-start"
-    >
+    <Panel title={t("whatsapp.title")} subtitle={t("whatsapp.subtitle")} className="self-start">
+      {/* The status badge sits in the body: in the header it took the full right side and squeezed
+          the description into a narrow column on this side panel. */}
+      <Badge variant="warning" className="mb-4">
+        {t("whatsapp.simulation")}
+      </Badge>
       <Tabs defaultValue="preview">
         <TabsList aria-label={t("whatsapp.tabsLabel")} className="h-auto flex-wrap justify-start">
           {TABS.map((tab) => (

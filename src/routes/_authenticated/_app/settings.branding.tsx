@@ -29,12 +29,12 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/_app/settings/branding")({
   head: () => ({
     meta: [
-      { title: "Branding & appearance · Servora" },
+      { title: "Branding & appearance · Dinequora" },
       {
         name: "description",
         content: "Upload a logo and generate an accessible workspace theme automatically.",
       },
-      { property: "og:title", content: "Branding & appearance · Servora" },
+      { property: "og:title", content: "Branding & appearance · Dinequora" },
       {
         property: "og:description",
         content: "Upload a logo and generate an accessible workspace theme automatically.",

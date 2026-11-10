@@ -45,6 +45,7 @@ import {
   persistFinalizedPOSSaleAtomic,
   cancelOrderWithReversal,
 } from "@/lib/orders-persistence-service";
+import { confirmedReceipt } from "@/lib/pos-receipt";
 import { type OrderType } from "@/lib/orders-service";
 import { fmtBasisPoints, fmtMoneyCents } from "@/lib/format";
 import { captureError, isExpectedBusinessError } from "@/lib/observability";
@@ -75,12 +76,12 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_authenticated/_app/pos")({
   head: () => ({
     meta: [
-      { title: "POS · Servora" },
+      { title: "POS · Dinequora" },
       {
         name: "description",
         content: "Authorized point of sale and server-confirmed restaurant orders.",
       },
-      { property: "og:title", content: "POS · Servora" },
+      { property: "og:title", content: "POS · Dinequora" },
       {
         property: "og:description",
         content: "Authorized point of sale and server-confirmed restaurant orders.",
@@ -215,6 +216,7 @@ export function POSPage() {
 
   const taxRateLabel = fmtBasisPoints(posTaxRateBasisPoints(session), lng);
   const displayCashier = session.cashierName || t("ticket.cashierFallback");
+  const ticketCount = session.cart.reduce((n, item) => n + item.quantity, 0);
 
   const handleOpenItem = (item: MenuItem) => {
     if (item.modifierGroups && item.modifierGroups.length > 0) {
@@ -338,10 +340,9 @@ export function POSPage() {
 
       const orderNumber = displayOrderNumber(persistRes.orderNumber, persistRes.orderId);
       setReceiptSession({
-        ...paid,
+        ...confirmedReceipt(paid, persistRes),
         persistedOrderId: persistRes.orderId,
         orderNumber,
-        isSimulation: org.fictional,
       });
       setCheckoutOpen(false);
       // Only reset active cart once server confirmed sale ID
@@ -407,7 +408,7 @@ export function POSPage() {
   const filtersActive = search.trim() !== "" || selectedCat !== "all";
 
   return (
-    <div className="flex flex-col gap-4 lg:h-[calc(100vh-5rem)] lg:flex-row lg:overflow-hidden">
+    <div className="flex flex-col gap-4 pb-16 lg:h-[calc(100vh-5rem)] lg:flex-row lg:overflow-hidden lg:pb-0">
       {/* Main Catalog View */}
       <section className="surface flex min-h-[60vh] flex-1 flex-col overflow-hidden lg:min-h-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
@@ -580,7 +581,10 @@ export function POSPage() {
       </section>
 
       {/* Right Cart Sidebar */}
-      <aside className="surface flex w-full shrink-0 flex-col overflow-hidden lg:w-96">
+      <aside
+        id="pos-ticket"
+        className="surface flex w-full shrink-0 scroll-mt-4 flex-col overflow-hidden lg:w-96"
+      >
         {/* Header Order Settings */}
         <div className="flex flex-col gap-2 border-b p-3">
           <div className="flex items-center justify-between gap-2">
@@ -956,6 +960,30 @@ export function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Phones and tablets: the ticket sits below the menu, so keep its summary in reach */}
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t bg-card/95 px-4 py-2 backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <p className="tabular min-w-0 truncate text-sm font-medium" aria-live="polite">
+            {ticketCount > 0
+              ? t("ticket.mobileSummary", { count: ticketCount, total: money(session.totalCents) })
+              : t("ticket.mobileEmpty")}
+          </p>
+          <Button
+            size="sm"
+            variant={ticketCount > 0 ? "default" : "outline"}
+            className="h-10 shrink-0"
+            onClick={() =>
+              document
+                .getElementById("pos-ticket")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          >
+            <ShoppingBag className="mr-1.5 size-4" aria-hidden />
+            {t("ticket.view")}
+          </Button>
+        </div>
+      </div>
 
       {/* Clear ticket confirmation */}
       <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>

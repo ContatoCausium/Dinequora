@@ -15,17 +15,17 @@ import { fmtCurrency, fmtDate, fmtNumber, fmtPercent } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/control/")({
   head: () => ({
     meta: [
-      { title: "Platform overview · Servora Control Center" },
+      { title: "Platform overview · Dinequora Control Center" },
       {
         name: "description",
         content:
-          "Organizations, locations, subscriptions and activity across the Servora platform.",
+          "Organizations, locations, subscriptions and activity across the Dinequora platform.",
       },
-      { property: "og:title", content: "Platform overview · Servora Control Center" },
+      { property: "og:title", content: "Platform overview · Dinequora Control Center" },
       {
         property: "og:description",
         content:
-          "Organizations, locations, subscriptions and activity across the Servora platform.",
+          "Organizations, locations, subscriptions and activity across the Dinequora platform.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

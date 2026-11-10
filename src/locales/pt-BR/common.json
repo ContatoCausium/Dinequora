@@ -14,7 +14,7 @@
     "inventory": "Estoque e Suprimentos",
     "employees": "Equipe e acessos",
     "finance": "Financeiro",
-    "intelligence": "Servora Intelligence",
+    "intelligence": "Dinequora Intelligence",
     "whatsapp": "Central WhatsApp",
     "analytics": "Relatórios",
     "controlCenter": "Central de Controle",
@@ -55,9 +55,14 @@
     "search": "Buscar…",
     "searchPlaceholder": "Buscar páginas e unidades…",
     "noResults": "Nenhum resultado encontrado.",
-    "poweredBy": "Desenvolvido com Servora",
+    "poweredBy": "Desenvolvido com Dinequora",
     "signOut": "Sair",
-    "notificationsEmpty": "Nenhuma notificação no momento."
+    "notificationsEmpty": "Nenhuma notificação no momento.",
+    "signOutHeldTitle": "Sair e descartar os tickets em espera?",
+    "signOutHeldBody_one": "Há {{count}} ticket em espera neste aparelho. Tickets em espera nunca são enviados ao servidor, então sair descarta esse ticket. Pedidos e vendas registrados não são afetados.",
+    "signOutHeldBody_other": "Há {{count}} tickets em espera neste aparelho. Tickets em espera nunca são enviados ao servidor, então sair descarta esses tickets. Pedidos e vendas registrados não são afetados.",
+    "signOutHeldConfirm": "Descartar e sair",
+    "signOutHeldCancel": "Continuar conectado"
   },
   "plans": {
     "starter": "Inicial",
@@ -76,7 +81,7 @@
     "errorBody": "Seus dados estão seguros. Verifique sua conexão e tente novamente.",
     "retry": "Tentar novamente",
     "suspendedTitle": "Este workspace está pausado",
-    "suspendedBody": "O acesso a esta organização foi suspenso pela plataforma. Fale com o suporte Servora para reativá-lo.",
+    "suspendedBody": "O acesso a esta organização foi suspenso pela plataforma. Fale com o suporte Dinequora para reativá-lo.",
     "reason": "Motivo: {{reason}}",
     "noStoresTitle": "Nenhuma loja atribuída ainda",
     "noStoresBody": "Peça a um proprietário ou gerente para liberar o acesso às lojas em que você trabalha.",
@@ -86,7 +91,8 @@
     "notFoundTitle": "Página não encontrada",
     "notFoundBody": "Esta página não existe ou foi movida.",
     "home": "Ir para o início",
-    "controlDenied": "A Central de Controle está disponível apenas para administradores da plataforma."
+    "controlDenied": "A Central de Controle está disponível apenas para administradores da plataforma.",
+    "ordersTruncated": "Estes números incluem os {{shown}} pedidos mais recentes de um total de {{total}}. Pedidos mais antigos ainda não estão incluídos."
   },
   "access": {
     "noModuleTitle": "Você não tem acesso a este módulo",

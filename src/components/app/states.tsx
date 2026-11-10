@@ -124,3 +124,26 @@ export function SuspendedState({ reason }: { reason: string | null }) {
     />
   );
 }
+
+/** Shown when the browser cap stopped reading the order history (fetchAllOrders `truncated`). */
+export function OrdersTruncatedNotice({
+  shown,
+  total,
+  truncated,
+}: {
+  shown: number;
+  total: number;
+  truncated: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!truncated || shown >= total) return null;
+  return (
+    <div
+      role="status"
+      className="surface flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground"
+    >
+      <CircleAlert className="size-4 shrink-0 text-warning" />
+      <span>{t("states.ordersTruncated", { shown, total })}</span>
+    </div>
+  );
+}

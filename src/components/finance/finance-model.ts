@@ -8,6 +8,7 @@ import {
 } from "@/lib/finance-service";
 import type { Resources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
+import { dayKey } from "@/lib/period-metrics";
 
 /**
  * Pure view-model helpers for the Finance screen. Every figure is derived from recorded rows:
@@ -50,10 +51,13 @@ export function monthlyTrend(
   entries: readonly LedgerEntry[],
   expenses: readonly Expense[],
   currentMonth: string,
+  /** Store zone: a sale belongs to the month it happened in locally, like expense competency. */
+  timeZone?: string,
 ): MonthPoint[] {
   const ledgerByMonth = new Map<string, LedgerEntry[]>();
   for (const e of entries) {
-    const m = e.created_at.slice(0, 7);
+    // Without a store zone keep the previous UTC month, so callers that pass none are unchanged.
+    const m = dayKey(e.created_at, timeZone ?? "UTC").slice(0, 7);
     if (m > currentMonth) continue;
     const list = ledgerByMonth.get(m) ?? [];
     list.push(e);

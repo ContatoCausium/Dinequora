@@ -4,8 +4,8 @@
   "add": "Add location",
   "limitReached": "Your plan's location limit has been reached. Upgrade to add more.",
   "planUsage": "{{plan}} plan · locations in use",
-  "planRemaining_one": "{{count}} more location available on this plan",
-  "planRemaining_other": "{{count}} more locations available on this plan",
+  "planRemaining_one": "{{count}} more location available on this plan.",
+  "planRemaining_other": "{{count}} more locations available on this plan.",
   "addressMissing": "Address not provided yet",
   "status": {
     "verified": "Verified",

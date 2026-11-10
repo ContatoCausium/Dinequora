@@ -1,5 +1,5 @@
 {
-  "title": "Servora Intelligence",
+  "title": "Dinequora Intelligence",
   "description": "Receita, CMV e sinais de estoque calculados a partir das operações registradas.",
   "allStores": "Todas as lojas",
   "demoBadge": "Restaurante demo",
@@ -82,7 +82,7 @@
       "ledger": "Somente pedidos que chegaram aos lançamentos são contados; canais de venda externos não estão conectados.",
       "waste": "Desperdício e perdas ainda não são registrados separadamente.",
       "inventory": "Depende de cada item ter uma quantidade mínima configurada.",
-      "suppliers": "A pontualidade de entrega depende do registro do recebimento no Servora."
+      "suppliers": "A pontualidade de entrega depende do registro do recebimento no Dinequora."
     },
     "labels": {
       "revenue": "Receita bruta",
@@ -203,15 +203,15 @@
     "historyEmptyBody": "Os testes simulados salvos aparecem aqui. Eles nunca são enviados.",
     "draft": "Rascunho simulado",
     "connectionStatus": "Nenhum provedor conectado",
-    "connectionBody": "O Servora está preparado para a API oficial WhatsApp Business Cloud. Nenhum token ou chave privada é armazenado no navegador.",
+    "connectionBody": "O Dinequora está preparado para a API oficial WhatsApp Business Cloud. Nenhum token ou chave privada é armazenado no navegador.",
     "connectionPending": "Conectar um provedor exige um número comercial verificado."
   },
   "message": {
     "noValue": "—",
-    "footer": "_Simulação do Servora Intelligence. Esta mensagem não foi enviada._",
-    "financial_summary": "*Servora Intelligence · Resumo financeiro*\nOlá, *{{name}}*. Números registrados nos últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Resultado líquido: {{net}}\n• CMV: {{cmv}}\n• Margem bruta: {{margin}}\n• Itens com estoque baixo: {{lowStock}}",
-    "cmv_audit": "*Servora Intelligence · Revisão de CMV*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• CMV: {{cmv}}\n• Custo das fichas: {{recipeCost}}\n• Faturamento bruto: {{revenue}}\n• Fichas técnicas ativas: {{recipes}}",
-    "low_stock_alert": "*Servora Intelligence · Alerta de estoque baixo*\nOlá, *{{name}}*. {{lowStock}} de {{tracked}} itens monitorados estão no estoque mínimo ou abaixo ({{scope}}).\n\nAbra o Estoque no Servora para planejar o próximo pedido de compra.",
-    "pulse": "*Servora Intelligence · Atualização operacional*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Pedidos: {{orders}}"
+    "footer": "_Simulação do Dinequora Intelligence. Esta mensagem não foi enviada._",
+    "financial_summary": "*Dinequora Intelligence · Resumo financeiro*\nOlá, *{{name}}*. Números registrados nos últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Resultado líquido: {{net}}\n• CMV: {{cmv}}\n• Margem bruta: {{margin}}\n• Itens com estoque baixo: {{lowStock}}",
+    "cmv_audit": "*Dinequora Intelligence · Revisão de CMV*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• CMV: {{cmv}}\n• Custo das fichas: {{recipeCost}}\n• Faturamento bruto: {{revenue}}\n• Fichas técnicas ativas: {{recipes}}",
+    "low_stock_alert": "*Dinequora Intelligence · Alerta de estoque baixo*\nOlá, *{{name}}*. {{lowStock}} de {{tracked}} itens monitorados estão no estoque mínimo ou abaixo ({{scope}}).\n\nAbra o Estoque no Dinequora para planejar o próximo pedido de compra.",
+    "pulse": "*Dinequora Intelligence · Atualização operacional*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Pedidos: {{orders}}"
   }
 }

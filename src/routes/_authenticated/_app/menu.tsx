@@ -59,12 +59,12 @@ import { fmtMoneyCents } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/_app/menu")({
   head: () => ({
     meta: [
-      { title: "Menu & Products · Servora" },
+      { title: "Menu & Products · Dinequora" },
       {
         name: "description",
         content: "Restaurant products, prices and modifiers with authorized store access.",
       },
-      { property: "og:title", content: "Menu & Products · Servora" },
+      { property: "og:title", content: "Menu & Products · Dinequora" },
       {
         property: "og:description",
         content: "Restaurant products, prices and modifiers with authorized store access.",

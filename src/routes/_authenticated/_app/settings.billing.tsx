@@ -14,12 +14,12 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/_app/settings/billing")({
   head: () => ({
     meta: [
-      { title: "Billing · Servora" },
+      { title: "Billing · Dinequora" },
       {
         name: "description",
         content: "Subscription plan, trial, billed locations and billing history.",
       },
-      { property: "og:title", content: "Billing · Servora" },
+      { property: "og:title", content: "Billing · Dinequora" },
       {
         property: "og:description",
         content: "Subscription plan, trial, billed locations and billing history.",
@@ -144,29 +144,48 @@ function BillingPage() {
           </div>
           <Panel title={t("billing.plans")} subtitle={t("billing.plansNote")}>
             <ul className="flex flex-col gap-2">
-              {data?.plans.map((p) => (
-                <li
-                  key={p.id}
-                  className={cn(
-                    "rounded-lg border p-3.5",
-                    p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
-                  )}
-                >
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-sm font-semibold">{p.name}</span>
-                    <span className="tabular text-sm">
-                      {p.price_per_location_cents
-                        ? t("billing.perLocation", {
-                            price: fmtCurrency(p.price_per_location_cents / 100, lng),
-                          })
-                        : t("billing.custom")}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("billing.planMeta", { count: p.default_store_limit, days: p.trial_days })}
-                  </p>
-                </li>
-              ))}
+              {/* Smallest plan first. Prices are the placeholder per-location values stored in
+                  billing_plans; the monthly figure below is derived from them, never invented. */}
+              {[...(data?.plans ?? [])]
+                .sort(
+                  (a, b) =>
+                    (a.default_store_limit ?? 0) - (b.default_store_limit ?? 0) ||
+                    a.name.localeCompare(b.name),
+                )
+                .map((p) => (
+                  <li
+                    key={p.id}
+                    className={cn(
+                      "rounded-lg border p-3.5",
+                      p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
+                    )}
+                  >
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-semibold">{p.name}</span>
+                      <span className="tabular text-sm">
+                        {p.price_per_location_cents
+                          ? t("billing.perLocation", {
+                              price: fmtCurrency(p.price_per_location_cents / 100, lng),
+                            })
+                          : t("billing.custom")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("billing.planMeta", { count: p.default_store_limit, days: p.trial_days })}
+                    </p>
+                    {p.price_per_location_cents > 0 && (p.default_store_limit ?? 0) > 1 && (
+                      <p className="tabular mt-0.5 text-xs text-muted-foreground">
+                        {t("billing.planUpTo", {
+                          count: p.default_store_limit,
+                          total: fmtCurrency(
+                            (p.price_per_location_cents * p.default_store_limit) / 100,
+                            lng,
+                          ),
+                        })}
+                      </p>
+                    )}
+                  </li>
+                ))}
             </ul>
           </Panel>
         </div>

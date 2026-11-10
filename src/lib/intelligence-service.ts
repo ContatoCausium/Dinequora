@@ -334,7 +334,7 @@ export function classifyQueryTopic(query: string): AgentQueryTopic {
 }
 
 /**
- * Agente determinístico Servora Intelligence: analisa a pergunta do restaurante
+ * Agente determinístico Dinequora Intelligence: analisa a pergunta do restaurante
  * consultando ferramentas autorizadas e serviços financeiros e de estoque já existentes.
  */
 export function executeAgentQuery(

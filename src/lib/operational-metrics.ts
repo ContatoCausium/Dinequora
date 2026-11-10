@@ -1,5 +1,6 @@
 import type { Resources } from "./operational-mappers";
 import type { IntelligenceSummary } from "./intelligence-service";
+import { dayKey, expensesInPeriod } from "./period-metrics";
 
 /** Revenue and COGS come exclusively from the server ledger; reversals are additive. */
 export function ledgerMetrics(entries: Resources["finance"]) {
@@ -14,25 +15,43 @@ export function ledgerMetrics(entries: Resources["finance"]) {
   return { revenueCents: revenue, cogsCents: cogs };
 }
 
+/**
+ * Recorded figures for the last `periodDays` days. Revenue and COGS come from ledger entries in the
+ * window; expenses count only when their competency date (falling back to the due date) is inside
+ * the same window, so the net result compares the same days (same rule as Reports).
+ */
 export function recordedIntelligence(
   resources: Resources,
   periodDays: number,
+  timeZone?: string,
+  now: number = Date.now(),
 ): IntelligenceSummary {
-  const threshold = Date.now() - periodDays * 86400000;
+  const threshold = now - periodDays * 86400000;
   const entries = resources.finance.filter((e) => Date.parse(e.created_at) >= threshold);
   const ledger = ledgerMetrics(entries);
-  const expenses = resources.expenses.reduce((sum, e) => {
+  const dated = resources.expenses.flatMap((e) => {
     const p = e.payload;
-    if (
-      p &&
-      typeof p === "object" &&
-      !Array.isArray(p) &&
-      typeof p["amountCents"] === "number" &&
-      !p["isSimulation"]
-    )
-      return sum + p["amountCents"];
-    return sum;
-  }, 0);
+    if (!p || typeof p !== "object" || Array.isArray(p) || typeof p["amountCents"] !== "number")
+      return [];
+    const day =
+      typeof p["competencyDate"] === "string" && p["competencyDate"]
+        ? p["competencyDate"]
+        : typeof p["dueDate"] === "string"
+          ? p["dueDate"]
+          : "";
+    return [
+      {
+        competencyDate: day.slice(0, 10),
+        amountCents: p["amountCents"],
+        isSimulation: p["isSimulation"] === true,
+      },
+    ];
+  });
+  const expenses = expensesInPeriod(
+    dated,
+    dayKey(new Date(threshold).toISOString(), timeZone),
+    dayKey(new Date(now).toISOString(), timeZone),
+  );
   const low = resources.inventory.filter((i) => i.quantity <= i.min_quantity).length;
   return {
     grossRevenueCents: ledger.revenueCents,

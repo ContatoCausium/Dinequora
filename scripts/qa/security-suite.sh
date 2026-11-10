@@ -15,6 +15,8 @@
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
+#   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
+#      sales created mid-read), totals match the table
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -73,6 +75,10 @@ for run in 1 2; do
   echo "  seed run $run: $(echo "$out" | grep -o "demo organizations present: .*")"
 done
 run_check scripts/security/demo_seed_rebuild.sql
+echo "::endgroup::"
+echo "::group::7. order history paging against the database"
+QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
+  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/orders-paging.db.test.ts
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."

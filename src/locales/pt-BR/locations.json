@@ -4,8 +4,8 @@
   "add": "Adicionar unidade",
   "limitReached": "O limite de unidades do seu plano foi atingido. Faça upgrade para adicionar mais.",
   "planUsage": "Plano {{plan}} · unidades em uso",
-  "planRemaining_one": "Mais {{count}} unidade disponível neste plano",
-  "planRemaining_other": "Mais {{count}} unidades disponíveis neste plano",
+  "planRemaining_one": "Mais {{count}} unidade disponível neste plano.",
+  "planRemaining_other": "Mais {{count}} unidades disponíveis neste plano.",
   "addressMissing": "Endereço ainda não informado",
   "status": {
     "verified": "Verificada",

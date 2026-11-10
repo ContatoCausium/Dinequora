@@ -57,7 +57,13 @@
     "pack": "packs",
     "tsp": "tsp",
     "tbsp": "tbsp",
-    "cup": "cups"
+    "cup": "cups",
+    "units_one": "unit",
+    "units_other": "units",
+    "pack_one": "pack",
+    "pack_other": "packs",
+    "cup_one": "cup",
+    "cup_other": "cups"
   },
   "status": {
     "ok": "In stock",
@@ -74,7 +80,28 @@
     "emptyTitle": "No stock items yet",
     "emptyBody": "Add the ingredients and supplies this store keeps on hand to track stock and recipe costs.",
     "noMatchTitle": "No items match your search",
-    "noMatchBody": "Try another name, SKU or category."
+    "noMatchBody": "Try another name, SKU or category.",
+    "columns": {
+      "item": "Item",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "filter": {
+      "label": "Filter by stock status",
+      "all": "All ({{count}})",
+      "attention": "Needs attention ({{count}})"
+    },
+    "view": {
+      "label": "Layout",
+      "list": "List",
+      "cards": "Cards"
+    },
+    "groupItems_one": "{{count}} item",
+    "groupItems_other": "{{count}} items",
+    "groupAttention_one": "{{count}} needs attention",
+    "groupAttention_other": "{{count}} need attention",
+    "noAttentionTitle": "Nothing needs attention",
+    "noAttentionBody": "Every item matching your search is above its minimum."
   },
   "movements": {
     "title": "Movement history",

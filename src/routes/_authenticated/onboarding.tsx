@@ -21,12 +21,12 @@ export const Route = createFileRoute("/_authenticated/onboarding")({
   validateSearch: onboardingSearch,
   head: () => ({
     meta: [
-      { title: "Set up your workspace · Servora" },
+      { title: "Set up your workspace · Dinequora" },
       {
         name: "description",
         content: "Create your restaurant workspace or join one by invitation.",
       },
-      { property: "og:title", content: "Set up your workspace · Servora" },
+      { property: "og:title", content: "Set up your workspace · Dinequora" },
       {
         property: "og:description",
         content: "Create your restaurant workspace or join one by invitation.",

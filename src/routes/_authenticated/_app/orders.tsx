@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/_app/orders")({
   head: () => ({
     meta: [
-      { title: "Orders · Servora" },
+      { title: "Orders · Dinequora" },
       { name: "description", content: "Recorded orders across channels and stores." },
     ],
   }),

@@ -9,9 +9,7 @@ import {
   suspendSession,
   resumeSession,
   simulatePayment,
-  finalizeSale,
   listSuspendedSales,
-  listPosHistory,
   type POSSession,
 } from "../lib/pos-service";
 import { MenuItem } from "../lib/menu-service";
@@ -96,17 +94,12 @@ describe("POS Service calculations and lifecycle", () => {
     expect(listSuspendedSales("org-test", "loc-1").length).toBe(0);
   });
 
-  it("simulates payment and registers a completed simulated order in history", () => {
+  it("computes cash change at checkout without writing any local sales history", () => {
     let session = getPOSSession("org-test", "loc-1", "Bob");
     session = addItemToCart(session, mockItem, [], 1);
     const paid = simulatePayment(session, "cash", 2000);
     expect(paid.changeDueCents).toBe(calculateChange(2000, paid.totalCents));
-
-    const finalized = finalizeSale(paid);
-    expect(finalized.completedAt).toBeDefined();
-
-    const history = listPosHistory("org-test", "loc-1");
-    expect(history.length).toBe(1);
-    expect(history[0]!.isSimulated).toBe(true);
+    // Sales are recorded only on the server; the legacy local history store is gone.
+    expect(Object.keys(localStorage).some((k) => k.startsWith("servora.pos.history."))).toBe(false);
   });
 });

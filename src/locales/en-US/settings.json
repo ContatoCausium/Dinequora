@@ -2,7 +2,7 @@
   "eyebrow": "Settings",
   "branding": {
     "title": "Branding & appearance",
-    "subtitle": "Upload {{org}}'s logo and Servora suggests an accessible light and dark theme. Branding is cosmetic only and never changes access permissions.",
+    "subtitle": "Upload {{org}}'s logo and Dinequora suggests an accessible light and dark theme. Branding is cosmetic only and never changes access permissions.",
     "restore": "Restore previous",
     "reset": "Reset to default",
     "apply": "Apply theme"
@@ -72,7 +72,7 @@
     "eyebrow": "Settings",
     "title": "Billing",
     "subtitle": "Subscription and billing for {{org}}.",
-    "notConnected": "Online payments aren't connected yet, so no card is charged. Plans and prices shown here are placeholders and are changed by the Servora team for now.",
+    "notConnected": "Online payments aren't connected yet, so no card is charged. Plans and prices shown here are placeholders and are changed by the Dinequora team for now.",
     "subscription": "Subscription",
     "noSubscription": "No subscription on file.",
     "plan": "Plan",
@@ -102,6 +102,8 @@
       "incomplete": "Incomplete"
     },
     "activeLocations": "Active locations / allowed",
-    "billedPendingSync": "{{count}} (updates when billing syncs)"
+    "billedPendingSync": "{{count}} — not synced yet: online payments aren’t connected",
+    "planUpTo_one": "Up to {{total}} / mo with {{count}} location",
+    "planUpTo_other": "Up to {{total}} / mo with {{count}} locations"
   }
 }

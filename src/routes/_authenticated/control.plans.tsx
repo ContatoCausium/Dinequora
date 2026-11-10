@@ -41,13 +41,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/control/plans")({
   head: () => ({
     meta: [
-      { title: "Plans & pricing · Servora Control Center" },
+      { title: "Plans & pricing · Dinequora Control Center" },
       {
         name: "description",
         content:
           "Manage subscription tiers, visual comparisons, draft edits and impact simulations.",
       },
-      { property: "og:title", content: "Plans & pricing · Servora Control Center" },
+      { property: "og:title", content: "Plans & pricing · Dinequora Control Center" },
       {
         property: "og:description",
         content:

@@ -58,6 +58,8 @@ interface FinanceReportsProps {
   }>;
   stores: StoreResult[];
   currentMonth: string;
+  /** Store zone used to place each sale in its local month. */
+  timeZone?: string | undefined;
 }
 
 export function FinanceReports({
@@ -69,6 +71,7 @@ export function FinanceReports({
   orders,
   stores,
   currentMonth,
+  timeZone,
 }: FinanceReportsProps) {
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
@@ -118,7 +121,7 @@ export function FinanceReports({
         selectedLocation === "all"
           ? stores
           : stores.filter((s) => s.locationId === selectedLocation),
-      monthlyTrend: monthlyTrend(scopedEntries, scopedExpenses, currentMonth),
+      monthlyTrend: monthlyTrend(scopedEntries, scopedExpenses, currentMonth, timeZone),
       storeName,
       formatters,
     });
@@ -134,6 +137,7 @@ export function FinanceReports({
     stores,
     locations,
     currentMonth,
+    timeZone,
     lng,
     t,
   ]);

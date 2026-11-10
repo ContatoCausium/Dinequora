@@ -20,15 +20,15 @@ export const Route = createFileRoute("/signup")({
   validateSearch: z.object({ redirect: z.string().optional(), email: z.string().optional() }),
   head: () => ({
     meta: [
-      { title: "Create account · Servora" },
+      { title: "Create account · Dinequora" },
       {
         name: "description",
-        content: "Create your Servora account with Google, Microsoft or email.",
+        content: "Create your Dinequora account with Google, Microsoft or email.",
       },
-      { property: "og:title", content: "Create account · Servora" },
+      { property: "og:title", content: "Create account · Dinequora" },
       {
         property: "og:description",
-        content: "Create your Servora account with Google, Microsoft or email.",
+        content: "Create your Dinequora account with Google, Microsoft or email.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
