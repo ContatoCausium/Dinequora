@@ -22,7 +22,8 @@
     "0018_member_permissions": "065fa8080741ecf753d980b28a233adee0ef78ba2ab330a0e5c80e9d5f4e8627",
     "0019_permission_performance": "f036f2f3f33c8b78d8efce0a9f43fb3aed620d0174f5a30734dbcfb3281491d7",
     "0020_inventory_cost_permission": "84a0de717168b7c05a61a135d94bd49283cb9615f5809c80ce5530cb504478d3",
-    "0021_remove_seed_demo_orgs_on_fresh_databases": "9b0d19074f5a28566b04d6f2e7332261eb67da4a7193bda9c58488653c18426d"
+    "0021_remove_seed_demo_orgs_on_fresh_databases": "9b0d19074f5a28566b04d6f2e7332261eb67da4a7193bda9c58488653c18426d",
+    "0022_permission_scope_and_org_features": "cde3d6d0e1fcbf5d1eeb4c51b05824e3c0d2e1b7709946e818ec788a6cb562b3"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

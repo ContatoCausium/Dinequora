@@ -177,11 +177,13 @@ const GUARDED = [
   "update_order_status",
 ];
 // Data-writing SECURITY DEFINER functions callable by signed-in users that authorize WITHOUT the
-// permission catalog (reviewed 2026-11-09 against the definitions in 0000-0020). Each one checks
-// something else. Do not add a function here without the same review; prefer GUARDED.
+// permission catalog (reviewed 2026-11-09 against the definitions in 0000-0020;
+// admin_set_org_feature reviewed 2026-11-10 in 0022). Each one checks something else. Do not add
+// a function here without the same review; prefer GUARDED.
 const REVIEWED = {
   accept_invitation: "auth.uid() must match the invitation",
   admin_assign_owner: "platform admin only",
+  admin_set_org_feature: "platform admin only (0022, audited)",
   admin_set_platform_role: "platform admin only",
   admin_set_subscription: "platform admin only",
   admin_update_organization: "platform admin only",
