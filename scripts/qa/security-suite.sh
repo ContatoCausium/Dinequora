@@ -85,8 +85,10 @@ done
 run_check scripts/security/demo_seed_rebuild.sql
 echo "::endgroup::"
 echo "::group::7. order history and kitchen board against the database"
+# One file at a time: both files insert and count orders of the same QA tenant.
 QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
-  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts
+  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run --no-file-parallelism \
+  src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."
