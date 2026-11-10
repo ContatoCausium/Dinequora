@@ -1,7 +1,7 @@
 -- DEMO seed: the two bundled demonstration organizations (MARAO BURGERS, Harbor Taco Co.).
 --
 -- Layer: demonstration data. Never run on a production database. Use it on a fresh demo/QA
--- database when the proposed 0021 migration removed the 0000 seed rows. Idempotent: existing rows
+-- database when migration 0021 removed the 0000 seed rows. Idempotent: existing rows
 -- (e.g. the current commercial demo, where 0000 created them) are left untouched.
 -- Recreates exactly the state the commercial demo has today (verified 2026-11-09).
 \set ON_ERROR_STOP on

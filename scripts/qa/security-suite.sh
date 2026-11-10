@@ -8,11 +8,13 @@
 #
 # Steps (any failure stops the suite with a non-zero exit, which blocks the merge in CI):
 #   1. apply every migration from zero with the same tool as production (drizzle-kit migrate)
-#   2. journal/tracker/hash integrity (scripts/qa/check-migrations.mjs)
+#   2. journal/tracker/hash integrity and SQL-first policy (scripts/qa/check-migrations.mjs)
+#   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
+#   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -25,6 +27,18 @@ mkdir -p "$ARTIFACTS"
 CREDS_FILE="$ARTIFACTS/qa-credentials.json"   # generated passwords; never printed, never committed
 [[ -e "$CREDS_FILE" ]] && { echo "Refusing: $CREDS_FILE exists (suite needs a fresh stack)"; exit 2; }
 
+# psql on the runner; locally (no psql installed) the one inside the QA db container.
+QA_PROJECT=$(sed -n 's/^project_id = "\(.*\)"/\1/p' scripts/qa/supabase/config.toml)
+run_sql() {
+  if command -v psql >/dev/null; then psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$1"
+  else docker exec -i "supabase_db_${QA_PROJECT}" psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 < "$1"; fi
+}
+# Runs a check file and requires its PASS line.
+run_check() {
+  out=$(run_sql "$1" 2>&1) || { echo "$out" | tail -5; echo "FAIL $1"; exit 1; }
+  echo "$out" | grep -E "PASS" || { echo "$out" | tail -5; echo "FAIL $1 (no PASS line)"; exit 1; }
+}
+
 echo "::group::1. migrations from zero"
 LOVABLE_DB_MIGRATION_URL="$DB_URL" npx --no-install drizzle-kit migrate 2>&1 | grep -E "applied|error|Error" || true
 echo "::endgroup::"
@@ -33,16 +47,13 @@ echo "::group::2. migration integrity"
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"
 
+echo "::group::2b. new database without fictional organizations"
+run_check scripts/security/fresh_database_no_demo.sql
+echo "::endgroup::"
+
 echo "::group::3. SQL security fixtures"
-# psql on the runner; locally (no psql installed) the one inside the QA db container.
-QA_PROJECT=$(sed -n 's/^project_id = "\(.*\)"/\1/p' scripts/qa/supabase/config.toml)
-run_sql() {
-  if command -v psql >/dev/null; then psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$1"
-  else docker exec -i "supabase_db_${QA_PROJECT}" psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 < "$1"; fi
-}
 for f in reconstructed_operations reconstructed_hardening reconstructed_purchases; do
-  out=$(run_sql "scripts/security/$f.sql" 2>&1) || { echo "$out" | tail -5; echo "FAIL $f"; exit 1; }
-  echo "$out" | grep -E "PASS" || { echo "$out" | tail -5; echo "FAIL $f (no PASS line)"; exit 1; }
+  run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"
 
@@ -54,6 +65,14 @@ echo "::endgroup::"
 echo "::group::5. permission matrix"
 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$CREDS_FILE" \
   node scripts/security/permission_matrix.mjs | tee "$ARTIFACTS/permission-matrix.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::6. demo reconstruction"
+for run in 1 2; do
+  out=$(run_sql scripts/seeds/demo/seed-demo-orgs.sql 2>&1) || { echo "$out" | tail -5; echo "FAIL demo seed run $run"; exit 1; }
+  echo "  seed run $run: $(echo "$out" | grep -o "demo organizations present: .*")"
+done
+run_check scripts/security/demo_seed_rebuild.sql
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."

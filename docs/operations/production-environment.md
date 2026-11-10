@@ -90,11 +90,12 @@ Regras:
 
 ## 5. Estado das migrations e pré-condições
 
-**Estado atual (2026-11-10):** a `main` (`9773d8c`) tem **21 migrations** no journal, de `0000` a
-`0020`. A **0021** (`0021_remove_seed_demo_orgs_on_fresh_databases`) está **pendente de
-integração**: existe na branch `db/0021-fresh-db-without-demo-seeds`, ainda sem PR. As **22
-migrations** citadas neste documento são o **estado esperado depois da integração da 0021**, não o
-estado atual.
+**Estado das migrations:** até o merge `dbbe497`, a `main` tinha **21 migrations** no journal, de
+`0000` a `0020`. A **0021** (`0021_remove_seed_demo_orgs_on_fresh_databases`) entra na `main` pelo
+pull request da branch `db/0021-remove-seed-demo-orgs`, que substitui a branch de trabalho anterior
+`db/0021-fresh-db-without-demo-seeds`. As **22 migrations** citadas neste documento são o estado
+depois da integração da 0021. Antes de qualquer conexão, confirme no journal da `main` que a 0021
+está presente (pré-condição 1).
 
 Pré-condições, todas antes de qualquer conexão:
 
