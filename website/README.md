@@ -1,15 +1,39 @@
-# Dinequora — Marketing Website
+# Dinequora — Marketing Website (cinematic version)
+
+The site tells the product as one night of service: a scroll-driven opening film, a prologue and three
+chapters (18:00, 20:30, 23:30), then the product screens, pricing, FAQ and the demo request. Prices,
+languages (EN/PT) and honesty rules are unchanged from the first version.
+
+## Story and structure
+
+1. **Opening film** (`src/sections/CinemaHero.tsx`): a scroll-driven video from the street to the kitchen pass, with three text beats.
+2. **Prologue** (`#platform`): a statement whose words light up on scroll, with links to the three chapters.
+3. **Chapters** (`#features`, `src/sections/Story.tsx`): 18:00 before service (live stock levels), 20:30 the rush
+   (film + tickets flowing through the kitchen display), 23:30 closing (film + revenue/expense chart). Each lists real
+   capabilities with their Available / Rolling out status. Charts are labeled **Sample data**.
+4. Then the existing sections: product screens, locations, implementation, pricing, AI roadmap, about, FAQ, demo request.
+
+Engine: `src/components/cinema/scene.tsx` (sticky stage + canvas frame sequence + progress-timed `Moment`s),
+`charts.tsx` (scroll-driven charts), `SmoothScroll.tsx` (Lenis; off for reduced motion and touch devices).
+
+## Film and image assets
+
+- Frames: `public/frames/<scene>/{d,m}/NNN.webp` (desktop 1600 px, mobile 960 px), sliced from the videos in `fonte/`.
+- Section images: `public/images/cinema/*.webp`.
+- Sources (kept outside the repository): keyframes and section images generated with `google/gemini-nano-banana-2.1`,
+  videos with `google/veo-3.1` (opening) and `google/veo-3.1-fast` (chapters), via OpenRouter, without audio.
+  Total generation cost: about US$ 3.5. The OpenRouter key lives outside the project and is never bundled.
+- To re-slice a video: `bash fatiar_web.sh <video>.mp4 public/frames/<scene> <frames>` (ffmpeg with libwebp: 1600 px desktop, 960 px mobile)
+  and update `total` in the matching `FrameSet`.
+
 
 Public website for **Dinequora — Restaurant Intelligence Platform**. It is a standalone
 Vite + React + TypeScript + Tailwind CSS v4 site, the same front-end stack as the Dinequora
-restaurant application. It lives in `website/` of the Servora repository but is a separate
-project: its own `package.json`, lockfile, lint config and CI job (`.github/workflows/website.yml`).
-It does not import anything from the app, and the app's lint/typecheck/tests ignore this folder.
+restaurant application. The restaurant application (`Servora/…` folder) was **not modified**.
 
 ## Run locally
 
 ```bash
-cd website
 npm install
 npm run dev        # http://localhost:5180
 npm run build      # typecheck + production build into dist/
@@ -23,7 +47,7 @@ npm run typecheck
 
 | Variable | Purpose | If empty |
 | --- | --- | --- |
-| `VITE_APP_URL` | Base URL of the restaurant app. **Login** → `<url>/auth`, **Create account** → `<url>/signup`. | Relative `/auth` and `/signup` (same domain). For local work, put `VITE_APP_URL=http://localhost:8080` (or your app dev port) in `website/.env.local` (git-ignored). |
+| `VITE_APP_URL` | Base URL of the restaurant app. **Login** → `<url>/auth`, **Create account** → `<url>/signup`. | Relative `/auth` and `/signup` (same domain). `.env.development` sets `http://localhost:8080` (assumed app dev port; adjust if yours differs). |
 | `VITE_DEMO_REQUEST_ENDPOINT` | URL that receives demo requests as JSON `POST`. | Form validates, then opens **WhatsApp** (sales line) with the request pre-filled. The visitor sends it themselves; the site never claims it was delivered. |
 | `VITE_SITE_URL` | Public URL of this site. Adds `<link rel=canonical>`, `og:url`, and absolute OG image URLs at build time. | Relative OG image (some social crawlers will not show it). |
 

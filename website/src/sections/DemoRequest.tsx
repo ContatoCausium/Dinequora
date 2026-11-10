@@ -115,7 +115,7 @@ export function DemoRequest() {
     <section id="demo" aria-labelledby="demo-title" className="relative isolate overflow-hidden bg-navy-950 py-24 sm:py-32">
       <div className="absolute inset-0 -z-10" aria-hidden>
         <img
-          src="/images/plating-line.webp"
+          src="/images/cinema/contato.webp"
           alt=""
           loading="lazy"
           decoding="async"

@@ -27,7 +27,7 @@ export function MultiLocation() {
     <section aria-labelledby="multi-title" className="relative overflow-hidden bg-navy-950 py-24 sm:py-32">
       <div className="absolute inset-0" aria-hidden>
         <img
-          src="/images/kitchen-fire.webp"
+          src="/images/cinema/unidades.webp"
           alt=""
           loading="lazy"
           decoding="async"
