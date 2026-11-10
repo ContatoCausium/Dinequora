@@ -76,7 +76,7 @@ import {
 } from "@/lib/recipes-service";
 import type { Supplier, PurchaseOrder, POStatus } from "@/lib/suppliers-purchases-service";
 import { DemoBadge } from "@/components/app/brand-mark";
-import { fmtDate, fmtMoneyCents, fmtPercent, fmtQuantity } from "@/lib/format";
+import { displayAmount, fmtDate, fmtMoneyCents, fmtPercent, fmtQuantity } from "@/lib/format";
 import {
   centsFromDollars,
   centsToDecimalString,
@@ -390,8 +390,10 @@ export function InventoryPage() {
       count: items.length,
       low: items.filter((i) => stockStatus(i) === "low").length,
       out: items.filter((i) => stockStatus(i) === "out").length,
-      valueCents: sumCents(
-        items.map((i) => multiplyQuantityCents(Math.max(0, i.quantity), i.costCents)),
+      valueCents: displayAmount(
+        () =>
+          sumCents(items.map((i) => multiplyQuantityCents(Math.max(0, i.quantity), i.costCents))),
+        "money.stock_value",
       ),
     }),
     [items],

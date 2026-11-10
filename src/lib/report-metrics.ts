@@ -5,6 +5,7 @@ import { dayKey } from "./period-metrics";
 export { dayKey, expensesInPeriod } from "./period-metrics";
 import { netSalesCents, type RecordedOrder } from "./recorded-data";
 import { averageCents } from "./money";
+import { displayAmount } from "./format";
 
 type LedgerEntry = Parameters<typeof ledgerMetrics>[0][number];
 
@@ -64,7 +65,10 @@ export function buildReport(input: {
     revenueCents: ledger.revenueCents,
     cogsCents: ledger.cogsCents,
     orderCount: sales.length,
-    avgTicketCents: averageCents(orderNet, sales.length),
+    avgTicketCents: displayAmount(
+      () => averageCents(orderNet, sales.length),
+      "money.report_average",
+    ),
     daily: [...daily].map(([day, cents]) => ({ day, cents })),
     daysWithSales: [...daily.values()].filter((v) => v > 0).length,
     byStore: [...byStore].map(([locationId, v]) => ({ locationId, ...v })).sort(sortDesc),

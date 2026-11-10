@@ -8,6 +8,7 @@ import {
 } from "./tenant-storage";
 import { multiplyQuantityCents, roundCents } from "./money";
 import { convertQuantity } from "./units";
+import { displayAmount } from "./format";
 
 /** Store-restricted callers may only write store-specific recipes in their stores; org-wide recipes need an org-wide caller. */
 function assertRecipeWritable(
@@ -87,7 +88,10 @@ export function calculateIngredientCost(
   const convertedQty = convertUnits(qty, unit, inventoryItem.unit);
   const wasteFactor = 1 + Math.max(0, wastePercentage) / 100;
   const netQty = convertedQty * wasteFactor;
-  const subtotalCostCents = multiplyQuantityCents(netQty, inventoryItem.costCents);
+  const subtotalCostCents = displayAmount(
+    () => multiplyQuantityCents(netQty, inventoryItem.costCents),
+    "money.recipe_cost",
+  );
   return {
     unitCostCents: inventoryItem.costCents,
     subtotalCostCents,
@@ -105,7 +109,10 @@ export function computeRecipeTotals(
 } {
   const totalCostCents = ingredients.reduce((acc, i) => acc + (i.subtotalCostCents || 0), 0);
   const safeServings = Math.max(1, servings || 1);
-  const costPerServingCents = roundCents(totalCostCents / safeServings);
+  const costPerServingCents = displayAmount(
+    () => roundCents(totalCostCents / safeServings),
+    "money.recipe_cost",
+  );
 
   let estimatedMarginPercent = 0;
   if (sellingPriceCents > 0) {

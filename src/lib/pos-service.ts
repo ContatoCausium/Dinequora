@@ -1,7 +1,7 @@
 import { assertLocationAllowed, assertTenantContext, isLocationAllowed } from "./tenant-storage";
 import { MenuItem } from "./menu-service";
 import { OrderItem, OrderType, SelectedModifier, calculateOrderSummary } from "./orders-service";
-import { basisPointsFromPercent } from "./money";
+import { basisPointsFromPercent, isCents } from "./money";
 
 export type POSPaymentMethod = "cash" | "card" | "digital";
 export type PaymentMethod = POSPaymentMethod;
@@ -75,6 +75,21 @@ const isValidSuspended = (s: unknown, orgId: string): s is SuspendedSale => {
     r.locationId !== "" &&
     Array.isArray(r.items) &&
     r.items.length > 0 &&
+    // Amounts must be whole cents: a corrupted ticket goes to quarantine instead of breaking the
+    // POS when its totals are recalculated (P2).
+    r.items.every(
+      (i) =>
+        typeof i === "object" &&
+        i !== null &&
+        isCents(i.basePriceCents) &&
+        isCents(i.subtotalCents) &&
+        Number.isSafeInteger(i.quantity) &&
+        i.quantity > 0 &&
+        (i.modifiers === undefined ||
+          (Array.isArray(i.modifiers) && i.modifiers.every((m) => isCents(m?.priceCents)))),
+    ) &&
+    (r.discountCents === undefined || isCents(r.discountCents)) &&
+    (r.taxRatePercent === undefined || Number.isFinite(r.taxRatePercent)) &&
     typeof r.suspendedAt === "string" &&
     !Number.isNaN(Date.parse(r.suspendedAt))
   );
