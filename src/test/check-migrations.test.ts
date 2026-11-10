@@ -95,21 +95,21 @@ describe("migration gate (files mode)", () => {
 
   it("fails on a new .sql file outside the journal", () => {
     const root = sandbox();
-    fs.writeFileSync(migration(root, "0021_stray"), "select 1;\n");
+    fs.writeFileSync(migration(root, "0090_stray"), "select 1;\n");
     const r = check(root);
     expect(r.code).toBe(1);
-    expect(r.out).toContain("new migration outside the journal: 0021_stray.sql");
+    expect(r.out).toContain("new migration outside the journal: 0090_stray.sql");
   });
 
   it("fails on a new journal entry without a recorded hash, and --add-new-hashes records it", () => {
     const root = sandbox();
-    appendJournalEntry(root, "0021_example");
+    appendJournalEntry(root, "0090_example");
     const before = check(root);
     expect(before.code).toBe(1);
-    expect(before.out).toContain("no recorded hash for 0021_example");
+    expect(before.out).toContain("no recorded hash for 0090_example");
 
     const add = check(root, "--add-new-hashes");
-    expect(add.out).toContain("recorded hashes for: 0021_example");
+    expect(add.out).toContain("recorded hashes for: 0090_example");
     expect(add.code).toBe(0);
     expect(check(root).code).toBe(0);
   });

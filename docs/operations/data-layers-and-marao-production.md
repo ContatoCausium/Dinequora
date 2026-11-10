@@ -10,15 +10,32 @@
 | **Organizações reais**                                                 | Fluxo de cadastro/onboarding do produto (`create_organization`, `create_location`, convites)          | O cliente, pela interface                                | Sim          |
 
 Hoje a camada de estrutura ainda carrega uma sobra de demonstração: `0000` insere MARAO e Harbor e
-`0001` as marca `is_demo = true`. Como `0000` está publicada, ela **não é editada**. A correção proposta é
-a migration aditiva `docs/proposed-migrations/0021_remove_seed_demo_orgs_on_fresh_databases.sql`:
+`0001` as marca `is_demo = true`. Como `0000` está publicada, ela **não é editada**. A correção é a
+migration aditiva **`drizzle/migrations/0021_remove_seed_demo_orgs_on_fresh_databases.sql`** (no journal
+desde a Fase 1.0; a proposta original em `docs/proposed-migrations/` virou um ponteiro para ela):
 
-- só age se o banco **não tem nenhum usuário** (`auth.users` vazio) e as organizações são exatamente as
-  sementes (sem criador, sem membros, sem convites); tabelas operacionais têm `NO ACTION`, então qualquer
-  pedido/estoque/cardápio impediria a exclusão;
-- em qualquer banco com usuários (demo comercial, QA, hospedado em uso) é um no-op.
+Política: **qualquer coisa que não seja exatamente a semente original é dado legítimo e a organização
+fica.** A 0021 só remove uma organização semeada quando todas as condições abaixo são verdadeiras:
 
-### Testes em banco descartável (2026-11-09, stack `dq-rebuild`)
+- o banco **não tem nenhum usuário** (`auth.users` vazio); com qualquer usuário é um no-op;
+- a organização é idêntica à semente original em **todas** as colunas, exceto `id` e `created_at`;
+- as lojas são exatamente as lojas originais (nenhuma a mais ou a menos, nenhuma coluna alterada, nenhuma
+  atualizada depois de criada);
+- a assinatura é exatamente a original, incluindo períodos de cobrança e sem IDs do Stripe;
+- **nenhuma linha em nenhuma tabela** dos esquemas `public` e `storage` menciona a organização ou suas
+  lojas (id ou slug) em colunas uuid, texto ou JSON. A varredura usa o catálogo do banco: cobre relações
+  CASCADE, SET NULL e NO ACTION, tabelas sem FK e tabelas futuras (membros, convites, perfis, acessos por
+  loja, eventos de cobrança, webhooks do Stripe, auditoria e todo dado operacional).
+
+Qualquer condição falsa, ou qualquer erro durante a verificação, **mantém** a organização e registra um
+`NOTICE` com o motivo. Por causa da varredura, a exclusão só pode levar as lojas e a assinatura originais
+e nenhum registro de auditoria é desvinculado; uma pós-condição confere isso e desfaz a exclusão se falhar.
+
+A suíte de segurança verifica, num banco novo, que nenhuma organização existe depois de todas as
+migrations e que o seed de demonstração recria MARAO e Harbor (duas vezes, sem duplicar) exatamente como
+na demo, sem nenhuma outra linha referenciando-as.
+
+### Testes em banco descartável da versão anterior da proposta (2026-11-09, stack `dq-rebuild`)
 
 | Cenário                                                                                                                    | Resultado                                                                                                                    |
 | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -29,11 +46,14 @@ a migration aditiva `docs/proposed-migrations/0021_remove_seed_demo_orgs_on_fres
 | B. Cópia restaurada do dump da demo (7 usuários) + `0021`                                                                  | “kept: database already has users”; contagens idênticas nas 32 tabelas                                                       |
 | B. seed de demonstração sobre a cópia                                                                                      | nenhuma alteração                                                                                                            |
 
-### Para ativar (requer aprovação)
+### Aplicação (cada ambiente exige autorização própria)
 
-1. Mover a proposta para `drizzle/migrations/0021_remove_seed_demo_orgs_on_fresh_databases.sql` e registrar no journal (`drizzle-kit` gera `when`; manter `idx` 21).
-2. Na demo comercial ela será no-op (há usuários) — aplicar com `drizzle-kit migrate` registra a linha 21 sem mudar dados; `check-migrations` com `DB_URL` deve passar.
-3. Na CI, bancos novos deixam de ter MARAO/Harbor; nenhuma suíte depende deles (verificado: fixtures SQL, seed QA e matriz usam organizações próprias).
+1. Feito: migration registrada no journal (`idx` 21) e no manifesto de hashes.
+2. Na demo comercial ela será no-op (há usuários) — aplicar com `drizzle-kit migrate` registra a linha 21
+   sem mudar dados; `check-migrations` com `DB_URL` deve passar. **Não aplicada.**
+3. Na CI, bancos novos deixam de ter MARAO/Harbor; nenhuma suíte depende deles (verificado: fixtures SQL,
+   seed QA e matriz usam organizações próprias).
+4. Ao recriar uma demonstração do zero: aplicar as migrations e depois `scripts/seeds/demo/seed-demo-orgs.sql`.
 
 ## 2. MARAO em produção (quando contrato e onboarding forem confirmados)
 

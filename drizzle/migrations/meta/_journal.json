@@ -148,6 +148,13 @@
       "when": 1794179764664,
       "tag": "0020_inventory_cost_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794249349984,
+      "tag": "0021_remove_seed_demo_orgs_on_fresh_databases",
+      "breakpoints": true
     }
   ]
 }
