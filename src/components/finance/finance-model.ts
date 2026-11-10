@@ -9,7 +9,7 @@ import {
 import type { Resources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
 import { dayKey } from "@/lib/period-metrics";
-import { centsToDecimalString, parseMoneyInput } from "@/lib/money";
+import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
 
 /**
  * Pure view-model helpers for the Finance screen. Every figure is derived from recorded rows:
@@ -275,9 +275,12 @@ export function markPaidPayload(e: Expense, nowIso: string) {
   return expensePayload({ ...e, status: "paid", paidAt: nowIso });
 }
 
-/** Parses a user-typed amount ("1234.5", "1,234.50", "1.234,50") into integer cents; null if invalid. */
+/**
+ * Amount field of the expense form (<input type="number">): "." decimal, exact to the cent,
+ * whatever the language ("9.995" → 1000 cents, "12.345" → 1235). Null if empty or invalid.
+ */
 export function parseAmountToCents(input: string): number | null {
-  return parseMoneyInput(input.replace(/\s/g, ""));
+  return centsFromNumberInput(input);
 }
 
 /** Series colors in fixed order (dataviz rule: tokens chart-1..6, never raw palette values). */

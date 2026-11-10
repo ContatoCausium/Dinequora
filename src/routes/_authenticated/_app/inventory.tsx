@@ -81,7 +81,7 @@ import {
   centsFromDollars,
   centsToDecimalString,
   multiplyQuantityCents,
-  parseMoneyInput,
+  centsFromNumberInput,
   sumCents,
 } from "@/lib/money";
 
@@ -1603,7 +1603,10 @@ export function InventoryPage() {
                   onChange={(e) =>
                     setRecipeFormData({
                       ...recipeFormData,
-                      sellingPriceCents: Math.max(0, parseMoneyInput(e.target.value || "0") ?? 0),
+                      // <input type="number">: "." decimal, exact; an unreadable value keeps the price.
+                      sellingPriceCents:
+                        centsFromNumberInput(e.target.value || "0") ??
+                        recipeFormData.sellingPriceCents,
                     })
                   }
                 />

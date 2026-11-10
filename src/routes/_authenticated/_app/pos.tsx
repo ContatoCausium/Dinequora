@@ -72,7 +72,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { centsToDecimalString, parseMoneyInput } from "@/lib/money";
+import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/pos")({
   head: () => ({
@@ -122,8 +122,10 @@ function readableDetail(err: unknown): string | undefined {
   return msg;
 }
 
-// Typed amounts are parsed from the text (money.ts): "1,234.50" is $1,234.50, not $1.23.
-const parseAmountCents = (value: string) => parseMoneyInput(value) ?? 0;
+// Tendered and discount are <input type="number"> values ("." decimal, exact conversion to
+// cents: "9.995" is $10.00, never $9,995). Empty or unreadable means nothing entered yet: the
+// sale stays blocked (cash short / no discount) instead of recording a guessed amount.
+const parseAmountCents = (value: string) => centsFromNumberInput(value) ?? 0;
 
 export function POSPage() {
   const { t, i18n } = useTranslation("pos");

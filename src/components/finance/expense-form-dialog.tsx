@@ -113,7 +113,10 @@ export function ExpenseFormDialog({
                 </label>
                 <Input
                   id={`${id}-amount`}
+                  type="number"
                   inputMode="decimal"
+                  step="0.01"
+                  min="0"
                   value={v.amount}
                   onChange={(e) => set("amount", e.target.value)}
                   placeholder={t("form.amountPlaceholder")}

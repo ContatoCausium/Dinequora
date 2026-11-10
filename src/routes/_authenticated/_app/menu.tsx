@@ -55,7 +55,7 @@ import {
 import { DemoBadge } from "@/components/app/brand-mark";
 import { cn } from "@/lib/utils";
 import { fmtMoneyCents } from "@/lib/format";
-import { centsToDecimalString, parseMoneyInput } from "@/lib/money";
+import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/menu")({
   head: () => ({
@@ -205,7 +205,7 @@ function MenuPage() {
       toast.error("Item name is required");
       return;
     }
-    const cents = parseMoneyInput(formPrice || "0");
+    const cents = centsFromNumberInput(formPrice || "0"); // <input type="number">
     if (cents === null) {
       toast.error(t("form.invalidPrice"));
       return;

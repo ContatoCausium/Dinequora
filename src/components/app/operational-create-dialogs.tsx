@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseMoneyInput } from "@/lib/money";
+import { centsFromNumberInput } from "@/lib/money";
 
 /** Backend error codes the inventory screens explain in plain language (inventory:errors.*). */
 const KNOWN_ERROR_CODES = [
@@ -91,8 +91,9 @@ export function OperationalCreateDialog({
   async function save() {
     if (busy) return;
     const q = Number(quantity);
-    const cents = parseMoneyInput(price) ?? Number.NaN;
-    const extras = [discount, tax, shipping].map((v) => parseMoneyInput(v || "0"));
+    // <input type="number"> values: "." decimal, exact to the cent (0.125 → 13 cents, not $125).
+    const cents = centsFromNumberInput(price) ?? Number.NaN;
+    const extras = [discount, tax, shipping].map((v) => centsFromNumberInput(v || "0"));
     const chosen = storeItems.find((i) => i.id === (itemId || storeItems[0]?.id));
     const sup = supplierId || suppliers[0]?.id;
     if (

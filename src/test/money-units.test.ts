@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyBasisPoints,
+  centsFromDollars,
+  centsFromNumberInput,
   averageCents,
   basisPointsFromPercent,
   centsToDecimalString,
@@ -162,6 +164,67 @@ describe("money: typed amounts (no parseFloat)", () => {
   it("formats in the viewer's language", () => {
     expect(formatMoney(123450, "en-US")).toBe("$1,234.50");
     expect(formatMoney(123450, "pt-BR").replace(/\s/g, " ")).toBe("US$ 1.234,50");
+  });
+});
+
+describe("money: number fields (P1 — <input type=number> values)", () => {
+  // The browser gives a plain number with "." as the decimal separator, in every language.
+  it.each([
+    ["0.125", 13], // a purchase unit cost: 12.5 cents rounds half away from zero, like the server
+    ["9.995", 1000], // menu price: never $9,995
+    ["12.345", 1235],
+    ["1.005", 101], // exact: Math.round(1.005 * 100) gave 100
+    ["19.99", 1999],
+    ["0.5", 50],
+    [".5", 50],
+    ["12", 1200],
+    ["0", 0],
+    ["1e2", 10000],
+  ])("%s -> %i cents", (value, cents) => {
+    expect(centsFromNumberInput(value)).toBe(cents);
+  });
+
+  it.each(["", " ", "abc", "1,234.50", "1.234,50", "12.3.4", "--1", "1e"])(
+    "%j is refused (null), never turned into 0",
+    (value) => {
+      expect(centsFromNumberInput(value)).toBeNull();
+    },
+  );
+
+  it("negatives only when allowed", () => {
+    expect(centsFromNumberInput("-5")).toBeNull();
+    expect(centsFromNumberInput("-5.255", { allowNegative: true })).toBe(-526);
+  });
+
+  it("the audited defect: the free-text reading gave 1000x the amount", () => {
+    expect(parseMoneyInput("0.125", { format: "number-input" })).toBe(13);
+    expect(centsFromNumberInput("9.995")).not.toBe(999500);
+  });
+
+  it("receiving form (number state) converts exactly too", () => {
+    expect(centsFromDollars(0.125)).toBe(13);
+    expect(centsFromDollars(9.995)).toBe(1000);
+    expect(centsFromDollars(12.345)).toBe(1235);
+    expect(centsFromDollars(4.35)).toBe(435);
+  });
+});
+
+describe("money: free text never reads a leading-zero group as thousands", () => {
+  it.each([
+    ["0.125", 13],
+    ["0,125", 13],
+    ["0.1234", 12],
+    ["0,5", 50],
+    ["01,234", 123],
+  ])("%s -> %i cents", (text, cents) => {
+    expect(parseMoneyInput(text)).toBe(cents);
+  });
+
+  it("real thousands groups are unchanged", () => {
+    expect(parseMoneyInput("1,234")).toBe(123400);
+    expect(parseMoneyInput("1.234,50")).toBe(123450);
+    expect(parseMoneyInput("12.345.678,90")).toBe(1234567890);
+    expect(parseMoneyInput("1.2345")).toBeNull();
   });
 });
 
