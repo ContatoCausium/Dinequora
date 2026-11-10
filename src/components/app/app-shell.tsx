@@ -36,6 +36,17 @@ import {
 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { auth } from "@/lib/auth";
+import { clearTemporaryDeviceData, countHeldTicketsOnDevice } from "@/lib/session-cleanup";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { cn } from "@/lib/utils";
 import { LANGUAGES, type LanguageCode } from "@/lib/i18n";
@@ -382,67 +393,95 @@ function PreferencesMenu() {
     .slice(0, 2)
     .map((w) => w[0]!.toUpperCase())
     .join("");
+  // Held tickets exist only on this device; warn before discarding them on sign-out.
+  const [heldOnDevice, setHeldOnDevice] = useState(0);
   const signOut = async () => {
+    setHeldOnDevice(0);
     await auth.signOut();
+    // Also cleared by the root sign-out listener; repeated here in case the event never arrives.
+    clearTemporaryDeviceData();
     await navigate({ to: "/auth", replace: true });
   };
+  const requestSignOut = () => {
+    const held = countHeldTicketsOnDevice();
+    if (held > 0) setHeldOnDevice(held);
+    else void signOut();
+  };
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="ml-1 inline-flex size-8 items-center justify-center rounded-full border bg-card text-[11px] font-semibold tracking-wide text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/20"
-        aria-label={t("shell.account")}
-      >
-        {initials}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>
-          <p className="truncate text-sm font-medium">{name}</p>
-          <p className="truncate text-xs font-normal text-muted-foreground">
-            {user.email} · {t(`auth:roles.${role}`)}
-          </p>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {isPlatformAdmin && (
-          <DropdownMenuItem asChild className="gap-2">
-            <Link to="/control">
-              <ServerCog className="size-4" />
-              {t("nav.controlCenter")}
-            </Link>
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2">
-            <Globe className="size-4" />
-            {t("shell.language")}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            {LANGUAGES.map((l) => (
-              <DropdownMenuItem
-                key={l.code}
-                onClick={() => void chooseLanguage(user.id, l.code as LanguageCode)}
-                className="gap-2"
-              >
-                <span className="w-6 text-xs text-muted-foreground">{l.short}</span>
-                <span className="flex-1">{l.label}</span>
-                {i18n.language === l.code && <Check className="size-4 text-primary" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuItem
-          onClick={() => setMode(mode === "dark" ? "light" : "dark")}
-          className="gap-2"
+    <>
+      <AlertDialog open={heldOnDevice > 0} onOpenChange={(open) => !open && setHeldOnDevice(0)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("shell.signOutHeldTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("shell.signOutHeldBody", { count: heldOnDevice })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("shell.signOutHeldCancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void signOut()}>
+              {t("shell.signOutHeldConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="ml-1 inline-flex size-8 items-center justify-center rounded-full border bg-card text-[11px] font-semibold tracking-wide text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/20"
+          aria-label={t("shell.account")}
         >
-          {mode === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          {mode === "dark" ? t("shell.lightMode") : t("shell.darkMode")}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut} className="gap-2">
-          <LogOut className="size-4" />
-          {t("shell.signOut")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {initials}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuLabel>
+            <p className="truncate text-sm font-medium">{name}</p>
+            <p className="truncate text-xs font-normal text-muted-foreground">
+              {user.email} · {t(`auth:roles.${role}`)}
+            </p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {isPlatformAdmin && (
+            <DropdownMenuItem asChild className="gap-2">
+              <Link to="/control">
+                <ServerCog className="size-4" />
+                {t("nav.controlCenter")}
+              </Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2">
+              <Globe className="size-4" />
+              {t("shell.language")}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {LANGUAGES.map((l) => (
+                <DropdownMenuItem
+                  key={l.code}
+                  onClick={() => void chooseLanguage(user.id, l.code as LanguageCode)}
+                  className="gap-2"
+                >
+                  <span className="w-6 text-xs text-muted-foreground">{l.short}</span>
+                  <span className="flex-1">{l.label}</span>
+                  {i18n.language === l.code && <Check className="size-4 text-primary" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem
+            onClick={() => setMode(mode === "dark" ? "light" : "dark")}
+            className="gap-2"
+          >
+            {mode === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {mode === "dark" ? t("shell.lightMode") : t("shell.darkMode")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={requestSignOut} className="gap-2">
+            <LogOut className="size-4" />
+            {t("shell.signOut")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 

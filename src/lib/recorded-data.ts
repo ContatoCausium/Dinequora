@@ -9,16 +9,20 @@ const HARD_CAP = 5000; // protects the browser; the UI says when the cap is hit
 /**
  * Every recorded order visible to the user (RLS + store scope apply server-side), newest first.
  * `since` is an ISO timestamp lower bound. Returns `truncated` when more rows exist than the cap.
+ * `fetchPage` defaults to the server function; tests pass their own page source.
  */
 export async function fetchAllOrders(
   orgId: string,
   locationId: string,
   since?: string,
+  fetchPage: (req: {
+    data: { orgId: string; locationId: string; limit: number; offset: number; startDate?: string };
+  }) => Promise<{ orders: RecordedOrder[]; totalCount: number }> = fetchOperationalOrders,
 ): Promise<{ orders: RecordedOrder[]; total: number; truncated: boolean }> {
   const orders: RecordedOrder[] = [];
   let total = 0;
   for (let offset = 0; offset < HARD_CAP; offset += PAGE) {
-    const page = await fetchOperationalOrders({
+    const page = await fetchPage({
       data: {
         orgId,
         locationId,

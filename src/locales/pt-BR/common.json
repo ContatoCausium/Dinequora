@@ -57,7 +57,12 @@
     "noResults": "Nenhum resultado encontrado.",
     "poweredBy": "Desenvolvido com Dinequora",
     "signOut": "Sair",
-    "notificationsEmpty": "Nenhuma notificação no momento."
+    "notificationsEmpty": "Nenhuma notificação no momento.",
+    "signOutHeldTitle": "Sair e descartar os tickets em espera?",
+    "signOutHeldBody_one": "Há {{count}} ticket em espera neste aparelho. Tickets em espera nunca são enviados ao servidor, então sair descarta esse ticket. Pedidos e vendas registrados não são afetados.",
+    "signOutHeldBody_other": "Há {{count}} tickets em espera neste aparelho. Tickets em espera nunca são enviados ao servidor, então sair descarta esses tickets. Pedidos e vendas registrados não são afetados.",
+    "signOutHeldConfirm": "Descartar e sair",
+    "signOutHeldCancel": "Continuar conectado"
   },
   "plans": {
     "starter": "Inicial",
@@ -86,7 +91,8 @@
     "notFoundTitle": "Página não encontrada",
     "notFoundBody": "Esta página não existe ou foi movida.",
     "home": "Ir para o início",
-    "controlDenied": "A Central de Controle está disponível apenas para administradores da plataforma."
+    "controlDenied": "A Central de Controle está disponível apenas para administradores da plataforma.",
+    "ordersTruncated": "Estes números incluem os {{shown}} pedidos mais recentes de um total de {{total}}. Pedidos mais antigos ainda não estão incluídos."
   },
   "access": {
     "noModuleTitle": "Você não tem acesso a este módulo",

@@ -21,7 +21,7 @@ import {
   deleteExpense,
   updateExpenseStatus,
 } from "@/lib/finance-service";
-import { listSuspendedSales, listPosHistory } from "@/lib/pos-service";
+import { listSuspendedSales } from "@/lib/pos-service";
 import { listOrders } from "@/lib/orders-service";
 import { listSuppliers, listPurchaseOrders } from "@/lib/suppliers-purchases-service";
 import { saveCategory } from "@/lib/menu-service";
@@ -418,17 +418,12 @@ describe("finance expenses — isolation", () => {
 });
 
 describe("POS, orders, menu and purchases — context and store filters", () => {
-  it("POS suspended sales and history no longer show loc-1 records in other stores", () => {
+  it("POS suspended sales no longer show loc-1 records in other stores", () => {
     localStorage.setItem(
       "servora.pos.suspended.org_a",
       JSON.stringify([{ id: "s1", locationId: "loc-1" }]),
     );
-    localStorage.setItem(
-      "servora.pos.history.org_a",
-      JSON.stringify([{ id: "h1", locationId: "loc-1" }]),
-    );
     expect(listSuspendedSales(ORG_A, "loc_2")).toEqual([]);
-    expect(listPosHistory(ORG_A, "loc_2")).toEqual([]);
   });
 
   it("orders no longer show loc-1 records in other stores", () => {
@@ -444,7 +439,7 @@ describe("POS, orders, menu and purchases — context and store filters", () => 
     (bad) => {
       expect(() => listSuppliers(bad)).toThrow(TenantContextError);
       expect(() => listPurchaseOrders(bad)).toThrow(TenantContextError);
-      expect(() => listPosHistory(bad)).toThrow(TenantContextError);
+      expect(() => listSuspendedSales(bad)).toThrow(TenantContextError);
       expect(() => listOrders(bad)).toThrow(TenantContextError);
       expect(() => saveCategory(bad, { id: "c", name: "C" } as never)).toThrow(TenantContextError);
       expect(localStorage.getItem("servora_suppliers_")).toBeNull();

@@ -7,8 +7,11 @@ vi.mock("../lib/operational.functions", () => ({
   changeOperationalOrder: server.change,
   fetchOperationalOrders: server.fetch,
 }));
-import { finalizeAndPersistSale, getPOSSession } from "../lib/pos-service";
-import { persistOrderToSupabase } from "../lib/orders-persistence-service";
+import { getPOSSession } from "../lib/pos-service";
+import {
+  persistFinalizedPOSSaleAtomic,
+  persistOrderToSupabase,
+} from "../lib/orders-persistence-service";
 import type { Order } from "../lib/orders-service";
 
 describe("Reconstructed operational boundary (local contracts, not live RLS)", () => {
@@ -41,7 +44,7 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
         }).success,
       ).toBe(false);
   });
-  it("does not mark sale complete or write local history when server fails", async () => {
+  it("does not confirm the sale or write anything locally when the server fails", async () => {
     server.submit.mockRejectedValue(new Error("forbidden"));
     const session = getPOSSession("org-a", "store-a", "Cashier");
     session.cart = [
@@ -55,8 +58,9 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
         subtotalCents: 100,
       },
     ];
-    const result = await finalizeAndPersistSale(session);
-    expect(result.session.completedAt).toBeUndefined();
+    const result = await persistFinalizedPOSSaleAtomic(session);
+    expect(result.success).toBe(false);
+    expect(result.orderId).toBeUndefined();
     expect(result.error).toBe("forbidden");
     expect(localStorage.getItem("servora.pos.history.org-a")).toBeNull();
   });

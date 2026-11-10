@@ -45,6 +45,7 @@ import {
   persistFinalizedPOSSaleAtomic,
   cancelOrderWithReversal,
 } from "@/lib/orders-persistence-service";
+import { confirmedReceipt } from "@/lib/pos-receipt";
 import { type OrderType } from "@/lib/orders-service";
 import { fmtBasisPoints, fmtMoneyCents } from "@/lib/format";
 import { captureError, isExpectedBusinessError } from "@/lib/observability";
@@ -339,10 +340,9 @@ export function POSPage() {
 
       const orderNumber = displayOrderNumber(persistRes.orderNumber, persistRes.orderId);
       setReceiptSession({
-        ...paid,
+        ...confirmedReceipt(paid, persistRes),
         persistedOrderId: persistRes.orderId,
         orderNumber,
-        isSimulation: org.fictional,
       });
       setCheckoutOpen(false);
       // Only reset active cart once server confirmed sale ID

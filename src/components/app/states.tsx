@@ -124,3 +124,18 @@ export function SuspendedState({ reason }: { reason: string | null }) {
     />
   );
 }
+
+/** Shown when a screen could load only the most recent part of the order history. */
+export function OrdersTruncatedNotice({ shown, total }: { shown: number; total: number }) {
+  const { t } = useTranslation();
+  if (shown >= total) return null;
+  return (
+    <div
+      role="status"
+      className="surface flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground"
+    >
+      <CircleAlert className="size-4 shrink-0 text-warning" />
+      <span>{t("states.ordersTruncated", { shown, total })}</span>
+    </div>
+  );
+}

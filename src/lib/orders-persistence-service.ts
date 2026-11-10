@@ -81,10 +81,22 @@ export async function cancelOrderWithReversal(
   }
 }
 
+/** Server confirmation of a recorded sale: the values the receipt must show. */
+export interface ConfirmedSale {
+  success: boolean;
+  orderId?: string;
+  orderNumber?: string;
+  subtotalCents?: number;
+  taxCents?: number;
+  totalCents?: number;
+  isSimulation?: boolean;
+  error?: string;
+}
+
 export async function persistFinalizedPOSSaleAtomic(
   session: POSSession,
   clientOrderId?: string,
-): Promise<{ success: boolean; orderId?: string; orderNumber?: string; error?: string }> {
+): Promise<ConfirmedSale> {
   if (session.cart.length === 0) {
     return { success: false, error: "O carrinho está vazio." };
   }

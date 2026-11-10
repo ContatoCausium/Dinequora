@@ -190,7 +190,7 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       );
     const { data: order, error } = await context.supabase
       .from("orders")
-      .select("order_number,total_cents,tax_cents,subtotal_cents")
+      .select("order_number,total_cents,tax_cents,subtotal_cents,is_simulation")
       .eq("id", result.data)
       .eq("org_id", s.org.id)
       .eq("location_id", s.location.id)
@@ -203,6 +203,8 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       totalCents: order.total_cents,
       taxCents: order.tax_cents,
       subtotalCents: order.subtotal_cents,
+      // What was actually recorded: the receipt must describe the stored order, not the org type.
+      isSimulation: order.is_simulation,
     };
   });
 

@@ -6,11 +6,30 @@ export * from "./types";
 /** The single auth implementation used by the app. Replace this adapter to migrate providers. */
 export const auth: AuthService = supabaseAuth;
 
-/** Social providers shown on sign-in screens. Toggle here when a provider is (de)configured. */
-export const SOCIAL_PROVIDERS: { id: SocialProvider; enabled: boolean }[] = [
-  { id: "google", enabled: true },
-  { id: "microsoft", enabled: true },
-];
+const KNOWN_SOCIAL_PROVIDERS: readonly SocialProvider[] = ["google", "microsoft"];
+
+/**
+ * Social sign-in is opt-in per deployment: `VITE_AUTH_SOCIAL_PROVIDERS` lists the providers that
+ * are actually configured for this Supabase project (comma-separated, e.g. `google`). Empty or
+ * unset = email and password only. The buttons previously relied on the Lovable Cloud broker,
+ * which does not work on a self-hosted Supabase project, so nothing is shown unless enabled.
+ */
+export function socialProvidersFromEnv(
+  raw: string | undefined,
+): { id: SocialProvider; enabled: boolean }[] {
+  const wanted = new Set(
+    (raw ?? "")
+      .split(",")
+      .map((p) => p.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  return KNOWN_SOCIAL_PROVIDERS.map((id) => ({ id, enabled: wanted.has(id) }));
+}
+
+/** Social providers shown on sign-in screens. */
+export const SOCIAL_PROVIDERS: { id: SocialProvider; enabled: boolean }[] = socialProvidersFromEnv(
+  import.meta.env["VITE_AUTH_SOCIAL_PROVIDERS"] as string | undefined,
+);
 
 /** Accept only same-origin relative paths for post-auth redirects. */
 export function safeRedirect(path: unknown, fallback = "/"): string {

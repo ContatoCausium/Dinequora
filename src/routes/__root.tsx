@@ -19,6 +19,7 @@ import {
 } from "../lib/observability";
 import { applyClientLanguageAfterHydration } from "../lib/i18n";
 import { auth } from "@/lib/auth";
+import { clearTemporaryDeviceData } from "@/lib/session-cleanup";
 import { Toaster } from "@/components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -133,12 +134,15 @@ function RootComponent() {
     installBrowserErrorHandlers();
   }, []);
 
-  // Single auth listener: refresh route guards on identity changes; drop cached data on sign-out.
+  // Single auth listener: refresh route guards on identity changes. On sign-out (menu, expired
+  // session or another tab) drop cached data and temporary device data (held tickets); records
+  // stored on the server are never touched.
   useEffect(
     () =>
       auth.onChange((event) => {
         if (event === "signed_out") {
           queryClient.clear();
+          clearTemporaryDeviceData();
           setObservabilityScope({});
         }
         if (event === "signed_in" || event === "signed_out" || event === "user_updated")

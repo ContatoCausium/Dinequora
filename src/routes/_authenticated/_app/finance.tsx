@@ -4,11 +4,8 @@ import { useTranslation } from "react-i18next";
 import { CircleAlert, Plus, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  fetchOperationalOrders,
-  fetchOperationalResources,
-  saveOperationalRecord,
-} from "@/lib/operational.functions";
+import { fetchOperationalResources, saveOperationalRecord } from "@/lib/operational.functions";
+import { fetchAllOrders } from "@/lib/recorded-data";
 import { mapResources, type Resources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
 import {
@@ -23,7 +20,7 @@ import { fmtMoneyCents, fmtPercent } from "@/lib/format";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader } from "@/components/app/page";
 import { DemoBadge } from "@/components/app/brand-mark";
-import { Skeleton, StateCard } from "@/components/app/states";
+import { OrdersTruncatedNotice, Skeleton, StateCard } from "@/components/app/states";
 import { StatTile } from "@/components/app/stat-tile";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -106,14 +103,22 @@ export function FinancePage() {
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [entries, setEntries] = useState<Resources["finance"]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersTotal, setOrdersTotal] = useState(0);
   const [tab, setTab] = useState<Tab>("overview");
 
+  // Same paged loader as Reports (this used to be a single page of 200): the history up to the
+  // browser cap, and the screen says so when older orders could not be included.
   const load = useCallback(async () => {
     const [r, o] = await Promise.all([
       fetchOperationalResources({ data: { orgId: org.id } }),
-      fetchOperationalOrders({ data: { orgId: org.id, limit: 200 } }),
+      fetchAllOrders(org.id, "all"),
     ]);
-    return { expenses: mapResources(r).expenses, entries: r.finance, orders: o.orders };
+    return {
+      expenses: mapResources(r).expenses,
+      entries: r.finance,
+      orders: o.orders,
+      ordersTotal: o.total,
+    };
   }, [org.id]);
 
   const reload = useCallback(async () => {
@@ -122,6 +127,7 @@ export function FinancePage() {
       setAllExpenses(d.expenses);
       setEntries(d.entries);
       setOrders(d.orders);
+      setOrdersTotal(d.ordersTotal);
       setState("ready");
     } catch {
       setState("error");
@@ -140,6 +146,7 @@ export function FinancePage() {
         setAllExpenses(d.expenses);
         setEntries(d.entries);
         setOrders(d.orders);
+        setOrdersTotal(d.ordersTotal);
         setState("ready");
       })
       .catch(() => {
@@ -530,7 +537,8 @@ export function FinancePage() {
               </TabsContent>
             )}
 
-            <TabsContent value="reports" className="mt-4">
+            <TabsContent value="reports" className="mt-4 space-y-4">
+              <OrdersTruncatedNotice shown={orders.length} total={ordersTotal} />
               <FinanceReports
                 restaurantName={org.name}
                 locations={stores}

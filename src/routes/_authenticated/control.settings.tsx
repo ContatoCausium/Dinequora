@@ -16,6 +16,7 @@ import { LoadingRows, Section, Tag } from "@/components/control/control-ui";
 import { listPlans, pingBackend, type PlanDef } from "@/lib/admin-service";
 import { fmtCurrency } from "@/lib/format";
 import { LANGUAGES } from "@/lib/i18n";
+import { SOCIAL_PROVIDERS } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { LoadFailure } from "@/components/control/load-failure";
 import { requestErrorKind, type RequestErrorKind } from "@/lib/request-error";
@@ -94,8 +95,11 @@ function Settings() {
         defaultValue: "Supabase Auth operacional via supabase.auth",
       }),
     },
-    { key: "google", state: "unverified" },
-    { key: "microsoft", state: "unverified" },
+    // Social sign-in is off unless enabled for this deployment (VITE_AUTH_SOCIAL_PROVIDERS).
+    ...SOCIAL_PROVIDERS.map((p) => ({
+      key: p.id,
+      state: p.enabled ? ("unverified" as const) : ("off" as const),
+    })),
     { key: "stripe", state: "off" },
     { key: "email", state: "unverified" },
   ];
