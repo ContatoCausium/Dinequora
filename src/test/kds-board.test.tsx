@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import i18n from "@/lib/i18n";
+import { KitchenCapNotice } from "@/components/kds/kitchen-cap-notice";
 
 import {
   KITCHEN_RECENT_DELIVERED,
@@ -9,7 +12,7 @@ import {
   type RecordedOrder,
 } from "../lib/recorded-data";
 import { filterOrdersByStation } from "../lib/kds-service";
-import { createRefreshScheduler } from "../lib/refresh-scheduler";
+import { REFRESH_TIMEOUT_MS, createRefreshScheduler } from "../lib/refresh-scheduler";
 import type { Order } from "../lib/orders-service";
 
 type Row = { id: string; createdAt: string; status: OrderStatus; productName: string };
@@ -27,9 +30,11 @@ function database(rows: Row[], beforePage?: (req: OrderPageRequest["data"], rows
     const matching = rows
       .filter((r) => (data.status ? r.status === data.status : true))
       .filter((r) => (data.statuses ? data.statuses.includes(r.status) : true))
-      .sort((a, b) =>
-        a.createdAt === b.createdAt ? (a.id < b.id ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1,
-      );
+      .sort((a, b) => {
+        const newestFirst =
+          a.createdAt === b.createdAt ? (a.id < b.id ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1;
+        return data.oldestFirst ? -newestFirst : newestFirst;
+      });
     const page = matching.slice(data.offset, data.offset + data.limit).map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
@@ -90,6 +95,7 @@ describe("kitchen board — open tickets never disappear", () => {
     const openCalls = db.calls.filter((c) => c.statuses);
     expect(openCalls.map((c) => c.offset)).toEqual([0, 200, 400]);
     expect(openCalls.every((c) => c.statuses?.join() === "new,confirmed,in_prep,ready")).toBe(true);
+    expect(openCalls.every((c) => c.oldestFirst === true)).toBe(true); // P5: oldest first
     expect(openCalls.every((c) => c.locationId === "loc-1" && c.limit === 200)).toBe(true);
     expect(db.calls.filter((c) => c.status === "delivered")).toEqual([
       expect.objectContaining({ limit: KITCHEN_RECENT_DELIVERED, offset: 0 }),
@@ -117,7 +123,7 @@ describe("kitchen board — open tickets never disappear", () => {
     expect(board.orders.some((o) => o.status === "cancelled")).toBe(false);
   });
 
-  it("tickets created during the read are not duplicated; they appear on the next load", async () => {
+  it("tickets created during the read are never duplicated and nothing existing is lost", async () => {
     const open = rows(450, "new", "o", 10);
     let n = 0;
     const db = database([...open], (req, all) => {
@@ -127,8 +133,13 @@ describe("kitchen board — open tickets never disappear", () => {
     const ids = first.orders.map((o) => o.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const r of open) expect(ids).toContain(r.id); // nothing that existed is lost
+    // Read oldest first, new tickets land at the end of the list: they appear in the same load or,
+    // at the latest, in the next one (their realtime event triggers it). Never twice.
+    const before = new Set(ids);
     const second = await fetchKitchenBoard("org", "all", db.fetchPage);
-    expect(second.orders.filter((o) => o.status === "new")).toHaveLength(456);
+    const ids2 = second.orders.map((o) => o.id);
+    expect(new Set(ids2).size).toBe(ids2.length);
+    for (const id of before) expect(ids2).toContain(id);
   });
 
   it("a ticket bumped to delivered during the read is shown once", async () => {
@@ -143,11 +154,27 @@ describe("kitchen board — open tickets never disappear", () => {
     expect(board.orders.filter((o) => o.id === "o00010")).toHaveLength(1);
   });
 
-  it("beyond the browser cap the board says so instead of hiding tickets silently", async () => {
-    const db = database(rows(ORDER_HISTORY_CAP + 1, "new", "o", 0));
+  it("beyond the 5,000 cap the OLDEST tickets stay; the newest are reported, not dropped silently", async () => {
+    // index 0 is the newest (rows() goes back in time), index 5,049 the oldest
+    const open = rows(ORDER_HISTORY_CAP + 50, "new", "o", 0);
+    const db = database([...open]);
     const board = await fetchKitchenBoard("org", "all", db.fetchPage);
     expect(board.orders).toHaveLength(ORDER_HISTORY_CAP);
-    expect(board).toMatchObject({ openTotal: ORDER_HISTORY_CAP + 1, truncated: true });
+    expect(board).toMatchObject({
+      openTotal: ORDER_HISTORY_CAP + 50,
+      openLoaded: ORDER_HISTORY_CAP,
+      truncated: true,
+    });
+    const ids = new Set(board.orders.map((o) => o.id));
+    expect(open.slice(50).every((r) => ids.has(r.id))).toBe(true); // the 5,000 that waited longest
+    expect(open.slice(0, 50).some((r) => ids.has(r.id))).toBe(false); // the 50 newest are left out
+  });
+
+  it("the board is still shown newest first, as before", async () => {
+    const db = database([...rows(300, "in_prep", "o", 100), ...rows(5, "delivered", "d", 0)]);
+    const board = await fetchKitchenBoard("org", "all", db.fetchPage);
+    const times = board.orders.map((o) => o.createdAt);
+    expect([...times].sort().reverse()).toEqual(times);
   });
 
   it("station filters still apply to the full open list", async () => {
@@ -246,5 +273,136 @@ describe("refresh scheduler — realtime bursts and ordering", () => {
     await s.now();
     expect(task).toHaveBeenCalledTimes(2);
     s.stop();
+  });
+
+  it("P3: a reload that never answers is abandoned after 20 s and the next one runs", async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    let calls = 0;
+    const onTimeout = vi.fn();
+    const s = createRefreshScheduler(
+      (signal) => {
+        signals.push(signal);
+        calls++;
+        return calls === 1 ? new Promise<void>(() => undefined) : Promise.resolve(); // 1st hangs
+      },
+      { delayMs: 0, onTimeout },
+    );
+    let actionDone = false;
+    void s.now().then(() => (actionDone = true)); // e.g. a "Start" button awaiting fresh data
+    await vi.advanceTimersByTimeAsync(1);
+    void s.request(); // a realtime event while the first reload hangs
+    await vi.advanceTimersByTimeAsync(REFRESH_TIMEOUT_MS - 10);
+    expect(actionDone).toBe(false);
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(signals[0]?.aborted).toBe(true); // its late answer must be ignored
+    expect(actionDone).toBe(true); // the button is released
+    await vi.advanceTimersByTimeAsync(5);
+    expect(calls).toBe(2); // the queued update ran
+    expect(signals[1]?.aborted).toBe(false);
+    s.stop();
+  });
+
+  it("P3: a late answer of an abandoned reload never overwrites newer data", async () => {
+    vi.useFakeTimers();
+    const applied: string[] = [];
+    let n = 0;
+    const s = createRefreshScheduler(
+      async (signal) => {
+        const mine = ++n;
+        const data = await new Promise<string>((r) =>
+          setTimeout(() => r(`v${mine}`), mine === 1 ? 30_000 : 10),
+        );
+        if (!signal.aborted) applied.push(data);
+      },
+      { delayMs: 0, timeoutMs: 20_000 },
+    );
+    void s.now();
+    await vi.advanceTimersByTimeAsync(20_001); // v1 abandoned
+    void s.now();
+    await vi.advanceTimersByTimeAsync(20_000); // v2 applied, then v1 answers late (t = 30 s)
+    expect(applied).toEqual(["v2"]);
+    s.stop();
+  });
+
+  it("P3: failure, then recovery", async () => {
+    vi.useFakeTimers();
+    const outcomes: string[] = [];
+    const task = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        outcomes.push("failed");
+        throw new Error("network");
+      })
+      .mockImplementation(async () => {
+        outcomes.push("ok");
+      });
+    const s = createRefreshScheduler(task, { delayMs: 0 });
+    void s.now();
+    await vi.advanceTimersByTimeAsync(1);
+    void s.now();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(outcomes).toEqual(["failed", "ok"]);
+    s.stop();
+  });
+
+  it("P3: changing store stops the old board: its in-flight answer is not applied", async () => {
+    vi.useFakeTimers();
+    const board: string[] = [];
+    const makeBoard = (store: string, ms: number) => {
+      let active = true;
+      const s = createRefreshScheduler(
+        async (signal) => {
+          const data = await new Promise<string>((r) => setTimeout(() => r(store), ms));
+          if (active && !signal.aborted) board.push(data);
+        },
+        { delayMs: 0 },
+      );
+      void s.now();
+      return () => {
+        active = false;
+        s.stop();
+      };
+    };
+    const closeA = makeBoard("store A", 5_000); // slow answer for the previous store
+    await vi.advanceTimersByTimeAsync(10);
+    closeA(); // the operator switched to store B
+    const closeB = makeBoard("store B", 100);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(board).toEqual(["store B"]);
+    closeB();
+  });
+});
+
+describe("P5: kitchen cap notice", () => {
+  it("only when tickets are left off; specific text, all stations, both languages", async () => {
+    await i18n.changeLanguage("en-US");
+    const { container, rerender } = render(
+      <KitchenCapNotice openLoaded={460} openTotal={460} truncated={false} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    rerender(<KitchenCapNotice openLoaded={5000} openTotal={5050} truncated />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Not every open ticket fits on the board");
+    expect(alert).toHaveTextContent(
+      "Showing the 5000 oldest open tickets of 5050 (all stations). The 50 newest tickets are not on screen",
+    );
+    expect(alert).not.toHaveTextContent(/figures|orders out of/); // not the finance/report text
+    rerender(<KitchenCapNotice openLoaded={5000} openTotal={5001} truncated stationShown={812} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("The newest ticket is not on screen");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "812 of the tickets on the board belong to the selected station.",
+    );
+    await i18n.changeLanguage("pt-BR");
+    rerender(<KitchenCapNotice openLoaded={5000} openTotal={5050} truncated stationShown={1} />);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Exibindo os 5000 tickets abertos mais antigos de 5050 (todas as estações). Os 50 tickets mais recentes não aparecem",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "1 dos tickets no quadro é da estação selecionada.",
+    );
+    await i18n.changeLanguage("en-US");
   });
 });

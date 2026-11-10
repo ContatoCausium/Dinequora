@@ -18,6 +18,7 @@ export interface OrderPageRequest {
     startDate?: string;
     status?: OrderStatus;
     statuses?: OrderStatus[];
+    oldestFirst?: boolean;
   };
 }
 export type OrderPageSource = (
@@ -72,25 +73,51 @@ export async function fetchAllOrders(
 /** Most recent delivered tickets shown in the last column (unchanged from the previous board). */
 export const KITCHEN_RECENT_DELIVERED = 10;
 
+/** Newest first, ties by id — the order every list (and the board) is shown in. */
+const newestFirst = (x: RecordedOrder, y: RecordedOrder) =>
+  x.createdAt === y.createdAt ? (x.id < y.id ? 1 : -1) : x.createdAt < y.createdAt ? 1 : -1;
+
+export interface KitchenBoard {
+  /** Open tickets loaded + the latest delivered ones, each once, newest first (as before). */
+  orders: RecordedOrder[];
+  /** Open tickets in the database (all stations). */
+  openTotal: number;
+  /** Open tickets on the board (all stations). */
+  openLoaded: number;
+  /** true when the browser cap left the NEWEST open tickets off the board. */
+  truncated: boolean;
+}
+
 /**
  * The kitchen board: EVERY open ticket (all pages, however many newer orders exist) plus the most
  * recent delivered ones, each order exactly once. The previous board read the 100 most recent
  * orders of any status and filtered them in the browser, so an open ticket disappeared as soon as
  * 100 newer orders existed.
+ *
+ * Open tickets are read OLDEST first: if the 5,000 browser cap is ever reached, the tickets left
+ * off are the newest ones, never the ones that have been waiting longest; the board says so.
  */
 export async function fetchKitchenBoard(
   orgId: string,
   locationId: string,
   fetchPage: OrderPageSource = fetchOperationalOrders,
-): Promise<{ orders: RecordedOrder[]; openTotal: number; truncated: boolean }> {
+): Promise<KitchenBoard> {
   // Open = still the kitchen's work (OPEN_STATUSES below).
-  const open = await readAllPages({ orgId, locationId, statuses: [...OPEN_STATUSES] }, fetchPage);
+  const open = await readAllPages(
+    { orgId, locationId, statuses: [...OPEN_STATUSES], oldestFirst: true },
+    fetchPage,
+  );
   const delivered = await fetchPage({
     data: { orgId, locationId, status: "delivered", limit: KITCHEN_RECENT_DELIVERED, offset: 0 },
   });
   const byId = new Map(open.orders.map((o) => [o.id, o]));
   for (const order of delivered.orders) if (!byId.has(order.id)) byId.set(order.id, order);
-  return { orders: [...byId.values()], openTotal: open.total, truncated: open.truncated };
+  return {
+    orders: [...byId.values()].sort(newestFirst),
+    openTotal: open.total,
+    openLoaded: open.orders.length,
+    truncated: open.truncated,
+  };
 }
 
 /** Paid orders count toward sales; open tickets and cancellations don't. */

@@ -102,9 +102,14 @@ describe.skipIf(!ENABLED)(
         limit: data.limit,
         status: data.status,
         statuses: data.statuses,
+        oldestFirst: data.oldestFirst,
       });
       if (error) throw new Error(error.message);
-      const orders = (rows ?? []).map((r) => ({ id: r.id, status: r.status }));
+      const orders = (rows ?? []).map((r) => ({
+        id: r.id,
+        status: r.status,
+        createdAt: r.created_at,
+      }));
       return { orders: orders as unknown as RecordedOrder[], totalCount: count ?? 0 };
     };
 
@@ -145,6 +150,33 @@ describe.skipIf(!ENABLED)(
         sql(`select count(*) from (select status from public.orders where org_id = '${creds.orgId}'
                      order by created_at desc, id desc limit 100) s where status in ('new','confirmed','in_prep','ready')`);
       expect(Number(old)).toBe(0);
+      cleanup();
+    });
+
+    it("5,050 open tickets: the 5,000 that waited longest are on the board, the 50 newest reported", async () => {
+      // g = 1 is the newest ticket, g = 5,050 the oldest
+      insert("cap", 5050, "new", "now() - interval '1 hour' - (g || ' seconds')::interval");
+      const board = await fetchKitchenBoard(creds.orgId, "all", productionPages);
+      const total = openTruth().length;
+      expect(total).toBeGreaterThanOrEqual(5050);
+      expect(board).toMatchObject({ openTotal: total, openLoaded: 5000, truncated: true });
+      const shown = new Set(board.orders.map((o) => o.id));
+      const newest50 = sql(`select id from public.orders where org_id = '${creds.orgId}'
+        and status in ('new','confirmed','in_prep','ready') order by created_at desc, id desc limit ${total - 5000}`)
+        .split("\n")
+        .filter(Boolean);
+      expect(
+        newest50.filter((id) => shown.has(id)),
+        "newest open tickets are the ones left out",
+      ).toEqual([]);
+      const oldest = sql(`select id from public.orders where org_id = '${creds.orgId}'
+        and status in ('new','confirmed','in_prep','ready') order by created_at asc, id asc limit 5000`)
+        .split("\n")
+        .filter(Boolean);
+      expect(
+        oldest.filter((id) => !shown.has(id)),
+        "every long-waiting ticket is shown",
+      ).toEqual([]);
       cleanup();
     });
 

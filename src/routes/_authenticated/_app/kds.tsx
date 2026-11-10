@@ -35,7 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { persistOrderStatusTransition } from "@/lib/orders-persistence-service";
 import { fetchKitchenBoard } from "@/lib/recorded-data";
 import { createRefreshScheduler } from "@/lib/refresh-scheduler";
-import { OrdersTruncatedNotice } from "@/components/app/states";
+import { KitchenCapNotice } from "@/components/kds/kitchen-cap-notice";
 import { setOperationalItemReady } from "@/lib/operational.functions";
 
 export const Route = createFileRoute("/_authenticated/_app/kds")({
@@ -113,7 +113,9 @@ export function KDSPage() {
   >("connecting");
 
   // Open tickets beyond the browser cap (5,000) are announced instead of silently dropped.
-  const [boardMeta, setBoardMeta] = useState({ openTotal: 0, truncated: false });
+  const [boardMeta, setBoardMeta] = useState({ openTotal: 0, openLoaded: 0, truncated: false });
+  // Last realtime channel state: restored when a reload succeeds after a failed or timed-out one.
+  const realtimeStatusRef = useRef<"connected" | "connecting" | "disconnected">("connecting");
   // Reloads for the current store (set by the effect below; actions await fresh data through it).
   const refreshRef = useRef<() => Promise<void>>(async () => undefined);
   // Read by the realtime handler without re-subscribing when the sound is toggled.
@@ -122,27 +124,44 @@ export function KDSPage() {
 
   // Board data: every open ticket + the latest delivered ones (fetchKitchenBoard), reloaded on
   // every realtime change and every 15 s as a safety net. Reloads are serialized and bursts are
-  // merged (createRefreshScheduler), so an older response never overwrites a newer one. A response
-  // that arrives after the store changed is discarded.
+  // merged (createRefreshScheduler), so an older response never overwrites a newer one. Each reload
+  // has a 20 s deadline: a stalled request is abandoned (its late answer is ignored), the next
+  // reload runs and the action buttons are released. A response for a previous store is discarded.
   useEffect(() => {
     let active = true;
     setOrders([]);
-    setBoardMeta({ openTotal: 0, truncated: false });
+    setBoardMeta({ openTotal: 0, openLoaded: 0, truncated: false });
+    realtimeStatusRef.current = "connecting";
     setConnectionStatus("connecting");
 
-    const scheduler = createRefreshScheduler(async () => {
-      try {
-        const board = await fetchKitchenBoard(org.id, locationId);
-        if (!active) return;
-        setOrders(board.orders);
-        setBoardMeta({ openTotal: board.openTotal, truncated: board.truncated });
-      } catch (err) {
-        if (!active) return;
-        // Keep the tickets already on screen; the badge tells the kitchen the data may be stale.
-        setConnectionStatus("disconnected");
-        captureError(err, { event: "kds.fetch_failed" });
-      }
-    });
+    const scheduler = createRefreshScheduler(
+      async (signal) => {
+        try {
+          const board = await fetchKitchenBoard(org.id, locationId);
+          if (!active || signal.aborted) return; // store changed, or abandoned after the deadline
+          setOrders(board.orders);
+          setBoardMeta({
+            openTotal: board.openTotal,
+            openLoaded: board.openLoaded,
+            truncated: board.truncated,
+          });
+          // Recovered after a failure/timeout: show the realtime channel's real state again.
+          setConnectionStatus(realtimeStatusRef.current);
+        } catch (err) {
+          if (!active || signal.aborted) return;
+          // Keep the tickets already on screen; the badge tells the kitchen the data may be stale.
+          setConnectionStatus("disconnected");
+          captureError(err, { event: "kds.fetch_failed" });
+        }
+      },
+      {
+        onTimeout: () => {
+          if (!active) return;
+          setConnectionStatus("disconnected");
+          captureError(new Error("kitchen board reload timed out"), { event: "kds.fetch_timeout" });
+        },
+      },
+    );
     refreshRef.current = scheduler.now;
     void scheduler.now();
 
@@ -170,9 +189,11 @@ export function KDSPage() {
       )
       .subscribe((status) => {
         if (!active) return;
-        if (status === "SUBSCRIBED") setConnectionStatus("connected");
+        if (status === "SUBSCRIBED") realtimeStatusRef.current = "connected";
         else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")
-          setConnectionStatus("disconnected");
+          realtimeStatusRef.current = "disconnected";
+        else return;
+        setConnectionStatus(realtimeStatusRef.current);
       });
 
     return () => {
@@ -332,10 +353,15 @@ export function KDSPage() {
         </div>
       </div>
 
-      <OrdersTruncatedNotice
-        shown={filteredOrders.filter((o) => o.status !== "delivered").length}
-        total={boardMeta.openTotal}
+      <KitchenCapNotice
+        openLoaded={boardMeta.openLoaded}
+        openTotal={boardMeta.openTotal}
         truncated={boardMeta.truncated}
+        stationShown={
+          stationFilter === "all"
+            ? undefined
+            : columns.new.length + columns.in_prep.length + columns.ready.length
+        }
       />
 
       {/* Kanban Board Layout */}

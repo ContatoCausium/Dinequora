@@ -221,6 +221,7 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
         .min(1)
         .max(6)
         .optional(),
+      oldestFirst: z.boolean().optional(),
       channel: z.enum(["dine_in", "takeout", "delivery"]).optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional(),
@@ -240,6 +241,7 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
       locationId: s.location?.id,
       status: data.status,
       statuses: data.statuses,
+      oldestFirst: data.oldestFirst,
       channel: data.channel,
       startDate: data.startDate,
       endDate: data.endDate,
