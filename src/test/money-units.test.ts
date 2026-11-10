@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   applyBasisPoints,
@@ -199,6 +201,16 @@ describe("money: number fields (P1 — <input type=number> values)", () => {
   it("the audited defect: the free-text reading gave 1000x the amount", () => {
     expect(parseMoneyInput("0.125", { format: "number-input" })).toBe(13);
     expect(centsFromNumberInput("9.995")).not.toBe(999500);
+  });
+
+  it("the expense amount (the only money field inside a <form>) lets 12.345 be submitted", () => {
+    const src = fs.readFileSync(
+      path.join(process.cwd(), "src/components/finance/expense-form-dialog.tsx"),
+      "utf8",
+    );
+    const field = src.slice(src.indexOf("id={`${id}-amount`}"), src.indexOf("value={v.amount}"));
+    expect(field).toContain('type="number"');
+    expect(field).toContain('step="any"'); // step="0.01" makes the browser refuse 12.345
   });
 
   it("receiving form (number state) converts exactly too", () => {
