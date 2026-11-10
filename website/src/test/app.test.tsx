@@ -91,15 +91,16 @@ describe("Dinequora marketing site", () => {
     expect(within(ai).queryByRole("button")).toBeNull();
   });
 
-  it("switches feature categories and shows availability badges", async () => {
-    const user = userEvent.setup();
+  it("tells one service night in three chapters, with availability badges", () => {
     render(<App />);
-    const tablist = screen.getByRole("tablist", { name: "Feature categories" });
+    for (const name of ["Chapter 1: before service", "Chapter 2: the rush", "Chapter 3: closing"])
+      expect(screen.getByRole("region", { name })).toBeInTheDocument();
+    const close = screen.getByRole("region", { name: "Chapter 3: closing" });
     const finance = featureCategories.find((c) => c.id === "finance")!;
-    await user.click(within(tablist).getByRole("tab", { name: new RegExp(finance.title) }));
-    const panel = screen.getByRole("tabpanel", { name: new RegExp(finance.title) });
-    expect(within(panel).getByText("Cash flow projections")).toBeInTheDocument();
-    expect(within(panel).getAllByText("Rolling out").length).toBeGreaterThan(0);
+    for (const cap of finance.capabilities.slice(0, 4)) expect(close).toHaveTextContent(cap.name);
+    expect(within(close).getAllByText("Rolling out").length).toBeGreaterThan(0);
+    // Charts are illustrative and say so.
+    expect(close).toHaveTextContent("Sample data");
   });
 
   it("hands the demo request to WhatsApp without an endpoint and never claims delivery", async () => {
@@ -219,14 +220,14 @@ describe("Portuguese version", () => {
     expect(within(ai).queryByRole("button")).toBeNull();
   });
 
-  it("shows translated product screens, labeled as illustrative", () => {
+  it("shows translated product screens and charts, labeled as illustrative", () => {
     render(<App initialLocale="pt" />);
-    const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
-    expect(hero).toHaveTextContent("Lucro líquido estimado");
-    expect(hero).toHaveTextContent("Dinequora · Financeiro");
-    expect(hero).toHaveTextContent("Dados de exemplo");
-    expect(hero).not.toHaveTextContent("Estimated Net Profit");
-    expect(hero).toHaveTextContent("O aplicativo hoje é em inglês");
+    const close = screen.getByRole("region", { name: "Capítulo 3: o fechamento" });
+    expect(close).toHaveTextContent("Resultado estimado");
+    expect(close).toHaveTextContent("Dados de exemplo");
+    expect(close).not.toHaveTextContent("Estimated net");
+    expect(document.body).toHaveTextContent("Dinequora · Financeiro");
+    expect(document.body).toHaveTextContent("Hoje o aplicativo é em inglês");
   });
 
   it("says the app interface is in English", () => {
