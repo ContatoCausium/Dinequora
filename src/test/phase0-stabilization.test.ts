@@ -67,7 +67,18 @@ describe("POS held tickets — expiry and quarantine (key servora.pos.suspended.
       attendantName: "a",
       customerName: "Customer",
       orderType: "dine_in",
-      items: [{ id: "line", quantity: 1 }],
+      // A real held line carries its amounts in whole cents (a line without them is quarantined).
+      items: [
+        {
+          id: "line",
+          productId: "p",
+          productName: "Item",
+          quantity: 1,
+          basePriceCents: 500,
+          modifiers: [],
+          subtotalCents: 500,
+        },
+      ],
       discountCents: 0,
       taxRatePercent: 0,
       suspendedAt: new Date(Date.now() - ageMs).toISOString(),
