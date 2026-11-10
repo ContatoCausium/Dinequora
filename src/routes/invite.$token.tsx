@@ -12,15 +12,15 @@ export const Route = createFileRoute("/invite/$token")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Workspace invitation · Servora" },
+      { title: "Workspace invitation · Dinequora" },
       {
         name: "description",
-        content: "Accept your invitation to join a restaurant workspace on Servora.",
+        content: "Accept your invitation to join a restaurant workspace on Dinequora.",
       },
-      { property: "og:title", content: "Workspace invitation · Servora" },
+      { property: "og:title", content: "Workspace invitation · Dinequora" },
       {
         property: "og:description",
-        content: "Accept your invitation to join a restaurant workspace on Servora.",
+        content: "Accept your invitation to join a restaurant workspace on Dinequora.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

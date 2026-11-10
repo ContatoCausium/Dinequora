@@ -15,10 +15,10 @@ import { auth, AuthError } from "@/lib/auth";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Choose a new password · Servora" },
-      { name: "description", content: "Set a new password for your Servora account." },
-      { property: "og:title", content: "Choose a new password · Servora" },
-      { property: "og:description", content: "Set a new password for your Servora account." },
+      { title: "Choose a new password · Dinequora" },
+      { name: "description", content: "Set a new password for your Dinequora account." },
+      { property: "og:title", content: "Choose a new password · Dinequora" },
+      { property: "og:description", content: "Set a new password for your Dinequora account." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],

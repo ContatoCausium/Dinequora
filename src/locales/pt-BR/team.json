@@ -78,13 +78,19 @@
   },
   "stats": {
     "members": "Membros",
-    "membersHint": "{{owners}} proprietários · {{managers}} gerentes · {{staff}} funcionários",
+    "membersHint": "{{owners}} · {{managers}} · {{staff}}",
     "pending": "Convites pendentes",
     "pendingHint": "Aguardando aceite",
     "customized": "Acesso personalizado",
     "customizedHint": "Membros com ajustes individuais",
     "profiles": "Perfis personalizados",
-    "profilesHint": "Mais {{count}} modelos"
+    "profilesHint": "Mais {{count}} modelos",
+    "ownersCount_one": "{{count}} proprietário",
+    "ownersCount_other": "{{count}} proprietários",
+    "managersCount_one": "{{count}} gerente",
+    "managersCount_other": "{{count}} gerentes",
+    "staffCount_one": "{{count}} funcionário",
+    "staffCount_other": "{{count}} funcionários"
   },
   "page": {
     "eyebrow": "Configurações",
@@ -258,7 +264,7 @@
     "customSubtitle": "Conjuntos de permissões reutilizáveis desta organização.",
     "ownerOnly": "Só proprietários criam ou editam perfis.",
     "systemTitle": "Modelos",
-    "systemSubtitle": "Fornecidos pelo Servora. Somente leitura — duplique um para personalizar.",
+    "systemSubtitle": "Fornecidos pelo Dinequora. Somente leitura — duplique um para personalizar.",
     "template": "Modelo",
     "new": "Novo perfil",
     "newTitle": "Novo perfil",

@@ -21,8 +21,11 @@ import {
   Boxes,
   ChefHat,
   CircleAlert,
+  CircleCheck,
   Copy,
   History,
+  LayoutGrid,
+  List,
   Pencil,
   Plus,
   RefreshCw,
@@ -42,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -77,12 +81,12 @@ import { fmtDate, fmtMoneyCents, fmtPercent, fmtQuantity } from "@/lib/format";
 export const Route = createFileRoute("/_authenticated/_app/inventory")({
   head: () => ({
     meta: [
-      { title: "Inventory & Stock Movements · Servora" },
+      { title: "Inventory & Stock Movements · Dinequora" },
       {
         name: "description",
         content: "Store inventory, recipes, suppliers and purchase receiving.",
       },
-      { property: "og:title", content: "Inventory & Stock Movements · Servora" },
+      { property: "og:title", content: "Inventory & Stock Movements · Dinequora" },
       {
         property: "og:description",
         content: "Store inventory, recipes, suppliers and purchase receiving.",
@@ -187,8 +191,9 @@ export function InventoryPage() {
       org.locations.find((l) => l.id === slug)?.name ?? t("unknownStore"),
     [org.locations, t],
   );
-  const unitLabel = (u: string) => t(`units.${u}`, { defaultValue: u });
-  const qty = (v: number, unit: string) => `${fmtQuantity(v, lng)} ${unitLabel(unit)}`;
+  const unitLabel = (u: string, count?: number) =>
+    t(`units.${u}`, count === undefined ? { defaultValue: u } : { defaultValue: u, count });
+  const qty = (v: number, unit: string) => `${fmtQuantity(v, lng)} ${unitLabel(unit, Math.abs(v))}`;
   const money = (cents: number) => fmtMoneyCents(cents, lng);
   const errText = (e: unknown, fallbackKey: string) => operationalErrorText(t, e, t(fallbackKey));
 
@@ -205,6 +210,25 @@ export function InventoryPage() {
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | InventoryCategory>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "attention">("all");
+  // Dense list by default; the choice is kept on this device. Read after mount so the server render
+  // and the first client render match.
+  const [itemsView, setItemsView] = useState<"list" | "cards">("list");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("servora.inventory.view") === "cards") setItemsView("cards");
+    } catch {
+      /* storage unavailable: keep the default */
+    }
+  }, []);
+  const chooseItemsView = (v: "list" | "cards") => {
+    setItemsView(v);
+    try {
+      localStorage.setItem("servora.inventory.view", v);
+    } catch {
+      /* storage unavailable: the choice lasts for this visit */
+    }
+  };
 
   // Recipe dialog
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
@@ -313,6 +337,36 @@ export function InventoryPage() {
       (i) => i.name,
     );
   }, [items, categoryFilter, search, byStore]);
+  const attentionCount = useMemo(
+    () => filteredItems.filter((i) => stockStatus(i) !== "ok").length,
+    [filteredItems],
+  );
+  /** Items grouped by store ("All stores") and ordered out of stock → low → in stock, then by name. */
+  const itemGroups = useMemo(() => {
+    const SEVERITY = { out: 0, low: 1, ok: 2 } as const;
+    const visible = filteredItems.filter((i) => statusFilter === "all" || stockStatus(i) !== "ok");
+    const order = (a: InventoryItem, b: InventoryItem) =>
+      SEVERITY[stockStatus(a)] - SEVERITY[stockStatus(b)] || a.name.localeCompare(b.name, lng);
+    const keys = showStore
+      ? [
+          ...org.locations.map((l) => l.id),
+          ...new Set(visible.map((i) => i.locationId ?? "")),
+        ].filter((k, idx, arr) => arr.indexOf(k) === idx)
+      : [""];
+    return keys
+      .map((key) => {
+        const list = (showStore ? visible.filter((i) => (i.locationId ?? "") === key) : visible)
+          .slice()
+          .sort(order);
+        return {
+          key: key || "all",
+          title: showStore ? storeName(key || undefined) : null,
+          items: list,
+          attention: list.filter((i) => stockStatus(i) !== "ok").length,
+        };
+      })
+      .filter((g) => g.items.length > 0);
+  }, [filteredItems, statusFilter, showStore, org.locations, storeName, lng]);
   const sortedRecipes = useMemo(() => byStore(recipes, (r) => r.productName), [recipes, byStore]);
   const sortedPurchases = useMemo(
     () =>
@@ -666,10 +720,141 @@ export function InventoryPage() {
     );
   })();
 
+  const itemCard = (item: InventoryItem) => {
+    const status = stockStatus(item);
+    const meta = [item.sku ? t("items.sku", { sku: item.sku }) : "", item.supplier]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <div key={item.id} className="surface flex flex-col p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold" title={item.name}>
+              {item.name}
+            </h3>
+            {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
+          </div>
+          <Badge variant={STATUS_VARIANT[status]} className="shrink-0">
+            {t(`status.${status}`)}
+          </Badge>
+        </div>
+        <div className="mt-4 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <span className="text-xs text-muted-foreground">{t("items.onHand")}</span>
+            <p className="tabular text-[22px] font-semibold leading-tight tracking-[-0.02em]">
+              {fmtQuantity(item.quantity, lng)}{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                {unitLabel(item.unit, item.quantity)}
+              </span>
+            </p>
+          </div>
+          <dl className="text-right text-xs">
+            <dt className="text-muted-foreground">{t("items.minimum")}</dt>
+            <dd className="tabular font-medium">{qty(item.minQuantity, item.unit)}</dd>
+            {costsVisible && (
+              <>
+                <dt className="mt-1 text-muted-foreground">{t("items.unitCost")}</dt>
+                <dd className="tabular font-medium">{money(item.costCents)}</dd>
+              </>
+            )}
+          </dl>
+        </div>
+        {canMove && (
+          <div className="mt-3 flex justify-end border-t pt-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleOpenMovementModal(item)}
+              aria-label={t("actions.moveItem", { name: item.name })}
+            >
+              <ArrowUpDown className="mr-1.5 size-3.5" />
+              {t("actions.move")}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const itemTable = (list: InventoryItem[]) => (
+    // `relative` keeps the absolutely positioned sr-only header inside the scroll box on phones.
+    <div className="surface relative overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="border-b text-xs text-muted-foreground">
+            <th className="px-4 py-2.5 font-medium">{t("items.columns.item")}</th>
+            <th className="px-3 py-2.5 font-medium">{t("items.columns.status")}</th>
+            <th className="px-3 py-2.5 text-right font-medium">{t("items.onHand")}</th>
+            <th className="hidden px-3 py-2.5 text-right font-medium sm:table-cell">
+              {t("items.minimum")}
+            </th>
+            {costsVisible && (
+              <th className="hidden px-3 py-2.5 text-right font-medium md:table-cell">
+                {t("items.unitCost")}
+              </th>
+            )}
+            {canMove && (
+              <th className="px-4 py-2.5">
+                <span className="sr-only">{t("items.columns.actions")}</span>
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {list.map((item) => {
+            const status = stockStatus(item);
+            const meta = [item.sku ? t("items.sku", { sku: item.sku }) : "", item.supplier]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <tr key={item.id} className="align-middle hover:bg-muted/40">
+                <td className="max-w-[16rem] px-4 py-2.5">
+                  <p className="truncate font-medium" title={item.name}>
+                    {item.name}
+                  </p>
+                  {meta && <p className="truncate text-xs text-muted-foreground">{meta}</p>}
+                </td>
+                <td className="px-3 py-2.5">
+                  <Badge variant={STATUS_VARIANT[status]} className="whitespace-nowrap">
+                    {t(`status.${status}`)}
+                  </Badge>
+                </td>
+                <td className="tabular whitespace-nowrap px-3 py-2.5 text-right font-medium">
+                  {qty(item.quantity, item.unit)}
+                </td>
+                <td className="tabular hidden whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground sm:table-cell">
+                  {qty(item.minQuantity, item.unit)}
+                </td>
+                {costsVisible && (
+                  <td className="tabular hidden whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground md:table-cell">
+                    {money(item.costCents)}
+                  </td>
+                )}
+                {canMove && (
+                  <td className="px-4 py-1.5 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenMovementModal(item)}
+                      aria-label={t("actions.moveItem", { name: item.name })}
+                    >
+                      <ArrowUpDown className="size-3.5 sm:mr-1.5" />
+                      <span className="hidden sm:inline">{t("actions.move")}</span>
+                    </Button>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   // ---------- Tab bodies ----------
   const renderItems = () => (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
@@ -682,7 +867,7 @@ export function InventoryPage() {
         </div>
         <select
           aria-label={t("categories.label")}
-          className="h-9 rounded-md border bg-background px-3 text-sm sm:w-56"
+          className="h-9 rounded-md border bg-background px-3 text-sm lg:w-56"
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value as "all" | InventoryCategory)}
         >
@@ -693,6 +878,62 @@ export function InventoryPage() {
             </option>
           ))}
         </select>
+        <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+          <div
+            role="radiogroup"
+            aria-label={t("items.filter.label")}
+            className="inline-flex rounded-md border bg-muted/40 p-0.5"
+          >
+            {(["all", "attention"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                role="radio"
+                aria-checked={statusFilter === f}
+                onClick={() => setStatusFilter(f)}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                  statusFilter === f
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t(`items.filter.${f}`, {
+                  count: f === "all" ? filteredItems.length : attentionCount,
+                })}
+              </button>
+            ))}
+          </div>
+          <div
+            role="radiogroup"
+            aria-label={t("items.view.label")}
+            className="inline-flex rounded-md border bg-muted/40 p-0.5"
+          >
+            {(["list", "cards"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={itemsView === v}
+                aria-label={t(`items.view.${v}`)}
+                title={t(`items.view.${v}`)}
+                onClick={() => chooseItemsView(v)}
+                className={cn(
+                  "inline-flex size-7 items-center justify-center rounded transition-colors",
+                  itemsView === v
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {v === "list" ? (
+                  <List className="size-4" aria-hidden />
+                ) : (
+                  <LayoutGrid className="size-4" aria-hidden />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -719,66 +960,41 @@ export function InventoryPage() {
             body={t("items.noMatchBody")}
           />
         </div>
+      ) : itemGroups.length === 0 ? (
+        <div className="surface">
+          <EmptyState
+            icon={<CircleCheck className="size-5" strokeWidth={1.75} />}
+            title={t("items.noAttentionTitle")}
+            body={t("items.noAttentionBody")}
+          />
+        </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredItems.map((item) => {
-            const status = stockStatus(item);
-            const meta = [item.sku ? t("items.sku", { sku: item.sku }) : "", item.supplier]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div key={item.id} className="surface flex flex-col p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold" title={item.name}>
-                      {item.name}
-                    </h3>
-                    {meta && (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>
-                    )}
-                    {storeLine(item.locationId)}
-                  </div>
-                  <Badge variant={STATUS_VARIANT[status]} className="shrink-0">
-                    {t(`status.${status}`)}
-                  </Badge>
-                </div>
-                <div className="mt-4 flex items-end justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="text-xs text-muted-foreground">{t("items.onHand")}</span>
-                    <p className="tabular text-[22px] font-semibold leading-tight tracking-[-0.02em]">
-                      {fmtQuantity(item.quantity, lng)}{" "}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        {unitLabel(item.unit)}
+        <div className="space-y-6">
+          {itemGroups.map((group) => (
+            <section key={group.key} aria-label={group.title ?? undefined} className="space-y-3">
+              {group.title && (
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <h3 className="text-sm font-semibold">{group.title}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {t("items.groupItems", { count: group.items.length })}
+                    {group.attention > 0 && (
+                      <span className="text-warning">
+                        {" · "}
+                        {t("items.groupAttention", { count: group.attention })}
                       </span>
-                    </p>
-                  </div>
-                  <dl className="text-right text-xs">
-                    <dt className="text-muted-foreground">{t("items.minimum")}</dt>
-                    <dd className="tabular font-medium">{qty(item.minQuantity, item.unit)}</dd>
-                    {costsVisible && (
-                      <>
-                        <dt className="mt-1 text-muted-foreground">{t("items.unitCost")}</dt>
-                        <dd className="tabular font-medium">{money(item.costCents)}</dd>
-                      </>
                     )}
-                  </dl>
+                  </p>
                 </div>
-                {canMove && (
-                  <div className="mt-3 flex justify-end border-t pt-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleOpenMovementModal(item)}
-                      aria-label={t("actions.moveItem", { name: item.name })}
-                    >
-                      <ArrowUpDown className="mr-1.5 size-3.5" />
-                      {t("actions.move")}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              )}
+              {itemsView === "list" ? (
+                itemTable(group.items)
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {group.items.map(itemCard)}
+                </div>
+              )}
+            </section>
+          ))}
         </div>
       )}
     </div>

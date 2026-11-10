@@ -57,7 +57,13 @@
     "pack": "pct.",
     "tsp": "c. chá",
     "tbsp": "c. sopa",
-    "cup": "xíc."
+    "cup": "xíc.",
+    "units_one": "un.",
+    "units_other": "un.",
+    "pack_one": "pct.",
+    "pack_other": "pct.",
+    "cup_one": "xíc.",
+    "cup_other": "xíc."
   },
   "status": {
     "ok": "Em estoque",
@@ -74,7 +80,28 @@
     "emptyTitle": "Nenhum item de estoque ainda",
     "emptyBody": "Cadastre os insumos que esta loja mantém em estoque para controlar saldo e custo das fichas técnicas.",
     "noMatchTitle": "Nenhum item corresponde à busca",
-    "noMatchBody": "Tente outro nome, SKU ou categoria."
+    "noMatchBody": "Tente outro nome, SKU ou categoria.",
+    "columns": {
+      "item": "Item",
+      "status": "Situação",
+      "actions": "Ações"
+    },
+    "filter": {
+      "label": "Filtrar por situação do estoque",
+      "all": "Todos ({{count}})",
+      "attention": "Precisam de atenção ({{count}})"
+    },
+    "view": {
+      "label": "Visualização",
+      "list": "Lista",
+      "cards": "Cartões"
+    },
+    "groupItems_one": "{{count}} item",
+    "groupItems_other": "{{count}} itens",
+    "groupAttention_one": "{{count}} precisa de atenção",
+    "groupAttention_other": "{{count}} precisam de atenção",
+    "noAttentionTitle": "Nada precisa de atenção",
+    "noAttentionBody": "Todos os itens da busca estão acima do mínimo."
   },
   "movements": {
     "title": "Histórico de movimentações",

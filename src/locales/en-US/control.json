@@ -137,7 +137,7 @@
   },
   "assign": {
     "title": "Assign owner of {{name}}",
-    "description": "Only after the owner's identity has been verified outside the app. The person must already have a confirmed Servora account.",
+    "description": "Only after the owner's identity has been verified outside the app. The person must already have a confirmed Dinequora account.",
     "email": "Owner's account email",
     "note": "Verification note",
     "notePlaceholder": "How was identity verified? (e.g. ID + business registration checked on call, ticket #)",

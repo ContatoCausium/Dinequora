@@ -66,9 +66,9 @@ import {
 export const Route = createFileRoute("/_authenticated/_app/finance")({
   head: () => ({
     meta: [
-      { title: "Financial Management · Servora" },
+      { title: "Financial Management · Dinequora" },
       { name: "description", content: "Recorded restaurant revenue, expenses and recipe cost." },
-      { property: "og:title", content: "Financial Management · Servora" },
+      { property: "og:title", content: "Financial Management · Dinequora" },
       {
         property: "og:description",
         content: "Recorded restaurant revenue, expenses and recipe cost.",
@@ -87,6 +87,11 @@ export function FinancePage() {
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
   const { org, locationId, user, can, canAny } = useWorkspace();
+  // Same rule as Reports and the Overview: the selected store zone, or the first store zone for "all".
+  const timeZone =
+    (locationId === "all"
+      ? org.locations[0]?.timezone
+      : org.locations.find((l) => l.id === locationId)?.timezone) ?? undefined;
   // Owners and managers manage expenses; RLS/RPCs still enforce store scope on the server.
   const canManage = canAny(["expenses.create", "expenses.edit", "expenses.pay", "expenses.delete"]);
   const stores = org.locations;
@@ -159,8 +164,8 @@ export function FinancePage() {
   const summary = useMemo(() => summarizeExpenses(expenses, today), [expenses, today]);
   const result = financialResult({ ...ledger, expensesCents: summary.totalCents });
   const trend = useMemo(
-    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7)),
-    [scopedEntries, expenses, today],
+    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7), timeZone),
+    [scopedEntries, expenses, today, timeZone],
   );
   const forecast = useMemo(() => cashOutForecast(expenses, 6, today), [expenses, today]);
   const last28RevenueCents = useMemo(() => {
@@ -535,6 +540,7 @@ export function FinancePage() {
                 orders={orders}
                 stores={perStore}
                 currentMonth={today.slice(0, 7)}
+                timeZone={timeZone}
               />
             </TabsContent>
           </Tabs>

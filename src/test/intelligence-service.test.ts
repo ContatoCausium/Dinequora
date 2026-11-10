@@ -5,7 +5,7 @@ import {
   classifyQueryTopic,
 } from "@/lib/intelligence-service";
 
-describe("Servora Intelligence Service (Deterministic Logic)", () => {
+describe("Dinequora Intelligence Service (Deterministic Logic)", () => {
   const orgId = "org-demo-1";
 
   it("calculates intelligence metrics without throwing", () => {

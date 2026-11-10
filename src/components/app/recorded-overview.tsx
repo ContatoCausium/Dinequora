@@ -422,7 +422,7 @@ export function RecordedOverview() {
             {seeStock && (
               <Panel
                 title={t("home.stock.title")}
-                action={<PanelLink to="/inventory" label={t("home.stock.open")} />}
+                action={<PanelLink to="/inventory" label={t("home.stock.openInventory")} />}
               >
                 {view.low.length === 0 ? (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -442,7 +442,7 @@ export function RecordedOverview() {
                         </span>
                         <span className="tabular shrink-0 text-xs text-muted-foreground">
                           {t("home.stock.of", {
-                            qty: `${fmtQuantity(i.quantity, lng)} ${t(`inventory:units.${i.unit}`)}`,
+                            qty: `${fmtQuantity(i.quantity, lng)} ${t(`inventory:units.${i.unit}`, { count: i.quantity })}`,
                             min: fmtQuantity(i.minQuantity, lng),
                           })}
                         </span>
@@ -772,7 +772,8 @@ function StockSection({
                   )}
                 >
                   {m.quantityDelta > 0 ? "+" : ""}
-                  {fmtQuantity(m.quantityDelta, lng)} {t(`inventory:units.${m.unit}`)}
+                  {fmtQuantity(m.quantityDelta, lng)}{" "}
+                  {t(`inventory:units.${m.unit}`, { count: Math.abs(m.quantityDelta) })}
                 </span>
               </li>
             ))}

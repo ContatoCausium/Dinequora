@@ -23,12 +23,12 @@ import { requestErrorKind, type RequestErrorKind } from "@/lib/request-error";
 export const Route = createFileRoute("/_authenticated/control/settings")({
   head: () => ({
     meta: [
-      { title: "Platform settings · Servora Control Center" },
+      { title: "Platform settings · Dinequora Control Center" },
       {
         name: "description",
         content: "Platform identity, plan definitions, integration status and security controls.",
       },
-      { property: "og:title", content: "Platform settings · Servora Control Center" },
+      { property: "og:title", content: "Platform settings · Dinequora Control Center" },
       {
         property: "og:description",
         content: "Platform identity, plan definitions, integration status and security controls.",
@@ -114,7 +114,7 @@ function Settings() {
                 label={t("settings.productName")}
                 value={
                   <>
-                    Servora <Tag>{t("settings.workingName")}</Tag>
+                    Dinequora <Tag>{t("settings.workingName")}</Tag>
                   </>
                 }
               />

@@ -43,13 +43,13 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/_authenticated/control/admins")({
   head: () => ({
     meta: [
-      { title: "Administrators · Servora Control Center" },
+      { title: "Administrators · Dinequora Control Center" },
       {
         name: "description",
         content:
           "Manage platform administrator and support roles with audited, reason-required changes.",
       },
-      { property: "og:title", content: "Administrators · Servora Control Center" },
+      { property: "og:title", content: "Administrators · Dinequora Control Center" },
       {
         property: "og:description",
         content:

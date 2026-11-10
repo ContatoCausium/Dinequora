@@ -20,12 +20,15 @@ export const Route = createFileRoute("/auth")({
   validateSearch: z.object({ redirect: z.string().optional() }),
   head: () => ({
     meta: [
-      { title: "Sign in · Servora" },
-      { name: "description", content: "Sign in to your Servora restaurant operations workspace." },
-      { property: "og:title", content: "Sign in · Servora" },
+      { title: "Sign in · Dinequora" },
+      {
+        name: "description",
+        content: "Sign in to your Dinequora restaurant operations workspace.",
+      },
+      { property: "og:title", content: "Sign in · Dinequora" },
       {
         property: "og:description",
-        content: "Sign in to your Servora restaurant operations workspace.",
+        content: "Sign in to your Dinequora restaurant operations workspace.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

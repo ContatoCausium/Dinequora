@@ -1,4 +1,8 @@
 import { ledgerMetrics } from "./operational-metrics";
+import { dayKey } from "./period-metrics";
+
+// Shared period helpers live in period-metrics; re-exported here for existing imports.
+export { dayKey, expensesInPeriod } from "./period-metrics";
 import { netSalesCents, type RecordedOrder } from "./recorded-data";
 
 type LedgerEntry = Parameters<typeof ledgerMetrics>[0][number];
@@ -10,16 +14,6 @@ type LedgerEntry = Parameters<typeof ledgerMetrics>[0][number];
  */
 export const isRecordedSale = (o: Pick<RecordedOrder, "status" | "isSimulated" | "paid">) =>
   o.paid && o.status !== "cancelled" && !o.isSimulated;
-
-/** Calendar day (YYYY-MM-DD) of a timestamp in a given IANA zone (viewer's zone when omitted). */
-export function dayKey(iso: string, timeZone?: string) {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    ...(timeZone ? { timeZone } : {}),
-  }).format(new Date(iso));
-}
 
 export function buildReport(input: {
   orders: readonly RecordedOrder[];
@@ -76,13 +70,4 @@ export function buildReport(input: {
     byChannel: [...byChannel].map(([channel, v]) => ({ channel, ...v })).sort(sortDesc),
     products: [...products.values()].sort(sortDesc),
   };
-}
-
-/** Expenses whose competency date falls in [since, today]. */
-export function expensesInPeriod<
-  T extends { competencyDate: string; isSimulation: boolean; amountCents: number },
->(expenses: readonly T[], sinceDay: string, todayDay: string) {
-  return expenses
-    .filter((e) => !e.isSimulation && e.competencyDate >= sinceDay && e.competencyDate <= todayDay)
-    .reduce((s, e) => s + e.amountCents, 0);
 }

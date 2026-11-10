@@ -137,7 +137,7 @@
   },
   "assign": {
     "title": "Definir proprietário de {{name}}",
-    "description": "Somente após a identidade do proprietário ser verificada fora do app. A pessoa já precisa ter uma conta Servora confirmada.",
+    "description": "Somente após a identidade do proprietário ser verificada fora do app. A pessoa já precisa ter uma conta Dinequora confirmada.",
     "email": "E-mail da conta do proprietário",
     "note": "Nota de verificação",
     "notePlaceholder": "Como a identidade foi verificada? (ex.: documento + CNPJ/registro conferidos em chamada, ticket nº)",

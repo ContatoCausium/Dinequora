@@ -131,8 +131,8 @@
       "cogsHint": "{{value}} das vendas líquidas",
       "gross": "Lucro bruto",
       "grossHint": "Margem {{value}}",
-      "month": "Resultado do mês",
-      "monthHint": "Lucro bruto − despesas de {{month}}",
+      "month": "Resultado do mês até hoje",
+      "monthHint": "Lucro bruto desde o dia 1º − despesas com competência em {{month}}",
       "noSales": "Ainda sem vendas"
     },
     "sales": {
@@ -168,7 +168,9 @@
       "movesToday": "Movimentações hoje",
       "recent": "Últimas movimentações",
       "recentEmpty": "Nenhuma movimentação registrada ainda.",
-      "openInventory": "Abrir estoque"
+      "openInventory": "Abrir estoque",
+      "of": "{{qty}} · mín. {{min}}",
+      "empty": "Nenhum item no mínimo ou abaixo."
     },
     "role": {
       "owner": "Proprietário",

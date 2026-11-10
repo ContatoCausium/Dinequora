@@ -42,7 +42,7 @@ import { LANGUAGES, type LanguageCode } from "@/lib/i18n";
 import { chooseLanguage } from "@/lib/profile-service";
 import { operationalAlerts } from "@/lib/demo-data";
 import { useWorkspace } from "./workspace-context";
-import { DemoBadge, OrgLogo, ServoraMark } from "./brand-mark";
+import { BrandMark, DemoBadge, OrgLogo } from "./brand-mark";
 import { EmptyState, SuspendedState } from "./states";
 import { OnboardingProgress } from "./onboarding-progress";
 import { storeConfigured } from "@/lib/onboarding-checklist";
@@ -556,7 +556,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <SidebarNav collapsed={collapsed} />
           <div className={cn("flex items-center gap-2 border-t p-3", collapsed && "flex-col")}>
-            <ServoraMark className="size-6 text-foreground" />
+            <BrandMark className="size-6 text-foreground" />
             {!collapsed && (
               <span className="flex-1 text-xs text-muted-foreground">{t("shell.poweredBy")}</span>
             )}

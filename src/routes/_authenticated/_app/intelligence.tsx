@@ -25,12 +25,12 @@ import { Input } from "@/components/ui/input";
 export const Route = createFileRoute("/_authenticated/_app/intelligence")({
   head: () => ({
     meta: [
-      { title: "Servora Intelligence · Servora" },
+      { title: "Dinequora Intelligence · Dinequora" },
       {
         name: "description",
         content: "Revenue, food cost and stock signals calculated from recorded operations.",
       },
-      { property: "og:title", content: "Servora Intelligence · Servora" },
+      { property: "og:title", content: "Dinequora Intelligence · Dinequora" },
       {
         property: "og:description",
         content: "Revenue, food cost and stock signals calculated from recorded operations.",
@@ -336,13 +336,15 @@ export function IntelligencePage() {
   const isAll = locationId === "all";
   const scopeLabel = isAll ? t("allStores") : (scopedLocations[0]?.name ?? t("allStores"));
 
+  // Same rule as Reports and the Overview: the selected store's zone, or the first store's for "all".
+  const scopeTimeZone = scopedLocations[0]?.timezone ?? undefined;
   const scoped = useMemo(
     () => (resources ? scopeResources(resources, locationId) : null),
     [resources, locationId],
   );
   const summary = useMemo(
-    () => (scoped ? recordedIntelligence(scoped, periodDays) : EMPTY_SUMMARY),
-    [scoped, periodDays],
+    () => (scoped ? recordedIntelligence(scoped, periodDays, scopeTimeZone) : EMPTY_SUMMARY),
+    [scoped, periodDays, scopeTimeZone],
   );
   const previousRevenue = useMemo(
     () => (scoped ? previousRevenueCents(scoped, periodDays) : 0),
@@ -354,7 +356,13 @@ export function IntelligencePage() {
     return scopedLocations.flatMap((loc) => {
       const r = scopeResources(resources, loc.id);
       return r
-        ? [{ id: loc.id, name: loc.name, summary: recordedIntelligence(r, periodDays) }]
+        ? [
+            {
+              id: loc.id,
+              name: loc.name,
+              summary: recordedIntelligence(r, periodDays, loc.timezone ?? undefined),
+            },
+          ]
         : [];
     });
   }, [resources, scopedLocations, periodDays]);

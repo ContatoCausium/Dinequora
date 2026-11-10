@@ -15,7 +15,7 @@ import {
 } from "@/lib/whatsapp-service";
 import type { IntelligenceSummary } from "@/lib/intelligence-service";
 
-describe("Servora Intelligence — WhatsApp Service", () => {
+describe("Dinequora Intelligence — WhatsApp Service", () => {
   const orgId = "org-test-wa-123";
 
   it("initializes default WhatsApp settings in demo mode without exposing secrets", () => {

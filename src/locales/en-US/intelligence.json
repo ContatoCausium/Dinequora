@@ -1,5 +1,5 @@
 {
-  "title": "Servora Intelligence",
+  "title": "Dinequora Intelligence",
   "description": "Revenue, food cost and stock signals calculated from your recorded operations.",
   "allStores": "All stores",
   "demoBadge": "Demo tenant",
@@ -82,7 +82,7 @@
       "ledger": "Only orders that reached the ledger are counted; external sales channels are not connected.",
       "waste": "Waste and spoilage are not tracked as separate records yet.",
       "inventory": "Depends on minimum quantities being set for each item.",
-      "suppliers": "Delivery punctuality needs receiving to be recorded in Servora."
+      "suppliers": "Delivery punctuality needs receiving to be recorded in Dinequora."
     },
     "labels": {
       "revenue": "Gross revenue",
@@ -203,15 +203,15 @@
     "historyEmptyBody": "Saved simulated tests appear here. They are never sent.",
     "draft": "Simulated draft",
     "connectionStatus": "No provider connected",
-    "connectionBody": "Servora is prepared for the official WhatsApp Business Cloud API. No token or private key is stored in the browser.",
+    "connectionBody": "Dinequora is prepared for the official WhatsApp Business Cloud API. No token or private key is stored in the browser.",
     "connectionPending": "Connecting a provider requires a verified business number."
   },
   "message": {
     "noValue": "—",
-    "footer": "_Simulation by Servora Intelligence. This message was not sent._",
-    "financial_summary": "*Servora Intelligence · Financial summary*\nHello, *{{name}}*. Recorded figures for the last {{days}} days ({{scope}}):\n\n• Gross revenue: {{revenue}}\n• Net result: {{net}}\n• Food cost (COGS): {{cmv}}\n• Gross margin: {{margin}}\n• Low-stock items: {{lowStock}}",
-    "cmv_audit": "*Servora Intelligence · Food cost review*\nHello, *{{name}}*. Last {{days}} days ({{scope}}):\n\n• Food cost (COGS): {{cmv}}\n• Recipe cost: {{recipeCost}}\n• Gross revenue: {{revenue}}\n• Active recipes: {{recipes}}",
-    "low_stock_alert": "*Servora Intelligence · Low-stock alert*\nHello, *{{name}}*. {{lowStock}} of {{tracked}} tracked items are at or below minimum stock ({{scope}}).\n\nOpen Inventory in Servora to plan the next purchase order.",
-    "pulse": "*Servora Intelligence · Operations update*\nHello, *{{name}}*. Last {{days}} days ({{scope}}):\n\n• Gross revenue: {{revenue}}\n• Orders: {{orders}}"
+    "footer": "_Simulation by Dinequora Intelligence. This message was not sent._",
+    "financial_summary": "*Dinequora Intelligence · Financial summary*\nHello, *{{name}}*. Recorded figures for the last {{days}} days ({{scope}}):\n\n• Gross revenue: {{revenue}}\n• Net result: {{net}}\n• Food cost (COGS): {{cmv}}\n• Gross margin: {{margin}}\n• Low-stock items: {{lowStock}}",
+    "cmv_audit": "*Dinequora Intelligence · Food cost review*\nHello, *{{name}}*. Last {{days}} days ({{scope}}):\n\n• Food cost (COGS): {{cmv}}\n• Recipe cost: {{recipeCost}}\n• Gross revenue: {{revenue}}\n• Active recipes: {{recipes}}",
+    "low_stock_alert": "*Dinequora Intelligence · Low-stock alert*\nHello, *{{name}}*. {{lowStock}} of {{tracked}} tracked items are at or below minimum stock ({{scope}}).\n\nOpen Inventory in Dinequora to plan the next purchase order.",
+    "pulse": "*Dinequora Intelligence · Operations update*\nHello, *{{name}}*. Last {{days}} days ({{scope}}):\n\n• Gross revenue: {{revenue}}\n• Orders: {{orders}}"
   }
 }

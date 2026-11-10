@@ -31,7 +31,11 @@
     "empty": "Toque nos itens do cardápio para adicioná-los a esta comanda.",
     "decreaseAria": "Diminuir quantidade de {{name}}",
     "increaseAria": "Aumentar quantidade de {{name}}",
-    "removeAria": "Remover {{name}}"
+    "removeAria": "Remover {{name}}",
+    "mobileSummary_one": "{{count}} item · {{total}}",
+    "mobileSummary_other": "{{count}} itens · {{total}}",
+    "mobileEmpty": "O ticket está vazio",
+    "view": "Ver ticket"
   },
   "orderType": {
     "dine_in": "No salão",

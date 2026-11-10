@@ -78,13 +78,19 @@
   },
   "stats": {
     "members": "Members",
-    "membersHint": "{{owners}} owners · {{managers}} managers · {{staff}} staff",
+    "membersHint": "{{owners}} · {{managers}} · {{staff}}",
     "pending": "Pending invitations",
     "pendingHint": "Waiting to be accepted",
     "customized": "Customized access",
     "customizedHint": "Members with individual adjustments",
     "profiles": "Custom profiles",
-    "profilesHint": "Plus {{count}} templates"
+    "profilesHint": "Plus {{count}} templates",
+    "ownersCount_one": "{{count}} owner",
+    "ownersCount_other": "{{count}} owners",
+    "managersCount_one": "{{count}} manager",
+    "managersCount_other": "{{count}} managers",
+    "staffCount_one": "{{count}} staff member",
+    "staffCount_other": "{{count}} staff members"
   },
   "page": {
     "eyebrow": "Settings",
@@ -258,7 +264,7 @@
     "customSubtitle": "Reusable permission sets for this organization.",
     "ownerOnly": "Only owners create or edit profiles.",
     "systemTitle": "Templates",
-    "systemSubtitle": "Provided by Servora. Read-only — duplicate one to customize it.",
+    "systemSubtitle": "Provided by Dinequora. Read-only — duplicate one to customize it.",
     "template": "Template",
     "new": "New profile",
     "newTitle": "New profile",

@@ -20,13 +20,13 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/control/demo")({
   head: () => ({
     meta: [
-      { title: "Demo studio · Servora Control Center" },
+      { title: "Demo studio · Dinequora Control Center" },
       {
         name: "description",
         content:
           "Preview tenant branding, onboarding and location workflows with synthetic data only.",
       },
-      { property: "og:title", content: "Demo studio · Servora Control Center" },
+      { property: "og:title", content: "Demo studio · Dinequora Control Center" },
       {
         property: "og:description",
         content:

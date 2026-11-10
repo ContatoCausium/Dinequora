@@ -63,12 +63,12 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_authenticated/_app/locations")({
   head: () => ({
     meta: [
-      { title: "Locations · Servora" },
+      { title: "Locations · Dinequora" },
       {
         name: "description",
         content: "Manage restaurant locations, hours, time zones and store managers.",
       },
-      { property: "og:title", content: "Locations · Servora" },
+      { property: "og:title", content: "Locations · Dinequora" },
       {
         property: "og:description",
         content: "Manage restaurant locations, hours, time zones and store managers.",
@@ -465,7 +465,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
-              {t("common:actions.cancel", { defaultValue: t("form.cancel") })}
+              {t("form.cancel")}
             </Button>
             <Button type="submit" disabled={busy}>
               {t("create.submit")}
