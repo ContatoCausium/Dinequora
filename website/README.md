@@ -48,8 +48,29 @@ npm run typecheck
 | Variable | Purpose | If empty |
 | --- | --- | --- |
 | `VITE_APP_URL` | Base URL of the restaurant app. **Login** → `<url>/auth`, **Create account** → `<url>/signup`. | Relative `/auth` and `/signup` (same domain). `.env.development` sets `http://localhost:8080` (assumed app dev port; adjust if yours differs). |
-| `VITE_DEMO_REQUEST_ENDPOINT` | URL that receives demo requests as JSON `POST`. | Form validates, then opens **WhatsApp** (sales line) with the request pre-filled. The visitor sends it themselves; the site never claims it was delivered. |
-| `VITE_SITE_URL` | Public URL of this site. Adds `<link rel=canonical>`, `og:url`, and absolute OG image URLs at build time. | Relative OG image (some social crawlers will not show it). |
+| `VITE_APP_LINKS_ENABLED` | `true` turns the **Login** and **Create account** links on (header, mobile menu, footer). | **Off.** While the app is not published, those places show **Coming soon** / **Em breve** as plain text: no link to the app, no redirect to the demo form. |
+| `VITE_DEMO_REQUEST_ENDPOINT` | URL that receives demo requests as JSON `POST`. A cross-origin URL must also be added to `connect-src` in `public/_headers`; the build stops until it is. | Form validates, then opens **WhatsApp** (sales line) with the request pre-filled. The visitor sends it themselves; the site never claims it was delivered. |
+| `VITE_SITE_URL` | Public URL of this site. Adds `<link rel=canonical>`, `og:url`, absolute OG image URLs, `sitemap.xml` and the `Sitemap:` line of `robots.txt` at build time. | Relative OG image (some social crawlers will not show it); no sitemap; `robots.txt` without `Sitemap:`. |
+
+### Re-enabling Login and Create account
+
+When the application is live at its address, set `VITE_APP_LINKS_ENABLED=true` (and `VITE_APP_URL`) in the
+Cloudflare Pages environment variables and redeploy. No code change is needed; `src/test/app-links-enabled.test.tsx`
+covers that state.
+
+## Security headers, 404 and SEO files
+
+- `public/_headers` (Cloudflare Pages) sets on every response: a strict `Content-Security-Policy` (only this
+  site's own files; no inline scripts or styles, no third parties; `frame-ancestors 'none'`),
+  `Strict-Transport-Security: max-age=86400` (one day, **without** `includeSubDomains` or `preload`),
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy` and `Cross-Origin-Opener-Policy: same-origin`. The `dinequora.pages.dev` alias also gets
+  `X-Robots-Tag: noindex`; preview deployments get it from Cloudflare.
+- Keep the HTML free of inline `style=""`, `<style>`, inline `<script>` and `on…=` handlers: the CSP blocks them
+  (`src/test/security-seo.test.ts` checks `index.html` and `404.html`). React `style={…}` props are fine.
+- `public/404.html` (+ `404.css`): bilingual page, `noindex`. Because it exists, Cloudflare Pages answers unknown
+  paths with **HTTP 404** instead of the home page.
+- `robots.txt` and `sitemap.xml` are generated at build time (`src/build/seo.ts`) from `VITE_SITE_URL`.
 
 Demo request JSON payload: `name, email, restaurant, phone|null, locations, role, message|null, consent, language ("en"|"pt"), source, submittedAt`.
 `locations` and `role` are always sent as the English option values, whatever language the visitor used.

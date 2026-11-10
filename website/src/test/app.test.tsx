@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../App";
-import { appRoutes } from "../config/site";
+import { appRoutes, getAppRoutes } from "../config/site";
 import { featureCategories } from "../content/features";
 import { detectInitialLocale, STORAGE_KEY } from "../i18n/locale";
 
@@ -52,13 +52,39 @@ describe("Dinequora marketing site", () => {
     expect(container.querySelector("#demo")).not.toBeNull();
   });
 
-  it("points Login to the existing authentication route", () => {
-    render(<App />);
-    const logins = screen.getAllByRole("link", { name: "Login" });
-    expect(logins.length).toBeGreaterThan(0);
-    for (const l of logins) expect(l).toHaveAttribute("href", appRoutes.login);
-    expect(appRoutes.login.endsWith("/auth")).toBe(true);
-    expect(appRoutes.signup.endsWith("/signup")).toBe(true);
+  it("shows Login and Create account as coming soon, with no link to the unpublished app", () => {
+    expect(appRoutes).toBeNull();
+    const { container } = render(<App />);
+    // Desktop header: "Coming soon" takes the Login slot.
+    const header = container.querySelector("header")!;
+    const desktop = within(header).getByRole("link", { name: "Login — coming soon" });
+    expect(desktop).toHaveTextContent("Coming soon");
+    expect(desktop).toHaveAttribute("aria-disabled", "true");
+    expect(desktop).not.toHaveAttribute("href");
+    // Mobile menu (hidden until opened) and footer.
+    const mobile = container.querySelector("#mobile-menu")!;
+    expect(mobile.querySelector('[data-app-link="unavailable"]')).toHaveAccessibleName("Login — coming soon");
+    const footer = container.querySelector("footer")!;
+    expect(within(footer).getByRole("link", { name: "Login — coming soon" })).not.toHaveAttribute("href");
+    expect(within(footer).getByRole("link", { name: "Create account — coming soon" })).not.toHaveAttribute("href");
+    expect(container.querySelectorAll('[data-app-link="unavailable"]')).toHaveLength(4);
+    // No anchor anywhere points at the app, its routes, or is redirected to the demo form instead.
+    for (const a of container.querySelectorAll("a[href]")) {
+      expect(a.getAttribute("href")!, a.textContent ?? "").not.toMatch(/app\.dinequora\.com|\/auth\b|\/signup\b/);
+    }
+    expect(screen.queryAllByRole("link", { name: /^(Login|Create account)$/ })).toHaveLength(0);
+  });
+
+  it("keeps app links off unless explicitly enabled", () => {
+    expect(getAppRoutes({}, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "" }, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "false" }, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "1" }, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "true" }, "https://app.dinequora.com")).toEqual({
+      login: "https://app.dinequora.com/auth",
+      signup: "https://app.dinequora.com/signup",
+    });
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: " true " }, "")).toEqual({ login: "/auth", signup: "/signup" });
   });
 
   it("has no in-page links pointing at missing anchors", () => {
@@ -186,7 +212,10 @@ describe("Portuguese version", () => {
       "Implantação",
       "Sobre",
     ]);
-    expect(screen.getAllByRole("link", { name: "Entrar" })[0]).toHaveAttribute("href", appRoutes.login);
+    const header = document.querySelector("header")!;
+    expect(within(header).getByRole("link", { name: "Entrar — em breve" })).toHaveTextContent("Em breve");
+    const footer = document.querySelector("footer")!;
+    expect(within(footer).getByRole("link", { name: "Criar conta — em breve" })).toHaveTextContent("Em breve");
   });
 
   it("switches back to English and drops the URL parameter", async () => {
