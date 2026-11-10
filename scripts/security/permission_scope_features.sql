@@ -182,5 +182,36 @@ DO $$ BEGIN
  IF (SELECT updated_by FROM public.org_features WHERE org_id='b2200000-0000-4000-8000-000000000001' AND feature='integrations')
     IS DISTINCT FROM 'a2200000-0000-4000-8000-000000000005'::uuid THEN RAISE EXCEPTION 'FAIL updated_by'; END IF;
 END $$;
-SELECT 'PASS: cross-organization store denied both ways (has/any/assert/RLS orgs), no permission, no store, no membership, no session, anon, features off by default, disabled feature blocks owners, per-org switch by platform admin only, audited, direct writes denied';
+
+-- 4. (0023) A feature with dependent permissions or organization switches cannot be deleted or
+--    renamed, not even by the database owner; the three tables follow least privilege.
+DO $$
+DECLARE t text; p text; r text;
+BEGIN
+ BEGIN DELETE FROM public.feature_catalog WHERE key = 'integrations'; RAISE EXCEPTION 'FAIL feature with mappings deleted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ BEGIN UPDATE public.feature_catalog SET key = 'integrations_renamed' WHERE key = 'integrations'; RAISE EXCEPTION 'FAIL feature renamed';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ DELETE FROM public.feature_permissions WHERE feature = 'integrations';
+ BEGIN DELETE FROM public.feature_catalog WHERE key = 'integrations'; RAISE EXCEPTION 'FAIL feature with organization switches deleted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ IF NOT EXISTS (SELECT 1 FROM public.org_features WHERE feature = 'integrations') THEN RAISE EXCEPTION 'FAIL switch row lost'; END IF;
+ IF EXISTS (SELECT 1 FROM pg_constraint WHERE confrelid = 'public.feature_catalog'::regclass AND confdeltype <> 'r') THEN
+  RAISE EXCEPTION 'FAIL a foreign key to feature_catalog still cascades'; END IF;
+ FOREACH t IN ARRAY ARRAY['feature_catalog','org_features','feature_permissions'] LOOP
+  FOREACH p IN ARRAY ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'] LOOP
+   FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    IF has_table_privilege(r, 'public.' || t, p) THEN RAISE EXCEPTION 'FAIL % has % on %', r, p, t; END IF;
+   END LOOP;
+  END LOOP;
+  IF current_setting('server_version_num')::int >= 170000 THEN
+   FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    IF has_table_privilege(r, 'public.' || t, 'MAINTAIN') THEN RAISE EXCEPTION 'FAIL % has MAINTAIN on %', r, t; END IF;
+   END LOOP;
+  END IF;
+  IF has_table_privilege('anon', 'public.' || t, 'SELECT') THEN RAISE EXCEPTION 'FAIL anon reads %', t; END IF;
+  IF NOT has_table_privilege('authenticated', 'public.' || t, 'SELECT') THEN RAISE EXCEPTION 'FAIL authenticated cannot read %', t; END IF;
+ END LOOP;
+END $$;
+SELECT 'PASS: cross-organization store denied both ways (has/any/assert/RLS orgs), no permission, no store, no membership, no session, anon, features off by default, disabled feature blocks owners, per-org switch by platform admin only, audited, direct writes denied, features in use cannot be deleted or renamed, least privilege on feature tables';
 ROLLBACK;
