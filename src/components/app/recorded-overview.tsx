@@ -30,6 +30,7 @@ import { fmtDateTime } from "@/lib/format";
 import { financialResult, summarizeExpenses, todayIso } from "@/lib/expense-metrics";
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent, fmtQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { averageCents, multiplyQuantityCents, sumCents } from "@/lib/money";
 
 type Period = "today" | "7d" | "30d";
 const DAYS: Record<Period, number> = { today: 1, "7d": 7, "30d": 30 };
@@ -553,7 +554,7 @@ function roleViews(orders: RecordedOrder[], mapped: Mapped, userId: string, time
     cashier: {
       mySalesCents,
       myOrders: mine.length,
-      avgCents: mineSales.length ? Math.round(mySalesCents / mineSales.length) : 0,
+      avgCents: averageCents(mySalesCents, mineSales.length),
       openStore: open.length,
       recent: mine.slice(0, 5),
     },
@@ -570,8 +571,11 @@ function roleViews(orders: RecordedOrder[], mapped: Mapped, userId: string, time
     stock: {
       // null without inventory.costs: the backend sent no costs, so there is no value to show.
       valueCents: mapped.costsVisible
-        ? Math.round(
-            mapped.items.filter((i) => i.active).reduce((s, i) => s + i.quantity * i.costCents, 0),
+        ? // Same valuation as the Inventory screen: each item rounded once, like the server.
+          sumCents(
+            mapped.items
+              .filter((i) => i.active)
+              .map((i) => multiplyQuantityCents(i.quantity, i.costCents)),
           )
         : null,
       movesToday: mapped.movements.filter((m) => dayKey(m.createdAt, timeZone) === today).length,

@@ -1,5 +1,6 @@
 import { assertLocationAllowed, assertTenantContext, isLocationAllowed } from "./tenant-storage";
 import { MenuItem, ModifierGroup, ModifierOption } from "./menu-service";
+import { basisPointsFromPercent, lineTotalCents, saleTotals } from "./money";
 
 export type OrderType = "dine_in" | "takeout" | "delivery";
 
@@ -73,20 +74,32 @@ export function calculateItemTotal(
   quantity: number,
   modifiers: SelectedModifier[],
 ): number {
-  const modSum = modifiers.reduce((acc, m) => acc + m.priceCents, 0);
-  return (basePriceCents + modSum) * Math.max(1, quantity);
+  return lineTotalCents(
+    basePriceCents,
+    modifiers.map((m) => m.priceCents),
+    quantity,
+  );
 }
 
+/**
+ * Cart/order totals with the server's formula (create_pos_sale): the rate is first converted to the
+ * whole basis points the server receives, then tax = round((subtotal − discount) × bp / 10,000).
+ */
 export function calculateOrderSummary(
   items: OrderItem[],
-  taxRatePercent: number = 8.875,
+  taxRatePercent: number = 8.88,
   discountCents: number = 0,
 ): { subtotalCents: number; taxCents: number; totalCents: number } {
-  const subtotalCents = items.reduce((acc, item) => acc + item.subtotalCents, 0);
-  const taxableCents = Math.max(0, subtotalCents - discountCents);
-  const taxCents = Math.round((taxableCents * taxRatePercent) / 100);
-  const totalCents = taxableCents + taxCents;
-  return { subtotalCents, taxCents, totalCents };
+  const totals = saleTotals(
+    items.map((item) => item.subtotalCents),
+    discountCents,
+    basisPointsFromPercent(taxRatePercent),
+  );
+  return {
+    subtotalCents: totals.subtotalCents,
+    taxCents: totals.taxCents,
+    totalCents: totals.totalCents,
+  };
 }
 
 function getStorageKey(orgId: string): string {

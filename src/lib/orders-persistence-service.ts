@@ -6,6 +6,7 @@ import {
   submitOperationalSale,
 } from "./operational.functions";
 import type { SaleInput } from "./operational-contracts";
+import { basisPointsFromPercent } from "./money";
 
 // Server functions validate the session; RPCs enforce authorization and atomicity.
 // No direct-table write or local-success fallback is permitted.
@@ -58,7 +59,7 @@ export async function persistOrderToSupabase(
         ...(order.customer.tableNumber ? { tableNumber: order.customer.tableNumber } : {}),
         ...(order.specialInstructions ? { notes: order.specialInstructions } : {}),
         discountCents: order.discountCents,
-        taxRateBasisPoints: Math.round(order.taxRatePercent * 100),
+        taxRateBasisPoints: basisPointsFromPercent(order.taxRatePercent),
         items: saleItems(order.items),
         isSimulation: order.isSimulated,
       },
@@ -109,7 +110,7 @@ export async function persistFinalizedPOSSaleAtomic(
         orderType: session.orderType,
         customerName: session.customerName ?? "Walk-in",
         discountCents: session.discountCents,
-        taxRateBasisPoints: Math.round(session.taxRatePercent * 100),
+        taxRateBasisPoints: basisPointsFromPercent(session.taxRatePercent),
         items: saleItems(session.cart),
         paymentMethod: session.paymentMethod ?? "cash",
         isSimulation: false,

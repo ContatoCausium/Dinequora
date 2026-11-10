@@ -1,3 +1,5 @@
+import { formatMoney } from "./money";
+
 export function fmtCurrency(v: number, lng: string, compact = false) {
   return new Intl.NumberFormat(lng, {
     style: "currency",
@@ -10,15 +12,10 @@ export function fmtCurrency(v: number, lng: string, compact = false) {
 /**
  * Money stored as integer cents (every ledger, order, price and cost column).
  * Always pass cents here — never divide by 100 at call sites — so a value can't be shown 100x.
+ * Single implementation: money.ts formatMoney.
  */
 export function fmtMoneyCents(cents: number, lng: string, opts: { compact?: boolean } = {}) {
-  return new Intl.NumberFormat(lng, {
-    style: "currency",
-    currency: "USD",
-    notation: opts.compact ? "compact" : "standard",
-    minimumFractionDigits: opts.compact ? 0 : 2,
-    maximumFractionDigits: opts.compact ? 1 : 2,
-  }).format(cents / 100);
+  return formatMoney(Math.round(cents), lng, opts);
 }
 
 /** Stock and recipe quantities: at most `digits` decimals, trailing zeros dropped (2.9016 -> "2.9"). */

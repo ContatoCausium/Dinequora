@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseMoneyInput } from "@/lib/money";
 
 /** Backend error codes the inventory screens explain in plain language (inventory:errors.*). */
 const KNOWN_ERROR_CODES = [
@@ -90,10 +91,17 @@ export function OperationalCreateDialog({
   async function save() {
     if (busy) return;
     const q = Number(quantity);
-    const cents = Math.round(Number(price) * 100);
+    const cents = parseMoneyInput(price) ?? Number.NaN;
+    const extras = [discount, tax, shipping].map((v) => parseMoneyInput(v || "0"));
     const chosen = storeItems.find((i) => i.id === (itemId || storeItems[0]?.id));
     const sup = supplierId || suppliers[0]?.id;
-    if (!Number.isFinite(q) || q < 0 || !Number.isSafeInteger(cents) || cents < 0) {
+    if (
+      !Number.isFinite(q) ||
+      q < 0 ||
+      !Number.isSafeInteger(cents) ||
+      cents < 0 ||
+      (kind === "purchase" && extras.some((v) => v === null))
+    ) {
       toast.error(t("invalid"));
       return;
     }
@@ -119,9 +127,9 @@ export function OperationalCreateDialog({
           : {
               supplierId: sup ?? "",
               status: purchaseStatus,
-              discountCents: Math.round(Number(discount) * 100),
-              taxCents: Math.round(Number(tax) * 100),
-              shippingCents: Math.round(Number(shipping) * 100),
+              discountCents: extras[0] ?? 0,
+              taxCents: extras[1] ?? 0,
+              shippingCents: extras[2] ?? 0,
               items: [
                 { inventoryItemId: chosen?.id ?? "", quantityOrdered: q, unitPriceCents: cents },
               ],

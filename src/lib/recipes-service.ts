@@ -6,6 +6,8 @@ import {
   TenantContextError,
   writeTenantRecords,
 } from "./tenant-storage";
+import { multiplyQuantityCents, roundCents } from "./money";
+import { convertQuantity } from "./units";
 
 /** Store-restricted callers may only write store-specific recipes in their stores; org-wide recipes need an org-wide caller. */
 function assertRecipeWritable(
@@ -67,27 +69,13 @@ export interface IngredientAvailabilityAlert {
   isSufficient: boolean;
 }
 
-// Basic conversion table relative to standard base (mass in g, vol in ml, counts as 1)
+/**
+ * Recipe quantity in the stock item's unit, with the server's factors (units.ts =
+ * public.operational_unit_quantity). Units of different families cannot be converted; the server
+ * refuses such a recipe when it is saved, so the editor keeps the typed quantity for its preview.
+ */
 export function convertUnits(qty: number, from: RecipeUnit, to: UnitOfMeasure): number {
-  if (from === to) return qty;
-
-  // Weight conversion
-  if (from === "oz" && to === "lb") return qty / 16;
-  if (from === "lb" && to === "oz") return qty * 16;
-  if (from === "g" && to === "lb") return qty * 0.00220462;
-  if (from === "kg" && to === "lb") return qty * 2.20462;
-  if (from === "lb" && to === "kg") return qty * 0.453592;
-
-  // Volume conversion
-  if (from === "tsp" && to === "gal") return qty * 0.00130208;
-  if (from === "tbsp" && to === "gal") return qty * 0.00390625;
-  if (from === "cup" && to === "gal") return qty * 0.0625;
-  if (from === "oz" && to === "gal") return qty * 0.0078125;
-  if (from === "ml" && to === "gal") return qty * 0.000264172;
-  if (from === "l" && to === "gal") return qty * 0.264172;
-
-  // Default fallback if directly matching or untranslatable unit
-  return qty;
+  return convertQuantity(qty, from, to) ?? qty;
 }
 
 export function calculateIngredientCost(
@@ -99,7 +87,7 @@ export function calculateIngredientCost(
   const convertedQty = convertUnits(qty, unit, inventoryItem.unit);
   const wasteFactor = 1 + Math.max(0, wastePercentage) / 100;
   const netQty = convertedQty * wasteFactor;
-  const subtotalCostCents = Math.round(netQty * inventoryItem.costCents);
+  const subtotalCostCents = multiplyQuantityCents(netQty, inventoryItem.costCents);
   return {
     unitCostCents: inventoryItem.costCents,
     subtotalCostCents,
@@ -117,7 +105,7 @@ export function computeRecipeTotals(
 } {
   const totalCostCents = ingredients.reduce((acc, i) => acc + (i.subtotalCostCents || 0), 0);
   const safeServings = Math.max(1, servings || 1);
-  const costPerServingCents = Math.round(totalCostCents / safeServings);
+  const costPerServingCents = roundCents(totalCostCents / safeServings);
 
   let estimatedMarginPercent = 0;
   if (sellingPriceCents > 0) {

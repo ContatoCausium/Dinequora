@@ -4,6 +4,7 @@ import { dayKey } from "./period-metrics";
 // Shared period helpers live in period-metrics; re-exported here for existing imports.
 export { dayKey, expensesInPeriod } from "./period-metrics";
 import { netSalesCents, type RecordedOrder } from "./recorded-data";
+import { averageCents } from "./money";
 
 type LedgerEntry = Parameters<typeof ledgerMetrics>[0][number];
 
@@ -63,7 +64,7 @@ export function buildReport(input: {
     revenueCents: ledger.revenueCents,
     cogsCents: ledger.cogsCents,
     orderCount: sales.length,
-    avgTicketCents: sales.length ? Math.round(orderNet / sales.length) : 0,
+    avgTicketCents: averageCents(orderNet, sales.length),
     daily: [...daily].map(([day, cents]) => ({ day, cents })),
     daysWithSales: [...daily.values()].filter((v) => v > 0).length,
     byStore: [...byStore].map(([locationId, v]) => ({ locationId, ...v })).sort(sortDesc),

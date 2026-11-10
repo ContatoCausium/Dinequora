@@ -17,6 +17,7 @@ import { buildReport, dayKey, expensesInPeriod } from "@/lib/report-metrics";
 import { financialResult, todayIso } from "@/lib/expense-metrics";
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { centsToDecimalString } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/reports")({
   head: () => ({
@@ -197,7 +198,7 @@ function ReportsPage() {
                   downloadCsv(
                     file("daily"),
                     [t("csv.day"), t("csv.sales")],
-                    report.daily.map((d) => [d.day, (d.cents / 100).toFixed(2)]),
+                    report.daily.map((d) => [d.day, centsToDecimalString(d.cents)]),
                   )
                 }
               />
@@ -236,7 +237,7 @@ function ReportsPage() {
                       report.byStore.map((s) => [
                         storeName(s.locationId),
                         s.orders,
-                        (s.cents / 100).toFixed(2),
+                        centsToDecimalString(s.cents),
                       ]),
                     )
                   }
@@ -282,7 +283,7 @@ function ReportsPage() {
                     downloadCsv(
                       file("products"),
                       [t("csv.product"), t("csv.qty"), t("csv.sales")],
-                      report.products.map((p) => [p.name, p.qty, (p.cents / 100).toFixed(2)]),
+                      report.products.map((p) => [p.name, p.qty, centsToDecimalString(p.cents)]),
                     )
                   }
                 />

@@ -72,6 +72,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { centsToDecimalString, parseMoneyInput } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/pos")({
   head: () => ({
@@ -121,10 +122,8 @@ function readableDetail(err: unknown): string | undefined {
   return msg;
 }
 
-const parseAmountCents = (value: string) => {
-  const n = parseFloat(value.replace(",", "."));
-  return Number.isFinite(n) ? Math.round(Math.max(0, n) * 100) : 0;
-};
+// Typed amounts are parsed from the text (money.ts): "1,234.50" is $1,234.50, not $1.23.
+const parseAmountCents = (value: string) => parseMoneyInput(value) ?? 0;
 
 export function POSPage() {
   const { t, i18n } = useTranslation("pos");
@@ -316,7 +315,7 @@ export function POSPage() {
 
   const handleStartCheckout = () => {
     if (session.cart.length === 0 || submittingSale) return;
-    setTenderedInput((session.totalCents / 100).toFixed(2));
+    setTenderedInput(centsToDecimalString(session.totalCents));
     setCheckoutOpen(true);
   };
 

@@ -77,6 +77,13 @@ import {
 import type { Supplier, PurchaseOrder, POStatus } from "@/lib/suppliers-purchases-service";
 import { DemoBadge } from "@/components/app/brand-mark";
 import { fmtDate, fmtMoneyCents, fmtPercent, fmtQuantity } from "@/lib/format";
+import {
+  centsFromDollars,
+  centsToDecimalString,
+  multiplyQuantityCents,
+  parseMoneyInput,
+  sumCents,
+} from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/inventory")({
   head: () => ({
@@ -383,7 +390,9 @@ export function InventoryPage() {
       count: items.length,
       low: items.filter((i) => stockStatus(i) === "low").length,
       out: items.filter((i) => stockStatus(i) === "out").length,
-      valueCents: Math.round(items.reduce((s, i) => s + Math.max(0, i.quantity) * i.costCents, 0)),
+      valueCents: sumCents(
+        items.map((i) => multiplyQuantityCents(Math.max(0, i.quantity), i.costCents)),
+      ),
     }),
     [items],
   );
@@ -545,7 +554,7 @@ export function InventoryPage() {
     po.items.forEach((it) => {
       initial[it.id] = {
         qty: Math.max(0, it.quantityOrdered - it.quantityReceived),
-        price: it.unitPriceCents / 100,
+        price: Number(centsToDecimalString(it.unitPriceCents)),
         note: "",
       };
     });
@@ -560,7 +569,7 @@ export function InventoryPage() {
       const payload = Object.entries(receiveInputs).map(([itemId, val]) => ({
         itemId,
         receivedNow: val.qty,
-        priceVerifiedCents: Math.round(val.price * 100),
+        priceVerifiedCents: centsFromDollars(val.price),
         divergenceReason: val.note,
       }));
       await receiveOperationalPurchase({
@@ -1590,14 +1599,11 @@ export function InventoryPage() {
                   type="number"
                   step="0.50"
                   min="0"
-                  value={(recipeFormData.sellingPriceCents / 100).toFixed(2)}
+                  value={centsToDecimalString(recipeFormData.sellingPriceCents)}
                   onChange={(e) =>
                     setRecipeFormData({
                       ...recipeFormData,
-                      sellingPriceCents: Math.max(
-                        0,
-                        Math.round(parseFloat(e.target.value || "0") * 100),
-                      ),
+                      sellingPriceCents: Math.max(0, parseMoneyInput(e.target.value || "0") ?? 0),
                     })
                   }
                 />
@@ -1764,7 +1770,7 @@ export function InventoryPage() {
             {selectedPOForReceive?.items.map((it) => {
               const currentInput = receiveInputs[it.id] ?? {
                 qty: 0,
-                price: it.unitPriceCents / 100,
+                price: Number(centsToDecimalString(it.unitPriceCents)),
                 note: "",
               };
               return (

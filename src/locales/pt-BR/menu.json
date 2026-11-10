@@ -41,6 +41,7 @@
     "category": "Categoria",
     "selectCategory": "Selecione a categoria…",
     "price": "Preço (USD)",
+    "invalidPrice": "Informe um preço válido, por exemplo 12,50.",
     "prepTime": "Tempo Estimado de Preparo (minutos)",
     "imageUrl": "URL da Imagem",
     "notes": "Observações Internas para a Cozinha",

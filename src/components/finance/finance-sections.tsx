@@ -33,6 +33,7 @@ import {
   type MonthPoint,
   type StoreResult,
 } from "./finance-model";
+import { averageCents } from "@/lib/money";
 
 /** Shared row actions and display context passed down from the page. */
 export interface ExpenseActions {
@@ -709,7 +710,7 @@ export function CashflowSection({
           label={t("cashflow.weeklyRevenue")}
           value={fmtMoneyCents(last28RevenueCents, lng)}
           hint={t("cashflow.weeklyRevenueHint", {
-            avg: fmtMoneyCents(Math.round(last28RevenueCents / 4), lng),
+            avg: fmtMoneyCents(averageCents(last28RevenueCents, 4), lng),
           })}
         />
         <StatTile

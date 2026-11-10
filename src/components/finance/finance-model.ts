@@ -9,6 +9,7 @@ import {
 import type { Resources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
 import { dayKey } from "@/lib/period-metrics";
+import { centsToDecimalString, parseMoneyInput } from "@/lib/money";
 
 /**
  * Pure view-model helpers for the Finance screen. Every figure is derived from recorded rows:
@@ -276,22 +277,7 @@ export function markPaidPayload(e: Expense, nowIso: string) {
 
 /** Parses a user-typed amount ("1234.5", "1,234.50", "1.234,50") into integer cents; null if invalid. */
 export function parseAmountToCents(input: string): number | null {
-  const raw = input.trim().replace(/\s/g, "");
-  if (!raw || !/^[\d.,]+$/.test(raw)) return null;
-  const lastComma = raw.lastIndexOf(",");
-  const lastDot = raw.lastIndexOf(".");
-  const decimalSep = lastComma > lastDot ? "," : ".";
-  const decIdx = raw.lastIndexOf(decimalSep);
-  const digitsAfter = decIdx >= 0 ? raw.length - decIdx - 1 : 0;
-  let normalized: string;
-  if (decIdx >= 0 && digitsAfter > 0 && digitsAfter <= 2) {
-    normalized = raw.slice(0, decIdx).replace(/[.,]/g, "") + "." + raw.slice(decIdx + 1);
-  } else {
-    normalized = raw.replace(/[.,]/g, "");
-  }
-  const value = Number(normalized);
-  if (!Number.isFinite(value)) return null;
-  return Math.round(value * 100);
+  return parseMoneyInput(input.replace(/\s/g, ""));
 }
 
 /** Series colors in fixed order (dataviz rule: tokens chart-1..6, never raw palette values). */
@@ -319,7 +305,7 @@ export function initialFormValues(
     return {
       locationId: editing.locationId,
       description: editing.description,
-      amount: (editing.amountCents / 100).toFixed(2),
+      amount: centsToDecimalString(editing.amountCents),
       dueDate: editing.dueDate,
       category: editing.category,
       recurrence: editing.recurrence,
