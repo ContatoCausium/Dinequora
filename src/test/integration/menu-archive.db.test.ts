@@ -11,6 +11,11 @@
 // manager as manager and the QA kitchen staff as staff, both with the store) plus a second
 // organization owned by the tenant-B owner that uses the SAME category client id; it writes menu
 // rows only there and removes exactly those organizations at the end.
+//
+// Order: the cases run sequentially (describe.sequential) because each one starts from the menu
+// state the previous one left. Sessions: the clients are only signed out locally; a global sign-out
+// would revoke the sessions of the shared QA accounts that the other database test files use in
+// parallel.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -70,7 +75,7 @@ const visibleCategories = async (c: SupabaseClient<Database>, orgId: string) => 
   return (data ?? []).map((r) => r.client_id);
 };
 
-describe.skipIf(!ENABLED)("menu category archive against the database (0026)", () => {
+describe.skipIf(!ENABLED).sequential("menu category archive against the database (0026)", () => {
   let sql: QaSql;
   let org: IsolatedOrg;
   let other: IsolatedOrg;
@@ -148,7 +153,9 @@ describe.skipIf(!ENABLED)("menu category archive against the database (0026)", (
   }, 120_000);
 
   afterAll(async () => {
-    for (const c of [owner, manager, staff, ownerB]) if (c) await c.auth.signOut();
+    // local scope: drops this client's session only, never the other sessions of the shared accounts
+    for (const c of [owner, manager, staff, ownerB])
+      if (c) await c.auth.signOut({ scope: "local" });
     if (org && other) {
       sql(dropIsolatedOrgsSql([org.orgId, other.orgId]));
       expect(Number(sql(countOrgRowsSql([org.orgId, other.orgId]))), "left behind").toBe(0);
@@ -168,10 +175,19 @@ describe.skipIf(!ENABLED)("menu category archive against the database (0026)", (
     ).toBe(ownerUserId);
   });
 
-  it("archiving it again succeeds and changes nothing", async () => {
+  it("archiving it again succeeds without changing the menu, and is audited again", async () => {
     const { error } = await archive(owner, org.orgId, "category", "seasonal");
     expect(error).toBeNull();
     expect(await visibleCategories(owner, org.orgId)).toEqual(["desserts", "drinks"]);
+    // same as before 0026 and as the product branch: every successful call is audited
+    expect(auditCount("seasonal")).toBe(2);
+    expect(
+      Number(
+        sql(
+          `select count(*) from public.audit_logs where org_id = '${org.orgId}' and action = 'menu.archived' and target = 'seasonal' and actor_id = '${ownerUserId}'`,
+        ),
+      ),
+    ).toBe(2);
   });
 
   it("a category that does not exist is refused and nothing is written", async () => {
@@ -197,6 +213,9 @@ describe.skipIf(!ENABLED)("menu category archive against the database (0026)", (
   it("manager and staff cannot archive a category; nothing changes", async () => {
     const m = await archive(manager, org.orgId, "category", "drinks");
     expect(m.error?.message).toBe("forbidden");
+    // authorization before existence: a manager naming a missing category gets forbidden, not not_found
+    const missing = await archive(manager, org.orgId, "category", "no-such-category");
+    expect(missing.error?.message).toBe("forbidden");
     const s = await archive(staff, org.orgId, "category", "drinks");
     expect(s.error?.message).toBe("permission_denied");
     expect(await visibleCategories(owner, org.orgId)).toEqual(["drinks"]);
