@@ -1,22 +1,22 @@
 /**
  * Language support: English (default, US market) and Brazilian Portuguese.
  *
- * The active language comes from, in order:
- *   1. the `?lang=en|pt` URL parameter (shareable links),
- *   2. the visitor's last choice (localStorage),
- *   3. the browser language (Portuguese browsers get Portuguese),
- *   4. English.
+ * Each language has its own address: English at `/`, Portuguese at `/pt/` (a static page with
+ * Portuguese metadata, see src/i18n/meta.ts). The active language comes from, in order:
+ *   1. the path (`/pt/` is always Portuguese),
+ *   2. the legacy `?lang=en|pt` parameter (old shared links; the address then moves to the right path),
+ *   3. the visitor's last choice (localStorage),
+ *   4. the browser language (Portuguese browsers get Portuguese),
+ *   5. English.
  */
 import { createContext, useContext } from "react";
+import { htmlLang, localeFromPath, localePath, pageMeta, type Locale } from "./meta";
 
-export type Locale = "en" | "pt";
+export { htmlLang, localeFromPath, localePath, pageMeta, type Locale };
 
 export const LOCALES: readonly Locale[] = ["en", "pt"];
 
 export const STORAGE_KEY = "dinequora.lang";
-
-/** Value for the `<html lang>` attribute. */
-export const htmlLang: Record<Locale, string> = { en: "en-US", pt: "pt-BR" };
 
 export const localeName: Record<Locale, string> = { en: "English", pt: "Português" };
 
@@ -31,6 +31,8 @@ export function pick<T>(locale: Locale, en: T, pt: T): T {
 
 export function detectInitialLocale(): Locale {
   if (typeof window === "undefined") return "en";
+  const fromPath = localeFromPath(window.location.pathname);
+  if (fromPath) return fromPath;
   const fromUrl = new URLSearchParams(window.location.search).get("lang");
   if (isLocale(fromUrl)) return fromUrl;
   try {
@@ -56,17 +58,3 @@ export function useT(): <T>(en: T, pt: T) => T {
   const { locale } = useContext(LocaleContext);
   return (en, pt) => pick(locale, en, pt);
 }
-
-/** Page title and description per language (kept in sync with index.html for English). */
-export const pageMeta: Record<Locale, { title: string; description: string }> = {
-  en: {
-    title: "Dinequora — Restaurant Intelligence Platform",
-    description:
-      "Dinequora is the restaurant management platform for independent restaurants and multi-location groups: point of sale, kitchen display, inventory, purchasing, expenses, financial reports, and team permissions in one place.",
-  },
-  pt: {
-    title: "Dinequora — Plataforma de Inteligência para Restaurantes",
-    description:
-      "Dinequora é a plataforma de gestão para restaurantes independentes e grupos com várias unidades: PDV, tela da cozinha, estoque, compras, despesas, relatórios financeiros e permissões da equipe em um só lugar.",
-  },
-};

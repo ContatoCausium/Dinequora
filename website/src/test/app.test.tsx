@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../App";
-import { appRoutes } from "../config/site";
+import { getAppRoutes } from "../config/site";
 import { featureCategories } from "../content/features";
 import { detectInitialLocale, STORAGE_KEY } from "../i18n/locale";
+import { addressFor } from "../i18n/meta";
 
 beforeAll(() => {
   // jsdom lacks these browser APIs used by the layout helpers.
@@ -52,13 +53,16 @@ describe("Dinequora marketing site", () => {
     expect(container.querySelector("#demo")).not.toBeNull();
   });
 
-  it("points Login to the existing authentication route", () => {
-    render(<App />);
-    const logins = screen.getAllByRole("link", { name: "Login" });
-    expect(logins.length).toBeGreaterThan(0);
-    for (const l of logins) expect(l).toHaveAttribute("href", appRoutes.login);
-    expect(appRoutes.login.endsWith("/auth")).toBe(true);
-    expect(appRoutes.signup.endsWith("/signup")).toBe(true);
+  it("keeps app links off unless explicitly enabled", () => {
+    expect(getAppRoutes({}, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "" }, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "false" }, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "1" }, "https://app.dinequora.com")).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "true" }, "https://app.dinequora.com")).toEqual({
+      login: "https://app.dinequora.com/auth",
+      signup: "https://app.dinequora.com/signup",
+    });
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: " true " }, "")).toEqual({ login: "/auth", signup: "/signup" });
   });
 
   it("has no in-page links pointing at missing anchors", () => {
@@ -175,7 +179,9 @@ describe("Portuguese version", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Comande seu restaurante\.\s*Não o caos\./);
     expect(document.documentElement.lang).toBe("pt-BR");
     expect(document.title).toMatch(/Plataforma de Inteligência para Restaurantes/);
-    expect(window.location.search).toBe("?lang=pt");
+    // The address moves to the static Portuguese page.
+    expect(window.location.pathname).toBe("/pt/");
+    expect(window.location.search).toBe("");
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe("pt");
 
     const nav = screen.getByRole("navigation", { name: "Principal" });
@@ -186,17 +192,20 @@ describe("Portuguese version", () => {
       "Implantação",
       "Sobre",
     ]);
-    expect(screen.getAllByRole("link", { name: "Entrar" })[0]).toHaveAttribute("href", appRoutes.login);
   });
 
-  it("switches back to English and drops the URL parameter", async () => {
+  it("switches back to English at / and keeps the current section", async () => {
     const user = userEvent.setup();
-    render(<App initialLocale="pt" />);
+    window.history.replaceState(null, "", "/pt/#pricing");
+    render(<App />);
+    expect(window.location.pathname).toBe("/pt/");
     const switcher = screen.getAllByRole("group", { name: "Idioma" })[0]!;
     await user.click(within(switcher).getByRole("button", { name: "English" }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Run your restaurant/);
     expect(document.documentElement.lang).toBe("en-US");
+    expect(window.location.pathname).toBe("/");
     expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("#pricing");
   });
 
   it("keeps the same prices in US dollars", () => {
@@ -273,7 +282,17 @@ describe("Portuguese version", () => {
 });
 
 describe("initial language detection", () => {
-  it("prefers the URL parameter, then the saved choice, then English", () => {
+  it("uses the path first: /pt/ is always Portuguese, even with an English preference", () => {
+    window.localStorage.setItem(STORAGE_KEY, "en");
+    window.history.replaceState(null, "", "/pt/");
+    expect(detectInitialLocale()).toBe("pt");
+    window.history.replaceState(null, "", "/pt");
+    expect(detectInitialLocale()).toBe("pt");
+    window.history.replaceState(null, "", "/pt/#pricing");
+    expect(detectInitialLocale()).toBe("pt");
+  });
+
+  it("on /, prefers the legacy URL parameter, then the saved choice, then English", () => {
     window.history.replaceState(null, "", "/?lang=pt");
     expect(detectInitialLocale()).toBe("pt");
     window.history.replaceState(null, "", "/");
@@ -281,5 +300,21 @@ describe("initial language detection", () => {
     expect(detectInitialLocale()).toBe("pt");
     window.localStorage.clear();
     expect(detectInitialLocale()).toBe("en");
+  });
+
+  it("moves old ?lang=pt links to /pt/, keeping other parameters and the section", () => {
+    window.history.replaceState(null, "", "/?lang=pt&utm_source=ad#demo");
+    render(<App />);
+    expect(window.location.pathname).toBe("/pt/");
+    expect(window.location.search).toBe("?utm_source=ad");
+    expect(window.location.hash).toBe("#demo");
+    expect(document.documentElement.lang).toBe("pt-BR");
+  });
+
+  it("computes the address of each language", () => {
+    expect(addressFor("pt", "https://dinequora.com/")).toBe("/pt/");
+    expect(addressFor("en", "https://dinequora.com/pt/")).toBe("/");
+    expect(addressFor("pt", "https://dinequora.com/?lang=pt#pricing")).toBe("/pt/#pricing");
+    expect(addressFor("en", "https://dinequora.com/pt/?lang=pt&x=1#faq")).toBe("/?x=1#faq");
   });
 });

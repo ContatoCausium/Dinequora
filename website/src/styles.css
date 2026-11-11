@@ -319,3 +319,11 @@ body::after {
     filter: none !important;
   }
 }
+
+/* ---------- No-JavaScript message (index.html <noscript>; a class, not an inline style, for the CSP) ---------- */
+.noscript-message {
+  padding: 2rem;
+  font-family: system-ui, sans-serif;
+  color: #f8fafc;
+  background: #0b1320;
+}

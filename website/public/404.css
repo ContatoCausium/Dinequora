@@ -1,0 +1,99 @@
+/* Stand-alone styles of the 404 page (no JavaScript, no inline styles: compatible with the CSP). */
+:root {
+  --emerald: #10b981;
+  --navy: #0b1320;
+  --offwhite: #f8fafc;
+  --mist: #a9b9c9;
+  --line: rgb(169 185 201 / 0.14);
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+body {
+  /* Solid navy: the official dark lockup has a navy background of its own. */
+  background: var(--navy);
+  color: var(--offwhite);
+  font-family: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.nf {
+  margin: 0 auto;
+  max-width: 40rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 3rem 1.25rem 4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.nf-logo {
+  display: inline-block;
+  align-self: flex-start;
+  margin-left: -0.75rem;
+}
+.nf-logo img {
+  display: block;
+  height: 4rem;
+  width: auto;
+}
+.nf-code {
+  margin: 2.5rem 0 0.5rem;
+  color: var(--emerald);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+.nf-block + .nf-block {
+  margin-top: 2.25rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--line);
+}
+h1,
+h2 {
+  margin: 0;
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+h2 {
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+}
+p {
+  margin: 0.9rem 0 0;
+  color: var(--mist);
+  line-height: 1.6;
+}
+.nf-button {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 1.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: 999px;
+  background: var(--emerald);
+  color: var(--navy);
+  font-weight: 600;
+  text-decoration: none;
+}
+.nf-button:hover {
+  background: #34d399;
+}
+.nf-button-quiet {
+  background: transparent;
+  color: var(--offwhite);
+  box-shadow: inset 0 0 0 1px rgb(16 185 129 / 0.45);
+}
+.nf-button-quiet:hover {
+  background: rgb(16 185 129 / 0.1);
+}
+a:focus-visible {
+  outline: 2px solid var(--emerald);
+  outline-offset: 3px;
+}
