@@ -184,6 +184,20 @@ export function centsToDecimalString(cents: Cents): string {
 const CURRENCY_AFFIX = /^(?:US\$|R\$|\$|USD|BRL)\s*|\s*(?:US\$|R\$|\$|USD|BRL)$/gi;
 const MAX_CENTS = BigInt(Number.MAX_SAFE_INTEGER);
 
+/**
+ * Hard limits of a typed amount, checked BEFORE any BigInt arithmetic so that no input can stall
+ * the interface or throw out of a change handler (10n ** 200000000n takes seconds, then exceeds
+ * the BigInt size). Anything beyond them is refused (null), never turned into 0.
+ * - Length: the largest valid amount, Number.MAX_SAFE_INTEGER cents ($90,071,992,547,409.91), has
+ *   16 digits; 60 characters leave room for a sign, separators, a currency affix and an exponent.
+ * - Exponent (number fields may give "1e-7"): |exponent| > 40 is not an amount — 10^20 dollars is
+ *   already beyond the range, and 10^-40 dollars rounds to 0 cents.
+ * - Decimals: more than 40 fractional digits is not an amount either.
+ */
+export const MONEY_INPUT_MAX_LENGTH = 60;
+export const MONEY_INPUT_MAX_EXPONENT = 40;
+export const MONEY_INPUT_MAX_SCALE = 40;
+
 export interface ParseMoneyOptions {
   allowNegative?: boolean;
   /**
@@ -208,6 +222,7 @@ export function parseMoneyInput(text: string, opts: ParseMoneyOptions = {}): Cen
   if (opts.format === "number-input") return parseNumberInput(text, opts);
   // trim() and \s (currency affixes) already cover the no-break space of formatted amounts.
   let s = text.trim();
+  if (s.length > MONEY_INPUT_MAX_LENGTH) return null; // before BigInt(...) of a huge digit string
   let negative = false;
   if (s.startsWith("-")) {
     negative = true;
@@ -268,13 +283,21 @@ export function parseMoneyInput(text: string, opts: ParseMoneyOptions = {}): Cen
   return Number(negative ? -cents : cents) || 0;
 }
 
-/** The value of an <input type="number"> → cents (see ParseMoneyOptions.format). */
+/**
+ * The value of an <input type="number"> → cents (see ParseMoneyOptions.format). The limits above
+ * are enforced on the text (length, exponent of at most 3 digits and within ±MONEY_INPUT_MAX_EXPONENT)
+ * before decimalOfText builds any BigInt, so the cost of a call is bounded whatever is typed.
+ */
 function parseNumberInput(text: string, opts: ParseMoneyOptions): Cents | null {
   const s = text.trim();
-  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return null;
+  if (s.length > MONEY_INPUT_MAX_LENGTH) return null;
+  const m = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e([-+]?\d{1,3}))?$/i.exec(s);
+  if (!m) return null;
+  const exponent = m[1] === undefined ? 0 : Number(m[1]); // at most 3 digits: always exact
+  if (Math.abs(exponent) > MONEY_INPUT_MAX_EXPONENT) return null;
   const d = decimalOfText(s);
   if (d.digits < 0n && !opts.allowNegative) return null;
-  if (d.scale > 40) return null; // absurd precision (e.g. "1e-99"): not an amount
+  if (d.scale > MONEY_INPUT_MAX_SCALE) return null; // absurd precision (e.g. "1e-41"): not an amount
   const cents = centsOfDecimal(d);
   if (cents > MAX_CENTS || cents < -MAX_CENTS) return null;
   return Number(cents) || 0;

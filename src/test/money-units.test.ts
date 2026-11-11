@@ -16,6 +16,9 @@ import {
   roundCents,
   saleTotals,
   sumCents,
+  MONEY_INPUT_MAX_EXPONENT,
+  MONEY_INPUT_MAX_LENGTH,
+  MONEY_INPUT_MAX_SCALE,
 } from "@/lib/money";
 import { convertQuantity, unitFamily } from "@/lib/units";
 import { calculateOrderSummary } from "@/lib/orders-service";
@@ -218,6 +221,74 @@ describe("money: number fields (P1 — <input type=number> values)", () => {
     expect(centsFromDollars(9.995)).toBe(1000);
     expect(centsFromDollars(12.345)).toBe(1235);
     expect(centsFromDollars(4.35)).toBe(435);
+  });
+});
+
+// Audit follow-up: the exponent and the length of a typed amount are bounded BEFORE any BigInt
+// arithmetic, so no input can stall the interface or throw out of a change handler.
+describe("money: number fields cannot stall the interface (exponent and length limits)", () => {
+  it.each([
+    ["1e2", 10000],
+    ["1e+2", 10000],
+    ["1e-2", 1],
+    ["1.5e-1", 15],
+    ["12.5e1", 12500],
+    ["2.5e-3", 0], // a quarter of a cent rounds to 0, exactly like "0.0025"
+    ["-0", 0],
+    ["12.34", 1234],
+    ["0.125", 13],
+    ["0".repeat(MONEY_INPUT_MAX_LENGTH - 5) + "12.34", 1234], // exactly at the length limit
+  ])("%s -> %i cents", (value, cents) => {
+    expect(centsFromNumberInput(value)).toBe(cents);
+  });
+
+  it.each([
+    "1e+200000000", // took ~19 s of CPU before the limit
+    "1e-200000000",
+    "1e+41",
+    "1e-41",
+    "1e999",
+    "1e+1000",
+    "1e40", // beyond the largest amount
+    "1" + "0".repeat(MONEY_INPUT_MAX_LENGTH), // one character over the limit
+    "0." + "0".repeat(MONEY_INPUT_MAX_SCALE + 1),
+    "",
+    "   ",
+    "abc",
+    "1e",
+    "e5",
+    "1e5.5",
+  ])("%j is refused (null): never 0, never an exception", (value) => {
+    expect(centsFromNumberInput(value)).toBeNull();
+    expect(centsFromNumberInput(value, { allowNegative: true })).toBeNull();
+  });
+
+  it("extreme exponents and huge digit strings are refused in milliseconds, in both formats", () => {
+    const inputs = [
+      "1e+200000000",
+      "1e-200000000",
+      "-1e+200000000",
+      "9".repeat(10_000),
+      "1." + "9".repeat(10_000),
+      "9".repeat(10_000) + "e+999",
+    ];
+    const t0 = performance.now();
+    for (const v of inputs) {
+      expect(centsFromNumberInput(v)).toBeNull();
+      expect(parseMoneyInput(v)).toBeNull();
+    }
+    expect(performance.now() - t0).toBeLessThan(50);
+  });
+
+  it("the limits are the documented constants", () => {
+    expect([MONEY_INPUT_MAX_LENGTH, MONEY_INPUT_MAX_EXPONENT, MONEY_INPUT_MAX_SCALE]).toEqual([
+      60, 40, 40,
+    ]);
+    expect(centsFromNumberInput(`1e${MONEY_INPUT_MAX_EXPONENT}`)).toBeNull(); // out of range, not a stall
+    expect(centsFromNumberInput(`1e-${MONEY_INPUT_MAX_SCALE}`)).toBe(0); // 10^-40 dollars: 0 cents
+    expect(centsFromNumberInput(`1e-${MONEY_INPUT_MAX_SCALE + 1}`)).toBeNull();
+    expect(centsFromNumberInput("0".repeat(MONEY_INPUT_MAX_LENGTH - 4) + "12.34")).toBeNull(); // 61 chars
+    expect(parseMoneyInput("0".repeat(MONEY_INPUT_MAX_LENGTH - 4) + "12.34")).toBeNull();
   });
 });
 
