@@ -316,12 +316,15 @@ await rpc(b, "save_operational_record", {
     active: true,
   },
 });
-await rpc(b, "persist_finalized_pos_sale_atomic", {
+// Tenant B configures its own store rate (0025) before its first sale.
+await rpc(b, "set_location_tax_rate", { _location_id: bLoc.id, _tax_rate_ppm: 70000 });
+await rpc(b, "persist_finalized_pos_sale_atomic_v2", {
   _org_id: bOrg,
   _location_id: bLoc.id,
   _type: "takeout",
   _customer_name: "Tenant B",
   _items: [{ product_id: "prod-b", quantity: 1, modifiers: [] }],
+  _tax_rate_ppm: 70000,
   _client_order_id: "qa-b-1",
   _payment_method: "cash",
 });
