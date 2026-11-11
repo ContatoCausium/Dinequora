@@ -17,6 +17,8 @@
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
 #      answer in its own organization and is refused for stores of another organization
+#   5c. 0025 concurrency: a sale and a store rate change in two PostgreSQL sessions are serialized
+#      (FOR SHARE / FOR UPDATE); no sale is recorded with a rate the server did not validate
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -75,6 +77,11 @@ echo "::endgroup::"
 
 echo "::group::5b. permission equivalence (0022)"
 run_check scripts/security/permission_equivalence.sql
+echo "::endgroup::"
+
+echo "::group::5c. sale vs rate change concurrency (0025, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" CREDS_FILE="$CREDS_FILE" \
+  node scripts/security/tax_rate_concurrency.mjs | tee "$ARTIFACTS/tax-rate-concurrency.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

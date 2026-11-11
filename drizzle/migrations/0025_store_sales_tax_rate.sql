@@ -16,7 +16,9 @@
 --     _tax_rate_ppm: the rate the client DISPLAYED, used only as a confirmation. The tax charged
 --     is always round((subtotal - discount) x store_ppm / 1,000,000) from the store's own rate; a
 --     store without a rate raises tax_rate_not_configured and a client whose rate differs from
---     the store's raises tax_rate_changed (never silently charged a different amount).
+--     the store's raises tax_rate_changed (never silently charged a different amount). The sale
+--     reads the store row FOR SHARE, so it is serialized with set_location_tax_rate (FOR UPDATE):
+--     a sale never records a rate that a concurrent change has already replaced.
 --   - the previous signatures keep working (policy: a signature change is a new function) and
 --     now delegate to v2 with bp x 100, so they enforce the same rule: an old client can confirm
 --     a two-decimal rate, never bypass the store's rate.
@@ -89,7 +91,8 @@ PERFORM pg_advisory_xact_lock(hashtextextended(_org_id::text||':'||trim(_client_
 SELECT * INTO existing FROM public.orders WHERE org_id=_org_id AND client_order_id=trim(_client_order_id);
 IF existing.id IS NOT NULL THEN IF existing.request_hash<>fingerprint OR existing.location_id<>_location_id THEN RAISE EXCEPTION 'idempotency_conflict'; END IF; RETURN existing.id; END IF;
 -- The rate charged is the store's configured rate (0025). The client sends the rate it displayed only as a confirmation: a store without a rate cannot sell, and a stale client is refused instead of silently charged a different amount.
-SELECT l.tax_rate_ppm INTO store_ppm FROM public.locations l WHERE l.id=_location_id AND l.org_id=_org_id;
+-- FOR SHARE serializes the sale with set_location_tax_rate (FOR UPDATE, then UPDATE): a rate change waits for a sale that already read the rate, and a sale that arrives while a change is in progress waits and then reads the committed rate.
+SELECT l.tax_rate_ppm INTO store_ppm FROM public.locations l WHERE l.id=_location_id AND l.org_id=_org_id FOR SHARE;
 IF store_ppm IS NULL THEN RAISE EXCEPTION 'tax_rate_not_configured'; END IF; IF store_ppm<>_tax_rate_ppm THEN RAISE EXCEPTION 'tax_rate_changed'; END IF;
 oid:=gen_random_uuid();
 INSERT INTO public.orders(id,org_id,location_id,order_number,type,customer_name,customer_phone,customer_email,delivery_address,table_number,notes,discount_cents,tax_rate_basis_points,tax_rate_ppm,is_simulation,created_by,client_order_id,request_hash) VALUES(oid,_org_id,_location_id,'#'||upper(left(oid::text,8)),_type,coalesce(nullif(trim(_customer_name),''),'Walk-in'),_customer_phone,_customer_email,_delivery_address,_table_number,_notes,0,round(store_ppm/100.0)::int,store_ppm,_is_simulation,auth.uid(),trim(_client_order_id),fingerprint);
