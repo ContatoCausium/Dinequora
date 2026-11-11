@@ -59,3 +59,31 @@ export const saleInputSchema = z.object({
     .max(200),
 });
 export type SaleInput = z.input<typeof saleInputSchema>;
+
+/**
+ * What a recipe is made of, and nothing else. Cost snapshots (unitCostCents, subtotalCostCents)
+ * are display values computed from the current stock cost; they are refused here so they can never
+ * reach product_recipes.metadata, which members without inventory.costs can read (migration 0024).
+ */
+export const recipeIngredientInputSchema = z
+  .object({
+    inventoryItemId: z.string().min(1),
+    quantity: z.number().positive().finite(),
+    unit: z.enum(["oz", "lb", "g", "kg", "ml", "l", "units", "pack", "tsp", "tbsp", "cup"]),
+    wastePercentage: z.number().min(0).max(100).finite().default(0),
+  })
+  .strict();
+export const recipePayloadSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    productId: z.string().min(1),
+    productName: z.string().optional(),
+    servings: z.number().positive().finite(),
+    yieldQuantity: z.number().positive().finite().optional(),
+    yieldUnit: z.string().max(40).optional(),
+    prepInstructions: z.string().max(4000).optional(),
+    sellingPriceCents: z.number().int().nonnegative().optional(),
+    ingredients: z.array(recipeIngredientInputSchema).min(1).max(200),
+  })
+  .strict();
+export type RecipePayload = z.input<typeof recipePayloadSchema>;

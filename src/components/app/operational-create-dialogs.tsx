@@ -34,6 +34,8 @@ const KNOWN_ERROR_CODES = [
   "received_purchase_requires_return",
   "org_suspended",
   "subscription_inactive",
+  "recipe_exists_for_product",
+  "invalid_recipe",
 ] as const;
 
 /** Maps a server error to a translated message; unknown errors fall back to `fallback`. */

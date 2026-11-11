@@ -169,6 +169,13 @@
       "when": 1794333035944,
       "tag": "0023_feature_tables_least_privilege",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794391714705,
+      "tag": "0024_recipe_product_and_metadata_hardening",
+      "breakpoints": true
     }
   ]
 }

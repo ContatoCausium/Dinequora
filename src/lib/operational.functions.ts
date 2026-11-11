@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { menuItemSchema, modifierGroupsSchema, saleInputSchema } from "./operational-contracts";
+import {
+  menuItemSchema,
+  modifierGroupsSchema,
+  recipePayloadSchema,
+  saleInputSchema,
+} from "./operational-contracts";
 import { orderListQuery } from "./orders-query";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
@@ -421,6 +426,10 @@ export const saveOperationalRecord = createServerFn({ method: "POST" })
     const s = await scope(context.supabase, data.orgId, data.locationId);
     if (!s.location && data.kind !== "supplier" && data.kind !== "whatsapp")
       throw new Error("location_required");
+    // A recipe payload is exactly its definition: no cost snapshot can travel to the database
+    // (migration 0024; the RPC never stores the ingredient list in metadata either).
+    if (data.kind === "recipe" && !recipePayloadSchema.safeParse(data.payload).success)
+      throw new Error("invalid_recipe");
     const payload = z
       .record(
         z.lazy((): z.ZodType<import("@/integrations/supabase/types").Json> =>

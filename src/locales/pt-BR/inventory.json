@@ -287,6 +287,8 @@
     "received_purchase_requires_return": "Pedidos com mercadorias recebidas não podem ser cancelados.",
     "org_suspended": "Este restaurante está suspenso; alterações estão bloqueadas.",
     "subscription_inactive": "A assinatura está inativa; alterações estão bloqueadas.",
-    "permission_denied": "Você não tem permissão para esta ação."
+    "permission_denied": "Você não tem permissão para esta ação.",
+    "recipe_exists_for_product": "Este produto já tem uma receita nesta unidade. Edite essa receita em vez de criar outra.",
+    "invalid_recipe": "Confira as porções e o preço de venda: as porções devem ser maiores que zero e o preço não pode ser negativo."
   }
 }
