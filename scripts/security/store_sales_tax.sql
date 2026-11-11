@@ -16,6 +16,7 @@ INSERT INTO public.organizations(id,slug,name,plan,status) VALUES
 ('b2500000-0000-4000-8000-000000000002','pr25_b','PR25 B','starter','active');
 UPDATE public.subscriptions SET status='active'
  WHERE org_id IN('b2500000-0000-4000-8000-000000000001','b2500000-0000-4000-8000-000000000002');
+UPDATE public.organizations SET store_limit_override=5 WHERE id='b2500000-0000-4000-8000-000000000001'; -- room for the store created in 9
 INSERT INTO public.locations(id,org_id,slug,name) VALUES
 ('c2500000-0000-4000-8000-000000000001','b2500000-0000-4000-8000-000000000001','pr25_a1','A1'),
 ('c2500000-0000-4000-8000-000000000002','b2500000-0000-4000-8000-000000000001','pr25_a2','A2'),
@@ -169,9 +170,56 @@ RESET ROLE;
 DO $$ BEGIN
  IF has_function_privilege('anon','public.set_location_tax_rate(uuid,integer)','execute') THEN RAISE EXCEPTION 'FAIL anon may call set_location_tax_rate'; END IF;
  IF NOT has_function_privilege('authenticated','public.set_location_tax_rate(uuid,integer)','execute') THEN RAISE EXCEPTION 'FAIL authenticated cannot call set_location_tax_rate'; END IF;
+ IF has_function_privilege('anon','public.create_location_with_tax_rate(uuid,text,text,text,text,integer)','execute') THEN RAISE EXCEPTION 'FAIL anon may call create_location_with_tax_rate'; END IF;
+ IF NOT has_function_privilege('authenticated','public.create_location_with_tax_rate(uuid,text,text,text,text,integer)','execute') THEN RAISE EXCEPTION 'FAIL authenticated cannot call create_location_with_tax_rate'; END IF;
  IF has_function_privilege('anon','public.create_pos_sale_v2(uuid,uuid,public.order_type,text,text,text,text,text,text,integer,integer,jsonb,boolean,text)','execute') THEN RAISE EXCEPTION 'FAIL anon may call create_pos_sale_v2'; END IF;
  IF has_function_privilege('anon','public.persist_finalized_pos_sale_atomic_v2(uuid,uuid,public.order_type,text,text,text,text,text,text,integer,integer,jsonb,boolean,text,text)','execute') THEN RAISE EXCEPTION 'FAIL anon may call persist v2'; END IF;
  IF EXISTS(SELECT 1 FROM public.orders WHERE tax_rate_ppm IS NULL OR tax_rate_ppm<>tax_rate_basis_points*100 AND tax_rate_basis_points<>round(tax_rate_ppm/100.0)) THEN RAISE EXCEPTION 'FAIL an order has no ppm or inconsistent basis points'; END IF;
 END $$;
-SELECT 'PASS: store without a rate cannot sell, only owner/manager with settings.locations configure their own stores (audited, cross-org denied), claimed rate must equal the store rate exactly, tax from the store rate (6.25%, 8.875%, discount, explicit 0%), rate change with an open ticket, idempotent replay, previous signatures delegate, reads scoped, grants';
+-- 9. Store creation with its rate in ONE transaction (create_location_with_tax_rate): owner only;
+--    the rate is validated before anything is written; a refusal leaves no store and no audit row;
+--    the created store is active, carries the rate, has both audit rows and sells at once.
+SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000002',false); -- manager (settings.locations at A1)
+SET ROLE authenticated;
+DO $$ BEGIN
+ BEGIN PERFORM public.create_location_with_tax_rate('b2500000-0000-4000-8000-000000000001','A3','123 Main St','America/New_York','',62500); RAISE EXCEPTION 'FAIL manager created a store';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
+END $$;
+SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000003',false); -- cashier
+DO $$ BEGIN
+ BEGIN PERFORM public.create_location_with_tax_rate('b2500000-0000-4000-8000-000000000001','A3','123 Main St','America/New_York','',62500); RAISE EXCEPTION 'FAIL cashier created a store';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
+END $$;
+SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000004',false); -- owner of B
+DO $$ BEGIN
+ BEGIN PERFORM public.create_location_with_tax_rate('b2500000-0000-4000-8000-000000000001','A3','123 Main St','America/New_York','',62500); RAISE EXCEPTION 'FAIL owner of B created a store in A';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
+END $$;
+SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000001',false); -- owner of A
+DO $$ DECLARE A uuid:='b2500000-0000-4000-8000-000000000001'; n int; nid uuid; o public.orders; BEGIN
+ n:=(SELECT count(*) FROM public.locations WHERE org_id=A);
+ BEGIN PERFORM public.create_location_with_tax_rate(A,'A3','123 Main St','America/New_York','',NULL); RAISE EXCEPTION 'FAIL store created without a rate';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_tax_rate' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_location_with_tax_rate(A,'A3','123 Main St','America/New_York','',1000001); RAISE EXCEPTION 'FAIL store created with a rate above 100%%';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_tax_rate' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_location_with_tax_rate(A,'A3','123 Main St','America/New_York','',-1); RAISE EXCEPTION 'FAIL store created with a negative rate';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_tax_rate' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_location_with_tax_rate(A,'A3','123 Main St','Mars/Olympus','',62500); RAISE EXCEPTION 'FAIL store created with an invalid time zone';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_timezone' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_location_with_tax_rate(A,'A','123 Main St','America/New_York','',62500); RAISE EXCEPTION 'FAIL store created with a one-letter name';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_name' THEN RAISE; END IF; END;
+ IF (SELECT count(*) FROM public.locations WHERE org_id=A)<>n THEN RAISE EXCEPTION 'FAIL a refused creation left a store'; END IF;
+ IF EXISTS(SELECT 1 FROM public.audit_logs WHERE org_id=A AND action='location.created' AND target IN('A3','A')) THEN RAISE EXCEPTION 'FAIL a refused creation was audited'; END IF;
+ nid:=public.create_location_with_tax_rate(A,'A3','123 Main St','America/New_York','+1 555-0100',66250); -- 6.625% (NJ)
+ IF (SELECT count(*) FROM public.locations WHERE org_id=A)<>n+1 THEN RAISE EXCEPTION 'FAIL store not created'; END IF;
+ IF (SELECT tax_rate_ppm FROM public.locations WHERE id=nid)<>66250 OR (SELECT status FROM public.locations WHERE id=nid)<>'active' THEN RAISE EXCEPTION 'FAIL created store rate or status'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.audit_logs WHERE org_id=A AND action='location.created' AND target='A3' AND actor_id='a2500000-0000-4000-8000-000000000001') THEN RAISE EXCEPTION 'FAIL creation not audited'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.audit_logs WHERE org_id=A AND action='location.tax_rate_updated' AND (metadata->>'location_id')::uuid=nid AND metadata->>'from_ppm' IS NULL AND (metadata->>'to_ppm')::int=66250) THEN RAISE EXCEPTION 'FAIL rate of the new store not audited'; END IF;
+ -- the new store sells at its rate immediately: 1000 x 6.625% = 66.25 -> 66
+ PERFORM public.persist_finalized_pos_sale_atomic_v2(A,nid,'takeout','T',_tax_rate_ppm=>66250,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-a3-1');
+ SELECT * INTO o FROM public.orders WHERE client_order_id='t-a3-1';
+ IF o.id IS NULL OR o.location_id<>nid OR o.tax_cents<>66 OR o.total_cents<>1066 OR o.tax_rate_ppm<>66250 THEN RAISE EXCEPTION 'FAIL sale at the new store'; END IF;
+END $$;
+RESET ROLE;
+SELECT 'PASS: store without a rate cannot sell, only owner/manager with settings.locations configure their own stores (audited, cross-org denied), claimed rate must equal the store rate exactly, tax from the store rate (6.25%, 8.875%, discount, explicit 0%), rate change with an open ticket, idempotent replay, previous signatures delegate, reads scoped, grants, store created with its rate in one transaction (owner only, nothing written on refusal)';
 ROLLBACK;

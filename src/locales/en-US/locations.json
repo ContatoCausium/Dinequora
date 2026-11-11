@@ -91,6 +91,8 @@
     "invalid_hours": "Check the highlighted opening hours.",
     "address_required": "Add an address before activating this location.",
     "invalid_tax_rate": "Enter the sales tax rate as a percentage between 0 and 100, with up to four decimals (for example 8.875).",
+    "tax_rate_not_saved": "The store details were saved, but the sales tax rate was not: {{reason}} Check the rate and save again.",
+    "not_activated": "The store details and rate were saved, but the store was not activated: {{reason}}",
     "unknown": "Something went wrong. Please try again."
   },
   "recordedNote": "Sales are recorded figures: net of tax, counting only paid, non-cancelled orders from the last 30 days. Growth compares with the previous 30 days.",

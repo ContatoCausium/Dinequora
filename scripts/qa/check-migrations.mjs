@@ -192,6 +192,8 @@ const REVIEWED = {
   admin_update_organization: "platform admin only",
   archive_permission_profile: "organization owner only",
   create_location: "organization owner only",
+  create_location_with_tax_rate:
+    "organization owner only; delegates to create_location and set_location_tax_rate (GUARDED) in one transaction (0025)",
   create_organization: "signed-in user creates an organization they own",
   create_test_restaurant: "signed-in user creates their own demo organization",
   log_access_denied: "records a denial for the caller in their own organization",

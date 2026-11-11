@@ -99,26 +99,28 @@ await rpc(admin, "admin_set_subscription", {
   _status: "active",
   _reason: "QA tenant: two stores for permission/store-scope regression",
 });
-const riversideId = await rpc(owner, "create_location", {
+// Sales-tax rate per store (migration 0025, parts per million): a two-decimal rate and a
+// three-decimal one, so every sale below and the permission matrix exercise both. Riverside is
+// created with its rate in one call (the Locations screen path); Downtown, created by
+// create_organization without a rate, gets it through set_location_tax_rate.
+creds.taxRatePpm = { downtown: 62500, riverside: 88750 };
+const riversideId = await rpc(owner, "create_location_with_tax_rate", {
   _org_id: creds.orgId,
   _name: "QA Riverside",
   _address: "QA fixture address",
   _timezone: "America/New_York",
   _phone: "+1 555-0100",
+  _tax_rate_ppm: creds.taxRatePpm.riverside,
 });
 const { data: locs } = await owner.from("locations").select("id,name").eq("org_id", creds.orgId);
 creds.locations = {
   downtown: locs.find((l) => l.name === "QA Downtown").id,
   riverside: riversideId,
 };
-// Sales-tax rate per store (migration 0025, parts per million): a two-decimal rate and a
-// three-decimal one, so every sale below and the permission matrix exercise both.
-creds.taxRatePpm = { downtown: 62500, riverside: 88750 };
-for (const [store, loc] of Object.entries(creds.locations))
-  await rpc(owner, "set_location_tax_rate", {
-    _location_id: loc,
-    _tax_rate_ppm: creds.taxRatePpm[store],
-  });
+await rpc(owner, "set_location_tax_rate", {
+  _location_id: creds.locations.downtown,
+  _tax_rate_ppm: creds.taxRatePpm.downtown,
+});
 const { data: org } = await owner
   .from("organizations")
   .select("slug")

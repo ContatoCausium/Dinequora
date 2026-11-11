@@ -430,8 +430,8 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
     }
     setBusy(true);
     try {
-      const id = await createLocation(orgDbId, v);
-      await setLocationTaxRate(id, taxRatePpm);
+      // One server transaction: the store and its rate exist together, or nothing was written.
+      await createLocation(orgDbId, { ...v, taxRatePpm });
       toast.success(t("toast.created"));
       refresh();
       onClose();
@@ -558,6 +558,8 @@ function EditSheet({
   );
   const [busy, setBusy] = useState(false);
   const bad = validateHours(hours);
+  const reason = (err: unknown) =>
+    t(`errors.${(err as Error).message}`, { defaultValue: t("errors.unknown") });
   // Parsed exactly from the text (8.875 -> 88,750 ppm); null = not a valid rate.
   const taxRatePpm = ppmFromPercentInput(taxRate);
   const saveTaxRate = async () => {
@@ -579,13 +581,23 @@ function EditSheet({
     setBusy(true);
     try {
       await saveLocationWithManagers(location.dbId, { ...v, hours }, isOwner ? mgrs : null);
+    } catch (err) {
+      toast.error(reason(err));
+      setBusy(false);
+      return;
+    }
+    try {
       await saveTaxRate();
       toast.success(t("toast.saved"));
       void qc.invalidateQueries({ queryKey: ["team", orgDbId] });
       refresh();
       onClose();
     } catch (err) {
-      toast.error(t(`errors.${(err as Error).message}`, { defaultValue: t("errors.unknown") }));
+      // The details are already saved; only the rate was refused. Say exactly that and show the
+      // saved state instead of leaving the owner unsure of what was written.
+      toast.error(t("errors.tax_rate_not_saved", { reason: reason(err) }));
+      void qc.invalidateQueries({ queryKey: ["team", orgDbId] });
+      refresh();
     } finally {
       setBusy(false);
     }
@@ -608,13 +620,28 @@ function EditSheet({
     setBusy(true);
     try {
       await updateLocation(location.dbId, { ...v, hours });
+    } catch (err) {
+      toast.error(reason(err));
+      setBusy(false);
+      return;
+    }
+    try {
       await saveTaxRate();
+    } catch (err) {
+      toast.error(t("errors.tax_rate_not_saved", { reason: reason(err) }));
+      refresh();
+      setBusy(false);
+      return;
+    }
+    try {
       await setLocationStatus(location.dbId, "active");
       toast.success(t("toast.activated"));
       refresh();
       onClose();
     } catch (err) {
-      toast.error(t(`errors.${(err as Error).message}`, { defaultValue: t("errors.unknown") }));
+      // Details and rate are saved; only the activation was refused (for example the plan allowance).
+      toast.error(t("errors.not_activated", { reason: reason(err) }));
+      refresh();
     } finally {
       setBusy(false);
     }

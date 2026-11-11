@@ -162,16 +162,21 @@ async function rpc(fn: RpcName, args: Record<string, unknown>) {
   return data as unknown;
 }
 
+/**
+ * Creates a store together with its sales-tax rate in one backend transaction (migration 0025):
+ * either the store exists with its rate or nothing was written. Owners only.
+ */
 export const createLocation = (
   orgDbId: string,
-  v: { name: string; address: string; timezone: string; phone: string },
+  v: { name: string; address: string; timezone: string; phone: string; taxRatePpm: number },
 ) =>
-  rpc("create_location", {
+  rpc("create_location_with_tax_rate", {
     _org_id: orgDbId,
     _name: v.name,
     _address: v.address,
     _timezone: v.timezone,
     _phone: v.phone,
+    _tax_rate_ppm: v.taxRatePpm,
   }) as Promise<string>;
 export const updateLocation = (
   id: string,

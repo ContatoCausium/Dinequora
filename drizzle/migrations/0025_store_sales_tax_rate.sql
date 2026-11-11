@@ -72,6 +72,28 @@ end $function$;
 REVOKE ALL ON FUNCTION public.set_location_tax_rate(uuid, integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.set_location_tax_rate(uuid, integer) TO authenticated;
 
+-- ---------------------------------------------------------------- store creation with its rate
+-- One transaction for the Locations screen: the store and its rate are written together or not at
+-- all (two separate calls could leave a store that cannot sell when the second one failed). Owner
+-- only, like create_location; the rate is validated before anything is written. Audited by the two
+-- functions it delegates to (location.created, then location.tax_rate_updated with from_ppm null).
+CREATE OR REPLACE FUNCTION public.create_location_with_tax_rate(_org_id uuid, _name text, _address text, _timezone text, _phone text, _tax_rate_ppm integer)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare _id uuid;
+begin
+  if not public.is_org_owner(_org_id) then raise exception 'forbidden'; end if;
+  if _tax_rate_ppm is null or _tax_rate_ppm not between 0 and 1000000 then raise exception 'invalid_tax_rate'; end if;
+  _id := public.create_location(_org_id, _name, _address, _timezone, _phone);
+  perform public.set_location_tax_rate(_id, _tax_rate_ppm);
+  return _id;
+end $function$;
+REVOKE ALL ON FUNCTION public.create_location_with_tax_rate(uuid, text, text, text, text, integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_location_with_tax_rate(uuid, text, text, text, text, integer) TO authenticated;
+
 -- ---------------------------------------------------------------- sale RPCs (v2: rate in ppm)
 -- create_pos_sale_v2 is create_pos_sale (0018) with the tax taken from the store; everything else
 -- (scope, permissions, prices, modifiers, discount, idempotency, audit) is unchanged.

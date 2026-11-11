@@ -91,6 +91,8 @@
     "invalid_hours": "Confira os horários destacados.",
     "address_required": "Adicione um endereço antes de ativar esta unidade.",
     "invalid_tax_rate": "Informe a alíquota como porcentagem entre 0 e 100, com até quatro casas decimais (por exemplo 8.875).",
+    "tax_rate_not_saved": "Os dados da unidade foram salvos, mas a alíquota não: {{reason}} Confira a alíquota e salve de novo.",
+    "not_activated": "Os dados e a alíquota da unidade foram salvos, mas ela não foi ativada: {{reason}}",
     "unknown": "Algo deu errado. Tente novamente."
   },
   "recordedNote": "As vendas são valores registrados: líquidas de impostos, considerando apenas pedidos pagos e não cancelados dos últimos 30 dias. O crescimento compara com os 30 dias anteriores.",

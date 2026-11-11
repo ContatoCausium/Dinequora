@@ -30,6 +30,16 @@ com a alíquota anterior e a nova. Um membro de outra organização, um staff, o
 Na interface: Localizações → criar ou editar loja → "Alíquota de imposto sobre vendas (%)". O campo
 é obrigatório ao criar; o texto é convertido exatamente (8.875 → 88.750 ppm), sem `parseFloat`.
 
+**Criar loja = uma transação.** `create_location_with_tax_rate(_org_id, _name, _address,
+_timezone, _phone, _tax_rate_ppm)` (só proprietário, como `create_location`) valida a alíquota
+antes de gravar qualquer coisa e delega a `create_location` e `set_location_tax_rate` na mesma
+transação: ou a loja existe com a alíquota (auditorias `location.created` e
+`location.tax_rate_updated` com `from_ppm` nulo), ou nada foi gravado. A tela de criação chama só
+essa RPC. Na edição, os dados da loja e a alíquota continuam sendo duas RPCs (`save_location_with_managers`
+e `set_location_tax_rate`, assinaturas já publicadas); se a segunda falhar, a tela diz exatamente
+isso ("os dados foram salvos, mas a alíquota não: …") e recarrega o estado gravado. A RPC composta
+está em `REVIEWED` no `scripts/qa/check-migrations.mjs` (delegações auditadas).
+
 ## Como a venda é cobrada
 
 `create_pos_sale_v2` / `finalize_pos_sale_atomic_v2` / `persist_finalized_pos_sale_atomic_v2`
@@ -43,6 +53,13 @@ recebem `_tax_rate_ppm`: **a alíquota que o cliente exibiu**, usada só como co
 4. A repetição idempotente de uma venda já gravada (mesmo `client_order_id` e payload) devolve o
    pedido existente mesmo que a alíquota tenha mudado depois: a busca de idempotência vem antes da
    regra.
+5. **Concorrência.** A venda lê a linha da loja com `FOR SHARE`; `set_location_tax_rate` a bloqueia
+   com `FOR UPDATE` antes de alterar. Uma alteração de alíquota espera a transação de uma venda que
+   já leu a alíquota terminar (a venda é gravada com a alíquota que validou); uma venda que chega
+   durante uma alteração espera o commit e então lê a alíquota nova — a confirmação da alíquota
+   antiga é recusada (`tax_rate_changed`) e a da nova é gravada com a nova. Vendas entre si não se
+   bloqueiam (`FOR SHARE` é compatível com `FOR SHARE`). Nenhuma venda registra uma alíquota que o
+   servidor não tenha validado na mesma transação.
 
 As assinaturas anteriores (`create_pos_sale`, `finalize_pos_sale_atomic`,
 `persist_finalized_pos_sale_atomic`, com `_tax_rate_basis_points`) continuam existindo, como manda a
@@ -67,12 +84,37 @@ duas casas e nunca contorna a alíquota da loja (888 bp numa loja a 8,875 % é r
   configurar (owner, gerente só na própria loja, staff e outra organização negados, auditoria),
   confirmação exata (0 %, 100 %, 1 ppm de diferença, NULL), 6,25 % e 8,875 % com desconto,
   0 % explícito, mudança de alíquota com comanda aberta, replay idempotente, assinaturas
-  anteriores, leituras por RLS, grants.
+  anteriores, leituras por RLS, grants, criação de loja com alíquota numa transação (só owner,
+  nada gravado em caso de recusa, auditorias, venda imediata na loja nova).
+- `scripts/security/tax_rate_concurrency.mjs` (suíte, passo 5c): duas sessões PostgreSQL —
+  venda antes da alteração (a alteração espera, `pg_blocking_pids`), alteração antes da venda (a
+  venda espera e lê a alíquota nova: antiga recusada, nova gravada), alteração desfeita (venda
+  recusada, nada gravado), duas vendas simultâneas sem espera, invariante imposto = alíquota
+  validada em todos os pedidos.
 - `scripts/security/permission_matrix.mjs`, seção "Store sales tax": por perfil, contra a loja
-  própria e contra a outra loja.
-- `scripts/qa/seed-qa-org.mjs`: QA Downtown a 6,25 % e QA Riverside a 8,875 %.
+  própria e contra a outra loja; criação de loja com alíquota (caixa, gerente e outra organização
+  negados; alíquota inválida nada grava; owner cria com as duas auditorias).
+- `scripts/qa/seed-qa-org.mjs`: QA Downtown a 6,25 % (`set_location_tax_rate`) e QA Riverside a
+  8,875 % (`create_location_with_tax_rate`).
 - Vitest: `money-units`, `money-display`, `pos-service`, `orders-persistence`,
-  `operational-contracts` (ppm, arredondamento, sessão, confirmação).
+  `operational-contracts` (ppm, arredondamento, sessão, confirmação), `onboarding-checklist`
+  (loja configurada exige alíquota explícita).
+
+## Onboarding e primeira loja
+
+`create_test_restaurant` (onboarding) e `create_organization` criam a primeira loja **sem
+alíquota** (`tax_rate_ppm` nulo); nenhum valor padrão é inventado. Antes da primeira venda:
+
+1. o servidor recusa qualquer venda dessa loja (`tax_rate_not_configured`), inclusive pelas
+   assinaturas antigas;
+2. o PDV mostra o aviso e desabilita a cobrança, com link para Localizações;
+3. a etapa obrigatória "Configure suas unidades" do checklist de onboarding só fica concluída
+   quando alguma loja tem endereço, horários **e** alíquota explícita (`storeConfigured`); a
+   folha de edição da loja não salva sem uma alíquota válida (0 é válido e explícito);
+4. o seletor de lojas marca "Configuração pendente" enquanto faltar alíquota.
+
+Ou seja, toda organização nova tem a alíquota configurada explicitamente por um proprietário (ou
+gerente com `settings.locations`) antes de registrar qualquer venda.
 
 ## Ao aplicar a 0025 num ambiente existente
 

@@ -1027,6 +1027,99 @@ const stamp = Date.now();
       _tax_rate_ppm: RATE.downtown,
     }),
   );
+
+  // Store creation with its rate in one transaction (create_location_with_tax_rate, 0025): owner
+  // only, the rate validated before anything is written, both audit rows. The created store is
+  // deactivated afterwards so the plan allowance of the QA tenant is unchanged for later tests.
+  const newStore = (name, ppm) => ({
+    _org_id: ORG,
+    _name: name,
+    _address: "QA fixture address",
+    _timezone: "America/New_York",
+    _phone: "",
+    _tax_rate_ppm: ppm,
+  });
+  const storesNamed = async (prefix) =>
+    (
+      await svc
+        .from("locations")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", ORG)
+        .like("name", `${prefix}%`)
+    ).count ?? 0;
+  expectDeny(
+    "cashier cannot create a store with a rate (owner only)",
+    await call(cashier, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 62500)),
+    "forbidden",
+  );
+  expectDeny(
+    "manager cannot create a store with a rate (owner only)",
+    await call(mgr, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 62500)),
+    "forbidden",
+  );
+  if (creds.tenantB?.owner) {
+    const other = await signedIn(creds.tenantB.owner.email, creds.tenantB.owner.password);
+    expectDeny(
+      "owner of another organization cannot create a store in this one",
+      await call(other, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 62500)),
+      "forbidden",
+    );
+  }
+  expectDeny(
+    "owner cannot create a store with a rate above 100%",
+    await call(owner, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 1000001)),
+    "invalid_tax_rate",
+  );
+  expectDeny(
+    "owner cannot create a store without a rate",
+    await call(owner, "create_location_with_tax_rate", {
+      ...newStore(`QA Refused ${stamp}`, 0),
+      _tax_rate_ppm: null,
+    }),
+    "invalid_tax_rate",
+  );
+  check("no store was written by the refused creations", (await storesNamed("QA Refused")) === 0);
+  const created = await call(
+    owner,
+    "create_location_with_tax_rate",
+    newStore(`QA Atomic ${stamp}`, 66250),
+  );
+  expectAllow("owner creates a store with its rate in one call", created);
+  if (!created.error) {
+    const { data: loc } = await svc
+      .from("locations")
+      .select("name,status,tax_rate_ppm")
+      .eq("id", created.data)
+      .single();
+    check(
+      "the new store is active and carries the rate (6.625%)",
+      loc?.status === "active" && loc.tax_rate_ppm === 66250,
+      JSON.stringify(loc),
+    );
+    const { data: au } = await svc
+      .from("audit_logs")
+      .select("action,target,metadata")
+      .eq("org_id", ORG)
+      .eq("actor_id", creds.owner.userId)
+      .in("action", ["location.created", "location.tax_rate_updated"]);
+    check(
+      "creation and rate are both audited for the new store",
+      (au ?? []).some(
+        (a) => a.action === "location.created" && a.target === `QA Atomic ${stamp}`,
+      ) &&
+        (au ?? []).some(
+          (a) =>
+            a.action === "location.tax_rate_updated" &&
+            a.metadata?.location_id === created.data &&
+            a.metadata?.from_ppm == null &&
+            a.metadata?.to_ppm === 66250,
+        ),
+    );
+    expectAllow(
+      "the test store is deactivated again (plan allowance unchanged)",
+      await call(owner, "set_location_status", { _id: created.data, _status: "inactive" }),
+    );
+  }
 }
 
 // ---------------- Platform admin: no tenant data

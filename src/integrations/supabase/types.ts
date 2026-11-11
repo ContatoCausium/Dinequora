@@ -1749,6 +1749,17 @@ export type Database = {
         };
         Returns: string;
       };
+      create_location_with_tax_rate: {
+        Args: {
+          _address: string;
+          _name: string;
+          _org_id: string;
+          _phone: string;
+          _tax_rate_ppm: number;
+          _timezone: string;
+        };
+        Returns: string;
+      };
       create_organization: {
         Args: {
           _brand_primary?: string;
