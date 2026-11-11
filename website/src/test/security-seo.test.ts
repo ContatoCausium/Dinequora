@@ -39,15 +39,25 @@ describe("security headers (public/_headers)", () => {
     for (const l of headerLines) expect(l).not.toMatch(/includeSubDomains|preload/i);
   });
 
-  it("uses a strict CSP: own files only, no inline or eval, no framing", () => {
+  it("uses a strict CSP: own files plus the Cloudflare Web Analytics beacon, no inline or eval, no framing", () => {
     const csp = all.get("content-security-policy")!;
     expect(csp).not.toMatch(/'unsafe-inline'|'unsafe-eval'|'unsafe-hashes'|'strict-dynamic'|\bhttp:|\s\*(\s|;|$)/);
     expect(cspDirective(headersFile, "default-src")).toEqual(["'self'"]);
-    expect(cspDirective(headersFile, "script-src")).toEqual(["'self'"]);
+    // The beacon is the only third-party script. Cloudflare serves it as /beacon.min.js/v<hash>; a
+    // CSP path without a trailing slash matches only that exact path, so both forms are listed
+    // (no host-wide source).
+    expect(cspDirective(headersFile, "script-src")).toEqual([
+      "'self'",
+      "https://static.cloudflareinsights.com/beacon.min.js",
+      "https://static.cloudflareinsights.com/beacon.min.js/",
+    ]);
     expect(cspDirective(headersFile, "style-src")).toEqual(["'self'"]);
     expect(cspDirective(headersFile, "img-src")).toEqual(["'self'", "data:"]);
     expect(cspDirective(headersFile, "font-src")).toEqual(["'self'"]);
+    // The injected beacon posts to this site's own /cdn-cgi/rum: 'self' is enough. The manual-embed
+    // host (cloudflareinsights.com) is not used and must stay out.
     expect(cspDirective(headersFile, "connect-src")).toEqual(["'self'"]);
+    expect(csp).not.toMatch(/[\s;]https?:\/\/cloudflareinsights\.com/);
     expect(cspDirective(headersFile, "object-src")).toEqual(["'none'"]);
     expect(cspDirective(headersFile, "base-uri")).toEqual(["'self'"]);
     expect(cspDirective(headersFile, "form-action")).toEqual(["'self'"]);
