@@ -3,23 +3,40 @@
 //
 // save_operational_menu reads the product's category FOR SHARE (0027); archive_operational_menu
 // locks the category FOR UPDATE before checking that no active product uses it (0026). Two
-// PostgreSQL sessions prove that the two operations are serialized, in both orders, with COMMIT and
-// with ROLLBACK:
-//   1. save first, committed: the archive waits for the save, then refuses (category_in_use);
+// PostgreSQL sessions run the two operations concurrently, in both orders, with COMMIT and ROLLBACK.
+//
+// REGRESSION tests (they FAIL without the 0027 lock: with the 0018 body the save does not wait at
+// its category read, only at its foreign-key check, and then goes through):
 //   2. archive first, committed: the save waits for the archive, then refuses (category_required);
-//   3. save first, rolled back: the archive waits, then archives the (still empty) category;
-//   4. archive first, rolled back: the save waits, then saves the product into the active category;
-//   5. two saves into the same category never wait for each other (FOR SHARE is shared);
 //   6. an EXISTING product moved into a category being archived: the move waits, then refuses, and
 //      the product stays active in its original category;
-//   7. at the end: no active product in an archived category, no deadlock, and the audit trail holds
-//      exactly the committed operations.
+//   7. invariants at the end: no active product in an archived category, and the audit trail holds
+//      exactly the committed operations (with 0018: 2 active products in archived categories and 7
+//      product saves audited instead of 5).
+// BEHAVIOR-PRESERVATION tests (they also pass with 0018, where the archive already waited on the
+// save's foreign-key lock; they prove 0027 keeps that behavior and adds no blocking or deadlock):
+//   1. save first, committed: the archive waits for the save, then refuses (category_in_use);
+//   3. save first, rolled back: the archive waits, then archives the (still empty) category;
+//   4. archive first, rolled back: the save waits, then saves the product into the active category;
+//   5. two saves into the same category never wait for each other (FOR SHARE is shared): proven by
+//      pg_blocking_pids, never by a time window;
+//   7. no deadlock or lock timeout in any scenario.
 // Every wait is proven with pg_blocking_pids, not inferred from timing.
+//
+// Sessions end with COMMIT as a real client would (a save that wrongly went through stays in the
+// database and is caught). Every session is registered; the finally block terminates the ones still
+// open (pg_terminate_backend on their own pids only) before cleaning up, so an intermediate failure
+// never leaves a transaction or a lock behind, and the cleanup connection has a lock_timeout.
+// RACE_TEST_FAULT=after-lock injects a failure while two sessions hold and wait for locks (used to
+// test this cleanup; never set in the suite).
 //
 // Isolation: the test creates its OWN organization and store and two synthetic members (owner =
 // archiver, manager with the store = product editor) directly in the database, works only there and
-// removes all of it at the end. It does not read or change the shared QA tenant and can run in
-// parallel with every other test.
+// removes all of it at the end. It does not read or change the shared QA tenant or any other
+// organization, so it can run next to tests that also work only in their own organizations (the
+// tax-rate concurrency test, the database tests of step 7). It must NOT run during step 2b of the
+// security suite, which requires a database with no organization at all; the suite runs its steps
+// one after another, so this does not happen there.
 //
 //   QA_DB_URL=postgresql://...@127.0.0.1:55322/postgres node scripts/security/menu_category_race.mjs
 import crypto from "node:crypto";
@@ -51,9 +68,15 @@ const org = isolatedOrg("race", {
 const ORG = org.orgId;
 const STORE = org.locationId;
 
-const sql = postgres(DB_URL, { max: 4, onnotice: () => {} });
+// lock_timeout on the verification and cleanup connections: if a lock were still held, they fail
+// with an error instead of waiting forever.
+const sql = postgres(DB_URL, { max: 4, onnotice: () => {}, connection: { lock_timeout: "30s" } });
 // Fixture SQL (multi-statement, own transaction) needs a single dedicated connection.
-const fixtures = postgres(DB_URL, { max: 1, onnotice: () => {} });
+const fixtures = postgres(DB_URL, {
+  max: 1,
+  onnotice: () => {},
+  connection: { lock_timeout: "30s" },
+});
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ ok, name, detail });
@@ -63,14 +86,41 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const code = (e) => String(e?.message ?? e).split("\n")[0];
 const outcomes = [];
 
+/** Sessions opened by this test and not yet ended (closed by the finally block if a step fails). */
+const openSessions = new Set();
+/** Backend pids of every session this test ever opened (checked at the end: none alive, no lock). */
+const allPids = [];
 /** A dedicated connection impersonating one member, with explicit transactions. */
 async function session(userId) {
   const c = postgres(DB_URL, { max: 1, onnotice: () => {} });
+  const s = { c, pid: null, end: null };
+  openSessions.add(s);
+  s.end = async () => {
+    openSessions.delete(s);
+    await c.end({ timeout: 5 });
+  };
   await c`select set_config('request.jwt.claim.sub', ${userId}, false)`;
   await c`set lock_timeout = '20s'`;
   await c`set role authenticated`;
-  const [{ pid }] = await c`select pg_backend_pid() as pid`;
-  return { c, pid, end: () => c.end({ timeout: 5 }) };
+  [{ pid: s.pid }] = await c`select pg_backend_pid() as pid`;
+  allPids.push(s.pid);
+  return s;
+}
+/**
+ * Ends every session still open: their backends are terminated first (this rolls back their
+ * transactions and releases their locks even if a statement is still waiting), then the client
+ * connections are closed. Only the pids of this test's own sessions are touched.
+ */
+async function closeOpenSessions() {
+  const left = [...openSessions];
+  const pids = left.map((s) => s.pid).filter((p) => Number.isInteger(p));
+  if (pids.length)
+    await sql`select pg_terminate_backend(pid) from pg_stat_activity where pid = any(${pids}::int[])`;
+  for (const s of left) {
+    openSessions.delete(s);
+    await s.c.end({ timeout: 1 }).catch(() => undefined);
+  }
+  return { sessions: left.length, terminated: pids.length };
 }
 const category = (s, id) =>
   s.c`select public.save_operational_menu(${ORG}, 'category', ${s.c.json({ id, name: id })})`;
@@ -123,6 +173,26 @@ async function blockedBy(pid, byPid) {
 /** Resolves to "pending" if the promise has not settled within `ms`. */
 const settled = (p, ms) =>
   Promise.race([p.then(() => "resolved"), sleep(ms).then(() => "pending")]);
+/**
+ * Lock-based (not time-based) proof that `p`, running on backend `pid`, finishes WITHOUT ever being
+ * blocked by `byPid`: polls pg_blocking_pids until `p` settles. Returns { done, blocked }; if it is
+ * ever seen blocked by `byPid` it returns at once (the caller then releases `byPid`).
+ */
+async function finishesWithoutWaitingOn(p, pid, byPid) {
+  let done = false;
+  p.then(
+    () => (done = true),
+    () => (done = true),
+  );
+  for (let i = 0; i < 600; i++) {
+    if (done) return { done: true, blocked: false };
+    const [row] =
+      await sql`select ${byPid}::int = any(pg_blocking_pids(${pid})) as by from pg_stat_activity where pid = ${pid}`;
+    if (row?.by) return { done: false, blocked: true };
+    await sleep(20);
+  }
+  return { done, blocked: false };
+}
 
 try {
   // ---- setup: users, organization, store, members, categories (all owned by this test)
@@ -144,9 +214,18 @@ try {
   const [{ perms }] =
     await sql`select 'menu.create' = any(effective_permissions) and 'menu.edit' = any(effective_permissions) as perms
                 from public.organization_members where org_id = ${ORG} and user_id = ${EDITOR}`;
+  const [{ active, total }] =
+    await sql`select count(*) filter (where active)::int as active, count(*)::int as total
+                from public.menu_categories where org_id = ${ORG}`;
+  const p6 = await product("p6");
   check(
-    "fixture: 7 active categories, product p6 active in c6-from, manager holds menu.create/menu.edit",
-    perms === true && (await product("p6"))?.category === "c6-from",
+    "fixture: exactly 7 categories, all active; product p6 active in c6-from; manager holds menu.create/menu.edit",
+    total === 7 &&
+      active === 7 &&
+      p6?.active === true &&
+      p6.category === "c6-from" &&
+      perms === true,
+    `${active}/${total} active, p6 ${JSON.stringify(p6)}`,
   );
 
   // ---- 1. save first, committed: the archive waits, then refuses
@@ -161,6 +240,12 @@ try {
       "1. the archive waits for the open save (blocked on the category row)",
       await blockedBy(owner.pid, editor.pid),
     );
+    // Test of the cleanup only (never set in the suite): fail while one session holds a row lock and
+    // the other waits for it; the finally block must still release everything and clean up.
+    if (process.env.RACE_TEST_FAULT === "after-lock")
+      throw new Error(
+        "injected fault: one session holds the category lock, the other waits for it",
+      );
     check("1. the archive is still waiting after 1.5 s", (await settled(arch, 1500)) === "pending");
     await editor.c`commit`;
     const outcome = await arch;
@@ -261,9 +346,12 @@ try {
     await saveProduct(a, "p5a", "c5"); // holds FOR SHARE on c5
     await b.c`begin`;
     const second = attempt("5 second save", saveProduct(b, "p5b", "c5"));
+    // proven with pg_blocking_pids while the first save is still open, not with a time window
+    const run = await finishesWithoutWaitingOn(second, b.pid, a.pid);
     check(
-      "5. a second save into the same category completes while the first is still open",
-      (await settled(second, 3000)) === "resolved" && (await second) === "ok",
+      "5. a second save into the same category completes while the first is still open, never blocked by it",
+      run.done && !run.blocked && (await second) === "ok",
+      JSON.stringify(run),
     );
     await a.c`commit`;
     await b.c`commit`;
@@ -344,8 +432,34 @@ try {
       String(productSaves),
     );
   }
+} catch (e) {
+  // An intermediate failure is reported as a failed check (the summary still prints, exit code 1).
+  check("test aborted before its end", false, code(e));
 } finally {
-  // Remove the organization, its rows and the two synthetic users; nothing else is touched.
+  // 1. Sessions still open (only after a failure): terminate their backends, which rolls back their
+  //    transactions and releases their locks, then close them; nothing else is terminated.
+  try {
+    const closed = await closeOpenSessions();
+    // a backend exits a moment after its client disconnects: wait up to 2 s for all of them
+    let alive = -1;
+    let held = -1;
+    for (let i = 0; i < 40; i++) {
+      [{ alive }] =
+        await sql`select count(*)::int as alive from pg_stat_activity where pid = any(${allPids}::int[])`;
+      [{ held }] =
+        await sql`select count(*)::int as held from pg_locks where pid = any(${allPids}::int[])`;
+      if (alive === 0 && held === 0) break;
+      await sleep(50);
+    }
+    check(
+      `cleanup: none of the ${allPids.length} sessions of this test is alive or holds a lock`,
+      alive === 0 && held === 0,
+      `${closed.sessions} were still open at the end (terminated ${closed.terminated}); ${alive} alive, ${held} locks`,
+    );
+  } catch (e) {
+    check("cleanup: sessions of this test closed", false, code(e));
+  }
+  // 2. Remove the organization, its rows and the two synthetic users; nothing else is touched.
   try {
     await fixtures.unsafe(dropIsolatedOrgsSql([ORG]));
     await fixtures.unsafe(dropTestUsersSql([OWNER, EDITOR]));
