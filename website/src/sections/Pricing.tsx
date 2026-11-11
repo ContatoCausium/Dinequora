@@ -1,5 +1,18 @@
+import { useState } from "react";
 import { Check, Minus } from "lucide-react";
-import { formatUsd, getComparison, getPlans, implementationPrice, type ComparisonValue, type Plan } from "../config/pricing";
+import {
+  BILLING,
+  BILLING_PERIODS,
+  billingName,
+  formatUsd,
+  getComparison,
+  getPlans,
+  implementationPrice,
+  periodPrice,
+  type BillingPeriod,
+  type ComparisonValue,
+  type Plan,
+} from "../config/pricing";
 import { statusLabels } from "../content/features";
 import { ButtonLink, cx, Reveal, SectionHeader } from "../components/ui";
 import { pick, useLocale } from "../i18n/locale";
@@ -13,7 +26,7 @@ function RollingOutMark() {
   );
 }
 
-function PlanCard({ plan, index }: { plan: Plan; index: number }) {
+function PlanCard({ plan, index, period }: { plan: Plan; index: number; period: BillingPeriod }) {
   const { locale } = useLocale();
   const t = <T,>(en: T, pt: T) => pick(locale, en, pt);
   const featured = Boolean(plan.highlight);
@@ -43,19 +56,53 @@ function PlanCard({ plan, index }: { plan: Plan; index: number }) {
 
       <div className="mt-7">
         {plan.monthly.kind === "fixed" ? (
-          <p className="flex items-baseline gap-1.5">
-            <span className="display text-5xl text-offwhite tabular-nums">{formatUsd(plan.monthly.amountUsd, locale)}</span>
-            <span className="text-sm text-mist">{t("/ month", "/ mês")}</span>
-          </p>
+          (() => {
+            const price = periodPrice(plan.monthly.amountUsd, period);
+            return (
+              <>
+                <p className="h-6 text-base text-mist tabular-nums">
+                  {period !== "monthly" && (
+                    <span className="line-through">
+                      {formatUsd(plan.monthly.amountUsd, locale)} {t("/ month", "/ mês")}
+                    </span>
+                  )}
+                </p>
+                <p className="flex items-baseline gap-x-1.5 whitespace-nowrap">
+                  <span className="display text-[2.6rem] text-offwhite tabular-nums">{formatUsd(price.perMonth, locale)}</span>
+                  <span className="text-sm text-mist">{t("/ month", "/ mês")}</span>
+                </p>
+                <p className="mt-1 text-xs text-mist/80">
+                  {period === "monthly"
+                    ? t("Recurring subscription, billed monthly in USD", "Assinatura recorrente, cobrada todo mês em dólares (US$)")
+                    : period === "semiannual"
+                      ? t(
+                          `${formatUsd(price.charge, locale)} billed every 6 months, upfront`,
+                          `${formatUsd(price.charge, locale)} cobrados a cada 6 meses, à vista`,
+                        )
+                      : t(
+                          `${formatUsd(price.charge, locale)} billed once a year, upfront`,
+                          `${formatUsd(price.charge, locale)} cobrados uma vez por ano, à vista`,
+                        )}
+                </p>
+                {price.savings > 0 && (
+                  <p className="mt-2 inline-flex rounded-full bg-emerald/12 px-2.5 py-1 text-xs font-semibold text-emerald">
+                    {t(`You save ${formatUsd(price.savings, locale)}`, `Você economiza ${formatUsd(price.savings, locale)}`)}
+                  </p>
+                )}
+              </>
+            );
+          })()
         ) : (
           <p className="flex flex-wrap items-baseline gap-x-1.5">
             <span className="display text-[2.4rem] leading-[1.2] whitespace-nowrap text-offwhite">{plan.monthly.label}</span>
             <span className="text-sm text-mist">{t("monthly pricing", "valor mensal")}</span>
           </p>
         )}
-        <p className="mt-1 text-xs text-mist/70">
-          {t("Recurring subscription, billed monthly in USD", "Assinatura recorrente, cobrada todo mês em dólares (US$)")}
-        </p>
+        {plan.monthly.kind !== "fixed" && (
+          <p className="mt-1 text-xs text-mist/70">
+            {t("Billing period agreed in your contract", "Forma de cobrança definida em contrato")}
+          </p>
+        )}
       </div>
 
       <div className="mt-6 rounded-2xl border border-line-dark bg-white/[0.025] px-4 py-3.5">
@@ -108,9 +155,47 @@ function Cell({ value }: { value: ComparisonValue }) {
   return <span className="text-offwhite/90">{value}</span>;
 }
 
+/** Monthly / every 6 months / yearly. Longer periods are paid upfront and carry a discount. */
+function PeriodSwitch({ value, onChange }: { value: BillingPeriod; onChange: (p: BillingPeriod) => void }) {
+  const { locale } = useLocale();
+  return (
+    <div
+      role="radiogroup"
+      aria-label={pick(locale, "Billing period", "Forma de pagamento")}
+      className="mx-auto mt-12 flex w-fit flex-wrap justify-center gap-1 rounded-full bg-navy-900 p-1.5 ring-1 ring-line-dark"
+    >
+      {BILLING_PERIODS.map((p) => {
+        const on = p === value;
+        const off = Math.round(BILLING[p].discount * 100);
+        return (
+          <button
+            key={p}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(p)}
+            className={cx(
+              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-colors duration-300 sm:px-5",
+              on ? "bg-offwhite text-navy" : "text-mist hover:text-offwhite",
+            )}
+          >
+            {billingName(p, locale)}
+            {off > 0 && (
+              <span className={cx("rounded-full px-1.5 py-0.5 text-[11px] font-bold", on ? "bg-emerald text-navy" : "bg-emerald/15 text-emerald")}>
+                -{off}%
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Pricing() {
   const { locale } = useLocale();
   const t = <T,>(en: T, pt: T) => pick(locale, en, pt);
+  const [period, setPeriod] = useState<BillingPeriod>("annual");
   const plans = getPlans(locale);
   const comparison = getComparison(locale);
   return (
@@ -128,8 +213,8 @@ export function Pricing() {
             </>
           }
           lead={t(
-            "Every plan has two separate charges: a one-time implementation fee to set up your restaurant, and a monthly subscription to use Dinequora. That's it.",
-            "Todo plano tem duas cobranças separadas: uma taxa única de implantação para preparar seu restaurante e uma assinatura mensal para usar o Dinequora. Só isso.",
+            "Every plan has two separate charges: a one-time implementation fee to set up your restaurant, and a subscription to use Dinequora, paid monthly, every 6 months or yearly.",
+            "Todo plano tem duas cobranças separadas: uma taxa única de implantação para preparar seu restaurante e uma assinatura para usar o Dinequora, paga por mês, por semestre ou por ano.",
           )}
         />
 
@@ -145,20 +230,28 @@ export function Pricing() {
             </p>
           </div>
           <div className="rounded-2xl border border-line-dark bg-navy-900/70 px-5 py-4">
-            <p className="text-xs font-semibold tracking-[0.14em] text-emerald uppercase">{t("2 · Monthly", "2 · Mensal")}</p>
+            <p className="text-xs font-semibold tracking-[0.14em] text-emerald uppercase">{t("2 · Recurring", "2 · Recorrente")}</p>
             <p className="mt-1.5 text-sm text-mist">
               <span className="font-medium text-offwhite">{t("Subscription.", "Assinatura.")}</span>{" "}
               {t(
-                "Access to Dinequora for the locations included in your plan. Billed every month.",
-                "Acesso ao Dinequora para as unidades incluídas no seu plano. Cobrada todo mês.",
+                "Access to Dinequora for the locations in your plan. Monthly, or save with 6 or 12 months upfront.",
+                "Acesso ao Dinequora para as unidades do seu plano. Por mês, ou com desconto pagando 6 ou 12 meses à vista.",
               )}
             </p>
           </div>
         </Reveal>
 
-        <div className="mt-16 grid gap-6 lg:grid-cols-3 lg:gap-y-0">
+        <PeriodSwitch value={period} onChange={setPeriod} />
+        <p className="mt-3 text-center text-xs text-mist/75">
+          {t(
+            "Discount on the subscription only. Implementation is charged once, at the same price.",
+            "O desconto vale para a assinatura. A implantação é cobrada uma única vez, pelo mesmo valor.",
+          )}
+        </p>
+
+        <div className="mt-14 grid gap-6 lg:grid-cols-3 lg:gap-y-0">
           {plans.map((plan, i) => (
-            <PlanCard key={plan.id} plan={plan} index={i} />
+            <PlanCard key={plan.id} plan={plan} index={i} period={period} />
           ))}
         </div>
 

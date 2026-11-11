@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, Bot, LineChart, PackageSearch, ReceiptText, Sparkles } from "lucide-react";
-import { formatUsd, PRICES } from "../config/pricing";
+import { BILLING, formatUsd, periodPrice, PRICES } from "../config/pricing";
 import { pick, type Locale } from "../i18n/locale";
 
 export type Step = { number: string; title: string; body: string; deliverables: readonly string[] };
@@ -161,6 +161,9 @@ export function getFaqs(locale: Locale): readonly Faq[] {
   const s = PRICES.starter;
   const g = PRICES.growth;
   const e = PRICES.enterprise;
+  const semi = Math.round(BILLING.semiannual.discount * 100);
+  const year = Math.round(BILLING.annual.discount * 100);
+  const sYear = periodPrice(s.monthlyUsd, "annual");
   if (locale === "pt") {
     return [
       {
@@ -170,6 +173,10 @@ export function getFaqs(locale: Locale): readonly Faq[] {
       {
         q: "O que a assinatura mensal inclui?",
         a: `A assinatura dá à sua equipe acesso ao Dinequora com os recursos do seu plano: ${usd(s.monthlyUsd)} por mês no Starter e ${usd(g.monthlyUsd)} por mês no Growth. No Enterprise, o valor é definido em contrato conforme o número de unidades e o escopo do projeto.`,
+      },
+      {
+        q: "Posso pagar por semestre ou por ano?",
+        a: `Sim. No Starter e no Growth você escolhe pagar por mês, por semestre com ${semi}% de desconto na assinatura ou por ano com ${year}% de desconto. Semestral e anual são pagos à vista pelo período. Exemplo: o Starter anual sai por ${usd(sYear.charge)} no ano, o equivalente a ${usd(sYear.perMonth)} por mês. A implantação não tem desconto e é cobrada uma única vez. No Enterprise, a forma de cobrança é definida em contrato.`,
       },
       {
         q: "Como funcionam várias unidades?",
@@ -209,6 +216,10 @@ export function getFaqs(locale: Locale): readonly Faq[] {
     {
       q: "What does the monthly subscription include?",
       a: `Your subscription gives your team access to Dinequora with the capabilities of your plan: ${usd(s.monthlyUsd)} per month for Starter and ${usd(g.monthlyUsd)} per month for Growth. Enterprise subscriptions are priced by contract based on the number of locations and the scope of the engagement.`,
+    },
+    {
+      q: "Can I pay every 6 months or yearly?",
+      a: `Yes. On Starter and Growth you can pay monthly, every 6 months with ${semi}% off the subscription, or yearly with ${year}% off. Semiannual and yearly plans are paid upfront for the period. For example, Starter yearly is ${usd(sYear.charge)} a year, the equivalent of ${usd(sYear.perMonth)} a month. Implementation is never discounted and is charged once. Enterprise billing is agreed in your contract.`,
     },
     {
       q: "How are multiple locations handled?",

@@ -43,17 +43,58 @@ export const CURRENCY = "USD";
 
 /** Approved amounts in US dollars. `null` monthly = priced by contract. */
 export const PRICES = {
-  starter: { monthlyUsd: 49, implementationUsd: 149 },
-  growth: { monthlyUsd: 119, implementationUsd: 349 },
+  starter: { monthlyUsd: 69, implementationUsd: 149 },
+  growth: { monthlyUsd: 119, implementationUsd: 399.99 },
   enterprise: { monthlyUsd: null, implementationFromUsd: 799 },
 } as const;
 
-/** Formats whole US dollars: "$49" in English, "US$ 49" in Portuguese. */
+/**
+ * Billing periods for the subscription (Starter and Growth; Enterprise is set by contract).
+ * Semiannual and annual are paid upfront for the whole period, in exchange for a discount on
+ * the subscription only. The implementation fee is never discounted and is charged once.
+ * To change a discount, edit it here only; components and tests read from this table.
+ */
+export type BillingPeriod = "monthly" | "semiannual" | "annual";
+export const BILLING_PERIODS: readonly BillingPeriod[] = ["monthly", "semiannual", "annual"];
+export const BILLING: Record<BillingPeriod, { months: number; discount: number }> = {
+  monthly: { months: 1, discount: 0 },
+  semiannual: { months: 6, discount: 0.08 },
+  annual: { months: 12, discount: 0.15 },
+};
+
+/**
+ * What a plan costs for a billing period. The charge for the period is rounded to whole dollars
+ * (what the customer actually pays upfront); the monthly equivalent and the savings follow from it.
+ */
+export function periodPrice(monthlyUsd: number, period: BillingPeriod) {
+  const { months, discount } = BILLING[period];
+  const full = monthlyUsd * months;
+  const charge = period === "monthly" ? monthlyUsd : Math.round(full * (1 - discount));
+  return {
+    months,
+    discount,
+    charge,
+    perMonth: Math.round((charge / months) * 100) / 100,
+    savings: Math.round((full - charge) * 100) / 100,
+  };
+}
+
+export function billingName(period: BillingPeriod, locale: Locale): string {
+  return {
+    monthly: pick(locale, "Monthly", "Mensal"),
+    semiannual: pick(locale, "Every 6 months", "Semestral"),
+    annual: pick(locale, "Yearly", "Anual"),
+  }[period];
+}
+
+/** Formats US dollars: "$69" / "$399.99" in English, "US$ 69" / "US$ 399,99" in Portuguese. Cents only when there are any. */
 export function formatUsd(amount: number, locale: Locale = "en"): string {
+  const cents = Math.round(amount * 100) % 100 !== 0;
   return new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US", {
     style: "currency",
     currency: CURRENCY,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: cents ? 2 : 0,
   }).format(amount);
 }
 
