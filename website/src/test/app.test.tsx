@@ -80,11 +80,32 @@ describe("Dinequora marketing site", () => {
     const pricing = document.getElementById("pricing")!;
     const growth = within(pricing).getByRole("article", { name: "Growth" });
     expect(growth).toHaveTextContent("$119");
-    expect(growth).toHaveTextContent("One-time implementation$349");
+    expect(growth).toHaveTextContent("One-time implementation$399.99");
     expect(growth).toHaveTextContent("Most Popular");
     const enterprise = within(pricing).getByRole("article", { name: "Enterprise" });
     expect(enterprise).toHaveTextContent("From $799");
     expect(enterprise).toHaveTextContent("Subject to scope and contract");
+  });
+
+  it("switches the subscription between monthly, every 6 months and yearly", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const pricing = document.getElementById("pricing")!;
+    const period = within(pricing).getByRole("radiogroup", { name: "Billing period" });
+    const starter = () => within(pricing).getByRole("article", { name: "Starter" });
+    // Yearly is selected by default.
+    expect(within(period).getByRole("radio", { name: /Yearly/ })).toHaveAttribute("aria-checked", "true");
+    expect(starter()).toHaveTextContent("$58.67");
+    expect(starter()).toHaveTextContent("$704 billed once a year, upfront");
+    expect(starter()).toHaveTextContent("You save $124");
+    await user.click(within(period).getByRole("radio", { name: /Every 6 months/ }));
+    expect(starter()).toHaveTextContent("$63.50");
+    expect(starter()).toHaveTextContent("$381 billed every 6 months, upfront");
+    await user.click(within(period).getByRole("radio", { name: /Monthly/ }));
+    expect(starter()).toHaveTextContent("$69/ month");
+    expect(starter()).not.toHaveTextContent("You save");
+    // Implementation keeps its price in every period.
+    expect(starter()).toHaveTextContent("One-time implementation$149");
   });
 
   it("labels AI capabilities as upcoming, not available", () => {
@@ -214,7 +235,7 @@ describe("Portuguese version", () => {
     const text = (el: Element) => (el.textContent ?? "").replace(/\s+/g, " ");
     const growth = within(pricing).getByRole("article", { name: "Growth" });
     expect(text(growth)).toContain("US$ 119");
-    expect(text(growth)).toContain("Implantação (pagamento único)US$ 349");
+    expect(text(growth)).toContain("Implantação (pagamento único)US$ 399,99");
     expect(growth).toHaveTextContent("Mais popular");
     const enterprise = within(pricing).getByRole("article", { name: "Enterprise" });
     expect(text(enterprise)).toContain("A partir de US$ 799");
