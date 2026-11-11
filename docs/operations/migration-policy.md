@@ -38,7 +38,17 @@ banco recém-criado).
    anterior, mesmo formato das existentes).
 3. Registrar o hash: `node scripts/qa/check-migrations.mjs --add-new-hashes` (só acrescenta; nunca
    reescreve um hash existente).
-4. Regenerar `src/integrations/supabase/types.ts` no mesmo commit.
+4. Regenerar `src/integrations/supabase/types.ts` no mesmo commit, **sempre pelo script** e só
+   contra uma stack local criada do zero:
+   `supabase start --workdir scripts/qa ...`, aplicar as migrations
+   (`LOVABLE_DB_MIGRATION_URL=<url local> npx drizzle-kit migrate`) e
+   `bash scripts/qa/gen-types.sh`. O script recusa uma CLI diferente da fixada na CI
+   (`supabase/setup-cli`, hoje 3.0.0) e qualquer banco que não seja local; gera só o esquema
+   `public` e aplica apenas o Prettier do repositório (formatação; nomes, opcionalidade e
+   nulabilidade não mudam). Nunca editar o arquivo à mão nem usar `--remote`, `--linked` ou
+   `--project-id`. A CI (job `security`, passo "Generated types match the migrations") roda
+   `bash scripts/qa/gen-types.sh --check` depois de aplicar as migrations do zero e falha se o
+   arquivo versionado divergir. Ao atualizar a versão da CLI na CI, regenerar os tipos no mesmo PR.
 5. Testar num banco descartável: aplicar do zero (`scripts/qa/security-suite.sh`) e, se houver
    dados afetados, ensaiar a atualização numa cópia restaurada da demonstração (nunca na própria
    demonstração e nunca na CI, porque o dump contém dados de usuários).
