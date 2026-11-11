@@ -65,13 +65,16 @@ DO $$ DECLARE a public.audit_logs; BEGIN
  IF (SELECT active FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='seasonal') IS DISTINCT FROM false THEN
   RAISE EXCEPTION 'FAIL 1 category not archived'; END IF;
  SELECT * INTO a FROM public.audit_logs WHERE org_id='b2600000-0000-4000-8000-000000000001' AND action='menu.archived' AND target='seasonal';
- IF a.id IS NULL OR a.actor_id<>'a2600000-0000-4000-8000-000000000001' OR a.metadata->>'kind'<>'category' THEN
+ IF a.id IS NULL OR a.actor_id IS DISTINCT FROM 'a2600000-0000-4000-8000-000000000001'::uuid
+    OR a.metadata->>'kind' IS DISTINCT FROM 'category' THEN
   RAISE EXCEPTION 'FAIL 1 audit row: %', to_jsonb(a); END IF;
  IF (SELECT count(*) FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND active)<>3 THEN
   RAISE EXCEPTION 'FAIL 1 another category changed'; END IF;
 END $$;
 
 -- ---------------------------------------------------------------- 2. idempotent: archiving it again
+-- The menu state does not change, but the call is audited again (same as 0018 and as the product
+-- branch): exactly two menu.archived rows for this category, both by owner A.
 SET ROLE authenticated;
 SELECT public.archive_operational_menu('b2600000-0000-4000-8000-000000000001','category','seasonal');
 RESET ROLE;
@@ -79,6 +82,10 @@ DO $$ BEGIN
  IF (SELECT active FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='seasonal') IS DISTINCT FROM false
     OR (SELECT count(*) FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND active)<>3 THEN
   RAISE EXCEPTION 'FAIL 2 second archive changed the menu'; END IF;
+ IF (SELECT count(*) FROM public.audit_logs WHERE org_id='b2600000-0000-4000-8000-000000000001' AND action='menu.archived' AND target='seasonal')<>2
+    OR (SELECT count(*) FROM public.audit_logs WHERE org_id='b2600000-0000-4000-8000-000000000001' AND action='menu.archived' AND target='seasonal'
+          AND actor_id='a2600000-0000-4000-8000-000000000001' AND metadata->>'kind'='category')<>2 THEN
+  RAISE EXCEPTION 'FAIL 2 repeated archive: expected exactly two audit rows by owner A'; END IF;
 END $$;
 
 -- ---------------------------------------------------------------- 3. a category that does not exist: refused, nothing written
@@ -89,7 +96,7 @@ DO $$ BEGIN
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'not_found' THEN RAISE EXCEPTION 'FAIL 3 expected not_found, got %', SQLERRM; END IF; END $$;
 RESET ROLE;
 DO $$ BEGIN
- IF EXISTS(SELECT 1 FROM public.audit_logs WHERE action='menu.archived' AND target='no-such-category') THEN
+ IF EXISTS(SELECT 1 FROM public.audit_logs WHERE org_id='b2600000-0000-4000-8000-000000000001' AND action='menu.archived' AND target='no-such-category') THEN
   RAISE EXCEPTION 'FAIL 3 audit row recorded for a category that does not exist'; END IF;
 END $$;
 
@@ -129,6 +136,12 @@ DO $$ BEGIN
  PERFORM public.archive_operational_menu('b2600000-0000-4000-8000-000000000001','category','sides');
  RAISE EXCEPTION 'FAIL 6 manager archived a category';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 6 manager: expected forbidden, got %', SQLERRM; END IF; END $$;
+-- authorization comes before existence: a manager naming a category that does not exist gets
+-- forbidden, never not_found (no way to probe which category ids exist)
+DO $$ BEGIN
+ PERFORM public.archive_operational_menu('b2600000-0000-4000-8000-000000000001','category','no-such-category');
+ RAISE EXCEPTION 'FAIL 6 manager archived a missing category';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 6 manager, missing category: expected forbidden, got %', SQLERRM; END IF; END $$;
 -- staff (no menu.delete)
 SELECT set_config('request.jwt.claim.sub','a2600000-0000-4000-8000-000000000003',false);
 DO $$ BEGIN
@@ -182,8 +195,10 @@ DO $$ BEGIN
   RAISE EXCEPTION 'FAIL 7 org B category not archived'; END IF;
  IF (SELECT active FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='drinks') IS DISTINCT FROM true THEN
   RAISE EXCEPTION 'FAIL 7 org A category with the same client id was changed'; END IF;
- IF (SELECT org_id FROM public.audit_logs WHERE action='menu.archived' AND target='drinks') IS DISTINCT FROM 'b2600000-0000-4000-8000-000000000002' THEN
+ IF (SELECT count(*) FROM public.audit_logs WHERE org_id='b2600000-0000-4000-8000-000000000002' AND action='menu.archived' AND target='drinks')<>1 THEN
   RAISE EXCEPTION 'FAIL 7 audit row of org B'; END IF;
+ IF EXISTS(SELECT 1 FROM public.audit_logs WHERE org_id='b2600000-0000-4000-8000-000000000001' AND action='menu.archived' AND target='drinks') THEN
+  RAISE EXCEPTION 'FAIL 7 org A got an audit row for the archive done in org B'; END IF;
 END $$;
 
 -- ---------------------------------------------------------------- 8. product branch (unchanged behavior)
@@ -265,14 +280,20 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 DO $$ DECLARE p public.menu_products; BEGIN
- IF (SELECT name FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='drinks')<>'Cold drinks' THEN RAISE EXCEPTION 'FAIL 9 category rename'; END IF;
+ IF (SELECT name FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='drinks') IS DISTINCT FROM 'Cold drinks' THEN RAISE EXCEPTION 'FAIL 9 category rename'; END IF;
  IF (SELECT active FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='seasonal') IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 9 re-saved category not restored'; END IF;
  SELECT * INTO p FROM public.menu_products WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='soda';
- IF p.price_cents<>275 OR NOT p.active OR p.category_id<>(SELECT id FROM public.menu_categories WHERE org_id=p.org_id AND client_id='seasonal') THEN RAISE EXCEPTION 'FAIL 9 product edit: %', to_jsonb(p); END IF;
+ IF p.id IS NULL THEN RAISE EXCEPTION 'FAIL 9 product soda not found'; END IF;
+ IF p.price_cents IS DISTINCT FROM 275 OR p.active IS DISTINCT FROM true
+    OR p.category_id IS DISTINCT FROM (SELECT id FROM public.menu_categories WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='seasonal') THEN
+  RAISE EXCEPTION 'FAIL 9 product edit: %', to_jsonb(p); END IF;
  SELECT * INTO p FROM public.menu_products WHERE org_id='b2600000-0000-4000-8000-000000000001' AND client_id='a1-tea';
- IF p.name<>'A1 Iced Tea' OR p.price_cents<>325 OR p.location_ids<>ARRAY['c2600000-0000-4000-8000-000000000001'::uuid] THEN RAISE EXCEPTION 'FAIL 9 manager product: %', to_jsonb(p); END IF;
+ IF p.id IS NULL THEN RAISE EXCEPTION 'FAIL 9 product a1-tea not found'; END IF;
+ IF p.name IS DISTINCT FROM 'A1 Iced Tea' OR p.price_cents IS DISTINCT FROM 325
+    OR p.location_ids IS DISTINCT FROM ARRAY['c2600000-0000-4000-8000-000000000001'::uuid] THEN
+  RAISE EXCEPTION 'FAIL 9 manager product: %', to_jsonb(p); END IF;
  IF EXISTS(SELECT 1 FROM public.menu_products WHERE client_id='staff-item') OR EXISTS(SELECT 1 FROM public.menu_categories WHERE client_id='manager-cat') THEN RAISE EXCEPTION 'FAIL 9 refused save wrote a row'; END IF;
 END $$;
 
-SELECT ' PASS: category archive works (empty and all-unavailable categories), idempotent, missing category refused without audit, category in use kept, products untouched, audit row (actor, kind), owner-only (manager/staff/non-member/no session/anon refused), grants/SECURITY DEFINER/search_path kept, same client id isolated per organization, product archive unchanged (store scope, staff, missing, kind), menu edits/availability/category moves/manager and staff permissions';
+SELECT ' PASS: category archive works (empty and all-unavailable categories), idempotent (repeat audited: exactly two rows), missing category refused without audit, category in use kept, products untouched, audit row (actor, kind, per organization), owner-only (manager/staff/non-member/no session/anon refused; manager gets forbidden, not not_found, for a missing category), grants/SECURITY DEFINER/search_path kept, same client id isolated per organization, product archive unchanged (store scope, staff, missing, kind), menu edits/availability/category moves/manager and staff permissions';
 ROLLBACK;
