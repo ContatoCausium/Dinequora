@@ -77,6 +77,15 @@ banco recém-criado).
   criada: foi o que quebrou o arquivamento de categorias de 0013 a 0025 (corrigido em 0026). Todo
   ramo de uma função nova ou alterada precisa ser executado por uma fixture em
   `scripts/security/`.
+  - Exceção que o próprio PostgreSQL impõe: as colunas de destino de `SET` em `UPDATE` (e em
+    `ON CONFLICT ... DO UPDATE SET`) e a lista de colunas de `INSERT INTO t (a, b)` **não aceitam**
+    o alias. `UPDATE public.menu_categories mc SET mc.active = false` falha com `42703` (o
+    PostgreSQL lê `mc.active` como o campo `active` de uma coluna `mc`) e `INSERT INTO t x (x.a)`
+    com `42601`. Essas posições sempre designam colunas da tabela alvo e nunca são trocadas por uma
+    variável, então não ficam ambíguas mesmo que exista uma variável com o mesmo nome: escrever
+    `SET active = false` e qualificar todo o resto (`WHERE mc.id = _category_id`). O lado direito
+    do `SET`, o `WHERE` e o `RETURNING` seguem a regra geral (lá uma coluna sem alias com o nome de
+    uma variável dá `42702`).
 - Nunca dados de demonstração ou de cliente em migrations estruturais; seeds ficam em
   `scripts/seeds/` (`docs/operations/data-layers-and-marao-production.md`).
 
