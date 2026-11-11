@@ -19,10 +19,12 @@
 #      answer in its own organization and is refused for stores of another organization
 #   5c. 0025 concurrency: a sale and a store rate change in two PostgreSQL sessions are serialized
 #      (FOR SHARE / FOR UPDATE); no sale is recorded with a rate the server did not validate
+#      (own isolated organization, store and synthetic members, removed at the end)
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
-#      >100 newer orders, realtime events of the own organization only
+#      >100 newer orders, realtime events of the own organization only (each file in its own
+#      isolated organization, fixed timestamps, run in parallel)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -80,8 +82,7 @@ run_check scripts/security/permission_equivalence.sql
 echo "::endgroup::"
 
 echo "::group::5c. sale vs rate change concurrency (0025, two PostgreSQL sessions)"
-QA_DB_URL="$DB_URL" CREDS_FILE="$CREDS_FILE" \
-  node scripts/security/tax_rate_concurrency.mjs | tee "$ARTIFACTS/tax-rate-concurrency.txt" | grep -v "^PASS"
+QA_DB_URL="$DB_URL" node scripts/security/tax_rate_concurrency.mjs | tee "$ARTIFACTS/tax-rate-concurrency.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
@@ -92,9 +93,10 @@ done
 run_check scripts/security/demo_seed_rebuild.sql
 echo "::endgroup::"
 echo "::group::7. order history and kitchen board against the database"
-# One file at a time: both files insert and count orders of the same QA tenant.
+# Each file works only in organizations it creates and removes (scripts/qa/isolated-org.mjs), so
+# the files run in parallel (vitest default) and nothing the earlier steps recorded can interfere.
 QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
-  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run --no-file-parallelism \
+  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run \
   src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
