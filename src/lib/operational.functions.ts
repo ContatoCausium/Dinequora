@@ -216,6 +216,12 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
       orgId: z.string().min(1),
       locationId: z.string().optional(),
       status: z.enum(["new", "confirmed", "in_prep", "ready", "delivered", "cancelled"]).optional(),
+      statuses: z
+        .array(z.enum(["new", "confirmed", "in_prep", "ready", "delivered", "cancelled"]))
+        .min(1)
+        .max(6)
+        .optional(),
+      oldestFirst: z.boolean().optional(),
       channel: z.enum(["dine_in", "takeout", "delivery"]).optional(),
       startDate: z.string().optional(),
       endDate: z.string().optional(),
@@ -234,6 +240,8 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
       orgId: s.org.id,
       locationId: s.location?.id,
       status: data.status,
+      statuses: data.statuses,
+      oldestFirst: data.oldestFirst,
       channel: data.channel,
       startDate: data.startDate,
       endDate: data.endDate,

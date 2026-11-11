@@ -40,8 +40,9 @@ import {
   type RecordedOrder,
 } from "@/lib/recorded-data";
 import { isRecordedSale } from "@/lib/report-metrics";
-import { fmtBasisPoints, fmtDateTime, fmtMoneyCents, fmtNumber } from "@/lib/format";
+import { displayAmount, fmtBasisPoints, fmtDateTime, fmtMoneyCents, fmtNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { averageCents, basisPointsFromPercent } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/orders")({
   head: () => ({
@@ -107,7 +108,7 @@ function OrdersPage() {
       count: orders.length,
       cancelled: orders.length - orders.filter((o) => o.status !== "cancelled").length,
       net,
-      avg: valid.length ? Math.round(net / valid.length) : 0,
+      avg: displayAmount(() => averageCents(net, valid.length), "money.orders_average"),
       open: orders.filter((o) => OPEN_STATUSES.includes(o.status)).length,
     };
   }, [orders]);
@@ -544,7 +545,13 @@ function OrderSheet({
                   )}
                   <Row
                     label={t("detail.tax", {
-                      rate: fmtBasisPoints(Math.round(order.taxRatePercent * 100), lng),
+                      rate: fmtBasisPoints(
+                        displayAmount(
+                          () => basisPointsFromPercent(order.taxRatePercent),
+                          "rate.order_display",
+                        ),
+                        lng,
+                      ),
                     })}
                     value={fmtMoneyCents(order.taxCents, lng)}
                   />

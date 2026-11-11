@@ -8,6 +8,8 @@ import {
 } from "./recipes-service";
 import type { Supplier, PurchaseOrder } from "./suppliers-purchases-service";
 import { EXPENSE_CATEGORIES, type Expense } from "./finance-service";
+import { multiplyQuantityCents } from "./money";
+import { displayAmount } from "./format";
 
 /**
  * inventory_movements.kind as written by the RPCs. Manual movements (in/out/loss/adjustment) are all
@@ -116,7 +118,11 @@ export function mapResources(r: Resources) {
         quantityOrdered: i.quantity_ordered,
         quantityReceived: i.quantity_received,
         unitPriceCents: i.unit_price_cents,
-        subtotalCents: Math.round(i.quantity_ordered * i.unit_price_cents),
+        // Same line amount as the server: round(quantity_ordered * unit_price_cents).
+        subtotalCents: displayAmount(
+          () => multiplyQuantityCents(i.quantity_ordered, i.unit_price_cents),
+          "money.purchase_line",
+        ),
       };
     });
     const subtotal = its.reduce((sum, i) => sum + i.subtotalCents, 0);

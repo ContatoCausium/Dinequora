@@ -1,6 +1,7 @@
 import { assertLocationAllowed, assertTenantContext, isLocationAllowed } from "./tenant-storage";
 import { MenuItem } from "./menu-service";
 import { OrderItem, OrderType, SelectedModifier, calculateOrderSummary } from "./orders-service";
+import { basisPointsFromPercent, isCents } from "./money";
 
 export type POSPaymentMethod = "cash" | "card" | "digital";
 export type PaymentMethod = POSPaymentMethod;
@@ -44,14 +45,14 @@ export interface SuspendedSale {
 
 /**
  * Default POS sales-tax rate in basis points (888 = 8.88%). The backend receives
- * `Math.round(taxRatePercent * 100)` basis points (see `persistFinalizedPOSSaleAtomic`), so the
- * cart preview uses exactly the rate that is persisted instead of a more precise one it can't store.
+ * basisPointsFromPercent(taxRatePercent) (see `persistFinalizedPOSSaleAtomic`), and the cart preview
+ * uses exactly that rate, so the preview and the recorded sale never differ.
  */
 export const DEFAULT_POS_TAX_RATE_BASIS_POINTS = 888;
 
 /** Rate actually sent to the backend for this session, in basis points. */
 export function posTaxRateBasisPoints(session: Pick<POSSession, "taxRatePercent">): number {
-  return Math.round(session.taxRatePercent * 100);
+  return basisPointsFromPercent(session.taxRatePercent);
 }
 
 const SUSPENDED_STORAGE_PREFIX = "servora.pos.suspended.";
@@ -74,6 +75,21 @@ const isValidSuspended = (s: unknown, orgId: string): s is SuspendedSale => {
     r.locationId !== "" &&
     Array.isArray(r.items) &&
     r.items.length > 0 &&
+    // Amounts must be whole cents: a corrupted ticket goes to quarantine instead of breaking the
+    // POS when its totals are recalculated (P2).
+    r.items.every(
+      (i) =>
+        typeof i === "object" &&
+        i !== null &&
+        isCents(i.basePriceCents) &&
+        isCents(i.subtotalCents) &&
+        Number.isSafeInteger(i.quantity) &&
+        i.quantity > 0 &&
+        (i.modifiers === undefined ||
+          (Array.isArray(i.modifiers) && i.modifiers.every((m) => isCents(m?.priceCents)))),
+    ) &&
+    (r.discountCents === undefined || isCents(r.discountCents)) &&
+    (r.taxRatePercent === undefined || Number.isFinite(r.taxRatePercent)) &&
     typeof r.suspendedAt === "string" &&
     !Number.isNaN(Date.parse(r.suspendedAt))
   );

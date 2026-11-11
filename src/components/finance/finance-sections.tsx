@@ -21,7 +21,7 @@ import {
   type ExpenseSummary,
 } from "@/lib/expense-metrics";
 import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory } from "@/lib/finance-service";
-import { fmtDate, fmtMoneyCents, fmtPercent } from "@/lib/format";
+import { displayAmount, fmtDate, fmtMoneyCents, fmtPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ChartLegend, MoneyChart, RankedBars, type Series } from "./finance-charts";
 import {
@@ -33,6 +33,7 @@ import {
   type MonthPoint,
   type StoreResult,
 } from "./finance-model";
+import { averageCents } from "@/lib/money";
 
 /** Shared row actions and display context passed down from the page. */
 export interface ExpenseActions {
@@ -709,7 +710,10 @@ export function CashflowSection({
           label={t("cashflow.weeklyRevenue")}
           value={fmtMoneyCents(last28RevenueCents, lng)}
           hint={t("cashflow.weeklyRevenueHint", {
-            avg: fmtMoneyCents(Math.round(last28RevenueCents / 4), lng),
+            avg: fmtMoneyCents(
+              displayAmount(() => averageCents(last28RevenueCents, 4), "money.finance_average"),
+              lng,
+            ),
           })}
         />
         <StatTile

@@ -70,5 +70,12 @@
     "syncFailed": "The ticket could not be updated",
     "itemFailed": "Item could not be updated",
     "simulated": "New simulated order received: {{number}}"
+  },
+  "capNotice": {
+    "title": "Not every open ticket fits on the board",
+    "body_one": "Showing the {{shown}} oldest open tickets of {{total}} (all stations). The newest ticket is not on screen until earlier tickets are completed.",
+    "body_other": "Showing the {{shown}} oldest open tickets of {{total}} (all stations). The {{count}} newest tickets are not on screen until earlier tickets are completed.",
+    "station_one": "{{count}} of the tickets on the board belongs to the selected station.",
+    "station_other": "{{count}} of the tickets on the board belong to the selected station."
   }
 }

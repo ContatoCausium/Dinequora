@@ -41,6 +41,7 @@
     "category": "Category",
     "selectCategory": "Select category…",
     "price": "Price (USD)",
+    "invalidPrice": "Enter a valid price, for example 12.50.",
     "prepTime": "Estimated Prep Time (minutes)",
     "imageUrl": "Image URL",
     "notes": "Internal Kitchen Notes",

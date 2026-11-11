@@ -70,5 +70,12 @@
     "syncFailed": "Não foi possível atualizar a comanda",
     "itemFailed": "Não foi possível atualizar o item",
     "simulated": "Novo pedido simulado recebido: {{number}}"
+  },
+  "capNotice": {
+    "title": "Nem todos os tickets abertos cabem no quadro",
+    "body_one": "Exibindo os {{shown}} tickets abertos mais antigos de {{total}} (todas as estações). O ticket mais recente não aparece até que tickets anteriores sejam concluídos.",
+    "body_other": "Exibindo os {{shown}} tickets abertos mais antigos de {{total}} (todas as estações). Os {{count}} tickets mais recentes não aparecem até que tickets anteriores sejam concluídos.",
+    "station_one": "{{count}} dos tickets no quadro é da estação selecionada.",
+    "station_other": "{{count}} dos tickets no quadro são da estação selecionada."
   }
 }

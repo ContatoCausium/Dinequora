@@ -55,6 +55,7 @@ import {
 import { DemoBadge } from "@/components/app/brand-mark";
 import { cn } from "@/lib/utils";
 import { fmtMoneyCents } from "@/lib/format";
+import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/menu")({
   head: () => ({
@@ -191,7 +192,7 @@ function MenuPage() {
     setFormName(item.name);
     setFormDesc(item.description);
     setFormCategory(item.category);
-    setFormPrice((item.priceCents / 100).toFixed(2));
+    setFormPrice(centsToDecimalString(item.priceCents));
     setFormPrep(String(item.prepTimeMinutes));
     setFormImage(item.imageUrl || "");
     setFormActive(item.active);
@@ -204,7 +205,11 @@ function MenuPage() {
       toast.error("Item name is required");
       return;
     }
-    const cents = Math.round(parseFloat(formPrice || "0") * 100);
+    const cents = centsFromNumberInput(formPrice || "0"); // <input type="number">
+    if (cents === null) {
+      toast.error(t("form.invalidPrice"));
+      return;
+    }
     const prep = parseInt(formPrep || "5", 10);
 
     const toSave: MenuItem = {

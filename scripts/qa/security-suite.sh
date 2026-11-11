@@ -11,12 +11,16 @@
 #   2. journal/tracker/hash integrity and SQL-first policy (scripts/qa/check-migrations.mjs)
 #   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
-#      movement idempotence/consent/auth, purchase receipts/transfer conservation
+#      movement idempotence/consent/auth, purchase receipts/transfer conservation,
+#      0022 cross-organization store scope and organization features (rolled back)
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
+#   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
+#      answer in its own organization and is refused for stores of another organization
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
-#      sales created mid-read), totals match the table
+#      sales created mid-read), totals match the table; kitchen board: every open ticket once with
+#      >100 newer orders, realtime events of the own organization only
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -54,7 +58,7 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations reconstructed_hardening reconstructed_purchases; do
+for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features; do
   run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"
@@ -69,6 +73,10 @@ SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE=
   node scripts/security/permission_matrix.mjs | tee "$ARTIFACTS/permission-matrix.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
+echo "::group::5b. permission equivalence (0022)"
+run_check scripts/security/permission_equivalence.sql
+echo "::endgroup::"
+
 echo "::group::6. demo reconstruction"
 for run in 1 2; do
   out=$(run_sql scripts/seeds/demo/seed-demo-orgs.sql 2>&1) || { echo "$out" | tail -5; echo "FAIL demo seed run $run"; exit 1; }
@@ -76,9 +84,11 @@ for run in 1 2; do
 done
 run_check scripts/security/demo_seed_rebuild.sql
 echo "::endgroup::"
-echo "::group::7. order history paging against the database"
+echo "::group::7. order history and kitchen board against the database"
+# One file at a time: both files insert and count orders of the same QA tenant.
 QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
-  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/orders-paging.db.test.ts
+  QA_PROJECT="$QA_PROJECT" npx --no-install vitest run --no-file-parallelism \
+  src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."

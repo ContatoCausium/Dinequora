@@ -189,14 +189,19 @@ describe("finance model", () => {
     expect(expensePayload({ ...e, paidAt: "x" })).not.toHaveProperty("paidAt");
   });
 
-  it("parses user-typed amounts in both decimal conventions", () => {
+  it("reads the expense amount field (<input type=number>: '.' decimal in every language)", () => {
     expect(parseAmountToCents("1234.5")).toBe(123450);
-    expect(parseAmountToCents("1,234.50")).toBe(123450);
-    expect(parseAmountToCents("1.234,50")).toBe(123450);
-    expect(parseAmountToCents("85,9")).toBe(8590);
-    expect(parseAmountToCents("1,234")).toBe(123400);
+    expect(parseAmountToCents("85.9")).toBe(8590);
+    // three decimals are decimals, rounded to the cent like the server — never thousands
+    expect(parseAmountToCents("0.125")).toBe(13);
+    expect(parseAmountToCents("9.995")).toBe(1000);
+    expect(parseAmountToCents("12.345")).toBe(1235);
+    // a number input never yields grouping or a comma; such text is refused, not guessed
+    expect(parseAmountToCents("1,234.50")).toBeNull();
+    expect(parseAmountToCents("1.234,50")).toBeNull();
     expect(parseAmountToCents("abc")).toBeNull();
     expect(parseAmountToCents("")).toBeNull();
+    expect(parseAmountToCents("-5")).toBeNull();
   });
 
   it("never fabricates monthly-trend report rows", () => {

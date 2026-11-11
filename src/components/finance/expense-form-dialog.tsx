@@ -113,7 +113,12 @@ export function ExpenseFormDialog({
                 </label>
                 <Input
                   id={`${id}-amount`}
+                  type="number"
                   inputMode="decimal"
+                  // "any": this field is inside a <form>; step="0.01" would make the browser
+                  // refuse to submit 12.345 instead of rounding it to the cent like every field.
+                  step="any"
+                  min="0"
                   value={v.amount}
                   onChange={(e) => set("amount", e.target.value)}
                   placeholder={t("form.amountPlaceholder")}

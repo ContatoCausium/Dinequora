@@ -42,7 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { computeKpis } from "@/lib/demo-data";
 import { storeMetricsSince, storeSalesMetrics } from "@/lib/location-metrics";
 import { fetchAllOrders } from "@/lib/recorded-data";
-import { fmtCurrency, fmtNumber, fmtPercent } from "@/lib/format";
+import { fmtCurrency, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
 import {
   createLocation,
   fetchTeam,
@@ -213,7 +213,7 @@ function LocationsPage() {
                     }
                     const m = storeSalesMetrics(recorded.data.orders, l.id);
                     return [
-                      { k: "sales", v: fmtCurrency(m.salesCents / 100, lng, true) },
+                      { k: "sales", v: fmtMoneyCents(m.salesCents, lng, { compact: true }) },
                       { k: "orders", v: fmtNumber(m.orders, lng, true) },
                       {
                         k: "growth",
