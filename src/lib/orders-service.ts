@@ -1,6 +1,6 @@
 import { assertLocationAllowed, assertTenantContext, isLocationAllowed } from "./tenant-storage";
 import { MenuItem, ModifierGroup, ModifierOption } from "./menu-service";
-import { basisPointsFromPercent, lineTotalCents, saleTotals } from "./money";
+import { lineTotalCents, saleTotals } from "./money";
 
 export type OrderType = "dine_in" | "takeout" | "delivery";
 
@@ -57,7 +57,8 @@ export interface Order {
   items: OrderItem[];
   subtotalCents: number;
   discountCents: number;
-  taxRatePercent: number;
+  /** Sales-tax rate the order was charged, in parts per million (migration 0025). */
+  taxRatePpm: number;
   taxCents: number;
   totalCents: number;
   specialInstructions?: string;
@@ -82,18 +83,20 @@ export function calculateItemTotal(
 }
 
 /**
- * Cart/order totals with the server's formula (create_pos_sale): the rate is first converted to the
- * whole basis points the server receives, then tax = round((subtotal − discount) × bp / 10,000).
+ * Cart/order totals with the server's formula (create_pos_sale_v2): the store rate in parts per
+ * million, tax = round((subtotal − discount) × ppm / 1,000,000). A store whose rate is not
+ * configured yet (null) previews 0 tax; the server refuses to record such a sale, and the POS
+ * blocks the checkout.
  */
 export function calculateOrderSummary(
   items: OrderItem[],
-  taxRatePercent: number = 8.88,
+  taxRatePpm: number | null,
   discountCents: number = 0,
 ): { subtotalCents: number; taxCents: number; totalCents: number } {
   const totals = saleTotals(
     items.map((item) => item.subtotalCents),
     discountCents,
-    basisPointsFromPercent(taxRatePercent),
+    taxRatePpm ?? 0,
   );
   return {
     subtotalCents: totals.subtotalCents,
@@ -169,7 +172,7 @@ export function getInitialDemoOrders(orgId: string, locationId: string): Order[]
       ],
       subtotalCents: 4150,
       discountCents: 0,
-      taxRatePercent: 8.875,
+      taxRatePpm: 88750,
       taxCents: 368,
       totalCents: 4518,
       specialInstructions: "Serve fries first if ready",
@@ -227,7 +230,7 @@ export function getInitialDemoOrders(orgId: string, locationId: string): Order[]
       ],
       subtotalCents: 1700,
       discountCents: 200,
-      taxRatePercent: 8.875,
+      taxRatePpm: 88750,
       taxCents: 133,
       totalCents: 1633,
       specialInstructions: "Ring doorbell twice and leave on doorstep",
@@ -267,7 +270,7 @@ export function getInitialDemoOrders(orgId: string, locationId: string): Order[]
       ],
       subtotalCents: 1450,
       discountCents: 0,
-      taxRatePercent: 8.875,
+      taxRatePpm: 88750,
       taxCents: 129,
       totalCents: 1579,
       createdAt: subHours(1.1),

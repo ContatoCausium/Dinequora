@@ -94,6 +94,10 @@ Lacunas:
 
 ### 1.4 Impostos
 
+> Atualização (migration 0025, branch `fix/backend-stabilization`): a alíquota agora é por loja, em
+> partes por milhão, cobrada exclusivamente pelo servidor; o cliente só confirma a alíquota exibida.
+> Ver `docs/operations/store-sales-tax.md`. Os pontos abaixo descrevem o estado anterior.
+
 - O servidor calcula `tax = round((subtotal − desconto) × bps / 10000)` (0018:346), arredondando
   meio para cima (_half away from zero_), sobre o pedido inteiro.
 - **A alíquota vem do navegador**: `DEFAULT_POS_TAX_RATE_BASIS_POINTS = 888`

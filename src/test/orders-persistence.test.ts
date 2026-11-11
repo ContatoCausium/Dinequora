@@ -42,7 +42,7 @@ describe("Orders persistence and multi-tenant integrity", () => {
           subtotalCents: 2000,
         },
       ],
-      10,
+      100000, // 10% in parts per million
       500,
     );
 
@@ -87,7 +87,7 @@ describe("Orders persistence and multi-tenant integrity", () => {
       },
     ];
 
-    const summary = calculateOrderSummary(items, 8.25, 200);
+    const summary = calculateOrderSummary(items, 82500, 200);
     expect(summary.subtotalCents).toBe(3800);
     // Taxable = 3800 - 200 = 3600; 8.25% of 3600 = 297 cents
     expect(summary.taxCents).toBe(297);
@@ -116,7 +116,7 @@ describe("Orders persistence and multi-tenant integrity", () => {
       ],
       subtotalCents: 1200,
       discountCents: 0,
-      taxRatePercent: 8.25,
+      taxRatePpm: 82500,
       taxCents: 99,
       totalCents: 1299,
       createdAt: new Date().toISOString(),
@@ -163,7 +163,7 @@ describe("Orders persistence and multi-tenant integrity", () => {
         items: [],
         subtotalCents: 1000,
         discountCents: 0,
-        taxRatePercent: 8.25,
+        taxRatePpm: 82500,
         taxCents: 83,
         totalCents: 1083,
         createdAt: new Date().toISOString(),
@@ -182,7 +182,7 @@ describe("Orders persistence and multi-tenant integrity", () => {
         items: [],
         subtotalCents: 1500,
         discountCents: 0,
-        taxRatePercent: 8.25,
+        taxRatePpm: 82500,
         taxCents: 124,
         totalCents: 1624,
         createdAt: new Date().toISOString(),

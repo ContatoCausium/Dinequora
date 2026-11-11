@@ -24,6 +24,11 @@ export type Location = {
   lifecycle?: "active" | "inactive" | "placeholder" | undefined;
   phone?: string | undefined;
   hours?: Record<string, { open: string; close: string } | null> | undefined;
+  /**
+   * Sales-tax rate the POS charges at this store, in parts per million (88,750 = 8.875%); null =
+   * not configured yet, so no sale can be recorded there (migration 0025).
+   */
+  taxRatePpm?: number | null | undefined;
   /** Relative size factor used only to shape synthetic demo data. */
   demoScale: number;
 };

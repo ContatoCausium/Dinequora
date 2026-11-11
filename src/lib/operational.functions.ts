@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { menuItemSchema, modifierGroupsSchema, saleInputSchema } from "./operational-contracts";
+import {
+  menuItemSchema,
+  modifierGroupsSchema,
+  recipePayloadSchema,
+  saleInputSchema,
+} from "./operational-contracts";
 import { orderListQuery } from "./orders-query";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
@@ -164,7 +169,7 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       _table_number: data.tableNumber ?? "",
       _notes: data.notes ?? "",
       _discount_cents: data.discountCents,
-      _tax_rate_basis_points: data.taxRateBasisPoints,
+      _tax_rate_ppm: data.taxRatePpm,
       _is_simulation: data.isSimulation,
       _client_order_id: data.clientOrderId,
       _items: data.items.map((i) => ({
@@ -174,12 +179,14 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
         modifiers: i.modifiers.map((m) => ({ group_id: m.groupId, option_id: m.optionId })),
       })),
     };
+    // v2 (migration 0025): the tax is computed from the store's configured rate; _tax_rate_ppm is
+    // the rate the client displayed and must match it exactly.
     const result = data.paymentMethod
-      ? await context.supabase.rpc("persist_finalized_pos_sale_atomic", {
+      ? await context.supabase.rpc("persist_finalized_pos_sale_atomic_v2", {
           ...args,
           _payment_method: data.paymentMethod,
         })
-      : await context.supabase.rpc("create_pos_sale", args);
+      : await context.supabase.rpc("create_pos_sale_v2", args);
     if (result.error || !result.data)
       throw await refused(
         context.supabase,
@@ -284,7 +291,8 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
         })),
         subtotalCents: r.subtotal_cents,
         discountCents: r.discount_cents,
-        taxRatePercent: r.tax_rate_basis_points / 100,
+        // Orders recorded before 0025 carry only basis points; 0025 back-filled ppm = bp × 100.
+        taxRatePpm: r.tax_rate_ppm ?? r.tax_rate_basis_points * 100,
         taxCents: r.tax_cents,
         totalCents: r.total_cents,
         ...(r.notes ? { specialInstructions: r.notes } : {}),
@@ -421,6 +429,10 @@ export const saveOperationalRecord = createServerFn({ method: "POST" })
     const s = await scope(context.supabase, data.orgId, data.locationId);
     if (!s.location && data.kind !== "supplier" && data.kind !== "whatsapp")
       throw new Error("location_required");
+    // A recipe payload is exactly its definition: no cost snapshot can travel to the database
+    // (migration 0024; the RPC never stores the ingredient list in metadata either).
+    if (data.kind === "recipe" && !recipePayloadSchema.safeParse(data.payload).success)
+      throw new Error("invalid_recipe");
     const payload = z
       .record(
         z.lazy((): z.ZodType<import("@/integrations/supabase/types").Json> =>

@@ -462,7 +462,14 @@ export function InventoryPage() {
             yieldUnit: recipeFormData.yieldUnit,
             prepInstructions: recipeFormData.prepInstructions,
             sellingPriceCents: recipeFormData.sellingPriceCents,
-            ingredients: recipeFormData.ingredients,
+            // Only what the recipe is made of. Cost snapshots are computed for display and never
+            // sent: product_recipes.metadata is readable without inventory.costs (migration 0024).
+            ingredients: recipeFormData.ingredients.map((i) => ({
+              inventoryItemId: i.inventoryItemId,
+              quantity: i.quantity,
+              unit: i.unit,
+              wastePercentage: i.wastePercentage,
+            })),
           },
         },
       });

@@ -24,7 +24,9 @@
     "0020_inventory_cost_permission": "84a0de717168b7c05a61a135d94bd49283cb9615f5809c80ce5530cb504478d3",
     "0021_remove_seed_demo_orgs_on_fresh_databases": "9b0d19074f5a28566b04d6f2e7332261eb67da4a7193bda9c58488653c18426d",
     "0022_permission_scope_and_org_features": "cde3d6d0e1fcbf5d1eeb4c51b05824e3c0d2e1b7709946e818ec788a6cb562b3",
-    "0023_feature_tables_least_privilege": "313bae7d26cdfaf86d464d43602029015fc8868aae696ccb046f0e71c134d9ba"
+    "0023_feature_tables_least_privilege": "313bae7d26cdfaf86d464d43602029015fc8868aae696ccb046f0e71c134d9ba",
+    "0024_recipe_product_and_metadata_hardening": "c5c69be489c896283285a3cc359de67fd3ff65b7cb99ca0c5d4609d6e1d3e645",
+    "0025_store_sales_tax_rate": "a0dc102a0f0b43a40ae07f6e74d54b1a28dc6f6a856ab96e4c6a5319eb998d78"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

@@ -99,18 +99,28 @@ await rpc(admin, "admin_set_subscription", {
   _status: "active",
   _reason: "QA tenant: two stores for permission/store-scope regression",
 });
-const riversideId = await rpc(owner, "create_location", {
+// Sales-tax rate per store (migration 0025, parts per million): a two-decimal rate and a
+// three-decimal one, so every sale below and the permission matrix exercise both. Riverside is
+// created with its rate in one call (the Locations screen path); Downtown, created by
+// create_organization without a rate, gets it through set_location_tax_rate.
+creds.taxRatePpm = { downtown: 62500, riverside: 88750 };
+const riversideId = await rpc(owner, "create_location_with_tax_rate", {
   _org_id: creds.orgId,
   _name: "QA Riverside",
   _address: "QA fixture address",
   _timezone: "America/New_York",
   _phone: "+1 555-0100",
+  _tax_rate_ppm: creds.taxRatePpm.riverside,
 });
 const { data: locs } = await owner.from("locations").select("id,name").eq("org_id", creds.orgId);
 creds.locations = {
   downtown: locs.find((l) => l.name === "QA Downtown").id,
   riverside: riversideId,
 };
+await rpc(owner, "set_location_tax_rate", {
+  _location_id: creds.locations.downtown,
+  _tax_rate_ppm: creds.taxRatePpm.downtown,
+});
 const { data: org } = await owner
   .from("organizations")
   .select("slug")
@@ -203,13 +213,13 @@ log.push("menu (prod-soda), stock QA-SODA x2 stores, recipes, supplier, open PO 
 // 4. Sales: delivered tickets at both stores (finance entries, KDS history, audit) -----------
 for (const [store, loc] of Object.entries(creds.locations)) {
   for (let i = 0; i < 3; i++) {
-    const id = await rpc(owner, "persist_finalized_pos_sale_atomic", {
+    const id = await rpc(owner, "persist_finalized_pos_sale_atomic_v2", {
       _org_id: creds.orgId,
       _location_id: loc,
       _type: "takeout",
       _customer_name: `QA ${store} ${i}`,
       _items: [{ product_id: "prod-soda", quantity: 2, modifiers: [] }],
-      _tax_rate_basis_points: 625,
+      _tax_rate_ppm: creds.taxRatePpm[store],
       _client_order_id: `qa-seed-${store}-${i}`,
       _payment_method: "cash",
     });
@@ -308,12 +318,15 @@ await rpc(b, "save_operational_record", {
     active: true,
   },
 });
-await rpc(b, "persist_finalized_pos_sale_atomic", {
+// Tenant B configures its own store rate (0025) before its first sale.
+await rpc(b, "set_location_tax_rate", { _location_id: bLoc.id, _tax_rate_ppm: 70000 });
+await rpc(b, "persist_finalized_pos_sale_atomic_v2", {
   _org_id: bOrg,
   _location_id: bLoc.id,
   _type: "takeout",
   _customer_name: "Tenant B",
   _items: [{ product_id: "prod-b", quantity: 1, modifiers: [] }],
+  _tax_rate_ppm: 70000,
   _client_order_id: "qa-b-1",
   _payment_method: "cash",
 });

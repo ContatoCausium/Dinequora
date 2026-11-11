@@ -64,6 +64,8 @@ const SODA_SKU = creds.fixtures?.sodaSku ?? "AUR-SODA";
 const PRODUCT = creds.fixtures?.productId ?? "prod-soda";
 const OTHER_ORG_SLUG = creds.fixtures?.otherOrgSlug ?? "org-alpha";
 const L = creds.locations; // downtown / riverside uuids
+// Store sales-tax rates in ppm as seeded by seed-qa-org.mjs (6.25% and 8.875%).
+const RATE = creds.taxRatePpm ?? { downtown: 62500, riverside: 88750 };
 const svc = serviceClient();
 const as = async (email) =>
   signedIn(
@@ -106,14 +108,14 @@ const { data: alphaLoc } = await svc
 // A fresh, unpaid Riverside ticket created by the store manager (who may sell there), so the
 // kitchen checks never depend on leftovers from previous runs.
 const mgr = await signedIn(creds.team.manager.email, creds.team.manager.password);
-const { data: rvOrderId, error: rvErr } = await mgr.rpc("create_pos_sale", {
+const { data: rvOrderId, error: rvErr } = await mgr.rpc("create_pos_sale_v2", {
   _org_id: ORG,
   _location_id: L.riverside,
   _type: "dine_in",
   _customer_name: "Kitchen test",
   _items: [{ product_id: PRODUCT, quantity: 1, modifiers: [] }],
   _discount_cents: 0,
-  _tax_rate_basis_points: 0,
+  _tax_rate_ppm: RATE.riverside,
   _is_simulation: false,
   _client_order_id: `perm-kitchen-${Date.now()}`,
 });
@@ -162,14 +164,20 @@ const members = Object.fromEntries(
     (m) => [m.user_id, m],
   ),
 );
-const sale = (loc, cid, discount = 0) => ({
+// Migration 0025: the sale confirms the store's configured rate (ppm); the server charges its own.
+const sale = (
+  loc,
+  cid,
+  discount = 0,
+  taxRatePpm = loc === L.downtown ? RATE.downtown : RATE.riverside,
+) => ({
   _org_id: ORG,
   _location_id: loc,
   _type: "takeout",
   _customer_name: "Permission test",
   _items: [{ product_id: PRODUCT, quantity: 1, modifiers: [] }],
   _discount_cents: discount,
-  _tax_rate_basis_points: 0,
+  _tax_rate_ppm: taxRatePpm,
   _is_simulation: false,
   _client_order_id: cid,
   _payment_method: "cash",
@@ -200,13 +208,17 @@ const stamp = Date.now();
     );
   expectAllow(
     "cashier sells at Downtown",
-    await call(c, "persist_finalized_pos_sale_atomic", sale(L.downtown, `perm-cashier-${stamp}`)),
+    await call(
+      c,
+      "persist_finalized_pos_sale_atomic_v2",
+      sale(L.downtown, `perm-cashier-${stamp}`),
+    ),
   );
   expectAllow(
     "cashier applies a discount (pos.discount)",
     await call(
       c,
-      "persist_finalized_pos_sale_atomic",
+      "persist_finalized_pos_sale_atomic_v2",
       sale(L.downtown, `perm-cashier-d-${stamp}`, 50),
     ),
   );
@@ -214,7 +226,7 @@ const stamp = Date.now();
     "cashier cannot sell at Riverside (store scope)",
     await call(
       c,
-      "persist_finalized_pos_sale_atomic",
+      "persist_finalized_pos_sale_atomic_v2",
       sale(L.riverside, `perm-cashier-rv-${stamp}`),
     ),
     "forbidden",
@@ -255,7 +267,7 @@ const stamp = Date.now();
   );
   expectDeny(
     "cashier cannot sell in another organization",
-    await call(c, "persist_finalized_pos_sale_atomic", {
+    await call(c, "persist_finalized_pos_sale_atomic_v2", {
       ...sale(alphaLoc.id, `perm-x-${stamp}`),
       _org_id: alpha.id,
     }),
@@ -338,7 +350,7 @@ const stamp = Date.now();
   );
   expectDeny(
     "kitchen cannot sell",
-    await call(c, "persist_finalized_pos_sale_atomic", sale(L.riverside, `perm-k-${stamp}`)),
+    await call(c, "persist_finalized_pos_sale_atomic_v2", sale(L.riverside, `perm-k-${stamp}`)),
   );
   expectDeny(
     "kitchen cannot cancel orders",
@@ -498,7 +510,7 @@ const stamp = Date.now();
   );
   expectDeny(
     "finance cannot sell",
-    await call(c, "persist_finalized_pos_sale_atomic", sale(L.downtown, `perm-f-${stamp}`)),
+    await call(c, "persist_finalized_pos_sale_atomic_v2", sale(L.downtown, `perm-f-${stamp}`)),
   );
 }
 // ---------------- Manager (Riverside)
@@ -881,6 +893,235 @@ const stamp = Date.now();
     );
   }
 }
+// ---------------- Store sales tax (migration 0025): who configures it, and the rate is never the client's
+{
+  const cashier = await as(EMAIL.cashier);
+  const kitchen = await as(EMAIL.kitchen);
+  const finance = await as(EMAIL.finance);
+  const owner = await ownerSession();
+  const { data: dtRate } = await cashier
+    .from("locations")
+    .select("tax_rate_ppm")
+    .eq("id", L.downtown)
+    .single();
+  check(
+    "cashier reads the rate of its store (the POS needs it)",
+    dtRate?.tax_rate_ppm === RATE.downtown,
+  );
+  expectDeny(
+    "cashier cannot configure the rate of its own store (staff)",
+    await call(cashier, "set_location_tax_rate", { _location_id: L.downtown, _tax_rate_ppm: 0 }),
+    "forbidden",
+  );
+  expectDeny(
+    "kitchen cannot configure the rate of its store (staff)",
+    await call(kitchen, "set_location_tax_rate", { _location_id: L.riverside, _tax_rate_ppm: 0 }),
+    "forbidden",
+  );
+  expectDeny(
+    "finance cannot configure a rate (staff tier, both stores)",
+    await call(finance, "set_location_tax_rate", { _location_id: L.downtown, _tax_rate_ppm: 0 }),
+    "forbidden",
+  );
+  expectDeny(
+    "manager cannot configure Downtown (no access to that store)",
+    await call(mgr, "set_location_tax_rate", { _location_id: L.downtown, _tax_rate_ppm: 0 }),
+    "forbidden",
+  );
+  expectDeny(
+    "cashier cannot sell at a rate of its choosing (0%)",
+    await call(
+      cashier,
+      "persist_finalized_pos_sale_atomic_v2",
+      sale(L.downtown, `perm-tax-0-${stamp}`, 0, 0),
+    ),
+    "tax_rate_changed",
+  );
+  expectDeny(
+    "cashier cannot sell at a rate off by 1 ppm",
+    await call(
+      cashier,
+      "persist_finalized_pos_sale_atomic_v2",
+      sale(L.downtown, `perm-tax-1-${stamp}`, 0, RATE.downtown + 1),
+    ),
+    "tax_rate_changed",
+  );
+  expectDeny(
+    "previous signature cannot bypass the store rate either (888 bp at 6.25%)",
+    await call(cashier, "persist_finalized_pos_sale_atomic", {
+      ...sale(L.downtown, `perm-tax-legacy-${stamp}`),
+      _tax_rate_ppm: undefined,
+      _tax_rate_basis_points: 888,
+    }),
+    "tax_rate_changed",
+  );
+  // Manager (Riverside, settings.locations): changes the rate of its own store, audited; the
+  // kitchen ticket created at the old rate is unaffected, a new sale must confirm the new rate.
+  expectAllow(
+    "manager configures the rate of its own store",
+    await call(mgr, "set_location_tax_rate", { _location_id: L.riverside, _tax_rate_ppm: 70000 }),
+  );
+  expectDeny(
+    "manager cannot sell at Riverside with the previous rate",
+    await call(
+      mgr,
+      "persist_finalized_pos_sale_atomic_v2",
+      sale(L.riverside, `perm-tax-stale-${stamp}`, 0, RATE.riverside),
+    ),
+    "tax_rate_changed",
+  );
+  const r = await call(
+    mgr,
+    "persist_finalized_pos_sale_atomic_v2",
+    sale(L.riverside, `perm-tax-new-${stamp}`, 0, 70000),
+  );
+  expectAllow("manager sells at Riverside confirming the new rate", r);
+  if (!r.error) {
+    const { data: o } = await svc
+      .from("orders")
+      .select("subtotal_cents,tax_cents,total_cents,tax_rate_ppm,tax_rate_basis_points")
+      .eq("id", r.data)
+      .single();
+    check(
+      "the sale was charged the store rate, not a client value",
+      o?.tax_rate_ppm === 70000 &&
+        o?.tax_rate_basis_points === 700 &&
+        o?.tax_cents === Math.round((o.subtotal_cents * 70000) / 1_000_000) &&
+        o?.total_cents === o.subtotal_cents + o.tax_cents,
+    );
+  }
+  expectAllow(
+    "manager restores the rate of its own store",
+    await call(mgr, "set_location_tax_rate", {
+      _location_id: L.riverside,
+      _tax_rate_ppm: RATE.riverside,
+    }),
+  );
+  const { data: audits } = await svc
+    .from("audit_logs")
+    .select("id,metadata")
+    .eq("org_id", ORG)
+    .eq("action", "location.tax_rate_updated")
+    .eq("actor_id", members && Object.values(members).find((m) => m.role === "manager")?.user_id);
+  check(
+    "rate changes by the manager are audited with the previous and new rate",
+    (audits ?? []).some(
+      (a) => a.metadata?.from_ppm === RATE.riverside && a.metadata?.to_ppm === 70000,
+    ) &&
+      (audits ?? []).some(
+        (a) => a.metadata?.from_ppm === 70000 && a.metadata?.to_ppm === RATE.riverside,
+      ),
+  );
+  expectDeny(
+    "owner cannot configure a rate above 100%",
+    await call(owner, "set_location_tax_rate", {
+      _location_id: L.downtown,
+      _tax_rate_ppm: 1000001,
+    }),
+    "invalid_tax_rate",
+  );
+  expectAllow(
+    "owner configures any store of the organization",
+    await call(owner, "set_location_tax_rate", {
+      _location_id: L.downtown,
+      _tax_rate_ppm: RATE.downtown,
+    }),
+  );
+
+  // Store creation with its rate in one transaction (create_location_with_tax_rate, 0025): owner
+  // only, the rate validated before anything is written, both audit rows. The created store is
+  // deactivated afterwards so the plan allowance of the QA tenant is unchanged for later tests.
+  const newStore = (name, ppm) => ({
+    _org_id: ORG,
+    _name: name,
+    _address: "QA fixture address",
+    _timezone: "America/New_York",
+    _phone: "",
+    _tax_rate_ppm: ppm,
+  });
+  const storesNamed = async (prefix) =>
+    (
+      await svc
+        .from("locations")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", ORG)
+        .like("name", `${prefix}%`)
+    ).count ?? 0;
+  expectDeny(
+    "cashier cannot create a store with a rate (owner only)",
+    await call(cashier, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 62500)),
+    "forbidden",
+  );
+  expectDeny(
+    "manager cannot create a store with a rate (owner only)",
+    await call(mgr, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 62500)),
+    "forbidden",
+  );
+  if (creds.tenantB?.owner) {
+    const other = await signedIn(creds.tenantB.owner.email, creds.tenantB.owner.password);
+    expectDeny(
+      "owner of another organization cannot create a store in this one",
+      await call(other, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 62500)),
+      "forbidden",
+    );
+  }
+  expectDeny(
+    "owner cannot create a store with a rate above 100%",
+    await call(owner, "create_location_with_tax_rate", newStore(`QA Refused ${stamp}`, 1000001)),
+    "invalid_tax_rate",
+  );
+  expectDeny(
+    "owner cannot create a store without a rate",
+    await call(owner, "create_location_with_tax_rate", {
+      ...newStore(`QA Refused ${stamp}`, 0),
+      _tax_rate_ppm: null,
+    }),
+    "invalid_tax_rate",
+  );
+  check("no store was written by the refused creations", (await storesNamed("QA Refused")) === 0);
+  const created = await call(
+    owner,
+    "create_location_with_tax_rate",
+    newStore(`QA Atomic ${stamp}`, 66250),
+  );
+  expectAllow("owner creates a store with its rate in one call", created);
+  if (!created.error) {
+    const { data: loc } = await svc
+      .from("locations")
+      .select("name,status,tax_rate_ppm")
+      .eq("id", created.data)
+      .single();
+    check(
+      "the new store is active and carries the rate (6.625%)",
+      loc?.status === "active" && loc.tax_rate_ppm === 66250,
+      JSON.stringify(loc),
+    );
+    const { data: au } = await svc
+      .from("audit_logs")
+      .select("action,target,metadata")
+      .eq("org_id", ORG)
+      .eq("actor_id", creds.owner.userId)
+      .in("action", ["location.created", "location.tax_rate_updated"]);
+    check(
+      "creation and rate are both audited for the new store",
+      (au ?? []).some(
+        (a) => a.action === "location.created" && a.target === `QA Atomic ${stamp}`,
+      ) &&
+        (au ?? []).some(
+          (a) =>
+            a.action === "location.tax_rate_updated" &&
+            a.metadata?.location_id === created.data &&
+            a.metadata?.from_ppm == null &&
+            a.metadata?.to_ppm === 66250,
+        ),
+    );
+    expectAllow(
+      "the test store is deactivated again (plan allowance unchanged)",
+      await call(owner, "set_location_status", { _id: created.data, _status: "inactive" }),
+    );
+  }
+}
+
 // ---------------- Platform admin: no tenant data
 {
   const c = await signedIn(creds.admin.email, creds.admin.password);

@@ -3,7 +3,11 @@ export type StepState = "done" | "todo" | "skipped";
 export interface ChecklistInput {
   logoUrl?: string | undefined;
   brandEdited: boolean; // previous_brand is set only when an owner saved branding
-  locations: { address?: string | undefined; hours?: Record<string, unknown> | undefined }[];
+  locations: {
+    address?: string | undefined;
+    hours?: Record<string, unknown> | undefined;
+    taxRatePpm?: number | null | undefined; // null = sales-tax rate not configured (0025)
+  }[];
   memberCount: number;
   pendingInvites: number;
   persistedStep: number; // furthest step the owner confirmed (optional steps can be skipped)
@@ -11,8 +15,17 @@ export interface ChecklistInput {
 export const REQUIRED_STEPS = [0, 2] as const; // branding, stores
 export const OPTIONAL_STEPS = [1, 3] as const; // dashboard preview, team
 
+/**
+ * A store counts as configured when it has an address, opening hours and an explicit sales-tax
+ * rate (0 is explicit; null is "not configured" and the POS refuses to sell). No default rate is
+ * ever assumed: the required "stores" step of the onboarding stays open until the owner sets one.
+ */
 export function storeConfigured(l: ChecklistInput["locations"][number]) {
-  return Boolean(l.address?.trim()) && Object.values(l.hours ?? {}).some((h) => h != null);
+  return (
+    Boolean(l.address?.trim()) &&
+    Object.values(l.hours ?? {}).some((h) => h != null) &&
+    l.taxRatePpm != null
+  );
 }
 
 export function onboardingChecklist(i: ChecklistInput): StepState[] {

@@ -3,11 +3,17 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   applyBasisPoints,
+  applyPartsPerMillion,
+  basisPointsFromPpm,
   centsFromDollars,
   centsFromNumberInput,
   averageCents,
   basisPointsFromPercent,
   centsToDecimalString,
+  isRatePpm,
+  percentTextFromPpm,
+  ppmFromPercentInput,
+  RATE_PPM_MAX,
   divRound,
   formatMoney,
   lineTotalCents,
@@ -43,13 +49,12 @@ describe("money: same rounding as the database", () => {
     // Connecticut 6.35% on $410.00: Math.round(41000 * 6.35 / 100) gave 2603, the server books 2604.
     expect(Math.round((41000 * 6.35) / 100)).toBe(2603);
     expect(applyBasisPoints(41000, 635)).toBe(2604);
-    expect(calculateOrderSummary([{ subtotalCents: 41000 } as never], 6.35).taxCents).toBe(2604);
-    // A percentage with three decimals is sent as whole basis points (8.875% -> 888); the client
-    // used 8.875 itself and disagreed with the server in most sales.
+    expect(calculateOrderSummary([{ subtotalCents: 41000 } as never], 63500).taxCents).toBe(2604);
+    // A rate with three decimals is exact in parts per million (8.875% = 88,750 ppm): 107 × 8.875%
+    // = 9.49625 → 9. Whole basis points (888, the unit before 0025) would have charged 10.
     expect(basisPointsFromPercent(8.875)).toBe(888);
-    expect(calculateOrderSummary([{ subtotalCents: 107 } as never], 8.875).taxCents).toBe(
-      applyBasisPoints(107, 888),
-    );
+    expect(applyBasisPoints(107, 888)).toBe(10);
+    expect(calculateOrderSummary([{ subtotalCents: 107 } as never], 88750).taxCents).toBe(9);
   });
 
   it("negative amounts round away from zero like PostgreSQL (refunds, reversals)", () => {
@@ -70,10 +75,10 @@ describe("money: same rounding as the database", () => {
   });
 });
 
-describe("money: sale totals = create_pos_sale", () => {
+describe("money: sale totals = create_pos_sale_v2", () => {
   it("matches the recorded receipt of the PR #7 audit (3 × $2.75, $1.00 off, 8.88%)", () => {
     const line = lineTotalCents(275, [], 3);
-    expect(saleTotals([line], 100, 888)).toEqual({
+    expect(saleTotals([line], 100, 88800)).toEqual({
       subtotalCents: 825,
       discountCents: 100,
       taxableCents: 725,
@@ -88,7 +93,7 @@ describe("money: sale totals = create_pos_sale", () => {
   });
 
   it("taxable base never goes below zero", () => {
-    expect(saleTotals([500], 900, 888)).toMatchObject({
+    expect(saleTotals([500], 900, 88800)).toMatchObject({
       taxableCents: 0,
       taxCents: 0,
       totalCents: 0,
@@ -332,5 +337,88 @@ describe("units: same factors as public.operational_unit_quantity", () => {
     expect(convertUnits(500, "g", "kg")).toBeCloseTo(0.5, 12);
     expect(convertUnits(1, "g", "lb")).toBeCloseTo(1 / 453.59237, 15);
     expect(convertUnits(16, "oz", "lb")).toBe(1);
+  });
+});
+
+// Migration 0025: store rates in parts per million, charged by the server from the store's own rate.
+describe("money: store rates in parts per million (0025)", () => {
+  it.each(reference.taxPpm)(
+    "tax of %i cents at %i ppm = %i (create_pos_sale_v2)",
+    (taxable, ppm, tax) => {
+      expect(applyPartsPerMillion(taxable, ppm)).toBe(tax);
+    },
+  );
+
+  it("represents the US rates whole basis points cannot (6.625%, 8.875%, 9.025%)", () => {
+    expect(ppmFromPercentInput("6.625")).toBe(66250);
+    expect(ppmFromPercentInput("8.875")).toBe(88750);
+    expect(ppmFromPercentInput("9.025")).toBe(90250);
+    expect(applyPartsPerMillion(1000, 88750)).toBe(89); // 88.75 -> 89
+    expect(applyPartsPerMillion(1000, 62500)).toBe(63); // 62.5 -> 63, half away from zero
+    expect(applyPartsPerMillion(1500, 88750)).toBe(133); // 133.125 -> 133
+    expect(applyPartsPerMillion(107, 88750)).toBe(9); // 9.49625 -> 9 (888 bp charged 10)
+    expect(saleTotals([1000, 1000], 500, 88750)).toEqual({
+      subtotalCents: 2000,
+      discountCents: 500,
+      taxableCents: 1500,
+      taxCents: 133,
+      totalCents: 1633,
+    });
+    expect(basisPointsFromPpm(88750)).toBe(888); // what older readers see
+    expect(basisPointsFromPpm(62500)).toBe(625);
+    expect(basisPointsFromPpm(0)).toBe(0);
+  });
+
+  it("a typed percentage becomes ppm exactly, or is refused", () => {
+    expect(ppmFromPercentInput("0")).toBe(0);
+    expect(ppmFromPercentInput("100")).toBe(RATE_PPM_MAX);
+    expect(ppmFromPercentInput(" 7 ")).toBe(70000);
+    expect(ppmFromPercentInput("8.8750")).toBe(88750);
+    expect(ppmFromPercentInput(".5")).toBe(5000);
+    expect(ppmFromPercentInput("6.25")).toBe(62500);
+    // finer than 1 ppm, out of range, negative, empty, not a plain decimal
+    expect(ppmFromPercentInput("8.87555")).toBeNull();
+    expect(ppmFromPercentInput("100.0001")).toBeNull();
+    expect(ppmFromPercentInput("-1")).toBeNull();
+    expect(ppmFromPercentInput("")).toBeNull();
+    expect(ppmFromPercentInput("abc")).toBeNull();
+    expect(ppmFromPercentInput("1e2")).toBeNull();
+    expect(ppmFromPercentInput("8,875")).toBeNull();
+    expect(ppmFromPercentInput("1".repeat(200))).toBeNull();
+  });
+
+  it("ppm is shown back as the exact percentage text", () => {
+    expect(percentTextFromPpm(88750)).toBe("8.875");
+    expect(percentTextFromPpm(62500)).toBe("6.25");
+    expect(percentTextFromPpm(0)).toBe("0");
+    expect(percentTextFromPpm(RATE_PPM_MAX)).toBe("100");
+    expect(percentTextFromPpm(90250)).toBe("9.025");
+    expect(percentTextFromPpm(1)).toBe("0.0001");
+    for (const text of ["8.875", "6.25", "0", "100", "9.025", "0.0001", "12.3456"])
+      expect(percentTextFromPpm(ppmFromPercentInput(text)!)).toBe(text);
+  });
+
+  it("refuses rates that are not whole ppm between 0 and 100%", () => {
+    expect(isRatePpm(88750)).toBe(true);
+    expect(isRatePpm(0)).toBe(true);
+    expect(isRatePpm(RATE_PPM_MAX)).toBe(true);
+    expect(isRatePpm(-1)).toBe(false);
+    expect(isRatePpm(RATE_PPM_MAX + 1)).toBe(false);
+    expect(isRatePpm(8.875)).toBe(false);
+    expect(isRatePpm(Number.NaN)).toBe(false);
+    expect(isRatePpm(null)).toBe(false);
+    expect(() => applyPartsPerMillion(100, 8.875)).toThrow(RangeError);
+    expect(() => applyPartsPerMillion(100, -1)).toThrow(RangeError);
+    expect(() => applyPartsPerMillion(100, RATE_PPM_MAX + 1)).toThrow(RangeError);
+    expect(() => applyPartsPerMillion(100.5, 88750)).toThrow(RangeError);
+    expect(() => saleTotals([100], 0, Number.NaN)).toThrow(RangeError);
+    expect(() => basisPointsFromPpm(-5)).toThrow(RangeError);
+    expect(() => percentTextFromPpm(RATE_PPM_MAX + 1)).toThrow(RangeError);
+  });
+
+  it("stays exact at the top of the safe range", () => {
+    expect(applyPartsPerMillion(Number.MAX_SAFE_INTEGER - 1, 1)).toBe(9007199255);
+    expect(applyPartsPerMillion(2147483647, RATE_PPM_MAX)).toBe(2147483647);
+    expect(applyPartsPerMillion(-2147483647, 88750)).toBe(-190589174); // -190589173.67 -> away from zero
   });
 });

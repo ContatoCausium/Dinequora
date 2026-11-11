@@ -73,8 +73,8 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
     ];
 
     const discountCents = 400;
-    const taxRatePercent = 8.25;
-    const summary = calculateOrderSummary(items, taxRatePercent, discountCents);
+    const taxRatePpm = 82500; // 8.25% in parts per million
+    const summary = calculateOrderSummary(items, taxRatePpm, discountCents);
 
     expect(summary.subtotalCents).toBe(4000);
     // (4000 - 400) = 3600 taxable * 8.25% = 297 cents tax
@@ -115,7 +115,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
       ],
       subtotalCents: 1500,
       discountCents: 0,
-      taxRatePercent: 8.25,
+      taxRatePpm: 82500,
       taxCents: 124,
       totalCents: 1624,
       createdAt: new Date().toISOString(),
@@ -165,7 +165,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
         items: [],
         subtotalCents: 1000,
         discountCents: 0,
-        taxRatePercent: 8.25,
+        taxRatePpm: 82500,
         taxCents: 83,
         totalCents: 1083,
         createdAt: new Date().toISOString(),
@@ -184,7 +184,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
         items: [],
         subtotalCents: 2000,
         discountCents: 0,
-        taxRatePercent: 8.25,
+        taxRatePpm: 82500,
         taxCents: 165,
         totalCents: 2165,
         createdAt: new Date().toISOString(),

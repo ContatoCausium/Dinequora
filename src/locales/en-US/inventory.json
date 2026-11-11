@@ -287,6 +287,8 @@
     "received_purchase_requires_return": "Orders with received goods can't be cancelled.",
     "org_suspended": "This restaurant is suspended; changes are blocked.",
     "subscription_inactive": "The subscription is inactive; changes are blocked.",
-    "permission_denied": "You do not have permission for this action."
+    "permission_denied": "You do not have permission for this action.",
+    "recipe_exists_for_product": "This product already has a recipe at this store. Edit that recipe instead.",
+    "invalid_recipe": "Check the servings and the selling price: servings must be above zero and the price cannot be negative."
   }
 }

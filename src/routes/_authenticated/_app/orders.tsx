@@ -40,9 +40,9 @@ import {
   type RecordedOrder,
 } from "@/lib/recorded-data";
 import { isRecordedSale } from "@/lib/report-metrics";
-import { displayAmount, fmtBasisPoints, fmtDateTime, fmtMoneyCents, fmtNumber } from "@/lib/format";
+import { displayAmount, fmtDateTime, fmtMoneyCents, fmtNumber, fmtRatePpm } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { averageCents, basisPointsFromPercent } from "@/lib/money";
+import { averageCents } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/orders")({
   head: () => ({
@@ -544,15 +544,7 @@ function OrderSheet({
                     />
                   )}
                   <Row
-                    label={t("detail.tax", {
-                      rate: fmtBasisPoints(
-                        displayAmount(
-                          () => basisPointsFromPercent(order.taxRatePercent),
-                          "rate.order_display",
-                        ),
-                        lng,
-                      ),
-                    })}
+                    label={t("detail.tax", { rate: fmtRatePpm(order.taxRatePpm, lng) })}
                     value={fmtMoneyCents(order.taxCents, lng)}
                   />
                   <div className="flex justify-between border-t pt-2 text-base font-semibold">

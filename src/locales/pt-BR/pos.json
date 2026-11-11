@@ -128,5 +128,13 @@
     "alreadyCancelled": "Esta venda já havia sido cancelada.",
     "cancelled": "Venda cancelada e estoque revertido.",
     "cancelFailed": "Não foi possível cancelar a venda"
+  },
+  "tax": {
+    "notConfigured": "O imposto sobre vendas desta loja não está configurado, por isso nenhuma venda pode ser registrada aqui.",
+    "configure": "Configurar a loja"
+  },
+  "errors": {
+    "tax_rate_changed": "A alíquota de imposto da loja mudou enquanto esta comanda estava aberta. A comanda foi recalculada com a alíquota atual; confira o total e cobre novamente.",
+    "tax_rate_not_configured": "O imposto sobre vendas desta loja não está configurado. Um proprietário ou gerente da loja precisa defini-lo antes de vender."
   }
 }
