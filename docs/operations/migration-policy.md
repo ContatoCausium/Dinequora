@@ -70,13 +70,30 @@ banco recém-criado).
     usuário), com o motivo registrado. Entrar nesta lista exige revisão explícita.
     Uma função nova sem classificação faz a CI falhar (falha fechada).
 - `GRANT`/`REVOKE` explícitos em toda função nova.
+- **PL/pgSQL sem nomes ambíguos**: variáveis e parâmetros sempre com prefixo `_` (`_product`,
+  `_category_id`), toda coluna qualificada pelo alias da tabela (`mp.category_id`) e nenhum alias
+  igual ao nome de uma variável. O PL/pgSQL não distingue uma variável de uma coluna ou alias com o
+  mesmo nome e a função falha só quando o trecho é executado (`42702 ... is ambiguous`), não ao ser
+  criada: foi o que quebrou o arquivamento de categorias de 0013 a 0025 (corrigido em 0026). Todo
+  ramo de uma função nova ou alterada precisa ser executado por uma fixture em
+  `scripts/security/`.
+  - Exceção que o próprio PostgreSQL impõe: as colunas de destino de `SET` em `UPDATE` (e em
+    `ON CONFLICT ... DO UPDATE SET`) e a lista de colunas de `INSERT INTO t (a, b)` **não aceitam**
+    o alias. `UPDATE public.menu_categories mc SET mc.active = false` falha com `42703` (o
+    PostgreSQL lê `mc.active` como o campo `active` de uma coluna `mc`) e `INSERT INTO t x (x.a)`
+    com `42601`. Essas posições sempre designam colunas da tabela alvo e nunca são trocadas por uma
+    variável, então não ficam ambíguas mesmo que exista uma variável com o mesmo nome: escrever
+    `SET active = false` e qualificar todo o resto (`WHERE mc.id = _category_id`). O lado direito
+    do `SET`, o `WHERE` e o `RETURNING` seguem a regra geral (lá uma coluna sem alias com o nome de
+    uma variável dá `42702`).
 - Nunca dados de demonstração ou de cliente em migrations estruturais; seeds ficam em
   `scripts/seeds/` (`docs/operations/data-layers-and-marao-production.md`).
 
-## Limitação conhecida
+## Histórico do QA local
 
 O stack de QA local `dq-rebuild` foi montado a partir de um checkout com fim de linha CRLF, antes do
-`.gitattributes`: as linhas 0010–0017 do seu registro de migrations têm o hash da versão CRLF dos
-mesmos arquivos (conteúdo idêntico). Por isso `check-migrations` com `DB_URL` desse stack acusa
-`applied hash differs`. Não afeta a demonstração, a CI nem bancos novos; o stack pode ser
-recriado quando a limpeza dos ambientes de teste for autorizada.
+`.gitattributes`: as linhas 0010–0017 do seu registro de migrations tinham o hash da versão CRLF dos
+mesmos arquivos (conteúdo idêntico) e `check-migrations` com `DB_URL` desse stack acusava
+`applied hash differs`. Em 2026-11-11 os oito hashes foram corrigidos para os do manifesto (só a
+coluna `hash`, numa transação com pré e pós-condições, depois de um backup restaurado e conferido e
+de um ensaio numa cópia). O registro do `dq-rebuild` agora confere com o manifesto.
