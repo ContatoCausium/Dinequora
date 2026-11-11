@@ -64,6 +64,10 @@ jobs:
         env:
           QA_ARTIFACTS: ${{ runner.temp }}/qa
         run: bash scripts/qa/security-suite.sh
+      # The database now holds every migration applied from zero: the committed types must be
+      # exactly what the pinned CLI generates from it (formatted with the repository's Prettier).
+      - name: Generated types match the migrations
+        run: bash scripts/qa/gen-types.sh --check
       - name: Upload permission matrix report
         if: always()
         uses: actions/upload-artifact@v4

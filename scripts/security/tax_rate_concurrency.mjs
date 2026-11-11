@@ -11,28 +11,49 @@
 //      refused, nothing is recorded;
 //   4. two sales at the same store never wait for each other on the store row (FOR SHARE is shared);
 //   5. every order recorded by this test carries the rate the server validated and a tax equal to
-//      round(taxable x ppm / 1,000,000).
-// Seller: the owner (every store). Changer: the store manager (settings.locations at Riverside).
+//      round(taxable x ppm / 1,000,000); the audit trail holds each committed change exactly once,
+//      by the member who made it, and nothing of the rolled-back one.
 //
-//   QA_DB_URL=postgresql://...@127.0.0.1:55322/postgres CREDS_FILE=<path> node scripts/security/tax_rate_concurrency.mjs
-import fs from "node:fs";
+// Isolation: the test creates its OWN organization, store (88,750 ppm), product and two synthetic
+// members (owner = seller, manager with settings.locations at the store = changer) directly in the
+// database, works only there and removes all of it at the end. It does not read or change the
+// shared QA tenant and can run in parallel with every other test.
+//
+//   QA_DB_URL=postgresql://...@127.0.0.1:55322/postgres node scripts/security/tax_rate_concurrency.mjs
+import crypto from "node:crypto";
 import { createRequire } from "node:module";
+import {
+  countOrgRowsSql,
+  createIsolatedOrgSql,
+  createTestUsersSql,
+  dropIsolatedOrgsSql,
+  dropTestUsersSql,
+  isolatedOrg,
+} from "../qa/isolated-org.mjs";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const postgres = require("postgres");
 
 const DB_URL = process.env.QA_DB_URL ?? process.env.DB_URL;
 if (!/@(127\.0\.0\.1|localhost):55322\/postgres$/.test(DB_URL ?? ""))
   throw new Error("Refusing: QA_DB_URL must be the local QA database (55322)");
-const creds = JSON.parse(fs.readFileSync(process.env.CREDS_FILE, "utf8"));
-const ORG = creds.orgId;
-const STORE = creds.locations.riverside;
-const SEEDED = creds.taxRatePpm?.riverside ?? 88750;
-const PRODUCT = creds.fixtures?.productId ?? "prod-soda";
-const SELLER = creds.owner.userId;
-const CHANGER = creds.team.manager.userId;
-const stamp = Date.now();
+
+const SEEDED = 88750;
+const PRODUCT = "conc-soda";
+const SELLER = crypto.randomUUID();
+const CHANGER = crypto.randomUUID();
+const org = isolatedOrg("conc", {
+  taxRatePpm: SEEDED,
+  members: [
+    { userId: SELLER, role: "owner" },
+    { userId: CHANGER, role: "manager", store: true },
+  ],
+});
+const ORG = org.orgId;
+const STORE = org.locationId;
 
 const sql = postgres(DB_URL, { max: 4, onnotice: () => {} });
+// Fixture SQL (multi-statement, own transaction) needs a single dedicated connection.
+const fixtures = postgres(DB_URL, { max: 1, onnotice: () => {} });
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ ok, name, detail });
@@ -53,9 +74,10 @@ async function session(userId) {
   const [{ pid }] = await c`select pg_backend_pid() as pid`;
   return { c, pid, end: () => c.end({ timeout: 5 }) };
 }
+const items = (c) => c.json([{ product_id: PRODUCT, quantity: 1, modifiers: [] }]);
 const sale = (s, cid, ppm) =>
   s.c`select public.persist_finalized_pos_sale_atomic_v2(${ORG}, ${STORE}, 'takeout', 'Concurrency test',
-        _tax_rate_ppm => ${ppm}, _items => ${s.c.json([{ product_id: PRODUCT, quantity: 1, modifiers: [] }])},
+        _tax_rate_ppm => ${ppm}, _items => ${items(s.c)},
         _client_order_id => ${cid}, _payment_method => 'cash') as id`.then((r) => r[0].id);
 const setRate = (s, ppm) => s.c`select public.set_location_tax_rate(${STORE}, ${ppm})`;
 const rate = async () =>
@@ -85,12 +107,33 @@ const settled = (p, ms) =>
     ),
     sleep(ms).then(() => "pending"),
   ]);
+/** Rate audit rows of THIS store, oldest first. */
+const rateAudits = () =>
+  sql`select actor_id::text as actor, (metadata->>'from_ppm')::int as f, (metadata->>'to_ppm')::int as t
+        from public.audit_logs
+       where org_id = ${ORG} and action = 'location.tax_rate_updated' and metadata->>'location_id' = ${STORE}
+       order by created_at, id`;
 
 try {
+  // ---- setup: users, organization, store, members, product (all owned by this test)
+  await fixtures.unsafe(
+    createTestUsersSql([
+      { userId: SELLER, email: `${org.key}-owner@example.test` },
+      { userId: CHANGER, email: `${org.key}-manager@example.test` },
+    ]),
+  );
+  await fixtures.unsafe(createIsolatedOrgSql(org));
+  {
+    const owner = await session(SELLER);
+    await owner.c`select public.save_operational_menu(${ORG}, 'category', ${owner.c.json({ id: "conc-drinks", name: "Drinks" })})`;
+    await owner.c`select public.save_operational_menu(${ORG}, 'product', ${owner.c.json({ id: PRODUCT, name: "Concurrency soda", category: "conc-drinks", priceCents: 275, prepTimeMinutes: 1, locationIds: [], modifierGroups: [] })})`;
+    await owner.end();
+  }
+  const [{ perms }] =
+    await sql`select 'settings.locations' = any(effective_permissions) as perms from public.organization_members where org_id = ${ORG} and user_id = ${CHANGER}`;
   check(
-    "fixture: Riverside starts at the seeded rate",
-    (await rate()) === SEEDED,
-    `${await rate()}`,
+    "fixture: isolated store at 88,750 ppm, manager holds settings.locations",
+    (await rate()) === SEEDED && perms === true,
   );
 
   // ---- 1. sale first, then the rate change waits for it
@@ -98,7 +141,7 @@ try {
     const seller = await session(SELLER);
     const changer = await session(CHANGER);
     await seller.c`begin`;
-    const cid = `conc-sale-first-${stamp}`;
+    const cid = `${org.key}-sale-first`;
     const id = await sale(seller, cid, SEEDED); // rate read FOR SHARE, transaction still open
     await changer.c`begin`;
     const change = setRate(changer, 70000).then(
@@ -118,13 +161,19 @@ try {
     await changer.c`commit`;
     const o = await order(cid);
     check(
-      "1. the sale was recorded with the rate it validated (seeded), not the new one",
+      "1. the sale was recorded with the rate it validated (88,750), not the new one",
       o?.id === id &&
         o.tax_rate_ppm === SEEDED &&
         o.tax_cents === Math.round((o.subtotal_cents * SEEDED) / 1e6),
       JSON.stringify(o),
     );
     check("1. the new rate is in force after the change", (await rate()) === 70000);
+    const a = await rateAudits();
+    check(
+      "1. the committed change is audited exactly once, by the manager (88,750 -> 70,000)",
+      a.length === 1 && a[0].actor === CHANGER && a[0].f === SEEDED && a[0].t === 70000,
+      JSON.stringify(a),
+    );
     await seller.end();
     await changer.end();
   }
@@ -136,7 +185,7 @@ try {
     await changer.c`begin`;
     await setRate(changer, 90250); // FOR UPDATE held, not committed
     await seller.c`begin`;
-    const cid = `conc-change-first-${stamp}`;
+    const cid = `${org.key}-change-first`;
     const attempt = sale(seller, cid, 70000).then(
       () => "ok",
       (e) => code(e),
@@ -156,7 +205,7 @@ try {
     await seller.c`rollback`;
     check("2. nothing was recorded for the refused sale", (await order(cid)) === undefined);
     await seller.c`begin`;
-    const cid2 = `conc-change-first-new-${stamp}`;
+    const cid2 = `${org.key}-change-first-new`;
     const id2 = await sale(seller, cid2, 90250);
     await seller.c`commit`;
     const o = await order(cid2);
@@ -167,6 +216,12 @@ try {
         o.tax_rate_basis_points === 903 &&
         o.tax_cents === Math.round((o.subtotal_cents * 90250) / 1e6),
       JSON.stringify(o),
+    );
+    const a = await rateAudits();
+    check(
+      "2. the second committed change is audited exactly once, by the manager (70,000 -> 90,250)",
+      a.length === 2 && a[1].actor === CHANGER && a[1].f === 70000 && a[1].t === 90250,
+      JSON.stringify(a),
     );
     await changer.end();
     await seller.end();
@@ -179,7 +234,7 @@ try {
     await changer.c`begin`;
     await setRate(changer, 50000);
     await seller.c`begin`;
-    const cid = `conc-rollback-${stamp}`;
+    const cid = `${org.key}-rollback`;
     const attempt = sale(seller, cid, 50000).then(
       () => "ok",
       (e) => code(e),
@@ -197,6 +252,12 @@ try {
       "3. nothing was recorded and the rate is unchanged",
       (await order(cid)) === undefined && (await rate()) === 90250,
     );
+    const a = await rateAudits();
+    check(
+      "3. the rolled-back change left no audit row (still exactly the two committed ones)",
+      a.length === 2 && !a.some((r) => r.t === 50000),
+      JSON.stringify(a),
+    );
     await changer.end();
     await seller.end();
   }
@@ -209,12 +270,12 @@ try {
     const a = await session(SELLER);
     const b = await session(SELLER);
     await a.c`begin`;
-    const cidA = `conc-parallel-a-${stamp}`;
+    const cidA = `${org.key}-parallel-a`;
     await a.c`select public.create_pos_sale_v2(${ORG}, ${STORE}, 'takeout', 'Concurrency test',
-        _tax_rate_ppm => ${90250}, _items => ${a.c.json([{ product_id: PRODUCT, quantity: 1, modifiers: [] }])},
+        _tax_rate_ppm => ${90250}, _items => ${items(a.c)},
         _client_order_id => ${cidA})`; // holds the store row FOR SHARE until the transaction ends
     await b.c`begin`;
-    const cidB = `conc-parallel-b-${stamp}`;
+    const cidB = `${org.key}-parallel-b`;
     const second = sale(b, cidB, 90250).then(
       () => "ok",
       (e) => code(e),
@@ -233,11 +294,11 @@ try {
     await b.end();
   }
 
-  // ---- 5. invariant over every order of this test
+  // ---- 5. invariants over everything this test recorded (the organization is its own)
   {
     const rows =
       await sql`select client_order_id, subtotal_cents, discount_cents, tax_cents, tax_rate_ppm, tax_rate_basis_points
-                           from public.orders where org_id = ${ORG} and client_order_id like ${"conc-%-" + stamp}`;
+                  from public.orders where org_id = ${ORG} order by client_order_id`;
     const bad = rows.filter(
       (o) =>
         ![SEEDED, 90250].includes(o.tax_rate_ppm) ||
@@ -246,43 +307,41 @@ try {
         o.tax_rate_basis_points !== Math.round(o.tax_rate_ppm / 100),
     );
     check(
-      `5. every recorded order (${rows.length}) carries a validated rate and the tax computed from it`,
+      `5. the organization holds exactly the 3 recorded sales, each at a validated rate with its tax`,
       rows.length === 3 && bad.length === 0,
-      bad.map((b) => b.client_order_id).join(","),
+      rows.map((r) => r.client_order_id.replace(`${org.key}-`, "")).join(","),
     );
-    const audits =
-      await sql`select metadata->>'from_ppm' as f, metadata->>'to_ppm' as t from public.audit_logs
-                             where org_id = ${ORG} and action = 'location.tax_rate_updated' and created_at > now() - interval '5 minutes' order by created_at`;
+    const a = await rateAudits();
     check(
-      "5. the audit trail holds the two committed changes only (seeded -> 70000 -> 90250), not the rolled-back one",
-      audits.some((a) => Number(a.f) === SEEDED && Number(a.t) === 70000) &&
-        audits.some((a) => Number(a.f) === 70000 && Number(a.t) === 90250) &&
-        !audits.some((a) => Number(a.t) === 50000),
-      JSON.stringify(audits),
+      "5. audit trail of the store: exactly [88,750 -> 70,000, 70,000 -> 90,250], both by the manager",
+      JSON.stringify(a.map((r) => [r.actor === CHANGER, r.f, r.t])) ===
+        JSON.stringify([
+          [true, SEEDED, 70000],
+          [true, 70000, 90250],
+        ]),
+      JSON.stringify(a),
     );
   }
 } finally {
-  // Restore the seeded rate, and deliver the paid sales this test recorded (confirmed -> in_prep ->
-  // ready -> delivered), so the kitchen-board tests that follow in the suite see no open ticket.
+  // Remove the organization, its rows and the two synthetic users; nothing else is touched.
   try {
-    const owner = await session(SELLER);
-    await setRate(owner, SEEDED);
-    const open = await sql`select id from public.orders where org_id = ${ORG}
-                           and client_order_id like ${"conc-%-" + stamp} and status = 'confirmed'`;
-    for (const { id } of open)
-      for (const s of ["in_prep", "ready", "delivered"])
-        await owner.c`select public.update_order_status(${id}, ${s})`;
-    await owner.end();
-    const left = await sql`select count(*)::int as n from public.orders where org_id = ${ORG}
-                           and client_order_id like ${"conc-%-" + stamp} and status <> 'delivered'`;
+    await fixtures.unsafe(dropIsolatedOrgsSql([ORG]));
+    await fixtures.unsafe(dropTestUsersSql([SELLER, CHANGER]));
+    const [{ n }] = await sql.unsafe(
+      `select * from (${countOrgRowsSql([ORG]).replace(/;\s*$/, "")}) x(n)`,
+    );
+    const [{ u }] =
+      await sql`select count(*)::int as u from auth.users where id in (${SELLER}, ${CHANGER})`;
     check(
-      "cleanup: the recorded sales are delivered (no open ticket left behind)",
-      left[0].n === 0,
+      "cleanup: nothing of the isolated organization or its users is left",
+      Number(n) === 0 && u === 0,
+      `${n} rows, ${u} users`,
     );
   } catch (e) {
-    check("cleanup: seeded rate restored and sales delivered", false, code(e));
+    check("cleanup: isolated organization removed", false, code(e));
   }
   await sql.end({ timeout: 5 });
+  await fixtures.end({ timeout: 5 });
 }
 
 const failed = results.filter((r) => !r.ok);

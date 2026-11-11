@@ -1,11 +1,6 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.18";
-  };
   public: {
     Tables: {
       audit_logs: {
@@ -65,6 +60,7 @@ export type Database = {
           status: string | null;
           stripe_ref: string | null;
         };
+        ComputedFields: never;
         Insert: {
           amount_cents?: number | null;
           currency?: string;
@@ -102,7 +98,7 @@ export type Database = {
           active: boolean;
           currency: string;
           default_store_limit: number;
-          entitlements: Json;
+          entitlements: NonNullable<Json>;
           id: string;
           is_placeholder_pricing: boolean;
           name: string;
@@ -111,11 +107,12 @@ export type Database = {
           trial_days: number;
           trial_store_limit: number;
         };
+        ComputedFields: never;
         Insert: {
           active?: boolean;
           currency?: string;
           default_store_limit?: number;
-          entitlements?: Json;
+          entitlements?: NonNullable<Json>;
           id: string;
           is_placeholder_pricing?: boolean;
           name: string;
@@ -128,7 +125,7 @@ export type Database = {
           active?: boolean;
           currency?: string;
           default_store_limit?: number;
-          entitlements?: Json;
+          entitlements?: NonNullable<Json>;
           id?: string;
           is_placeholder_pricing?: boolean;
           name?: string;
@@ -138,6 +135,52 @@ export type Database = {
           trial_store_limit?: number;
         };
         Relationships: [];
+      };
+      feature_catalog: {
+        Row: {
+          created_at: string;
+          default_enabled: boolean;
+          description: string;
+          key: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          default_enabled?: boolean;
+          description: string;
+          key: string;
+        };
+        Update: {
+          created_at?: string;
+          default_enabled?: boolean;
+          description?: string;
+          key?: string;
+        };
+        Relationships: [];
+      };
+      feature_permissions: {
+        Row: {
+          feature: string;
+          permission: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          feature: string;
+          permission: string;
+        };
+        Update: {
+          feature?: string;
+          permission?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feature_permissions_feature_fkey";
+            columns: ["feature"];
+            isOneToOne: false;
+            referencedRelation: "feature_catalog";
+            referencedColumns: ["key"];
+          },
+        ];
       };
       finance_entries: {
         Row: {
@@ -153,6 +196,7 @@ export type Database = {
           org_id: string;
           reverses_id: string | null;
         };
+        ComputedFields: never;
         Insert: {
           actor_id: string;
           amount_cents: number;
@@ -216,15 +260,16 @@ export type Database = {
           id: string;
           location_id: string;
           org_id: string;
-          payload: Json;
+          payload: NonNullable<Json>;
           updated_at: string;
         };
+        ComputedFields: never;
         Insert: {
           active?: boolean;
           id?: string;
           location_id: string;
           org_id: string;
-          payload: Json;
+          payload: NonNullable<Json>;
           updated_at?: string;
         };
         Update: {
@@ -232,7 +277,7 @@ export type Database = {
           id?: string;
           location_id?: string;
           org_id?: string;
-          payload?: Json;
+          payload?: NonNullable<Json>;
           updated_at?: string;
         };
         Relationships: [
@@ -270,6 +315,7 @@ export type Database = {
           unit: string;
           updated_at: string;
         };
+        ComputedFields: never;
         Insert: {
           active?: boolean;
           category?: string;
@@ -338,6 +384,7 @@ export type Database = {
           reverses_id: string | null;
           unit_cost_cents: number;
         };
+        ComputedFields: never;
         Insert: {
           actor_id: string;
           client_event_id: string;
@@ -459,7 +506,7 @@ export type Database = {
         Row: {
           address: string | null;
           created_at: string;
-          hours: Json;
+          hours: NonNullable<Json>;
           id: string;
           is_verified: boolean;
           name: string;
@@ -471,10 +518,11 @@ export type Database = {
           timezone: string;
           updated_at: string;
         };
+        ComputedFields: never;
         Insert: {
           address?: string | null;
           created_at?: string;
-          hours?: Json;
+          hours?: NonNullable<Json>;
           id?: string;
           is_verified?: boolean;
           name: string;
@@ -482,13 +530,14 @@ export type Database = {
           phone?: string | null;
           slug: string;
           status?: string;
+          tax_rate_ppm?: number | null;
           timezone?: string;
           updated_at?: string;
         };
         Update: {
           address?: string | null;
           created_at?: string;
-          hours?: Json;
+          hours?: NonNullable<Json>;
           id?: string;
           is_verified?: boolean;
           name?: string;
@@ -515,6 +564,7 @@ export type Database = {
           location_id: string;
           member_id: string;
         };
+        ComputedFields: never;
         Insert: {
           location_id: string;
           member_id: string;
@@ -549,6 +599,7 @@ export type Database = {
           name: string;
           org_id: string;
         };
+        ComputedFields: never;
         Insert: {
           active?: boolean;
           client_id: string;
@@ -585,7 +636,7 @@ export type Database = {
           id: string;
           image_url: string | null;
           location_ids: string[];
-          modifier_groups: Json;
+          modifier_groups: NonNullable<Json>;
           name: string;
           notes: string | null;
           org_id: string;
@@ -593,6 +644,7 @@ export type Database = {
           price_cents: number;
           updated_at: string;
         };
+        ComputedFields: never;
         Insert: {
           active?: boolean;
           category_id?: string | null;
@@ -602,7 +654,7 @@ export type Database = {
           id?: string;
           image_url?: string | null;
           location_ids?: string[];
-          modifier_groups?: Json;
+          modifier_groups?: NonNullable<Json>;
           name: string;
           notes?: string | null;
           org_id: string;
@@ -619,7 +671,7 @@ export type Database = {
           id?: string;
           image_url?: string | null;
           location_ids?: string[];
-          modifier_groups?: Json;
+          modifier_groups?: NonNullable<Json>;
           name?: string;
           notes?: string | null;
           org_id?: string;
@@ -654,6 +706,7 @@ export type Database = {
           order_item_id: string;
           price_cents: number;
         };
+        ComputedFields: never;
         Insert: {
           group_id: string;
           group_name: string;
@@ -696,6 +749,7 @@ export type Database = {
           subtotal_cents: number;
           unit_price_cents: number;
         };
+        ComputedFields: never;
         Insert: {
           id?: string;
           is_item_ready?: boolean;
@@ -751,6 +805,7 @@ export type Database = {
           reason: string | null;
           to_status: Database["public"]["Enums"]["order_status"];
         };
+        ComputedFields: never;
         Insert: {
           actor_id: string;
           created_at?: string;
@@ -810,6 +865,7 @@ export type Database = {
           type: Database["public"]["Enums"]["order_type"];
           updated_at: string;
         };
+        ComputedFields: never;
         Insert: {
           client_order_id: string;
           created_at?: string;
@@ -879,9 +935,50 @@ export type Database = {
           },
         ];
       };
+      org_features: {
+        Row: {
+          enabled: boolean;
+          feature: string;
+          org_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          enabled?: boolean;
+          feature: string;
+          org_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          enabled?: boolean;
+          feature?: string;
+          org_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_features_feature_fkey";
+            columns: ["feature"];
+            isOneToOne: false;
+            referencedRelation: "feature_catalog";
+            referencedColumns: ["key"];
+          },
+          {
+            foreignKeyName: "org_features_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       organization_members: {
         Row: {
           created_at: string;
+          effective_permissions: string[];
           extra_permissions: string[];
           id: string;
           org_id: string;
@@ -893,6 +990,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           created_at?: string;
+          effective_permissions?: string[];
           extra_permissions?: string[];
           id?: string;
           org_id: string;
@@ -903,6 +1001,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          effective_permissions?: string[];
           extra_permissions?: string[];
           id?: string;
           org_id?: string;
@@ -949,6 +1048,7 @@ export type Database = {
           store_limit_override: number | null;
           suspended_reason: string | null;
         };
+        ComputedFields: never;
         Insert: {
           brand_accent?: string;
           brand_primary?: string;
@@ -1003,6 +1103,7 @@ export type Database = {
           reversed_at: string | null;
           status: string;
         };
+        ComputedFields: never;
         Insert: {
           amount_cents: number;
           created_at?: string;
@@ -1032,503 +1133,6 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "orders";
             referencedColumns: ["org_id", "location_id", "id"];
-          },
-        ];
-      };
-      platform_bootstrap: {
-        Row: {
-          authorization_note: string;
-          completed_at: string;
-          id: boolean;
-          user_id: string;
-        };
-        Insert: {
-          authorization_note: string;
-          completed_at?: string;
-          id?: boolean;
-          user_id: string;
-        };
-        Update: {
-          authorization_note?: string;
-          completed_at?: string;
-          id?: boolean;
-          user_id?: string;
-        };
-        Relationships: [];
-      };
-      product_recipes: {
-        Row: {
-          id: string;
-          instructions: string;
-          location_id: string;
-          metadata: Json;
-          org_id: string;
-          product_id: string;
-          servings: number;
-          updated_at: string;
-          yield_quantity: number;
-          yield_unit: string;
-        };
-        Insert: {
-          id?: string;
-          instructions?: string;
-          location_id: string;
-          metadata?: Json;
-          org_id: string;
-          product_id: string;
-          servings: number;
-          updated_at?: string;
-          yield_quantity?: number;
-          yield_unit?: string;
-        };
-        Update: {
-          id?: string;
-          instructions?: string;
-          location_id?: string;
-          metadata?: Json;
-          org_id?: string;
-          product_id?: string;
-          servings?: number;
-          updated_at?: string;
-          yield_quantity?: number;
-          yield_unit?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "product_recipes_location_id_fkey";
-            columns: ["location_id"];
-            isOneToOne: false;
-            referencedRelation: "locations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "product_recipes_org_id_fkey";
-            columns: ["org_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "product_recipes_org_id_product_id_fkey";
-            columns: ["org_id", "product_id"];
-            isOneToOne: false;
-            referencedRelation: "menu_products";
-            referencedColumns: ["org_id", "id"];
-          },
-        ];
-      };
-      profiles: {
-        Row: {
-          avatar_url: string | null;
-          created_at: string;
-          full_name: string | null;
-          id: string;
-          preferred_language: string | null;
-          updated_at: string;
-        };
-        Insert: {
-          avatar_url?: string | null;
-          created_at?: string;
-          full_name?: string | null;
-          id: string;
-          preferred_language?: string | null;
-          updated_at?: string;
-        };
-        Update: {
-          avatar_url?: string | null;
-          created_at?: string;
-          full_name?: string | null;
-          id?: string;
-          preferred_language?: string | null;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      purchase_order_items: {
-        Row: {
-          id: string;
-          inventory_item_id: string;
-          location_id: string;
-          org_id: string;
-          purchase_order_id: string;
-          quantity_ordered: number;
-          quantity_received: number;
-          unit_price_cents: number;
-        };
-        Insert: {
-          id?: string;
-          inventory_item_id: string;
-          location_id: string;
-          org_id: string;
-          purchase_order_id: string;
-          quantity_ordered: number;
-          quantity_received?: number;
-          unit_price_cents: number;
-        };
-        Update: {
-          id?: string;
-          inventory_item_id?: string;
-          location_id?: string;
-          org_id?: string;
-          purchase_order_id?: string;
-          quantity_ordered?: number;
-          quantity_received?: number;
-          unit_price_cents?: number;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "purchase_order_items_org_id_location_id_inventory_item_id_fkey";
-            columns: ["org_id", "location_id", "inventory_item_id"];
-            isOneToOne: false;
-            referencedRelation: "inventory_items";
-            referencedColumns: ["org_id", "location_id", "id"];
-          },
-          {
-            foreignKeyName: "purchase_order_items_org_id_location_id_purchase_order_id_fkey";
-            columns: ["org_id", "location_id", "purchase_order_id"];
-            isOneToOne: false;
-            referencedRelation: "purchase_orders";
-            referencedColumns: ["org_id", "location_id", "id"];
-          },
-        ];
-      };
-      purchase_orders: {
-        Row: {
-          created_at: string;
-          discount_cents: number;
-          id: string;
-          location_id: string;
-          metadata: Json;
-          notes: string;
-          org_id: string;
-          shipping_cents: number;
-          status: string;
-          supplier_id: string;
-          tax_cents: number;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          discount_cents?: number;
-          id?: string;
-          location_id: string;
-          metadata?: Json;
-          notes?: string;
-          org_id: string;
-          shipping_cents?: number;
-          status?: string;
-          supplier_id: string;
-          tax_cents?: number;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          discount_cents?: number;
-          id?: string;
-          location_id?: string;
-          metadata?: Json;
-          notes?: string;
-          org_id?: string;
-          shipping_cents?: number;
-          status?: string;
-          supplier_id?: string;
-          tax_cents?: number;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "purchase_orders_location_id_fkey";
-            columns: ["location_id"];
-            isOneToOne: false;
-            referencedRelation: "locations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "purchase_orders_org_id_fkey";
-            columns: ["org_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "purchase_orders_org_id_supplier_id_fkey";
-            columns: ["org_id", "supplier_id"];
-            isOneToOne: false;
-            referencedRelation: "suppliers";
-            referencedColumns: ["org_id", "id"];
-          },
-        ];
-      };
-      purchase_receipts: {
-        Row: {
-          actor_id: string;
-          client_event_id: string;
-          created_at: string;
-          id: string;
-          items: Json;
-          location_id: string;
-          org_id: string;
-          payload_hash: string;
-          purchase_order_id: string;
-        };
-        Insert: {
-          actor_id: string;
-          client_event_id: string;
-          created_at?: string;
-          id?: string;
-          items: Json;
-          location_id: string;
-          org_id: string;
-          payload_hash: string;
-          purchase_order_id: string;
-        };
-        Update: {
-          actor_id?: string;
-          client_event_id?: string;
-          created_at?: string;
-          id?: string;
-          items?: Json;
-          location_id?: string;
-          org_id?: string;
-          payload_hash?: string;
-          purchase_order_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "purchase_receipts_org_id_location_id_purchase_order_id_fkey";
-            columns: ["org_id", "location_id", "purchase_order_id"];
-            isOneToOne: false;
-            referencedRelation: "purchase_orders";
-            referencedColumns: ["org_id", "location_id", "id"];
-          },
-        ];
-      };
-      recipe_ingredients: {
-        Row: {
-          id: string;
-          inventory_item_id: string;
-          location_id: string;
-          org_id: string;
-          quantity: number;
-          recipe_id: string;
-          unit: string;
-          waste_percentage: number;
-        };
-        Insert: {
-          id?: string;
-          inventory_item_id: string;
-          location_id: string;
-          org_id: string;
-          quantity: number;
-          recipe_id: string;
-          unit: string;
-          waste_percentage?: number;
-        };
-        Update: {
-          id?: string;
-          inventory_item_id?: string;
-          location_id?: string;
-          org_id?: string;
-          quantity?: number;
-          recipe_id?: string;
-          unit?: string;
-          waste_percentage?: number;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "recipe_ingredients_org_id_location_id_inventory_item_id_fkey";
-            columns: ["org_id", "location_id", "inventory_item_id"];
-            isOneToOne: false;
-            referencedRelation: "inventory_items";
-            referencedColumns: ["org_id", "location_id", "id"];
-          },
-          {
-            foreignKeyName: "recipe_ingredients_org_id_location_id_recipe_id_fkey";
-            columns: ["org_id", "location_id", "recipe_id"];
-            isOneToOne: false;
-            referencedRelation: "product_recipes";
-            referencedColumns: ["org_id", "location_id", "id"];
-          },
-        ];
-      };
-      stripe_webhook_events: {
-        Row: {
-          error: string | null;
-          id: string;
-          org_id: string | null;
-          processed_at: string | null;
-          received_at: string;
-          type: string;
-        };
-        Insert: {
-          error?: string | null;
-          id: string;
-          org_id?: string | null;
-          processed_at?: string | null;
-          received_at?: string;
-          type: string;
-        };
-        Update: {
-          error?: string | null;
-          id?: string;
-          org_id?: string | null;
-          processed_at?: string | null;
-          received_at?: string;
-          type?: string;
-        };
-        Relationships: [];
-      };
-      subscriptions: {
-        Row: {
-          billed_locations: number;
-          cancel_at_period_end: boolean;
-          canceled_at: string | null;
-          current_period_end: string | null;
-          current_period_start: string | null;
-          grace_ends_at: string | null;
-          org_id: string;
-          plan_id: string;
-          status: string;
-          stripe_customer_id: string | null;
-          stripe_subscription_id: string | null;
-          trial_ends_at: string | null;
-          updated_at: string;
-        };
-        Insert: {
-          billed_locations?: number;
-          cancel_at_period_end?: boolean;
-          canceled_at?: string | null;
-          current_period_end?: string | null;
-          current_period_start?: string | null;
-          grace_ends_at?: string | null;
-          org_id: string;
-          plan_id?: string;
-          status?: string;
-          stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          trial_ends_at?: string | null;
-          updated_at?: string;
-        };
-        Update: {
-          billed_locations?: number;
-          cancel_at_period_end?: boolean;
-          canceled_at?: string | null;
-          current_period_end?: string | null;
-          current_period_start?: string | null;
-          grace_ends_at?: string | null;
-          org_id?: string;
-          plan_id?: string;
-          status?: string;
-          stripe_customer_id?: string | null;
-          stripe_subscription_id?: string | null;
-          trial_ends_at?: string | null;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "subscriptions_org_id_fkey";
-            columns: ["org_id"];
-            isOneToOne: true;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "subscriptions_plan_id_fkey";
-            columns: ["plan_id"];
-            isOneToOne: false;
-            referencedRelation: "billing_plans";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      suppliers: {
-        Row: {
-          active: boolean;
-          details: Json;
-          id: string;
-          name: string;
-          org_id: string;
-          updated_at: string;
-        };
-        Insert: {
-          active?: boolean;
-          details?: Json;
-          id?: string;
-          name: string;
-          org_id: string;
-          updated_at?: string;
-        };
-        Update: {
-          active?: boolean;
-          details?: Json;
-          id?: string;
-          name?: string;
-          org_id?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "suppliers_org_id_fkey";
-            columns: ["org_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      user_roles: {
-        Row: {
-          id: string;
-          role: Database["public"]["Enums"]["platform_role"];
-          user_id: string;
-        };
-        Insert: {
-          id?: string;
-          role: Database["public"]["Enums"]["platform_role"];
-          user_id: string;
-        };
-        Update: {
-          id?: string;
-          role?: Database["public"]["Enums"]["platform_role"];
-          user_id?: string;
-        };
-        Relationships: [];
-      };
-      whatsapp_records: {
-        Row: {
-          created_at: string;
-          id: string;
-          is_simulation: boolean;
-          kind: string;
-          org_id: string;
-          payload: Json;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: string;
-          is_simulation?: boolean;
-          kind: string;
-          org_id: string;
-          payload: Json;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: string;
-          is_simulation?: boolean;
-          kind?: string;
-          org_id?: string;
-          payload?: Json;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "whatsapp_records_org_id_fkey";
-            columns: ["org_id"];
-            isOneToOne: false;
-            referencedRelation: "organizations";
-            referencedColumns: ["id"];
           },
         ];
       };
@@ -1586,6 +1190,515 @@ export type Database = {
           },
         ];
       };
+      platform_bootstrap: {
+        Row: {
+          authorization_note: string;
+          completed_at: string;
+          id: boolean;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          authorization_note: string;
+          completed_at?: string;
+          id?: boolean;
+          user_id: string;
+        };
+        Update: {
+          authorization_note?: string;
+          completed_at?: string;
+          id?: boolean;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      product_recipes: {
+        Row: {
+          id: string;
+          instructions: string;
+          location_id: string;
+          metadata: NonNullable<Json>;
+          org_id: string;
+          product_id: string;
+          servings: number;
+          updated_at: string;
+          yield_quantity: number;
+          yield_unit: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: string;
+          instructions?: string;
+          location_id: string;
+          metadata?: NonNullable<Json>;
+          org_id: string;
+          product_id: string;
+          servings: number;
+          updated_at?: string;
+          yield_quantity?: number;
+          yield_unit?: string;
+        };
+        Update: {
+          id?: string;
+          instructions?: string;
+          location_id?: string;
+          metadata?: NonNullable<Json>;
+          org_id?: string;
+          product_id?: string;
+          servings?: number;
+          updated_at?: string;
+          yield_quantity?: number;
+          yield_unit?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "product_recipes_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "product_recipes_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "product_recipes_org_id_product_id_fkey";
+            columns: ["org_id", "product_id"];
+            isOneToOne: false;
+            referencedRelation: "menu_products";
+            referencedColumns: ["org_id", "id"];
+          },
+        ];
+      };
+      profiles: {
+        Row: {
+          avatar_url: string | null;
+          created_at: string;
+          full_name: string | null;
+          id: string;
+          preferred_language: string | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          avatar_url?: string | null;
+          created_at?: string;
+          full_name?: string | null;
+          id: string;
+          preferred_language?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          avatar_url?: string | null;
+          created_at?: string;
+          full_name?: string | null;
+          id?: string;
+          preferred_language?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      purchase_order_items: {
+        Row: {
+          id: string;
+          inventory_item_id: string;
+          location_id: string;
+          org_id: string;
+          purchase_order_id: string;
+          quantity_ordered: number;
+          quantity_received: number;
+          unit_price_cents: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: string;
+          inventory_item_id: string;
+          location_id: string;
+          org_id: string;
+          purchase_order_id: string;
+          quantity_ordered: number;
+          quantity_received?: number;
+          unit_price_cents: number;
+        };
+        Update: {
+          id?: string;
+          inventory_item_id?: string;
+          location_id?: string;
+          org_id?: string;
+          purchase_order_id?: string;
+          quantity_ordered?: number;
+          quantity_received?: number;
+          unit_price_cents?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_org_id_location_id_inventory_item_id_fkey";
+            columns: ["org_id", "location_id", "inventory_item_id"];
+            isOneToOne: false;
+            referencedRelation: "inventory_items";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+          {
+            foreignKeyName: "purchase_order_items_org_id_location_id_purchase_order_id_fkey";
+            columns: ["org_id", "location_id", "purchase_order_id"];
+            isOneToOne: false;
+            referencedRelation: "purchase_orders";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
+      purchase_orders: {
+        Row: {
+          created_at: string;
+          discount_cents: number;
+          id: string;
+          location_id: string;
+          metadata: NonNullable<Json>;
+          notes: string;
+          org_id: string;
+          shipping_cents: number;
+          status: string;
+          supplier_id: string;
+          tax_cents: number;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          discount_cents?: number;
+          id?: string;
+          location_id: string;
+          metadata?: NonNullable<Json>;
+          notes?: string;
+          org_id: string;
+          shipping_cents?: number;
+          status?: string;
+          supplier_id: string;
+          tax_cents?: number;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          discount_cents?: number;
+          id?: string;
+          location_id?: string;
+          metadata?: NonNullable<Json>;
+          notes?: string;
+          org_id?: string;
+          shipping_cents?: number;
+          status?: string;
+          supplier_id?: string;
+          tax_cents?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "purchase_orders_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "purchase_orders_org_id_supplier_id_fkey";
+            columns: ["org_id", "supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["org_id", "id"];
+          },
+        ];
+      };
+      purchase_receipts: {
+        Row: {
+          actor_id: string;
+          client_event_id: string;
+          created_at: string;
+          id: string;
+          items: NonNullable<Json>;
+          location_id: string;
+          org_id: string;
+          payload_hash: string;
+          purchase_order_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id: string;
+          client_event_id: string;
+          created_at?: string;
+          id?: string;
+          items: NonNullable<Json>;
+          location_id: string;
+          org_id: string;
+          payload_hash: string;
+          purchase_order_id: string;
+        };
+        Update: {
+          actor_id?: string;
+          client_event_id?: string;
+          created_at?: string;
+          id?: string;
+          items?: NonNullable<Json>;
+          location_id?: string;
+          org_id?: string;
+          payload_hash?: string;
+          purchase_order_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "purchase_receipts_org_id_location_id_purchase_order_id_fkey";
+            columns: ["org_id", "location_id", "purchase_order_id"];
+            isOneToOne: false;
+            referencedRelation: "purchase_orders";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
+      recipe_ingredients: {
+        Row: {
+          id: string;
+          inventory_item_id: string;
+          location_id: string;
+          org_id: string;
+          quantity: number;
+          recipe_id: string;
+          unit: string;
+          waste_percentage: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: string;
+          inventory_item_id: string;
+          location_id: string;
+          org_id: string;
+          quantity: number;
+          recipe_id: string;
+          unit: string;
+          waste_percentage?: number;
+        };
+        Update: {
+          id?: string;
+          inventory_item_id?: string;
+          location_id?: string;
+          org_id?: string;
+          quantity?: number;
+          recipe_id?: string;
+          unit?: string;
+          waste_percentage?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recipe_ingredients_org_id_location_id_inventory_item_id_fkey";
+            columns: ["org_id", "location_id", "inventory_item_id"];
+            isOneToOne: false;
+            referencedRelation: "inventory_items";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+          {
+            foreignKeyName: "recipe_ingredients_org_id_location_id_recipe_id_fkey";
+            columns: ["org_id", "location_id", "recipe_id"];
+            isOneToOne: false;
+            referencedRelation: "product_recipes";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
+      stripe_webhook_events: {
+        Row: {
+          error: string | null;
+          id: string;
+          org_id: string | null;
+          processed_at: string | null;
+          received_at: string;
+          type: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          error?: string | null;
+          id: string;
+          org_id?: string | null;
+          processed_at?: string | null;
+          received_at?: string;
+          type: string;
+        };
+        Update: {
+          error?: string | null;
+          id?: string;
+          org_id?: string | null;
+          processed_at?: string | null;
+          received_at?: string;
+          type?: string;
+        };
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          billed_locations: number;
+          cancel_at_period_end: boolean;
+          canceled_at: string | null;
+          current_period_end: string | null;
+          current_period_start: string | null;
+          grace_ends_at: string | null;
+          org_id: string;
+          plan_id: string;
+          status: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          trial_ends_at: string | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          billed_locations?: number;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          current_period_end?: string | null;
+          current_period_start?: string | null;
+          grace_ends_at?: string | null;
+          org_id: string;
+          plan_id?: string;
+          status?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          trial_ends_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          billed_locations?: number;
+          cancel_at_period_end?: boolean;
+          canceled_at?: string | null;
+          current_period_end?: string | null;
+          current_period_start?: string | null;
+          grace_ends_at?: string | null;
+          org_id?: string;
+          plan_id?: string;
+          status?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          trial_ends_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey";
+            columns: ["plan_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_plans";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      suppliers: {
+        Row: {
+          active: boolean;
+          details: NonNullable<Json>;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          active?: boolean;
+          details?: NonNullable<Json>;
+          id?: string;
+          name: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          details?: NonNullable<Json>;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_roles: {
+        Row: {
+          id: string;
+          role: Database["public"]["Enums"]["platform_role"];
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          id?: string;
+          role: Database["public"]["Enums"]["platform_role"];
+          user_id: string;
+        };
+        Update: {
+          id?: string;
+          role?: Database["public"]["Enums"]["platform_role"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      whatsapp_records: {
+        Row: {
+          created_at: string;
+          id: string;
+          is_simulation: boolean;
+          kind: string;
+          org_id: string;
+          payload: NonNullable<Json>;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          is_simulation?: boolean;
+          kind: string;
+          org_id: string;
+          payload: NonNullable<Json>;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          is_simulation?: boolean;
+          kind?: string;
+          org_id?: string;
+          payload?: NonNullable<Json>;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_records_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1611,7 +1724,7 @@ export type Database = {
         }[];
       };
       admin_list_organizations: {
-        Args: never;
+        Args: Record<PropertyKey, never>;
         Returns: {
           created_at: string;
           id: string;
@@ -1627,7 +1740,7 @@ export type Database = {
         }[];
       };
       admin_list_platform_admins: {
-        Args: never;
+        Args: Record<PropertyKey, never>;
         Returns: {
           email: string;
           role: Database["public"]["Enums"]["platform_role"];
@@ -1635,7 +1748,7 @@ export type Database = {
         }[];
       };
       admin_org_insights: {
-        Args: never;
+        Args: Record<PropertyKey, never>;
         Returns: {
           active_store_count: number;
           billed_locations: number;
@@ -1659,6 +1772,10 @@ export type Database = {
           trial_ends_at: string;
         }[];
       };
+      admin_set_org_feature: {
+        Args: { _enabled: boolean; _feature: string; _org_id: string };
+        Returns: undefined;
+      };
       admin_set_platform_role: {
         Args: {
           _email: string;
@@ -1669,12 +1786,7 @@ export type Database = {
         Returns: undefined;
       };
       admin_set_subscription: {
-        Args: {
-          _org_id: string;
-          _plan: string;
-          _reason: string;
-          _status: string;
-        };
+        Args: { _org_id: string; _plan: string; _reason: string; _status: string };
         Returns: undefined;
       };
       admin_update_organization: {
@@ -1691,11 +1803,16 @@ export type Database = {
         Args: { _client_id: string; _kind: string; _org_id: string };
         Returns: undefined;
       };
+      archive_permission_profile: { Args: { _id: string }; Returns: undefined };
       assert_operational_scope: {
         Args: { _location_id: string; _manage?: boolean; _org_id: string };
         Returns: undefined;
       };
       assert_org_operational: { Args: { _org_id: string }; Returns: undefined };
+      assert_permission: {
+        Args: { _location_id?: string; _org_id: string; _perm: string };
+        Returns: undefined;
+      };
       billing_apply_stripe_event: {
         Args: {
           _amount_cents: number;
@@ -1721,10 +1838,7 @@ export type Database = {
       can_manage_member: { Args: { _member_id: string }; Returns: boolean };
       can_manage_org: { Args: { _org_id: string }; Returns: boolean };
       can_operate_location: { Args: { _location_id: string }; Returns: boolean };
-      cancel_operational_purchase: {
-        Args: { _id: string; _reason: string };
-        Returns: undefined;
-      };
+      cancel_operational_purchase: { Args: { _id: string; _reason: string }; Returns: undefined };
       cancel_order_with_reversal: {
         Args: { _order_id: string; _reason?: string };
         Returns: undefined;
@@ -1761,11 +1875,7 @@ export type Database = {
         Returns: string;
       };
       create_organization: {
-        Args: {
-          _brand_primary?: string;
-          _location_name?: string;
-          _name: string;
-        };
+        Args: { _brand_primary?: string; _location_name?: string; _name: string };
         Returns: string;
       };
       create_pos_sale: {
@@ -1814,6 +1924,15 @@ export type Database = {
           _name: string;
         };
         Returns: string;
+      };
+      effective_permissions_for: {
+        Args: {
+          _extra: string[];
+          _profile_id: string;
+          _revoked: string[];
+          _role: Database["public"]["Enums"]["org_role"];
+        };
+        Returns: string[];
       };
       effective_store_limit: { Args: { _org_id: string }; Returns: number };
       finalize_pos_sale_atomic: {
@@ -1867,23 +1986,52 @@ export type Database = {
           status: string;
         }[];
       };
-      has_platform_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["platform_role"];
-          _user_id: string;
-        };
+      has_any_permission: {
+        Args: { _location_id?: string; _org_id: string; _perms: string[] };
         Returns: boolean;
+      };
+      has_permission: {
+        Args: { _location_id?: string; _org_id: string; _perm: string };
+        Returns: boolean;
+      };
+      has_platform_role: {
+        Args: { _role: Database["public"]["Enums"]["platform_role"]; _user_id: string };
+        Returns: boolean;
+      };
+      inventory_item_costs: {
+        Args: { _org_id: string };
+        Returns: {
+          cost_cents: number;
+          item_id: string;
+        }[];
+      };
+      inventory_movement_costs: {
+        Args: { _movement_ids: string[]; _org_id: string };
+        Returns: {
+          movement_id: string;
+          unit_cost_cents: number;
+        }[];
       };
       is_org_member: { Args: { _org_id: string }; Returns: boolean };
       is_org_owner: { Args: { _org_id: string }; Returns: boolean };
-      is_platform_admin: { Args: never; Returns: boolean };
+      is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      location_in_org: { Args: { _location_id: string; _org_id: string }; Returns: boolean };
+      log_access_denied: {
+        Args: { _action: string; _detail?: string; _location_id?: string; _org_id: string };
+        Returns: undefined;
+      };
+      member_permissions: { Args: { _member_id: string }; Returns: string[] };
       member_scope: { Args: { _member_id: string }; Returns: string[] };
       my_member: {
         Args: { _org_id: string };
         Returns: {
           created_at: string;
+          effective_permissions: string[];
+          extra_permissions: string[];
           id: string;
           org_id: string;
+          profile_id: string | null;
+          revoked_permissions: string[];
           role: Database["public"]["Enums"]["org_role"];
           user_id: string;
         };
@@ -1903,11 +2051,16 @@ export type Database = {
           suspended_reason: string;
         }[];
       };
+      my_permissions: { Args: { _org_id: string }; Returns: string[] };
       operational_unit_quantity: {
         Args: { _from: string; _quantity: number; _to: string };
         Returns: number;
       };
+      org_feature_enabled: { Args: { _feature: string; _org_id: string }; Returns: boolean };
       org_is_operational: { Args: { _org_id: string }; Returns: boolean };
+      orgs_with_any_permission: { Args: { _perms: string[] }; Returns: string[] };
+      permission_catalog: { Args: Record<PropertyKey, never>; Returns: string[] };
+      permission_feature_enabled: { Args: { _org_id: string; _perm: string }; Returns: boolean };
       persist_finalized_pos_sale_atomic: {
         Args: {
           _client_order_id?: string;
@@ -1949,12 +2102,7 @@ export type Database = {
         Returns: string;
       };
       receive_operational_purchase: {
-        Args: {
-          _client_event_id: string;
-          _items: Json;
-          _notes?: string;
-          _purchase_id: string;
-        };
+        Args: { _client_event_id: string; _items: Json; _notes?: string; _purchase_id: string };
         Returns: string;
       };
       record_operational_movement: {
@@ -1972,6 +2120,11 @@ export type Database = {
       };
       remove_member: { Args: { _member_id: string }; Returns: undefined };
       revoke_invitation: { Args: { _id: string }; Returns: undefined };
+      role_ceiling: { Args: { _role: Database["public"]["Enums"]["org_role"] }; Returns: string[] };
+      role_default_permissions: {
+        Args: { _role: Database["public"]["Enums"]["org_role"] };
+        Returns: string[];
+      };
       save_location_with_managers: {
         Args: {
           _address: string;
@@ -1989,33 +2142,42 @@ export type Database = {
         Returns: string;
       };
       save_operational_record: {
-        Args: {
-          _kind: string;
-          _location_id: string;
-          _org_id: string;
-          _payload: Json;
-        };
+        Args: { _kind: string; _location_id: string; _org_id: string; _payload: Json };
         Returns: string;
       };
       save_org_brand: {
-        Args: {
-          _accent: string;
-          _logo?: string;
-          _org_id: string;
-          _primary: string;
-        };
+        Args: { _accent: string; _logo?: string; _org_id: string; _primary: string };
         Returns: undefined;
+      };
+      save_permission_profile: {
+        Args: {
+          _description: string;
+          _id: string;
+          _name: string;
+          _org_id: string;
+          _permissions: string[];
+          _tier: Database["public"]["Enums"]["org_role"];
+        };
+        Returns: string;
       };
       set_location_managers: {
         Args: { _location_id: string; _member_ids: string[] };
         Returns: undefined;
       };
-      set_location_status: {
-        Args: { _id: string; _status: string };
-        Returns: undefined;
-      };
+      set_location_status: { Args: { _id: string; _status: string }; Returns: undefined };
       set_location_tax_rate: {
         Args: { _location_id: string; _tax_rate_ppm: number };
+        Returns: undefined;
+      };
+      set_member_access: {
+        Args: {
+          _extra: string[];
+          _location_ids: string[];
+          _member_id: string;
+          _profile_id: string;
+          _revoked: string[];
+          _role: Database["public"]["Enums"]["org_role"];
+        };
         Returns: undefined;
       };
       set_member_locations: {
@@ -2023,26 +2185,14 @@ export type Database = {
         Returns: undefined;
       };
       set_member_role: {
-        Args: {
-          _member_id: string;
-          _role: Database["public"]["Enums"]["org_role"];
-        };
+        Args: { _member_id: string; _role: Database["public"]["Enums"]["org_role"] };
         Returns: undefined;
       };
-      set_onboarding_step: {
-        Args: { _org_id: string; _step: number };
-        Returns: undefined;
-      };
-      set_order_item_ready: {
-        Args: { _item_id: string; _ready: boolean };
-        Returns: undefined;
-      };
+      set_onboarding_step: { Args: { _org_id: string; _step: number }; Returns: undefined };
+      set_order_item_ready: { Args: { _item_id: string; _ready: boolean }; Returns: undefined };
       shares_org_with: { Args: { _user_id: string }; Returns: boolean };
       sync_org_entitlements: { Args: { _org_id: string }; Returns: undefined };
-      transfer_ownership: {
-        Args: { _new_owner: string; _org_id: string };
-        Returns: undefined;
-      };
+      transfer_ownership: { Args: { _new_owner: string; _org_id: string }; Returns: undefined };
       update_location: {
         Args: {
           _address: string;
@@ -2065,61 +2215,6 @@ export type Database = {
       valid_location_hours: { Args: { _hours: Json }; Returns: boolean };
       write_audit: {
         Args: { _action: string; _meta: Json; _org: string; _target: string };
-        Returns: undefined;
-      };
-      has_permission: {
-        Args: { _location_id?: string; _org_id: string; _perm: string };
-        Returns: boolean;
-      };
-      has_any_permission: {
-        Args: { _location_id?: string; _org_id: string; _perms: string[] };
-        Returns: boolean;
-      };
-      my_permissions: { Args: { _org_id: string }; Returns: string[] };
-      inventory_item_costs: {
-        Args: { _org_id: string };
-        Returns: { item_id: string; cost_cents: number }[];
-      };
-      inventory_movement_costs: {
-        Args: { _org_id: string; _movement_ids: string[] };
-        Returns: { movement_id: string; unit_cost_cents: number }[];
-      };
-      log_access_denied: {
-        Args: { _action: string; _detail?: string; _location_id?: string; _org_id: string };
-        Returns: undefined;
-      };
-      save_permission_profile: {
-        Args: {
-          _description: string;
-          _id: string;
-          _name: string;
-          _org_id: string;
-          _permissions: string[];
-          _tier: Database["public"]["Enums"]["org_role"];
-        };
-        Returns: string;
-      };
-      archive_permission_profile: { Args: { _id: string }; Returns: undefined };
-      set_member_access: {
-        Args: {
-          _extra: string[];
-          _location_ids: string[];
-          _member_id: string;
-          _profile_id: string;
-          _revoked: string[];
-          _role: Database["public"]["Enums"]["org_role"];
-        };
-        Returns: undefined;
-      };
-      permission_catalog: { Args: Record<PropertyKey, never>; Returns: string[] };
-      role_ceiling: { Args: { _role: Database["public"]["Enums"]["org_role"] }; Returns: string[] };
-      role_default_permissions: {
-        Args: { _role: Database["public"]["Enums"]["org_role"] };
-        Returns: string[];
-      };
-      member_permissions: { Args: { _member_id: string }; Returns: string[] };
-      assert_permission: {
-        Args: { _location_id?: string; _org_id: string; _perm: string };
         Returns: undefined;
       };
     };
@@ -2149,9 +2244,7 @@ export type Tables<
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R;
@@ -2174,9 +2267,7 @@ export type TablesInsert<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I;
     }
@@ -2198,9 +2289,7 @@ export type TablesUpdate<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U;
     }
@@ -2222,9 +2311,7 @@ export type Enums<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -2238,9 +2325,7 @@ export type CompositeTypes<
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
