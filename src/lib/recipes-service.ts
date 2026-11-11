@@ -6,7 +6,7 @@ import {
   TenantContextError,
   writeTenantRecords,
 } from "./tenant-storage";
-import { multiplyQuantityCents, roundCents } from "./money";
+import { multiplyQuantityCents, roundCents, sumCents } from "./money";
 import { convertQuantity } from "./units";
 import { displayAmount } from "./format";
 
@@ -98,6 +98,13 @@ export function calculateIngredientCost(
   };
 }
 
+/**
+ * Totals of a recipe for display. Every ingredient cost must be a whole number of cents; one that
+ * could not be computed (NaN from calculateIngredientCost, a corrupted stored value) makes the
+ * total, the cost per serving AND the margin NaN, which the screens show as "—" (fmtMoneyCents,
+ * fmtPercent). An unknown cost is never shown as $0.00 or as a real-looking margin. A recipe with
+ * no ingredients, or whose ingredients really cost 0, has a legitimate total of 0.
+ */
 export function computeRecipeTotals(
   ingredients: RecipeIngredient[],
   servings: number,
@@ -107,15 +114,19 @@ export function computeRecipeTotals(
   costPerServingCents: number;
   estimatedMarginPercent: number;
 } {
-  const totalCostCents = ingredients.reduce((acc, i) => acc + (i.subtotalCostCents || 0), 0);
-  const safeServings = Math.max(1, servings || 1);
-  const costPerServingCents = displayAmount(
-    () => roundCents(totalCostCents / safeServings),
+  const totalCostCents = displayAmount(
+    () => sumCents(ingredients.map((i) => i.subtotalCostCents)),
     "money.recipe_cost",
   );
+  const safeServings = Math.max(1, servings || 1);
+  const costPerServingCents = Number.isFinite(totalCostCents)
+    ? displayAmount(() => roundCents(totalCostCents / safeServings), "money.recipe_cost")
+    : Number.NaN;
 
   let estimatedMarginPercent = 0;
-  if (sellingPriceCents > 0) {
+  if (!Number.isFinite(costPerServingCents)) {
+    estimatedMarginPercent = Number.NaN; // no margin can be stated without a cost
+  } else if (sellingPriceCents > 0) {
     const profit = sellingPriceCents - costPerServingCents;
     estimatedMarginPercent = Math.round((profit / sellingPriceCents) * 1000) / 10;
   }
