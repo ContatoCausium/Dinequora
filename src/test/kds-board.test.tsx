@@ -376,6 +376,135 @@ describe("refresh scheduler — realtime bursts and ordering", () => {
   });
 });
 
+// Audit follow-up: stop() must end the run in progress too — no onTimeout after it, no button left
+// pending by an unmounted screen, no late answer applied or arming another reload.
+describe("P3 follow-up: stop() ends everything", () => {
+  afterEach(() => vi.useRealTimers());
+  const hanging = () => new Promise<void>(() => undefined);
+
+  it("stop() during a request: the waiter is released at once and onTimeout never fires", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const signals: AbortSignal[] = [];
+    const task = vi.fn((signal: AbortSignal) => {
+      signals.push(signal);
+      return hanging();
+    });
+    const s = createRefreshScheduler(task, { delayMs: 0, onTimeout });
+    let released = false;
+    void s.now().then(() => (released = true)); // a Start button awaiting fresh data
+    await vi.advanceTimersByTimeAsync(1);
+    expect(task).toHaveBeenCalledTimes(1);
+    expect(released).toBe(false);
+    s.stop(); // the screen is unmounted while the request is in flight
+    await vi.advanceTimersByTimeAsync(0);
+    expect(released).toBe(true);
+    expect(signals[0]?.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(REFRESH_TIMEOUT_MS * 2);
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(task).toHaveBeenCalledTimes(1);
+  });
+
+  it("stop() during the debounce: the scheduled run never starts and its waiter is released", async () => {
+    vi.useFakeTimers();
+    const task = vi.fn(async () => undefined);
+    const s = createRefreshScheduler(task, 250);
+    let released = false;
+    void s.request().then(() => (released = true));
+    await vi.advanceTimersByTimeAsync(100);
+    s.stop();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(task).not.toHaveBeenCalled();
+    expect(released).toBe(true);
+  });
+
+  it("stop() during the stall deadline: the 20 s never expires afterwards", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const s = createRefreshScheduler(hanging, { delayMs: 0, onTimeout });
+    void s.now();
+    await vi.advanceTimersByTimeAsync(REFRESH_TIMEOUT_MS - 10); // 10 ms before the deadline
+    s.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it("a request that never answers: stop() releases every waiter; later calls resolve without running", async () => {
+    vi.useFakeTimers();
+    const task = vi.fn(hanging);
+    const s = createRefreshScheduler(task, { delayMs: 0 });
+    const waiters = [s.now(), s.request(), s.request()];
+    await vi.advanceTimersByTimeAsync(5);
+    expect(task).toHaveBeenCalledTimes(1);
+    s.stop();
+    await expect(Promise.all(waiters)).resolves.toHaveLength(3);
+    await expect(s.now()).resolves.toBeUndefined();
+    await expect(s.request()).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(task).toHaveBeenCalledTimes(1);
+  });
+
+  it("store change during a request: old answer dropped, old button released, late completion arms nothing", async () => {
+    vi.useFakeTimers();
+    const board: string[] = [];
+    const runs: string[] = [];
+    let answerA!: () => void;
+    const makeBoard = (store: string, answer: Promise<string>) => {
+      let active = true;
+      const s = createRefreshScheduler(
+        async (signal) => {
+          runs.push(store);
+          const data = await answer;
+          if (active && !signal.aborted) board.push(data);
+        },
+        { delayMs: 0 },
+      );
+      return {
+        s,
+        close: () => {
+          active = false;
+          s.stop();
+        },
+      };
+    };
+    const a = makeBoard("A", new Promise<string>((r) => (answerA = () => r("A"))));
+    let buttonReleased = false;
+    void a.s.now().then(() => (buttonReleased = true)); // Start pressed on store A
+    await vi.advanceTimersByTimeAsync(1);
+    expect(runs).toEqual(["A"]);
+    a.close(); // the operator switches to store B while A's request is in flight
+    await vi.advanceTimersByTimeAsync(0);
+    expect(buttonReleased).toBe(true);
+    const b = makeBoard("B", Promise.resolve("B"));
+    void b.s.now();
+    await vi.advanceTimersByTimeAsync(10);
+    answerA(); // store A's request answers late
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(board).toEqual(["B"]);
+    expect(runs).toEqual(["A", "B"]); // the late answer did not start another run
+    b.close();
+  });
+
+  it("restart: a new scheduler after stop() works normally while the stopped one stays inert", async () => {
+    vi.useFakeTimers();
+    const oldTask = vi.fn(async () => undefined);
+    const old = createRefreshScheduler(oldTask, { delayMs: 0 });
+    void old.now();
+    await vi.advanceTimersByTimeAsync(1);
+    old.stop();
+    const task = vi.fn(async () => undefined);
+    const fresh = createRefreshScheduler(task, { delayMs: 0 });
+    void fresh.now();
+    await vi.advanceTimersByTimeAsync(1);
+    void old.request();
+    void fresh.request();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(oldTask).toHaveBeenCalledTimes(1);
+    expect(task).toHaveBeenCalledTimes(2);
+    fresh.stop();
+  });
+});
+
 describe("P5: kitchen cap notice", () => {
   it("only when tickets are left off; specific text, all stations, both languages", async () => {
     await i18n.changeLanguage("en-US");
