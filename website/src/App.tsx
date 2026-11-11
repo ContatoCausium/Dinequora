@@ -12,6 +12,7 @@ import { DemoRequest } from "./sections/DemoRequest";
 import { Footer } from "./sections/Footer";
 import { WhatsAppFloat } from "./components/whatsapp";
 import { SmoothScroll } from "./components/cinema/SmoothScroll";
+import { FactsBand, Marquee, PointerFx } from "./components/cinema/fx";
 import { LocaleProvider } from "./i18n/LocaleProvider";
 import { pick, useLocale, type Locale } from "./i18n/locale";
 
@@ -33,6 +34,7 @@ function Page() {
   return (
     <>
       <SmoothScroll />
+      <PointerFx />
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[80] focus:rounded-full focus:bg-emerald focus:px-4 focus:py-2 focus:text-navy"
@@ -43,7 +45,15 @@ function Page() {
       <main id="main">
         <CinemaHero />
         <Prologue />
+        <Marquee
+          items={pick(
+            locale,
+            ["Point of sale", "Kitchen display", "Inventory", "Purchasing", "Finance", "Team", "Locations"],
+            ["Ponto de venda", "Tela da cozinha", "Estoque", "Compras", "Financeiro", "Equipe", "Unidades"],
+          )}
+        />
         <NightStory />
+        <FactsBand />
         <Showcase />
         <MultiLocation />
         <Implementation />
@@ -51,6 +61,9 @@ function Page() {
         <AiRoadmap />
         <About />
         <Faq />
+        <a href="#demo" className="block" aria-label={pick(locale, "Book a Demo", "Agendar demonstração")}>
+          <Marquee tone="emerald" items={pick(locale, ["Book a demo", "See it with your menu"], ["Agende uma demonstração", "Veja com o seu cardápio"])} />
+        </a>
         <DemoRequest />
       </main>
       <Footer />

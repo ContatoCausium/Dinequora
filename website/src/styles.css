@@ -327,3 +327,12 @@ body::after {
   color: #f8fafc;
   background: #0b1320;
 }
+
+/* v4: magnetic buttons, blinking clock colon. */
+[data-magnetic] { transition: transform 300ms var(--ease-out-quint); }
+@keyframes blink { 50% { opacity: 0.25; } }
+.live-blink { animation: blink 1.6s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .live-blink { animation: none; }
+  [data-magnetic] { transform: none !important; }
+}
