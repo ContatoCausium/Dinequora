@@ -100,6 +100,62 @@ DO $$ DECLARE bun text:=current_setting('vars.bun'); ing jsonb; BEGIN
  IF (SELECT product_id FROM public.product_recipes WHERE id=current_setting('vars.salad')::uuid)<>(SELECT id FROM public.menu_products WHERE client_id='salad') THEN RAISE EXCEPTION 'FAIL refused edits changed the recipe'; END IF;
 END $$;
 
+-- 3b. Direct RPC calls with a malformed ingredient list never store a recipe: the list is validated in
+--     SQL (0024), not only by the application schema. Absent key, JSON null, object, string and empty
+--     array -> ingredients_required; a non-object element, a non-numeric quantity or a waste
+--     percentage outside 0..100 -> invalid_recipe; a zero or negative quantity -> invalid_quantity;
+--     more than 200 elements -> invalid_recipe; an item of another store -> ingredient_not_in_store.
+--     An edit with a malformed list keeps the recipe and its ingredient rows. Same guard for the item
+--     list of a purchase order (items_required). A NULL payload -> invalid_payload.
+DO $$ DECLARE A uuid:='b2400000-0000-4000-8000-000000000001'; A1 uuid:='c2400000-0000-4000-8000-000000000001'; bun text:=current_setting('vars.bun'); salad uuid:=current_setting('vars.salad')::uuid; recipes int; rows int; bad jsonb; sup uuid; BEGIN
+ recipes:=(SELECT count(*) FROM public.product_recipes WHERE org_id=A); rows:=(SELECT count(*) FROM public.recipe_ingredients WHERE org_id=A);
+ FOR bad IN SELECT value FROM jsonb_array_elements(jsonb_build_array(
+    '{"productId":"burger","servings":1}'::jsonb,
+    '{"productId":"burger","servings":1,"ingredients":null}'::jsonb,
+    '{"productId":"burger","servings":1,"ingredients":{}}'::jsonb,
+    '{"productId":"burger","servings":1,"ingredients":"x"}'::jsonb,
+    '{"productId":"burger","servings":1,"ingredients":[]}'::jsonb)) LOOP
+  BEGIN PERFORM public.save_operational_record(A,A1,'recipe',bad); RAISE EXCEPTION 'FAIL recipe stored with ingredients=%', coalesce(bad->'ingredients','"absent"'::jsonb);
+  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'ingredients_required' THEN RAISE; END IF; END;
+ END LOOP;
+ FOR bad IN SELECT value FROM jsonb_array_elements(jsonb_build_array(
+    jsonb_build_array(1),
+    jsonb_build_array('text'),
+    jsonb_build_array(jsonb_build_object('inventoryItemId',bun,'quantity','1','unit','units')),
+    jsonb_build_array(jsonb_build_object('inventoryItemId',bun,'unit','units')),
+    jsonb_build_array(jsonb_build_object('inventoryItemId',bun,'quantity',1,'unit','units','wastePercentage',101)),
+    jsonb_build_array(jsonb_build_object('inventoryItemId',bun,'quantity',1,'unit','units','wastePercentage',-1)),
+    (SELECT jsonb_agg(jsonb_build_object('inventoryItemId',bun,'quantity',1,'unit','units')) FROM generate_series(1,201)))) LOOP
+  BEGIN PERFORM public.save_operational_record(A,A1,'recipe',jsonb_build_object('productId','burger','servings',1,'ingredients',bad)); RAISE EXCEPTION 'FAIL recipe stored with element list %', left(bad::text,80);
+  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_recipe' THEN RAISE; END IF; END;
+ END LOOP;
+ FOR bad IN SELECT value FROM jsonb_array_elements('[0,-1]'::jsonb) LOOP
+  BEGIN PERFORM public.save_operational_record(A,A1,'recipe',jsonb_build_object('productId','burger','servings',1,'ingredients',jsonb_build_array(jsonb_build_object('inventoryItemId',bun,'quantity',bad,'unit','units')))); RAISE EXCEPTION 'FAIL recipe stored with quantity %', bad;
+  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_quantity' THEN RAISE; END IF; END;
+ END LOOP;
+ BEGIN PERFORM public.save_operational_record(A,A1,'recipe',jsonb_build_object('productId','burger','servings',1,'ingredients',jsonb_build_array(jsonb_build_object('inventoryItemId',gen_random_uuid(),'quantity',1,'unit','units')))); RAISE EXCEPTION 'FAIL recipe stored with an unknown ingredient';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'ingredient_not_in_store' THEN RAISE; END IF; END;
+ -- an edit with a malformed list is refused before anything is touched
+ BEGIN PERFORM public.save_operational_record(A,A1,'recipe',jsonb_build_object('id',salad,'productId','salad','servings',1)); RAISE EXCEPTION 'FAIL edit without ingredients accepted';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'ingredients_required' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.save_operational_record(A,A1,'recipe',jsonb_build_object('id',salad,'productId','salad','servings',1,'ingredients','[]'::jsonb)); RAISE EXCEPTION 'FAIL edit with an empty list accepted';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'ingredients_required' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.save_operational_record(A,A1,'recipe',jsonb_build_object('id',salad,'productId','salad','servings',1,'ingredients',jsonb_build_array(jsonb_build_object('inventoryItemId',bun,'quantity',0,'unit','units')))); RAISE EXCEPTION 'FAIL edit with a zero quantity accepted';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_quantity' THEN RAISE; END IF; END;
+ IF (SELECT count(*) FROM public.recipe_ingredients WHERE recipe_id=salad)<>1 THEN RAISE EXCEPTION 'FAIL a refused edit changed the ingredient rows'; END IF;
+ IF (SELECT count(*) FROM public.product_recipes WHERE org_id=A)<>recipes OR (SELECT count(*) FROM public.recipe_ingredients WHERE org_id=A)<>rows THEN RAISE EXCEPTION 'FAIL a refused call changed the recipes'; END IF;
+ IF EXISTS(SELECT 1 FROM public.product_recipes r WHERE r.org_id=A AND NOT EXISTS(SELECT 1 FROM public.recipe_ingredients i WHERE i.recipe_id=r.id)) THEN RAISE EXCEPTION 'FAIL a recipe without ingredient rows exists'; END IF;
+ BEGIN PERFORM public.save_operational_record(A,A1,'recipe',NULL); RAISE EXCEPTION 'FAIL NULL payload accepted';
+ EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_payload' THEN RAISE; END IF; END;
+ -- purchase orders: the item list has the same NULL-safe guard
+ sup:=public.save_operational_record(A,A1,'supplier','{"name":"PR24 Supplier"}');
+ FOR bad IN SELECT value FROM jsonb_array_elements(jsonb_build_array('{}'::jsonb,'{"items":null}'::jsonb,'{"items":{}}'::jsonb,'{"items":"x"}'::jsonb,'{"items":[]}'::jsonb)) LOOP
+  BEGIN PERFORM public.save_operational_record(A,A1,'purchase',jsonb_build_object('supplierId',sup)||bad); RAISE EXCEPTION 'FAIL purchase stored with items=%', coalesce(bad->'items','"absent"'::jsonb);
+  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'items_required' THEN RAISE; END IF; END;
+ END LOOP;
+ IF EXISTS(SELECT 1 FROM public.purchase_orders WHERE org_id=A) THEN RAISE EXCEPTION 'FAIL a purchase order without items was stored'; END IF;
+END $$;
+
 -- 4. Reads by the kitchen: recipes are visible, costs are not (neither in metadata nor through the gate).
 SELECT set_config('request.jwt.claim.sub','a2400000-0000-4000-8000-000000000002',false);
 DO $$ BEGIN
@@ -119,5 +175,5 @@ DO $$ BEGIN
  IF EXISTS(SELECT 1 FROM public.product_recipes r WHERE NOT EXISTS(SELECT 1 FROM public.recipe_ingredients i WHERE i.recipe_id=r.id)) THEN RAISE EXCEPTION 'FAIL a recipe lost its ingredient rows'; END IF;
  IF EXISTS(SELECT 1 FROM public.product_recipes r JOIN public.menu_products p ON p.id=r.product_id WHERE r.metadata->>'productName' IS DISTINCT FROM p.name) THEN RAISE EXCEPTION 'FAIL productName differs from the product'; END IF;
 END $$;
-SELECT 'PASS: recipe product change (product_id, audit, sale consumption), one recipe per product, invalid recipe refused, metadata without ingredient list or cost snapshots (RPC, CHECK, kitchen read), migrated rows keep recipe_ingredients';
+SELECT 'PASS: recipe product change (product_id, audit, sale consumption), one recipe per product, invalid recipe refused, malformed ingredient lists refused by SQL on direct RPC calls (absent/null/non-array/empty/bad elements, edits untouched, purchase items too), metadata without ingredient list or cost snapshots (RPC, CHECK, kitchen read), migrated rows keep recipe_ingredients';
 ROLLBACK;

@@ -15,7 +15,11 @@
 --     with recipe_exists_for_product (the UNIQUE(org_id, location_id, product_id) of 0012 used to
 --     surface as a raw unique_violation); metadata is built explicitly (productName from
 --     menu_products, sellingPriceCents, prepInstructions, yieldUnit) and never copied from the
---     payload; a negative selling price is refused (invalid_recipe).
+--     payload; a negative selling price is refused (invalid_recipe); the ingredient list is validated
+--     in SQL (absent, JSON null, non-array or empty -> ingredients_required; an element that is not an
+--     object with a numeric quantity and a waste percentage within 0..100 -> invalid_recipe), so a
+--     direct RPC call cannot store a recipe without ingredients. The same NULL-safe guard applies to
+--     the item list of a purchase (items_required).
 --   - existing rows: the unread metadata.ingredients key is removed (the ingredients live in
 --     recipe_ingredients, nothing reads the copy) and productName is realigned to menu_products.
 --   - CHECK product_recipes_metadata_no_ingredients so no future code path can store the list (and
@@ -29,7 +33,7 @@ CREATE OR REPLACE FUNCTION public.save_operational_record(_org_id uuid, _locatio
 AS $function$
 DECLARE id0 uuid; item jsonb; ref uuid; product uuid; product_name text; meta jsonb; category text; existing public.inventory_items; recipe public.product_recipes; po public.purchase_orders; BEGIN
 IF _kind='whatsapp' THEN IF auth.uid() IS NULL OR NOT public.is_org_owner(_org_id) THEN RAISE EXCEPTION 'forbidden'; END IF; PERFORM public.assert_org_operational(_org_id);ELSIF _kind='supplier' THEN IF auth.uid() IS NULL OR NOT public.is_org_member(_org_id) THEN RAISE EXCEPTION 'forbidden'; END IF; PERFORM public.assert_permission(_org_id,'suppliers.edit'); PERFORM public.assert_org_operational(_org_id);ELSE PERFORM public.assert_operational_scope(_org_id,_location_id); PERFORM public.assert_permission(_org_id, CASE _kind WHEN 'inventory' THEN CASE WHEN coalesce(_payload->>'id','')='' THEN 'inventory.create' ELSE 'inventory.edit' END WHEN 'recipe' THEN 'recipes.edit' WHEN 'purchase' THEN 'purchases.create' WHEN 'expense' THEN CASE WHEN coalesce(_payload->>'id','')='' THEN 'expenses.create' ELSE 'expenses.edit' END ELSE 'invalid_kind' END, _location_id); IF _kind='purchase' AND coalesce(_payload->>'status','draft')='sent' THEN PERFORM public.assert_permission(_org_id,'purchases.approve',_location_id); END IF; IF _kind='expense' AND coalesce(_payload->>'status','')='paid' AND NOT EXISTS(SELECT 1 FROM public.finance_expenses WHERE id::text=coalesce(_payload->>'id','') AND payload->>'status'='paid') THEN PERFORM public.assert_permission(_org_id,'expenses.pay',_location_id); END IF; IF _kind='expense' AND coalesce((_payload->>'active')::boolean,true)=false THEN PERFORM public.assert_permission(_org_id,'expenses.delete',_location_id); END IF; END IF;
-IF jsonb_typeof(_payload)<>'object' THEN RAISE EXCEPTION 'invalid_payload'; END IF;
+IF _payload IS NULL OR jsonb_typeof(_payload)<>'object' THEN RAISE EXCEPTION 'invalid_payload'; END IF;
 IF coalesce(_payload->>'id','')<>'' THEN id0:=(_payload->>'id')::uuid; END IF;
 IF _kind='inventory' THEN IF NOT (_payload ? 'quantity' AND _payload ? 'costCents' AND _payload ? 'unit') OR _payload->>'quantity' IS NULL OR _payload->>'costCents' IS NULL OR _payload->>'unit' NOT IN('oz','lb','gal','kg','units','pack') THEN RAISE EXCEPTION 'invalid_inventory'; END IF;
  IF length(coalesce(_payload->>'name','')) NOT BETWEEN 1 AND 160 OR (_payload->>'costCents')::int<0 OR (_payload->>'quantity')::numeric<0 THEN RAISE EXCEPTION 'invalid_inventory'; END IF;
@@ -40,7 +44,10 @@ IF _kind='inventory' THEN IF NOT (_payload ? 'quantity' AND _payload ? 'costCent
 ELSIF _kind='recipe' THEN
  SELECT id,name INTO product,product_name FROM public.menu_products WHERE org_id=_org_id AND (id::text=_payload->>'productId' OR client_id=_payload->>'productId') AND active AND (cardinality(location_ids)=0 OR _location_id=ANY(location_ids)); IF product IS NULL THEN RAISE EXCEPTION 'product_required'; END IF;
  IF id0 IS NOT NULL THEN SELECT * INTO recipe FROM public.product_recipes WHERE id=id0 AND org_id=_org_id AND location_id=_location_id FOR UPDATE; IF recipe.id IS NULL THEN RAISE EXCEPTION 'forbidden'; END IF; END IF;
- IF jsonb_typeof(_payload->'ingredients')<>'array' OR jsonb_array_length(_payload->'ingredients')=0 THEN RAISE EXCEPTION 'ingredients_required'; END IF;
+ -- The ingredient list is validated here, not only by the application: jsonb_typeof(NULL) is NULL, so a
+ -- missing key would have slipped through "<> 'array'". Absent, JSON null, non-array and empty are refused.
+ IF NOT (_payload ? 'ingredients') OR jsonb_typeof(_payload->'ingredients') IS DISTINCT FROM 'array' OR jsonb_array_length(_payload->'ingredients')=0 THEN RAISE EXCEPTION 'ingredients_required'; END IF;
+ IF jsonb_array_length(_payload->'ingredients')>200 THEN RAISE EXCEPTION 'invalid_recipe'; END IF;
  IF coalesce((_payload->>'sellingPriceCents')::int,0)<0 OR coalesce((_payload->>'servings')::numeric,0)<=0 THEN RAISE EXCEPTION 'invalid_recipe'; END IF;
  -- One recipe per product and store (UNIQUE of 0012), reported as a business error instead of a raw unique_violation.
  IF EXISTS(SELECT 1 FROM public.product_recipes r WHERE r.org_id=_org_id AND r.location_id=_location_id AND r.product_id=product AND (id0 IS NULL OR r.id<>id0)) THEN RAISE EXCEPTION 'recipe_exists_for_product'; END IF;
@@ -52,6 +59,8 @@ ELSIF _kind='recipe' THEN
  IF recipe.id IS NOT NULL AND recipe.product_id<>product THEN PERFORM public.write_audit(_org_id,'recipe.product_changed',id0::text,jsonb_build_object('location_id',_location_id,'from_product_id',recipe.product_id,'to_product_id',product)); END IF;
  DELETE FROM public.recipe_ingredients WHERE recipe_id=id0;
  FOR item IN SELECT * FROM jsonb_array_elements(_payload->'ingredients') LOOP
+  -- Each ingredient must be an object with a numeric quantity (> 0 is enforced by operational_unit_quantity) and a waste percentage within 0..100.
+  IF jsonb_typeof(item)<>'object' OR jsonb_typeof(item->'quantity') IS DISTINCT FROM 'number' OR coalesce((item->>'wastePercentage')::numeric,0) NOT BETWEEN 0 AND 100 THEN RAISE EXCEPTION 'invalid_recipe'; END IF;
   ref:=(item->>'inventoryItemId')::uuid;
   IF NOT EXISTS(SELECT 1 FROM public.inventory_items WHERE id=ref AND org_id=_org_id AND location_id=_location_id AND active) THEN RAISE EXCEPTION 'ingredient_not_in_store'; END IF;
   PERFORM public.operational_unit_quantity((item->>'quantity')::numeric,item->>'unit',(SELECT unit FROM public.inventory_items WHERE id=ref));
@@ -65,7 +74,7 @@ ELSIF _kind='purchase' THEN
  IF id0 IS NOT NULL THEN SELECT * INTO po FROM public.purchase_orders WHERE id=id0 AND org_id=_org_id AND location_id=_location_id FOR UPDATE; IF po.id IS NULL OR po.status NOT IN('draft','sent') OR EXISTS(SELECT 1 FROM public.purchase_receipts WHERE purchase_order_id=id0) THEN RAISE EXCEPTION 'purchase_locked'; END IF; END IF;
  ref:=(_payload->>'supplierId')::uuid; IF NOT EXISTS(SELECT 1 FROM public.suppliers WHERE id=ref AND org_id=_org_id AND active) THEN RAISE EXCEPTION 'supplier_required'; END IF;
  IF coalesce(_payload->>'status','draft') NOT IN('draft','sent') THEN RAISE EXCEPTION 'invalid_purchase_status'; END IF;
- IF jsonb_typeof(_payload->'items')<>'array' OR jsonb_array_length(_payload->'items')=0 THEN RAISE EXCEPTION 'items_required'; END IF;
+ IF NOT (_payload ? 'items') OR jsonb_typeof(_payload->'items') IS DISTINCT FROM 'array' OR jsonb_array_length(_payload->'items')=0 THEN RAISE EXCEPTION 'items_required'; END IF;
  IF id0 IS NULL THEN id0:=gen_random_uuid(); END IF;
  INSERT INTO public.purchase_orders(id,org_id,location_id,supplier_id,status,discount_cents,tax_cents,shipping_cents,notes,metadata) VALUES(id0,_org_id,_location_id,ref,coalesce(_payload->>'status','draft'),coalesce((_payload->>'discountCents')::int,0),coalesce((_payload->>'taxCents')::int,0),coalesce((_payload->>'shippingCents')::int,0),coalesce(_payload->>'notes',''),_payload) ON CONFLICT(id) DO UPDATE SET supplier_id=EXCLUDED.supplier_id,status=EXCLUDED.status,discount_cents=EXCLUDED.discount_cents,tax_cents=EXCLUDED.tax_cents,shipping_cents=EXCLUDED.shipping_cents,notes=EXCLUDED.notes,metadata=EXCLUDED.metadata,updated_at=now();
  DELETE FROM public.purchase_order_items WHERE purchase_order_id=id0;
