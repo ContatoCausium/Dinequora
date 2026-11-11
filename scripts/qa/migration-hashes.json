@@ -26,7 +26,8 @@
     "0022_permission_scope_and_org_features": "cde3d6d0e1fcbf5d1eeb4c51b05824e3c0d2e1b7709946e818ec788a6cb562b3",
     "0023_feature_tables_least_privilege": "313bae7d26cdfaf86d464d43602029015fc8868aae696ccb046f0e71c134d9ba",
     "0024_recipe_product_and_metadata_hardening": "c5c69be489c896283285a3cc359de67fd3ff65b7cb99ca0c5d4609d6e1d3e645",
-    "0025_store_sales_tax_rate": "a0dc102a0f0b43a40ae07f6e74d54b1a28dc6f6a856ab96e4c6a5319eb998d78"
+    "0025_store_sales_tax_rate": "a0dc102a0f0b43a40ae07f6e74d54b1a28dc6f6a856ab96e4c6a5319eb998d78",
+    "0026_fix_archive_operational_menu_category": "8f5e3dca47b6dded7daee4a8e8704e754fcbc5b7826f6383b629163089563425"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",
