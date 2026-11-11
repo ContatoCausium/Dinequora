@@ -21,6 +21,9 @@
 #   5c. 0025 concurrency: a sale and a store rate change in two PostgreSQL sessions are serialized
 #      (FOR SHARE / FOR UPDATE); no sale is recorded with a rate the server did not validate
 #      (own isolated organization, store and synthetic members, removed at the end)
+#   5d. 0027 concurrency: saving a menu product and archiving its category in two PostgreSQL
+#      sessions are serialized in both orders, with COMMIT and ROLLBACK (FOR SHARE / FOR UPDATE);
+#      never an active product in an archived category (own isolated organization, removed at the end)
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -85,6 +88,10 @@ echo "::endgroup::"
 
 echo "::group::5c. sale vs rate change concurrency (0025, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/tax_rate_concurrency.mjs | tee "$ARTIFACTS/tax-rate-concurrency.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5d. menu product save vs category archive concurrency (0027, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/menu_category_race.mjs | tee "$ARTIFACTS/menu-category-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

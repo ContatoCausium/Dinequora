@@ -190,6 +190,13 @@
       "when": 1794420705962,
       "tag": "0026_fix_archive_operational_menu_category",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794425037817,
+      "tag": "0027_save_operational_menu_category_lock",
+      "breakpoints": true
     }
   ]
 }
