@@ -15,7 +15,7 @@
     "created": "Workspace criado.",
     "stepsTitle": "Próximos passos",
     "step1": "Crie seu workspace — você será o proprietário.",
-    "step2": "Adicione unidades e envie seu logo para personalizar o app.",
+    "step2": "Adicione unidades com a alíquota de imposto sobre vendas e envie seu logo para personalizar o app.",
     "step3": "Convide gerentes e equipe para as unidades em que trabalham.",
     "trialNote": "Começa como teste gratuito com números de demonstração. Nenhum dado de pagamento é necessário.",
     "locationHint": "Opcional — você pode adicionar ou renomear unidades depois.",
@@ -39,7 +39,7 @@
       },
       {
         "title": "Configure suas unidades",
-        "body": "Complete os dados e gerencie as unidades dentro do limite do plano."
+        "body": "Complete o endereço, os horários e a alíquota de imposto sobre vendas de cada unidade (nenhuma venda é registrada sem alíquota) e gerencie as unidades dentro do limite do plano."
       },
       {
         "title": "Convide sua equipe",
@@ -60,7 +60,7 @@
     },
     "blocked": {
       "0": "Salve um logo ou as cores da marca primeiro.",
-      "2": "Adicione endereço e horários a pelo menos uma loja primeiro.",
+      "2": "Adicione endereço, horários e a alíquota de imposto sobre vendas a pelo menos uma loja primeiro.",
       "4": "Conclua o branding e a configuração da loja primeiro."
     }
   },

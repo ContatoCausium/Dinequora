@@ -15,7 +15,7 @@
     "created": "Workspace created.",
     "stepsTitle": "What happens next",
     "step1": "Create your workspace — you become its owner.",
-    "step2": "Add stores and upload your logo to brand the app.",
+    "step2": "Add stores with their sales tax rate and upload your logo to brand the app.",
     "step3": "Invite managers and staff to the stores they work at.",
     "trialNote": "Starts as a free trial with demo figures. No payment details needed.",
     "locationHint": "Optional — you can add or rename stores later.",
@@ -39,7 +39,7 @@
       },
       {
         "title": "Configure your stores",
-        "body": "Complete store details and manage locations within your plan allowance."
+        "body": "Complete each store's address, opening hours and sales tax rate (no sale is recorded without a rate), and manage locations within your plan allowance."
       },
       {
         "title": "Invite your team",
@@ -60,7 +60,7 @@
     },
     "blocked": {
       "0": "Save a logo or brand colors first.",
-      "2": "Add an address and opening hours to at least one store first.",
+      "2": "Add an address, opening hours and the sales tax rate to at least one store first.",
       "4": "Finish branding and store setup first."
     }
   },

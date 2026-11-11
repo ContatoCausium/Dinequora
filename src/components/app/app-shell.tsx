@@ -315,7 +315,7 @@ export function LocationSelector({ className }: { className?: string }) {
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{l.name}</span>
               <span className="block truncate text-xs text-muted-foreground">
-                {/* "Setup required" only when the store really lacks address or opening hours. */}
+                {/* "Setup required" only when the store really lacks address, opening hours or its sales-tax rate. */}
                 {l.status === "verified" || storeConfigured(l)
                   ? l.address
                   : t("shell.configRequired")}
