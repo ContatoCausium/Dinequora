@@ -34,6 +34,19 @@ type OrderFilter = Omit<OrderPageRequest["data"], "limit" | "offset">;
  * created while the pages are being read shifts later pages by one row; the repeated row is
  * dropped here (by id), and the new order is simply picked up on the next load. `truncated` is
  * true only when the browser cap stopped the read with older orders left unread.
+ *
+ * A removal moves rows the other way: an order that leaves the filtered set between two pages (an
+ * open ticket delivered or cancelled while the kitchen board is being read) shifts the later rows
+ * back by one, and the row that crosses the page boundary is missed by THIS read. The board heals
+ * itself — that same status change emits a realtime event, which queues the next reload, and the
+ * 15 s interval is the fallback — so a gap lasts one reload at most.
+ *
+ * Future improvement, deliberately left out of PR #8: keyset paging (a cursor `created_at, id`
+ * after the last row of the previous page) is immune to both insertions and removals. Known
+ * risks of that change: the server function and its zod schema gain a cursor argument; the paging
+ * and kitchen-board tests (unit and database) must be rewritten around the cursor; `totalCount`
+ * (counted at request time) has to be redefined for the cap notice; and the order-history screen
+ * shares this reader, so both screens change at once.
  */
 /** Optional hooks of a long read: stop when aborted, report each page that arrives. */
 export interface PagedReadOptions {
