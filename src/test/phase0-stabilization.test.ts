@@ -80,7 +80,7 @@ describe("POS held tickets — expiry and quarantine (key servora.pos.suspended.
         },
       ],
       discountCents: 0,
-      taxRatePercent: 0,
+      taxRatePpm: 0,
       suspendedAt: new Date(Date.now() - ageMs).toISOString(),
       ...extra,
     }) as unknown as SuspendedSale;

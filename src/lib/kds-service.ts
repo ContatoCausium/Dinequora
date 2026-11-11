@@ -148,7 +148,7 @@ export function simulateIncomingOrder(orgId: string, locationId: string): Order 
     ],
     subtotalCents: 2000,
     discountCents: 0,
-    taxRatePercent: 8.875,
+    taxRatePpm: 88750,
     taxCents: 178,
     totalCents: 2178,
     specialInstructions: "Rush order if possible",

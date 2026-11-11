@@ -8,6 +8,7 @@ import {
   Clock,
   Globe2,
   MapPin,
+  Percent,
   Phone,
   Plus,
   Power,
@@ -42,12 +43,14 @@ import { Switch } from "@/components/ui/switch";
 import { computeKpis } from "@/lib/demo-data";
 import { storeMetricsSince, storeSalesMetrics } from "@/lib/location-metrics";
 import { fetchAllOrders } from "@/lib/recorded-data";
-import { fmtCurrency, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
+import { fmtCurrency, fmtMoneyCents, fmtNumber, fmtPercent, fmtRatePpm } from "@/lib/format";
+import { percentTextFromPpm, ppmFromPercentInput } from "@/lib/money";
 import {
   createLocation,
   fetchTeam,
   saveLocationWithManagers,
   setLocationStatus,
+  setLocationTaxRate,
   updateLocation,
 } from "@/lib/org-service";
 import {
@@ -259,6 +262,13 @@ function LocationsPage() {
                     label={t("hours")}
                     value={openDays ? t("openDays", { count: openDays }) : t("notConfigured")}
                   />
+                  <Info
+                    icon={Percent}
+                    label={t("taxRate")}
+                    value={
+                      l.taxRatePpm == null ? t("taxNotConfigured") : fmtRatePpm(l.taxRatePpm, lng)
+                    }
+                  />
                   {l.phone && <Info icon={Phone} label={t("phone")} value={l.phone} />}
                   {isOwner && (
                     <Info
@@ -404,6 +414,7 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("locations");
   const { orgDbId, refresh } = useWorkspace();
   const [v, setV] = useState({ name: "", address: "", phone: "", timezone: "America/New_York" });
+  const [taxRate, setTaxRate] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,9 +422,16 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
       toast.error(t("errors.invalid_name"));
       return;
     }
+    // The sales-tax rate is required: without it the store cannot record a sale (0025).
+    const taxRatePpm = ppmFromPercentInput(taxRate);
+    if (taxRatePpm === null) {
+      toast.error(t("errors.invalid_tax_rate"));
+      return;
+    }
     setBusy(true);
     try {
-      await createLocation(orgDbId, v);
+      const id = await createLocation(orgDbId, v);
+      await setLocationTaxRate(id, taxRatePpm);
       toast.success(t("toast.created"));
       refresh();
       onClose();
@@ -463,6 +481,19 @@ function CreateDialog({ onClose }: { onClose: () => void }) {
               />
             </Labeled>
           </div>
+          <Labeled id="c-tax" label={t("form.taxRate")}>
+            <Input
+              id="c-tax"
+              inputMode="decimal"
+              placeholder="8.875"
+              value={taxRate}
+              onChange={(e) => setTaxRate(e.target.value)}
+              aria-describedby="c-tax-hint"
+            />
+            <p id="c-tax-hint" className="text-xs text-muted-foreground">
+              {t("form.taxRateHint")}
+            </p>
+          </Labeled>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t("form.cancel")}
@@ -516,6 +547,9 @@ function EditSheet({
     phone: location.phone ?? "",
     timezone: location.timezone,
   });
+  const [taxRate, setTaxRate] = useState(
+    location.taxRatePpm == null ? "" : percentTextFromPpm(location.taxRatePpm),
+  );
   const [hours, setHours] = useState<WeeklyHours>(location.hours ?? {});
   const [mgrs, setMgrs] = useState<string[]>(
     managers
@@ -524,6 +558,13 @@ function EditSheet({
   );
   const [busy, setBusy] = useState(false);
   const bad = validateHours(hours);
+  // Parsed exactly from the text (8.875 -> 88,750 ppm); null = not a valid rate.
+  const taxRatePpm = ppmFromPercentInput(taxRate);
+  const saveTaxRate = async () => {
+    if (!location.dbId || taxRatePpm === null || taxRatePpm === (location.taxRatePpm ?? null))
+      return;
+    await setLocationTaxRate(location.dbId, taxRatePpm);
+  };
 
   const save = async () => {
     if (!location.dbId) return;
@@ -531,9 +572,14 @@ function EditSheet({
       toast.error(t("errors.invalid_hours"));
       return;
     }
+    if (taxRatePpm === null) {
+      toast.error(t("errors.invalid_tax_rate"));
+      return;
+    }
     setBusy(true);
     try {
       await saveLocationWithManagers(location.dbId, { ...v, hours }, isOwner ? mgrs : null);
+      await saveTaxRate();
       toast.success(t("toast.saved"));
       void qc.invalidateQueries({ queryKey: ["team", orgDbId] });
       refresh();
@@ -555,9 +601,14 @@ function EditSheet({
       toast.error(t("errors.address_required"));
       return;
     }
+    if (taxRatePpm === null) {
+      toast.error(t("errors.invalid_tax_rate"));
+      return;
+    }
     setBusy(true);
     try {
       await updateLocation(location.dbId, { ...v, hours });
+      await saveTaxRate();
       await setLocationStatus(location.dbId, "active");
       toast.success(t("toast.activated"));
       refresh();
@@ -614,6 +665,20 @@ function EditSheet({
                 />
               </Labeled>
             </div>
+            <Labeled id="e-tax" label={t("form.taxRate")}>
+              <Input
+                id="e-tax"
+                inputMode="decimal"
+                placeholder="8.875"
+                value={taxRate}
+                onChange={(e) => setTaxRate(e.target.value)}
+                aria-invalid={taxRatePpm === null}
+                aria-describedby="e-tax-hint"
+              />
+              <p id="e-tax-hint" className="text-xs text-muted-foreground">
+                {t("form.taxRateHint")}
+              </p>
+            </Labeled>
           </section>
 
           <section className="flex flex-col gap-2">

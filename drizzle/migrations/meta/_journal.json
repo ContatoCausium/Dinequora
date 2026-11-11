@@ -176,6 +176,13 @@
       "when": 1794391714705,
       "tag": "0024_recipe_product_and_metadata_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794391958561,
+      "tag": "0025_store_sales_tax_rate",
+      "breakpoints": true
     }
   ]
 }

@@ -25,7 +25,7 @@ const order = (
     ],
     subtotalCents: 2000,
     discountCents: 0,
-    taxRatePercent: 10,
+    taxRatePpm: 100000,
     taxCents: 200,
     totalCents: 2200,
     updatedAt: o.createdAt,

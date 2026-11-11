@@ -128,5 +128,13 @@
     "alreadyCancelled": "This sale had already been cancelled.",
     "cancelled": "Sale cancelled and stock reversed.",
     "cancelFailed": "The sale could not be cancelled"
+  },
+  "tax": {
+    "notConfigured": "Sales tax is not configured for this store, so no sale can be recorded here.",
+    "configure": "Configure the store"
+  },
+  "errors": {
+    "tax_rate_changed": "The store's sales-tax rate changed while this ticket was open. The ticket was recalculated with the current rate; review the total and charge again.",
+    "tax_rate_not_configured": "Sales tax is not configured for this store. An owner or store manager must set it before selling."
   }
 }

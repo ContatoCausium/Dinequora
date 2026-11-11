@@ -43,7 +43,12 @@ export const saleInputSchema = z.object({
   tableNumber: z.string().optional(),
   notes: z.string().optional(),
   discountCents: z.number().int().nonnegative(),
-  taxRateBasisPoints: z.number().int().min(0).max(10000),
+  /**
+   * The sales-tax rate the client displayed, in parts per million (88,750 = 8.875%). The server
+   * charges the store's configured rate and refuses the sale when this differs from it
+   * (tax_rate_changed), so a client can never choose the rate (migration 0025).
+   */
+  taxRatePpm: z.number().int().min(0).max(1_000_000),
   paymentMethod: z.enum(["cash", "card", "digital"]).optional(),
   isSimulation: z.boolean().default(false),
   items: z

@@ -2,7 +2,9 @@
  * Money for every module (POS, Orders, Finance, Reports, Dashboard, Menu, Purchases, Inventory).
  *
  * - Amounts are integer CENTS (a safe integer `number`). Never floating dollars.
- * - Sales-tax rates are integer BASIS POINTS (888 = 8.88%): the unit the database stores and applies.
+ * - Sales-tax rates are integer PARTS PER MILLION (88,750 = 8.875%): the unit the store setting and
+ *   the sale RPCs use (migration 0025). Basis points (888 = 8.88%) survive only as the rounded
+ *   value older orders recorded.
  * - Rounding is HALF AWAY FROM ZERO, the rule of PostgreSQL round(numeric) used by every RPC
  *   (create_pos_sale tax, finalize COGS, purchase order lines), so browser and server agree to the
  *   cent. Integer arithmetic only (BigInt where a product could exceed 2^53).
@@ -13,6 +15,9 @@
 export type Cents = number;
 
 const TEN_THOUSAND = 10000n;
+const ONE_MILLION = 1_000_000n;
+/** 100% in parts per million: the highest rate a store can configure (migration 0025). */
+export const RATE_PPM_MAX = 1_000_000;
 
 export function isCents(v: unknown): v is Cents {
   return typeof v === "number" && Number.isSafeInteger(v);
@@ -59,11 +64,32 @@ export function sumCents(values: Iterable<number>): Cents {
   return assertCents(total, "sum");
 }
 
-/** cents × basisPoints / 10,000, rounded like the server (create_pos_sale tax). */
+/** cents × basisPoints / 10,000, rounded half away from zero (the rate older orders recorded). */
 export function applyBasisPoints(cents: Cents, basisPoints: number): Cents {
   assertCents(cents);
   if (!Number.isSafeInteger(basisPoints)) throw new RangeError("basis points must be an integer");
   return toSafeNumber(divRoundBig(BigInt(cents) * BigInt(basisPoints), TEN_THOUSAND), "tax");
+}
+
+/** A sales-tax rate in parts per million: a safe integer between 0 and 1,000,000 (100%). */
+export function isRatePpm(v: unknown): v is number {
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= RATE_PPM_MAX;
+}
+
+/**
+ * cents × ppm / 1,000,000, rounded half away from zero exactly like create_pos_sale_v2
+ * (round((subtotal − discount)::numeric × store_ppm / 1000000)). Integer arithmetic only.
+ */
+export function applyPartsPerMillion(cents: Cents, ppm: number): Cents {
+  assertCents(cents);
+  if (!isRatePpm(ppm)) throw new RangeError("rate must be an integer between 0 and 1,000,000 ppm");
+  return toSafeNumber(divRoundBig(BigInt(cents) * BigInt(ppm), ONE_MILLION), "tax");
+}
+
+/** Parts per million → the whole basis points older readers expect (88,750 → 888, half away from zero). */
+export function basisPointsFromPpm(ppm: number): number {
+  if (!isRatePpm(ppm)) throw new RangeError("rate must be an integer between 0 and 1,000,000 ppm");
+  return divRound(ppm, 100);
 }
 
 /** Exact decimal value of a plain decimal text ("12.5", "-0.125", "1e-7"): digits × 10^-scale. */
@@ -124,19 +150,21 @@ export interface SaleTotals {
 }
 
 /**
- * Totals of one sale exactly as create_pos_sale computes them: tax = round((subtotal − discount) ×
- * rate / 10,000), total = subtotal − discount + tax. A discount above the subtotal is refused by the
- * server ("invalid_discount"); here the taxable base never goes below zero.
+ * Totals of one sale exactly as create_pos_sale_v2 computes them: tax = round((subtotal − discount)
+ * × store rate / 1,000,000), total = subtotal − discount + tax. The rate is the store's configured
+ * rate in parts per million (the server refuses a sale whose displayed rate differs from it). A
+ * discount above the subtotal is refused by the server ("invalid_discount"); here the taxable base
+ * never goes below zero.
  */
 export function saleTotals(
   lineSubtotalsCents: readonly Cents[],
   discountCents: Cents,
-  taxRateBasisPoints: number,
+  taxRatePpm: number,
 ): SaleTotals {
   const subtotalCents = sumCents(lineSubtotalsCents);
   const discount = assertCents(discountCents, "discount");
   const taxableCents = Math.max(0, subtotalCents - discount);
-  const taxCents = applyBasisPoints(taxableCents, taxRateBasisPoints);
+  const taxCents = applyPartsPerMillion(taxableCents, taxRatePpm);
   return {
     subtotalCents,
     discountCents: discount,
@@ -163,6 +191,40 @@ export function ratio(part: number, whole: number): number {
 export function basisPointsFromPercent(percent: number): number {
   const p = decimalOf(percent);
   return toSafeNumber(divRoundBig(p.digits * 100n, 10n ** BigInt(p.scale)), "rate");
+}
+
+/**
+ * Percentage typed as text ("8.875", "6.25", "0") → parts per million (88,750), from the exact
+ * decimal value. null when the text is not a plain decimal, has more than four decimals (a rate
+ * finer than 1 ppm cannot be stored), or is outside 0–100%. Never parseFloat: "8.875" is 88,750,
+ * not 88,749.999.
+ */
+export function ppmFromPercentInput(text: string): number | null {
+  const s = text.trim();
+  if (s.length === 0 || s.length > MONEY_INPUT_MAX_LENGTH) return null;
+  if (!/^\+?(?:\d+\.?\d*|\.\d+)$/.test(s)) return null;
+  const d = decimalOfText(s);
+  if (d.scale > 4 + 40) return null; // "8.8750000…0" with many trailing zeros is still exact
+  // ppm = value × 10,000 = digits × 10^(4 − scale); it must be a whole number.
+  const scaled = d.digits * 10n ** 4n;
+  const divisor = 10n ** BigInt(d.scale);
+  if (scaled % divisor !== 0n) return null;
+  const ppm = scaled / divisor;
+  if (ppm < 0n || ppm > BigInt(RATE_PPM_MAX)) return null;
+  return Number(ppm);
+}
+
+/**
+ * Parts per million → the percentage text of a rate input (88,750 → "8.875", 62,500 → "6.25",
+ * 0 → "0"): at most four decimals, trailing zeros dropped, never a float conversion.
+ */
+export function percentTextFromPpm(ppm: number): string {
+  if (!isRatePpm(ppm)) throw new RangeError("rate must be an integer between 0 and 1,000,000 ppm");
+  const whole = Math.floor(ppm / 10_000);
+  const frac = String(ppm % 10_000)
+    .padStart(4, "0")
+    .replace(/0+$/, "");
+  return frac ? `${whole}.${frac}` : String(whole);
 }
 
 /**

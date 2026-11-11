@@ -169,7 +169,7 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       _table_number: data.tableNumber ?? "",
       _notes: data.notes ?? "",
       _discount_cents: data.discountCents,
-      _tax_rate_basis_points: data.taxRateBasisPoints,
+      _tax_rate_ppm: data.taxRatePpm,
       _is_simulation: data.isSimulation,
       _client_order_id: data.clientOrderId,
       _items: data.items.map((i) => ({
@@ -179,12 +179,14 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
         modifiers: i.modifiers.map((m) => ({ group_id: m.groupId, option_id: m.optionId })),
       })),
     };
+    // v2 (migration 0025): the tax is computed from the store's configured rate; _tax_rate_ppm is
+    // the rate the client displayed and must match it exactly.
     const result = data.paymentMethod
-      ? await context.supabase.rpc("persist_finalized_pos_sale_atomic", {
+      ? await context.supabase.rpc("persist_finalized_pos_sale_atomic_v2", {
           ...args,
           _payment_method: data.paymentMethod,
         })
-      : await context.supabase.rpc("create_pos_sale", args);
+      : await context.supabase.rpc("create_pos_sale_v2", args);
     if (result.error || !result.data)
       throw await refused(
         context.supabase,
@@ -289,7 +291,8 @@ export const fetchOperationalOrders = createServerFn({ method: "POST" })
         })),
         subtotalCents: r.subtotal_cents,
         discountCents: r.discount_cents,
-        taxRatePercent: r.tax_rate_basis_points / 100,
+        // Orders recorded before 0025 carry only basis points; 0025 back-filled ppm = bp × 100.
+        taxRatePpm: r.tax_rate_ppm ?? r.tax_rate_basis_points * 100,
         taxCents: r.tax_cents,
         totalCents: r.total_cents,
         ...(r.notes ? { specialInstructions: r.notes } : {}),

@@ -111,6 +111,14 @@ creds.locations = {
   downtown: locs.find((l) => l.name === "QA Downtown").id,
   riverside: riversideId,
 };
+// Sales-tax rate per store (migration 0025, parts per million): a two-decimal rate and a
+// three-decimal one, so every sale below and the permission matrix exercise both.
+creds.taxRatePpm = { downtown: 62500, riverside: 88750 };
+for (const [store, loc] of Object.entries(creds.locations))
+  await rpc(owner, "set_location_tax_rate", {
+    _location_id: loc,
+    _tax_rate_ppm: creds.taxRatePpm[store],
+  });
 const { data: org } = await owner
   .from("organizations")
   .select("slug")
@@ -203,13 +211,13 @@ log.push("menu (prod-soda), stock QA-SODA x2 stores, recipes, supplier, open PO 
 // 4. Sales: delivered tickets at both stores (finance entries, KDS history, audit) -----------
 for (const [store, loc] of Object.entries(creds.locations)) {
   for (let i = 0; i < 3; i++) {
-    const id = await rpc(owner, "persist_finalized_pos_sale_atomic", {
+    const id = await rpc(owner, "persist_finalized_pos_sale_atomic_v2", {
       _org_id: creds.orgId,
       _location_id: loc,
       _type: "takeout",
       _customer_name: `QA ${store} ${i}`,
       _items: [{ product_id: "prod-soda", quantity: 2, modifiers: [] }],
-      _tax_rate_basis_points: 625,
+      _tax_rate_ppm: creds.taxRatePpm[store],
       _client_order_id: `qa-seed-${store}-${i}`,
       _payment_method: "cash",
     });

@@ -72,7 +72,7 @@ function suspended(id: string, locationId: string, orgId = A): SuspendedSale {
       },
     ],
     discountCents: 0,
-    taxRatePercent: 0,
+    taxRatePpm: 0,
     suspendedAt: new Date().toISOString(),
   } as unknown as SuspendedSale;
 }

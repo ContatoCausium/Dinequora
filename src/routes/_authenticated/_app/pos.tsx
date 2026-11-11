@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -37,7 +37,8 @@ import {
   suspendSession,
   resumeSession,
   simulatePayment,
-  posTaxRateBasisPoints,
+  savePOSSession,
+  posTaxConfigured,
   type POSPaymentMethod,
   type POSSession,
 } from "@/lib/pos-service";
@@ -47,7 +48,7 @@ import {
 } from "@/lib/orders-persistence-service";
 import { confirmedReceipt } from "@/lib/pos-receipt";
 import { type OrderType } from "@/lib/orders-service";
-import { fmtBasisPoints, fmtMoneyCents } from "@/lib/format";
+import { fmtMoneyCents, fmtRatePpm, INVALID_VALUE_TEXT } from "@/lib/format";
 import { captureError, isExpectedBusinessError } from "@/lib/observability";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -131,15 +132,19 @@ export function POSPage() {
   const { t, i18n } = useTranslation("pos");
   const lng = i18n.language;
   const money = (cents: number) => fmtMoneyCents(cents, lng);
-  const { org, locationId, user, role, can } = useWorkspace();
+  const { org, locationId, user, role, can, refresh } = useWorkspace();
   // Owners are org-wide; managers/staff are limited to their authorized stores.
   const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
   const activeLocId = locationId === "all" ? org.locations[0]?.id || "loc-1" : locationId;
   // Data only; the translated fallback is applied at render time so a language switch never resets the cart.
   const cashierName = user.fullName || user.email || "";
+  // The store's configured sales-tax rate (parts per million, migration 0025). null = not
+  // configured: the ticket shows no rate and the checkout stays blocked; the server would refuse
+  // the sale anyway. The rate is never chosen here.
+  const taxRatePpm = org.locations.find((l) => l.id === activeLocId)?.taxRatePpm ?? null;
 
   const [session, setSession] = useState(() =>
-    getPOSSession(org.id, activeLocId, cashierName, locationScope),
+    getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm),
   );
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState<string>("all");
@@ -159,8 +164,14 @@ export function POSPage() {
   const [submittingSale, setSubmittingSale] = useState(false);
 
   useEffect(() => {
-    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
+    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm));
   }, [org.id, activeLocId, cashierName]);
+
+  // The owner may change the store's rate while a ticket is open: the open ticket is recalculated
+  // with the current rate (the server refuses the previous one with tax_rate_changed).
+  useEffect(() => {
+    setSession((s) => (s.taxRatePpm === taxRatePpm ? s : savePOSSession({ ...s, taxRatePpm })));
+  }, [taxRatePpm]);
 
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuCategories, setMenuCategories] = useState<MenuCategoryOption[]>([]);
@@ -215,7 +226,9 @@ export function POSPage() {
   // uniform with photos and dense without them.
   const menuHasImages = useMemo(() => menuItems.some((i) => !!i.imageUrl), [menuItems]);
 
-  const taxRateLabel = fmtBasisPoints(posTaxRateBasisPoints(session), lng);
+  const taxRateLabel =
+    session.taxRatePpm === null ? INVALID_VALUE_TEXT : fmtRatePpm(session.taxRatePpm, lng);
+  const taxConfigured = posTaxConfigured(session);
   const displayCashier = session.cashierName || t("ticket.cashierFallback");
   const ticketCount = session.cart.reduce((n, item) => n + item.quantity, 0);
 
@@ -304,11 +317,12 @@ export function POSPage() {
     if (session.cart.length === 0) return;
     suspendSession(session, locationScope);
     toast.info(t("toast.held"));
-    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
+    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm));
   };
 
   const handleResume = (id: string) => {
-    const resumed = resumeSession(org.id, id, locationScope);
+    // Resumed with the store's current rate, never the one the ticket was held with.
+    const resumed = resumeSession(org.id, id, locationScope, taxRatePpm);
     if (resumed) {
       setSession(resumed);
       toast.success(t("toast.resumed"));
@@ -316,7 +330,7 @@ export function POSPage() {
   };
 
   const handleStartCheckout = () => {
-    if (session.cart.length === 0 || submittingSale) return;
+    if (session.cart.length === 0 || submittingSale || !taxConfigured) return;
     setTenderedInput(centsToDecimalString(session.totalCents));
     setCheckoutOpen(true);
   };
@@ -347,7 +361,7 @@ export function POSPage() {
       });
       setCheckoutOpen(false);
       // Only reset active cart once server confirmed sale ID
-      setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
+      setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm));
       toast.success(t("toast.saleRecorded", { number: orderNumber }));
     } catch (err) {
       captureError(err, {
@@ -355,7 +369,18 @@ export function POSPage() {
         critical: !isExpectedBusinessError(err),
         storeId: activeLocId,
       });
-      const detail = readableDetail(err);
+      const code = err instanceof Error ? err.message : "";
+      // The store's rate changed (or was removed) since this ticket was prepared: reload the
+      // workspace so the ticket is recalculated with the current rate, and say why.
+      if (code === "tax_rate_changed" || code === "tax_rate_not_configured") {
+        refresh();
+        setCheckoutOpen(false);
+      }
+      const detail =
+        readableDetail(err) ??
+        (code === "tax_rate_changed" || code === "tax_rate_not_configured"
+          ? t(`errors.${code}`)
+          : undefined);
       toast.error(t("toast.saleFailed"), detail ? { description: detail } : undefined);
     } finally {
       setSubmittingSale(false);
@@ -706,6 +731,22 @@ export function POSPage() {
               <dd className="tabular">{money(session.totalCents)}</dd>
             </div>
           </dl>
+          {!taxConfigured && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
+            >
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>
+                {t("tax.notConfigured")}{" "}
+                {can("settings.locations") && (
+                  <Link to="/locations" className="font-medium underline">
+                    {t("tax.configure")}
+                  </Link>
+                )}
+              </span>
+            </p>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <Button
@@ -737,7 +778,7 @@ export function POSPage() {
           <Button
             className="tabular h-12 w-full text-base font-semibold"
             onClick={handleStartCheckout}
-            disabled={session.cart.length === 0 || submittingSale}
+            disabled={session.cart.length === 0 || submittingSale || !taxConfigured}
             aria-busy={submittingSale}
           >
             {submittingSale ? (
@@ -1063,7 +1104,10 @@ export function POSPage() {
                 <div className="flex justify-between text-muted-foreground">
                   <dt>
                     {t("receipt.tax", {
-                      rate: fmtBasisPoints(posTaxRateBasisPoints(receiptSession), lng),
+                      rate:
+                        receiptSession.taxRatePpm === null
+                          ? INVALID_VALUE_TEXT
+                          : fmtRatePpm(receiptSession.taxRatePpm, lng),
                     })}
                   </dt>
                   <dd className="tabular">{money(receiptSession.taxCents)}</dd>

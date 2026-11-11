@@ -23,6 +23,8 @@
   "timezone": "Fuso horário",
   "hours": "Horário",
   "notConfigured": "Não configurado",
+  "taxRate": "Imposto sobre vendas",
+  "taxNotConfigured": "Não configurado — vendas bloqueadas",
   "manager": "Gerente",
   "unassigned": "Não atribuído",
   "openDashboard": "Abrir painel",
@@ -66,7 +68,9 @@
     "cancel": "Cancelar",
     "opens": "Abre",
     "closes": "Fecha",
-    "verifiedNote": "Alterar o endereço remove a marca de verificada."
+    "verifiedNote": "Alterar o endereço remove a marca de verificada.",
+    "taxRate": "Alíquota de imposto sobre vendas (%)",
+    "taxRateHint": "Uma alíquota única cobrada em toda venda desta unidade, com até quatro casas decimais (por exemplo 8.875). Informe 0 apenas onde não há imposto sobre vendas. Não é um motor fiscal: sem categorias de produto, isenções ou jurisdições."
   },
   "days": {
     "mon": "Seg",
@@ -86,6 +90,7 @@
     "invalid_name": "Digite um nome com pelo menos 2 caracteres.",
     "invalid_hours": "Confira os horários destacados.",
     "address_required": "Adicione um endereço antes de ativar esta unidade.",
+    "invalid_tax_rate": "Informe a alíquota como porcentagem entre 0 e 100, com até quatro casas decimais (por exemplo 8.875).",
     "unknown": "Algo deu errado. Tente novamente."
   },
   "recordedNote": "As vendas são valores registrados: líquidas de impostos, considerando apenas pedidos pagos e não cancelados dos últimos 30 dias. O crescimento compara com os 30 dias anteriores.",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { saleInputSchema } from "../lib/operational-contracts";
+import { recipePayloadSchema, saleInputSchema } from "../lib/operational-contracts";
 
 const server = vi.hoisted(() => ({ submit: vi.fn(), change: vi.fn(), fetch: vi.fn() }));
 vi.mock("../lib/operational.functions", () => ({
@@ -26,7 +26,7 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
     orderType: "dine_in",
     customerName: "Customer",
     discountCents: 0,
-    taxRateBasisPoints: 825,
+    taxRatePpm: 82500,
     items: [{ productId: "p1", quantity: 1, modifiers: [] }],
   };
   it("rejects missing organization before dispatch", () => {
@@ -46,7 +46,7 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
   });
   it("does not confirm the sale or write anything locally when the server fails", async () => {
     server.submit.mockRejectedValue(new Error("forbidden"));
-    const session = getPOSSession("org-a", "store-a", "Cashier");
+    const session = getPOSSession("org-a", "store-a", "Cashier", undefined, 82500);
     session.cart = [
       {
         id: "i1",
@@ -76,7 +76,7 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
       items: [],
       subtotalCents: 0,
       discountCents: 0,
-      taxRatePercent: 0,
+      taxRatePpm: 0,
       taxCents: 0,
       totalCents: 0,
       createdAt: "",
@@ -89,5 +89,106 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
       error: "organization_mismatch",
     });
     expect(server.submit).not.toHaveBeenCalled();
+  });
+});
+
+describe("Store sales tax (0025) and recipe payload (0024) contracts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+  const sale = {
+    orgId: "org-a",
+    locationId: "store-a",
+    clientOrderId: "sale-1",
+    orderType: "dine_in",
+    customerName: "Customer",
+    discountCents: 0,
+    items: [{ productId: "p1", quantity: 1, modifiers: [] }],
+  };
+  it("the sale carries the displayed rate in whole ppm between 0 and 100%", () => {
+    expect(saleInputSchema.safeParse({ ...sale, taxRatePpm: 88750 }).success).toBe(true);
+    expect(saleInputSchema.safeParse({ ...sale, taxRatePpm: 0 }).success).toBe(true);
+    expect(saleInputSchema.safeParse({ ...sale, taxRatePpm: 1_000_000 }).success).toBe(true);
+    expect(saleInputSchema.safeParse({ ...sale, taxRatePpm: 1_000_001 }).success).toBe(false);
+    expect(saleInputSchema.safeParse({ ...sale, taxRatePpm: -1 }).success).toBe(false);
+    expect(saleInputSchema.safeParse({ ...sale, taxRatePpm: 887.5 }).success).toBe(false);
+    expect(saleInputSchema.safeParse({ ...sale, taxRateBasisPoints: 888 }).success).toBe(false);
+    expect(saleInputSchema.safeParse(sale).success).toBe(false);
+  });
+  it("a ticket of a store without a rate is refused before any server call", async () => {
+    const session = getPOSSession("org-a", "store-a", "Cashier");
+    session.cart = [
+      {
+        id: "i1",
+        productId: "p1",
+        productName: "Product",
+        quantity: 1,
+        basePriceCents: 100,
+        modifiers: [],
+        subtotalCents: 100,
+      },
+    ];
+    const result = await persistFinalizedPOSSaleAtomic(session);
+    expect(result).toEqual({ success: false, error: "tax_rate_not_configured" });
+    expect(server.submit).not.toHaveBeenCalled();
+  });
+  it("the ticket sends exactly the rate it displayed (ppm), as a confirmation", async () => {
+    server.submit.mockResolvedValue({ success: true, orderId: "o1" });
+    const session = getPOSSession("org-a", "store-a", "Cashier", undefined, 88750);
+    session.cart = [
+      {
+        id: "i1",
+        productId: "p1",
+        productName: "Product",
+        quantity: 1,
+        basePriceCents: 100,
+        modifiers: [],
+        subtotalCents: 100,
+      },
+    ];
+    await persistFinalizedPOSSaleAtomic(session, "cid-1");
+    expect(server.submit).toHaveBeenCalledTimes(1);
+    expect(server.submit.mock.calls[0]![0].data).toMatchObject({
+      taxRatePpm: 88750,
+      clientOrderId: "cid-1",
+    });
+    expect(server.submit.mock.calls[0]![0].data).not.toHaveProperty("taxRateBasisPoints");
+  });
+  const recipe = {
+    productId: "burger",
+    productName: "Burger",
+    servings: 2,
+    yieldQuantity: 2,
+    yieldUnit: "units",
+    prepInstructions: "grill",
+    sellingPriceCents: 1500,
+    ingredients: [{ inventoryItemId: "beef", quantity: 0.5, unit: "lb", wastePercentage: 0 }],
+  };
+  it("a recipe payload is only its definition: cost snapshots are refused", () => {
+    expect(recipePayloadSchema.safeParse(recipe).success).toBe(true);
+    expect(recipePayloadSchema.safeParse({ ...recipe, id: "r1" }).success).toBe(true);
+    expect(
+      recipePayloadSchema.safeParse({
+        ...recipe,
+        ingredients: [{ ...recipe.ingredients[0], unitCostCents: 400, subtotalCostCents: 200 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      recipePayloadSchema.safeParse({
+        ...recipe,
+        ingredients: [{ ...recipe.ingredients[0], name: "Beef", id: "ri-1" }],
+      }).success,
+    ).toBe(false);
+    expect(recipePayloadSchema.safeParse({ ...recipe, totalCostCents: 200 }).success).toBe(false);
+    expect(recipePayloadSchema.safeParse({ ...recipe, ingredients: [] }).success).toBe(false);
+    expect(recipePayloadSchema.safeParse({ ...recipe, servings: 0 }).success).toBe(false);
+    expect(recipePayloadSchema.safeParse({ ...recipe, sellingPriceCents: -1 }).success).toBe(false);
+    expect(
+      recipePayloadSchema.safeParse({
+        ...recipe,
+        ingredients: [{ ...recipe.ingredients[0], unit: "handful" }],
+      }).success,
+    ).toBe(false);
   });
 });

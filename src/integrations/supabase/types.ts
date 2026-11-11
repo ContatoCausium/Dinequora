@@ -467,6 +467,7 @@ export type Database = {
           phone: string | null;
           slug: string;
           status: string;
+          tax_rate_ppm: number | null;
           timezone: string;
           updated_at: string;
         };
@@ -495,6 +496,7 @@ export type Database = {
           phone?: string | null;
           slug?: string;
           status?: string;
+          tax_rate_ppm?: number | null;
           timezone?: string;
           updated_at?: string;
         };
@@ -803,6 +805,7 @@ export type Database = {
           table_number: string | null;
           tax_cents: number;
           tax_rate_basis_points: number;
+          tax_rate_ppm: number | null;
           total_cents: number;
           type: Database["public"]["Enums"]["order_type"];
           updated_at: string;
@@ -828,6 +831,7 @@ export type Database = {
           table_number?: string | null;
           tax_cents?: number;
           tax_rate_basis_points?: number;
+          tax_rate_ppm?: number | null;
           total_cents?: number;
           type: Database["public"]["Enums"]["order_type"];
           updated_at?: string;
@@ -853,6 +857,7 @@ export type Database = {
           table_number?: string | null;
           tax_cents?: number;
           tax_rate_basis_points?: number;
+          tax_rate_ppm?: number | null;
           total_cents?: number;
           type?: Database["public"]["Enums"]["order_type"];
           updated_at?: string;
@@ -1771,6 +1776,25 @@ export type Database = {
         };
         Returns: string;
       };
+      create_pos_sale_v2: {
+        Args: {
+          _client_order_id?: string;
+          _customer_email?: string;
+          _customer_name: string;
+          _customer_phone?: string;
+          _delivery_address?: string;
+          _discount_cents?: number;
+          _is_simulation?: boolean;
+          _items?: Json;
+          _location_id: string;
+          _notes?: string;
+          _org_id: string;
+          _table_number?: string;
+          _tax_rate_ppm?: number;
+          _type: Database["public"]["Enums"]["order_type"];
+        };
+        Returns: string;
+      };
       create_test_restaurant: {
         Args: {
           _company_address: string;
@@ -1797,6 +1821,26 @@ export type Database = {
           _payment_method?: string;
           _table_number?: string;
           _tax_rate_basis_points?: number;
+          _type: Database["public"]["Enums"]["order_type"];
+        };
+        Returns: string;
+      };
+      finalize_pos_sale_atomic_v2: {
+        Args: {
+          _client_order_id?: string;
+          _customer_email?: string;
+          _customer_name: string;
+          _customer_phone?: string;
+          _delivery_address?: string;
+          _discount_cents?: number;
+          _is_simulation?: boolean;
+          _items?: Json;
+          _location_id: string;
+          _notes?: string;
+          _org_id: string;
+          _payment_method?: string;
+          _table_number?: string;
+          _tax_rate_ppm?: number;
           _type: Database["public"]["Enums"]["order_type"];
         };
         Returns: string;
@@ -1873,6 +1917,26 @@ export type Database = {
         };
         Returns: string;
       };
+      persist_finalized_pos_sale_atomic_v2: {
+        Args: {
+          _client_order_id?: string;
+          _customer_email?: string;
+          _customer_name: string;
+          _customer_phone?: string;
+          _delivery_address?: string;
+          _discount_cents?: number;
+          _is_simulation?: boolean;
+          _items?: Json;
+          _location_id: string;
+          _notes?: string;
+          _org_id: string;
+          _payment_method?: string;
+          _table_number?: string;
+          _tax_rate_ppm?: number;
+          _type: Database["public"]["Enums"]["order_type"];
+        };
+        Returns: string;
+      };
       receive_operational_purchase: {
         Args: {
           _client_event_id: string;
@@ -1937,6 +2001,10 @@ export type Database = {
       };
       set_location_status: {
         Args: { _id: string; _status: string };
+        Returns: undefined;
+      };
+      set_location_tax_rate: {
+        Args: { _location_id: string; _tax_rate_ppm: number };
         Returns: undefined;
       };
       set_member_locations: {

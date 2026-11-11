@@ -8,6 +8,7 @@ import {
   fmtMoneyCents,
   fmtNumber,
   fmtPercent,
+  fmtRatePpm,
 } from "@/lib/format";
 import { averageCents, multiplyQuantityCents, saleTotals, sumCents } from "@/lib/money";
 import { setLogWriter } from "@/lib/observability";
@@ -70,6 +71,12 @@ describe("P2 — invalid amounts on screen", () => {
     expect(fmtNumber(Number.POSITIVE_INFINITY, "en-US")).toBe(INVALID_VALUE_TEXT);
     expect(fmtBasisPoints(888, "en-US")).toBe("8.88%");
     expect(fmtPercent(0.187, "en-US")).toBe("18.7%");
+    // Store rates (0025): every decimal the server applies, none invented.
+    expect(fmtRatePpm(88750, "en-US")).toBe("8.875%");
+    expect(fmtRatePpm(62500, "en-US")).toBe("6.25%");
+    expect(fmtRatePpm(0, "en-US")).toBe("0%");
+    expect(fmtRatePpm(90250, "pt-BR")).toBe("9,025%");
+    expect(fmtRatePpm(Number.NaN, "en-US")).toBe(INVALID_VALUE_TEXT);
   });
 
   it("values sent to the server stay strict (they still throw)", () => {
@@ -86,7 +93,7 @@ describe("P2 — invalid amounts on screen", () => {
       orderType: "takeout",
       attendantName: "Ana",
       discountCents: 0,
-      taxRatePercent: 8.88,
+      taxRatePpm: 88800,
     };
     const item = (subtotalCents: unknown) => ({
       id: "i1",

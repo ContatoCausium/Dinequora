@@ -6,7 +6,6 @@ import {
   submitOperationalSale,
 } from "./operational.functions";
 import type { SaleInput } from "./operational-contracts";
-import { basisPointsFromPercent } from "./money";
 
 // Server functions validate the session; RPCs enforce authorization and atomicity.
 // No direct-table write or local-success fallback is permitted.
@@ -59,7 +58,9 @@ export async function persistOrderToSupabase(
         ...(order.customer.tableNumber ? { tableNumber: order.customer.tableNumber } : {}),
         ...(order.specialInstructions ? { notes: order.specialInstructions } : {}),
         discountCents: order.discountCents,
-        taxRateBasisPoints: basisPointsFromPercent(order.taxRatePercent),
+        // The rate the order was prepared with; the server charges the store's rate and refuses a
+        // different one (tax_rate_changed) instead of silently recording another amount.
+        taxRatePpm: order.taxRatePpm,
         items: saleItems(order.items),
         isSimulation: order.isSimulated,
       },
@@ -101,6 +102,8 @@ export async function persistFinalizedPOSSaleAtomic(
   if (session.cart.length === 0) {
     return { success: false, error: "O carrinho está vazio." };
   }
+  // A store without a configured rate cannot sell: the server would refuse with the same code.
+  if (session.taxRatePpm === null) return { success: false, error: "tax_rate_not_configured" };
   try {
     return await submitOperationalSale({
       data: {
@@ -110,7 +113,8 @@ export async function persistFinalizedPOSSaleAtomic(
         orderType: session.orderType,
         customerName: session.customerName ?? "Walk-in",
         discountCents: session.discountCents,
-        taxRateBasisPoints: basisPointsFromPercent(session.taxRatePercent),
+        // The exact rate the ticket displayed (ppm): confirmation only, never the rate charged.
+        taxRatePpm: session.taxRatePpm,
         items: saleItems(session.cart),
         paymentMethod: session.paymentMethod ?? "cash",
         isSimulation: false,

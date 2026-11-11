@@ -1,7 +1,7 @@
 import { assertLocationAllowed, assertTenantContext, isLocationAllowed } from "./tenant-storage";
 import { MenuItem } from "./menu-service";
 import { OrderItem, OrderType, SelectedModifier, calculateOrderSummary } from "./orders-service";
-import { basisPointsFromPercent, isCents } from "./money";
+import { isCents, isRatePpm } from "./money";
 
 export type POSPaymentMethod = "cash" | "card" | "digital";
 export type PaymentMethod = POSPaymentMethod;
@@ -18,7 +18,11 @@ export interface POSSession {
   orderType: OrderType;
   cart: POSCartItem[];
   discountCents: number;
-  taxRatePercent: number;
+  /**
+   * The store's configured sales-tax rate in parts per million (migration 0025); null when the
+   * store has no rate yet, which blocks the checkout (the server refuses such a sale too).
+   */
+  taxRatePpm: number | null;
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
@@ -40,19 +44,17 @@ export interface SuspendedSale {
   customerName?: string | undefined;
   items: POSCartItem[];
   discountCents: number;
-  taxRatePercent: number;
+  /** Informational: the rate shown when the ticket was held. Resuming always re-applies the store's current rate. */
+  taxRatePpm?: number | null | undefined;
 }
 
 /**
- * Default POS sales-tax rate in basis points (888 = 8.88%). The backend receives
- * basisPointsFromPercent(taxRatePercent) (see `persistFinalizedPOSSaleAtomic`), and the cart preview
- * uses exactly that rate, so the preview and the recorded sale never differ.
+ * A sale can be recorded only when the store has a configured rate. The rate itself is never
+ * chosen here: it comes from the store (workspace locations) and the server charges its own copy,
+ * refusing a ticket whose displayed rate differs (tax_rate_changed).
  */
-export const DEFAULT_POS_TAX_RATE_BASIS_POINTS = 888;
-
-/** Rate actually sent to the backend for this session, in basis points. */
-export function posTaxRateBasisPoints(session: Pick<POSSession, "taxRatePercent">): number {
-  return basisPointsFromPercent(session.taxRatePercent);
+export function posTaxConfigured(session: Pick<POSSession, "taxRatePpm">): boolean {
+  return session.taxRatePpm !== null;
 }
 
 const SUSPENDED_STORAGE_PREFIX = "servora.pos.suspended.";
@@ -89,7 +91,8 @@ const isValidSuspended = (s: unknown, orgId: string): s is SuspendedSale => {
           (Array.isArray(i.modifiers) && i.modifiers.every((m) => isCents(m?.priceCents)))),
     ) &&
     (r.discountCents === undefined || isCents(r.discountCents)) &&
-    (r.taxRatePercent === undefined || Number.isFinite(r.taxRatePercent)) &&
+    // Tickets held before 0025 carry taxRatePercent instead; both are informational only.
+    (r.taxRatePpm === undefined || r.taxRatePpm === null || isRatePpm(r.taxRatePpm)) &&
     typeof r.suspendedAt === "string" &&
     !Number.isNaN(Date.parse(r.suspendedAt))
   );
@@ -219,11 +222,7 @@ export function buildCartItem(
 }
 
 function recalculateSession(session: POSSession): POSSession {
-  const summary = calculateOrderSummary(
-    session.cart,
-    session.taxRatePercent,
-    session.discountCents,
-  );
+  const summary = calculateOrderSummary(session.cart, session.taxRatePpm, session.discountCents);
   return {
     ...session,
     subtotalCents: summary.subtotalCents,
@@ -232,14 +231,21 @@ function recalculateSession(session: POSSession): POSSession {
   };
 }
 
+/**
+ * A new ticket for one store. `taxRatePpm` is the store's configured rate (null = not configured
+ * yet); it is the only source of the rate the ticket previews and confirms to the server.
+ */
 export function getPOSSession(
   orgId: string,
   locationId: string,
   cashierName: string,
   allowedLocationIds?: readonly string[],
+  taxRatePpm: number | null = null,
 ): POSSession {
   assertTenantContext(orgId);
   assertLocationAllowed(locationId, allowedLocationIds);
+  if (taxRatePpm !== null && !isRatePpm(taxRatePpm))
+    throw new RangeError("tax rate must be an integer between 0 and 1,000,000 ppm");
   const suspended = listSuspendedSales(orgId, locationId, allowedLocationIds);
   return recalculateSession({
     id: `pos-${Date.now()}`,
@@ -249,7 +255,7 @@ export function getPOSSession(
     orderType: "dine_in",
     cart: [],
     discountCents: 0,
-    taxRatePercent: DEFAULT_POS_TAX_RATE_BASIS_POINTS / 100,
+    taxRatePpm,
     subtotalCents: 0,
     taxCents: 0,
     totalCents: 0,
@@ -328,17 +334,24 @@ export function suspendSession(session: POSSession, allowedLocationIds?: readonl
     orderType: session.orderType,
     items: session.cart,
     discountCents: session.discountCents,
-    taxRatePercent: session.taxRatePercent,
+    taxRatePpm: session.taxRatePpm,
     suspendedAt: new Date().toISOString(),
   };
   suspendSale(session.orgId, sale, allowedLocationIds);
 }
 
+/**
+ * Resumes a held ticket with the store's CURRENT rate (`taxRatePpm`), never the rate it was held
+ * with: a rate changed while the ticket waited is applied before the customer is charged.
+ */
 export function resumeSession(
   orgId: string,
   saleId: string,
   allowedLocationIds?: readonly string[],
+  taxRatePpm: number | null = null,
 ): POSSession | null {
+  if (taxRatePpm !== null && !isRatePpm(taxRatePpm))
+    throw new RangeError("tax rate must be an integer between 0 and 1,000,000 ppm");
   const sales = listSuspendedSales(orgId, undefined, allowedLocationIds);
   const found = sales.find((s) => s.id === saleId);
   if (!found) return null;
@@ -353,7 +366,7 @@ export function resumeSession(
     orderType: found.orderType,
     cart: found.items,
     discountCents: found.discountCents,
-    taxRatePercent: found.taxRatePercent,
+    taxRatePpm,
     subtotalCents: 0,
     taxCents: 0,
     totalCents: 0,

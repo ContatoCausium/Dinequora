@@ -68,7 +68,18 @@ export function fmtQuantity(v: number, lng: string, digits = 2) {
   return new Intl.NumberFormat(lng, { maximumFractionDigits: digits }).format(v);
 }
 
-/** Basis points (888 = 8.88%) shown with the precision the backend actually applies. */
+/** A store rate in parts per million (88,750 = 8.875%) shown with every decimal the server applies. */
+export function fmtRatePpm(ppm: number, lng: string) {
+  if (typeof ppm !== "number" || !Number.isFinite(ppm)) {
+    reportInvalid("rate.invalid_display", ppm);
+    return INVALID_VALUE_TEXT;
+  }
+  return new Intl.NumberFormat(lng, { style: "percent", maximumFractionDigits: 4 }).format(
+    ppm / 1_000_000,
+  );
+}
+
+/** Basis points (888 = 8.88%): the rounded rate older orders recorded. */
 export function fmtBasisPoints(bp: number, lng: string) {
   if (typeof bp !== "number" || !Number.isFinite(bp)) {
     reportInvalid("rate.invalid_display", bp);

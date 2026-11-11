@@ -29,6 +29,7 @@ type DbLocation = {
   status: LocationLifecycle;
   hours: WeeklyHours;
   is_verified: boolean;
+  tax_rate_ppm: number | null;
 };
 type Row = {
   role: OrgRole;
@@ -64,7 +65,7 @@ export async function fetchMemberships(userId: string): Promise<Membership[]> {
   const { data, error } = await supabase
     .from("organization_members")
     .select(
-      "id, role, member_location_access(location_id), organizations(id, slug, name, brand_primary, brand_accent, status, suspended_reason, store_limit, plan, is_demo, logo_url, previous_brand, onboarding_step, locations(id, slug, name, address, phone, timezone, status, hours, is_verified))",
+      "id, role, member_location_access(location_id), organizations(id, slug, name, brand_primary, brand_accent, status, suspended_reason, store_limit, plan, is_demo, logo_url, previous_brand, onboarding_step, locations(id, slug, name, address, phone, timezone, status, hours, is_verified, tax_rate_ppm))",
     )
     .eq("user_id", userId);
   if (error) throw error;
@@ -83,6 +84,7 @@ export async function fetchMemberships(userId: string): Promise<Membership[]> {
       phone: l.phone ?? undefined,
       hours: l.hours ?? {},
       timezone: l.timezone,
+      taxRatePpm: l.tax_rate_ppm ?? null,
       demoScale:
         known?.locations.find((k) => k.id === l.slug)?.demoScale ?? Math.max(0.3, 0.6 - i * 0.1),
     }));
@@ -185,6 +187,12 @@ export const updateLocation = (
   });
 export const setLocationStatus = (id: string, status: "active" | "inactive") =>
   rpc("set_location_status", { _id: id, _status: status });
+/**
+ * Sales-tax rate of a store in parts per million (migration 0025). Owners, and managers holding
+ * settings.locations for that store; audited by the server.
+ */
+export const setLocationTaxRate = (id: string, taxRatePpm: number) =>
+  rpc("set_location_tax_rate", { _location_id: id, _tax_rate_ppm: taxRatePpm });
 /** Saves details and (owners only) store managers in one backend transaction: all-or-nothing. */
 export const saveLocationWithManagers = (
   id: string,
