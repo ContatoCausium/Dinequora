@@ -1,4 +1,5 @@
-import { appRoutes, DEMO_ANCHOR, WHATSAPP, whatsappGreeting, whatsappUrl } from "../config/site";
+import { appRoutes, DEMO_ANCHOR, INSTAGRAM_URL, WHATSAPP, whatsappGreeting, whatsappUrl } from "../config/site";
+import { InstagramIcon } from "../components/social";
 import { Logo } from "../components/ui";
 import { UnavailableAction } from "../components/appAccess";
 import { WhatsAppIcon } from "../components/whatsapp";
@@ -68,6 +69,18 @@ export function Footer() {
                 <span className="font-medium tabular-nums">{WHATSAPP.display}</span>
               </span>
             </a>
+            <div className="mt-4">
+              <a
+                href={INSTAGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t("Dinequora on Instagram", "Dinequora no Instagram")}
+                title="Instagram"
+                className="inline-grid size-11 place-items-center rounded-full text-offwhite ring-1 ring-inset ring-line-dark transition-[color,background-color,box-shadow] duration-300 hover:bg-white/[0.06] hover:text-emerald hover:ring-emerald/50"
+              >
+                <InstagramIcon className="size-5" />
+              </a>
+            </div>
           </div>
           {columns.map((col) => (
             <nav key={col.title} aria-label={col.title}>

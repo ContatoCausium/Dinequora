@@ -177,6 +177,14 @@ describe("Dinequora marketing site", () => {
     expect(activeBar.style.animationPlayState).toBe("paused");
   });
 
+  it("links the footer Instagram icon to Instagram in a new tab", () => {
+    render(<App />);
+    const ig = screen.getByRole("link", { name: "Dinequora on Instagram" });
+    expect(ig.getAttribute("href")).toMatch(/^https:\/\/www\.instagram\.com\//);
+    expect(ig).toHaveAttribute("target", "_blank");
+    expect(ig.getAttribute("rel")).toContain("noopener");
+  });
+
   it("links every WhatsApp button to the sales number", () => {
     const { container } = render(<App />);
     const links = [...container.querySelectorAll<HTMLAnchorElement>('a[href^="https://wa.me/"]')];
