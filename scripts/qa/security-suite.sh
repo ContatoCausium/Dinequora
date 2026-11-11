@@ -12,7 +12,8 @@
 #   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
-#      0022 cross-organization store scope and organization features (rolled back)
+#      0022 cross-organization store scope and organization features, 0024 recipes, 0025 store tax,
+#      0026 menu category archive (rolled back)
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
@@ -24,7 +25,8 @@
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
 #      >100 newer orders, realtime events of the own organization only (each file in its own
-#      isolated organization, fixed timestamps, run in parallel)
+#      isolated organization, fixed timestamps, run in parallel); menu categories archived through
+#      PostgREST by signed-in members (0026)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -62,7 +64,7 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax; do
+for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive; do
   run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"
@@ -92,12 +94,13 @@ for run in 1 2; do
 done
 run_check scripts/security/demo_seed_rebuild.sql
 echo "::endgroup::"
-echo "::group::7. order history and kitchen board against the database"
+echo "::group::7. order history, kitchen board and menu archive against the database"
 # Each file works only in organizations it creates and removes (scripts/qa/isolated-org.mjs), so
 # the files run in parallel (vitest default) and nothing the earlier steps recorded can interfere.
 QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run \
-  src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts
+  src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts \
+  src/test/integration/menu-archive.db.test.ts
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."
