@@ -1,12 +1,17 @@
 # Security headers for every response of the site (Cloudflare Pages `_headers`; one header per line).
-# The CSP allows only this site's own files: no third-party scripts, fonts, frames or analytics.
+# The CSP allows only this site's own files plus the Cloudflare Web Analytics beacon, which the
+# Cloudflare edge injects automatically into dinequora.com pages (never into previews). The beacon
+# is served as /beacon.min.js/v<hash>, and a CSP path without a trailing slash matches only that
+# exact path, so both the documented file and the versioned prefix are listed. It reports to this
+# site's own /cdn-cgi/rum, which the 'self' source of connect-src already covers; no other origin
+# is allowed.
 # `img-src data:` is needed by the inline SVG grain texture in the stylesheet. If
 # VITE_DEMO_REQUEST_ENDPOINT is ever set to an absolute https:// URL, add its origin to connect-src
 # (the build fails until it is listed). HSTS starts at one day, without includeSubDomains or
 # preload; raise it only in a separate, reviewed change.
 /*
   Strict-Transport-Security: max-age=86400
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com/beacon.min.js https://static.cloudflareinsights.com/beacon.min.js/; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

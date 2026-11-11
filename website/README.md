@@ -61,7 +61,9 @@ covers that state.
 ## Security headers, 404 and SEO files
 
 - `public/_headers` (Cloudflare Pages) sets on every response: a strict `Content-Security-Policy` (only this
-  site's own files; no inline scripts or styles, no third parties; `frame-ancestors 'none'`),
+  site's own files; no inline scripts or styles; the one third party is the Cloudflare Web Analytics beacon that the
+  Cloudflare edge injects into dinequora.com pages, allowed by exact path in `script-src` and reporting to the site's
+  own `/cdn-cgi/rum`; `frame-ancestors 'none'`),
   `Strict-Transport-Security: max-age=86400` (one day, **without** `includeSubDomains` or `preload`),
   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
   `Permissions-Policy` and `Cross-Origin-Opener-Policy: same-origin`. The `dinequora.pages.dev` alias also gets
