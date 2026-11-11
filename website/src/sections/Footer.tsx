@@ -28,19 +28,11 @@ function getColumns(locale: Locale) {
       title: t("Account", "Conta"),
       // While the app is not published (appRoutes is null) both entries render as "Coming soon".
       links: [
-        {
-          label: t("Login", "Entrar"),
-          href: appRoutes?.login ?? null,
-          soon: t("Login — coming soon", "Entrar — em breve"),
-        },
-        {
-          label: t("Create account", "Criar conta"),
-          href: appRoutes?.signup ?? null,
-          soon: t("Create account — coming soon", "Criar conta — em breve"),
-        },
+        { label: t("Login", "Entrar"), href: appRoutes?.login ?? null },
+        { label: t("Create account", "Criar conta"), href: appRoutes?.signup ?? null },
       ],
     },
-  ] satisfies Array<{ title: string; links: Array<{ label: string; href: string | null; soon?: string }> }>;
+  ] satisfies Array<{ title: string; links: Array<{ label: string; href: string | null }> }>;
 }
 
 export function Footer() {
@@ -88,11 +80,7 @@ export function Footer() {
                         {l.label}
                       </a>
                     ) : (
-                      <UnavailableAction
-                        label={l.label}
-                        accessibleName={"soon" in l && l.soon ? l.soon : l.label}
-                        className="inline-flex text-sm text-mist/60"
-                      />
+                      <UnavailableAction label={l.label} className="inline-flex text-sm text-mist/70" />
                     )}
                   </li>
                 ))}
