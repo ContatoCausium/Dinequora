@@ -262,13 +262,25 @@ try {
     );
   }
 } finally {
-  // Restore the seeded rate for the steps that follow in the suite.
+  // Restore the seeded rate, and deliver the paid sales this test recorded (confirmed -> in_prep ->
+  // ready -> delivered), so the kitchen-board tests that follow in the suite see no open ticket.
   try {
     const owner = await session(SELLER);
     await setRate(owner, SEEDED);
+    const open = await sql`select id from public.orders where org_id = ${ORG}
+                           and client_order_id like ${"conc-%-" + stamp} and status = 'confirmed'`;
+    for (const { id } of open)
+      for (const s of ["in_prep", "ready", "delivered"])
+        await owner.c`select public.update_order_status(${id}, ${s})`;
     await owner.end();
+    const left = await sql`select count(*)::int as n from public.orders where org_id = ${ORG}
+                           and client_order_id like ${"conc-%-" + stamp} and status <> 'delivered'`;
+    check(
+      "cleanup: the recorded sales are delivered (no open ticket left behind)",
+      left[0].n === 0,
+    );
   } catch (e) {
-    check("restore: seeded rate", false, code(e));
+    check("cleanup: seeded rate restored and sales delivered", false, code(e));
   }
   await sql.end({ timeout: 5 });
 }
