@@ -14,10 +14,23 @@ const rawEndpoint = (import.meta.env.VITE_DEMO_REQUEST_ENDPOINT as string | unde
 /** Base URL of the restaurant application. Empty string = same origin. */
 export const APP_URL = trimSlash(rawAppUrl);
 
-export const appRoutes = {
-  login: `${APP_URL}/auth`,
-  signup: `${APP_URL}/signup`,
-} as const;
+export type AppRoutes = { readonly login: string; readonly signup: string };
+
+/**
+ * Login and sign-up routes of the restaurant application, or `null` while the application is
+ * not published. Links are off unless VITE_APP_LINKS_ENABLED is exactly "true", so a build never
+ * points visitors at an address that does not exist yet; while off, the header, mobile menu and
+ * footer show "Coming soon" and render no link to the application.
+ */
+export function getAppRoutes(env: { VITE_APP_LINKS_ENABLED?: string | undefined }, appUrl: string): AppRoutes | null {
+  if (env.VITE_APP_LINKS_ENABLED?.trim() !== "true") return null;
+  return { login: `${appUrl}/auth`, signup: `${appUrl}/signup` };
+}
+
+export const appRoutes: AppRoutes | null = getAppRoutes(
+  { VITE_APP_LINKS_ENABLED: import.meta.env.VITE_APP_LINKS_ENABLED as string | undefined },
+  APP_URL,
+);
 
 /**
  * Endpoint that receives demo requests. `null` means the form is not yet

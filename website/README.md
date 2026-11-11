@@ -48,8 +48,29 @@ npm run typecheck
 | Variable | Purpose | If empty |
 | --- | --- | --- |
 | `VITE_APP_URL` | Base URL of the restaurant app. **Login** → `<url>/auth`, **Create account** → `<url>/signup`. | Relative `/auth` and `/signup` (same domain). `.env.development` sets `http://localhost:8080` (assumed app dev port; adjust if yours differs). |
-| `VITE_DEMO_REQUEST_ENDPOINT` | URL that receives demo requests as JSON `POST`. | Form validates, then opens **WhatsApp** (sales line) with the request pre-filled. The visitor sends it themselves; the site never claims it was delivered. |
-| `VITE_SITE_URL` | Public URL of this site. Adds `<link rel=canonical>`, `og:url`, and absolute OG image URLs at build time. | Relative OG image (some social crawlers will not show it). |
+| `VITE_APP_LINKS_ENABLED` | `true` turns the **Login** and **Create account** links on (header, mobile menu, footer). | **Off.** While the app is not published, those places show **Login** / **Create account** with a **Coming soon** / **Em breve** badge, as plain text (no link, no role, not focusable; read as "Login, coming soon"). No redirect to the demo form. |
+| `VITE_DEMO_REQUEST_ENDPOINT` | Where demo requests are sent as JSON `POST`: a same-origin path starting with `/` (e.g. `/api/demo`) or an absolute `https://` URL whose origin is listed in `connect-src` in `public/_headers` (an absolute URL is never treated as same-origin, because the site is also served from www and pages.dev). The build stops for protocol-relative (`//host`), `http://`, unlisted or invalid values. | Form validates, then opens **WhatsApp** (sales line) with the request pre-filled. The visitor sends it themselves; the site never claims it was delivered. |
+| `VITE_SITE_URL` | Public URL of this site. Adds canonical, `og:url` and `hreflang` (`/` and `/pt/`) to both language pages, absolute OG image URLs, `sitemap.xml` and the `Sitemap:` line of `robots.txt` at build time. | Relative OG image (some social crawlers will not show it); no sitemap; `robots.txt` without `Sitemap:`. |
+
+### Re-enabling Login and Create account
+
+When the application is live at its address, set `VITE_APP_LINKS_ENABLED=true` (and `VITE_APP_URL`) in the
+Cloudflare Pages environment variables and redeploy. No code change is needed; `src/test/app-links-enabled.test.tsx`
+covers that state.
+
+## Security headers, 404 and SEO files
+
+- `public/_headers` (Cloudflare Pages) sets on every response: a strict `Content-Security-Policy` (only this
+  site's own files; no inline scripts or styles, no third parties; `frame-ancestors 'none'`),
+  `Strict-Transport-Security: max-age=86400` (one day, **without** `includeSubDomains` or `preload`),
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy` and `Cross-Origin-Opener-Policy: same-origin`. The `dinequora.pages.dev` alias also gets
+  `X-Robots-Tag: noindex`; preview deployments get it from Cloudflare.
+- Keep the HTML free of inline `style=""`, `<style>`, inline `<script>` and `on…=` handlers: the CSP blocks them
+  (`src/test/security-seo.test.ts` checks `index.html` and `404.html`). React `style={…}` props are fine.
+- `public/404.html` (+ `404.css`): bilingual page, `noindex`. Because it exists, Cloudflare Pages answers unknown
+  paths with **HTTP 404** instead of the home page.
+- `robots.txt` and `sitemap.xml` (`/` and `/pt/`, reciprocal hreflang, x-default = English) are generated at build time (`src/build/seo.ts`) from `VITE_SITE_URL`.
 
 Demo request JSON payload: `name, email, restaurant, phone|null, locations, role, message|null, consent, language ("en"|"pt"), source, submittedAt`.
 `locations` and `role` are always sent as the English option values, whatever language the visitor used.
@@ -68,11 +89,17 @@ All links use `https://wa.me/15087149654` with a greeting in the visitor's langu
 
 The site is available in **English** (default) and **Brazilian Portuguese**, switched with the **EN | PT** control in the header.
 
-- Initial language: `?lang=en|pt` in the URL, else the visitor's last choice (localStorage), else the browser language, else English. Switching updates the URL (`/?lang=pt`), `<html lang>`, the page title and the meta description.
+- Each language has its own address: **English at `/`** (main page, US market) and **Portuguese at `/pt/`**.
+  `dist/pt/index.html` is generated at build time from the English page with Portuguese `<html lang="pt-BR">`, title,
+  description, social tags, noscript text, canonical `/pt/` and the same reciprocal hreflang set, so crawlers get the right
+  metadata without running JavaScript. The texts live in `src/i18n/meta.ts`; the build stops if `index.html` drifts from them.
+- Initial language: the path (`/pt/` is always Portuguese), else the legacy `?lang=en|pt` parameter (old links are moved to
+  `/pt/` or `/`), else the visitor's last choice (localStorage), else the browser language, else English. Switching moves the
+  address between `/` and `/pt/` without a reload, keeping the current `#section`.
 - Each piece of copy lives next to its translation (`t("English", "Português")` / `{ en, pt }` objects). Prices, plan inclusions and Available / Rolling-out statuses are defined once and shared by both languages, so the two versions cannot disagree.
 - Prices stay in US dollars in both languages (`$49` / `US$ 49`).
 - Product mockups are translated in the Portuguese version (sidebar, panels, statuses, sample dishes; amounts shown as `US$ 2.184,00`). The application itself is in English today, so the Portuguese captions and FAQ say the screens are translated for illustration only. Proper names (locations, suppliers, people) are not translated.
-- With `VITE_SITE_URL` set, the build adds `hreflang` alternates for both versions.
+- With `VITE_SITE_URL` set, both pages carry `hreflang` alternates (en-US `/`, pt-BR `/pt/`, x-default `/`).
 
 ## Where things live
 

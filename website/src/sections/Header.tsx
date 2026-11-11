@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Menu, X } from "lucide-react";
 import { appRoutes, DEMO_ANCHOR, getPrimaryNav, WHATSAPP, whatsappGreeting, whatsappUrl } from "../config/site";
 import { ButtonLink, cx, LanguageSwitcher, Logo } from "../components/ui";
+import { UnavailableAction } from "../components/appAccess";
 import { WhatsAppIcon } from "../components/whatsapp";
 import { pick, useLocale } from "../i18n/locale";
 
@@ -64,7 +65,7 @@ export function Header() {
         scrolled ? "border-line-dark shadow-[0_12px_40px_-20px_rgb(0_0_0/0.8)]" : "border-transparent",
       )}
     >
-      <div className="container-page flex h-[68px] items-center justify-between gap-6">
+      <div className="container-page flex h-[68px] items-center justify-between gap-4 xl:gap-6">
         <a href="#top" className="-ml-1 shrink-0 rounded-md" aria-label={t("Dinequora home", "Dinequora, início")}>
           {/* Official dark-background lockup; header background matches its navy exactly. */}
           <Logo variant="full-dark" className="h-[44px] w-auto" />
@@ -76,7 +77,7 @@ export function Header() {
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="rounded-full px-2.5 py-2 text-[0.9rem] xl:px-3.5 font-medium text-mist transition-colors hover:text-offwhite"
+                  className="rounded-full px-2 py-2 text-[0.9rem] xl:px-3.5 font-medium text-mist transition-colors hover:text-offwhite"
                 >
                   {item.label}
                 </a>
@@ -87,12 +88,20 @@ export function Header() {
 
         <div className="hidden items-center gap-2 lg:flex">
           <LanguageSwitcher className="mr-1" />
-          <a
-            href={appRoutes.login}
-            className="rounded-full px-2.5 py-2 text-[0.9rem] xl:px-3.5 font-medium text-mist transition-colors hover:text-offwhite"
-          >
-            {t("Login", "Entrar")}
-          </a>
+          {appRoutes ? (
+            <a
+              href={appRoutes.login}
+              className="rounded-full px-2.5 py-2 text-[0.9rem] xl:px-3.5 font-medium text-mist transition-colors hover:text-offwhite"
+            >
+              {t("Login", "Entrar")}
+            </a>
+          ) : (
+            // The app is not published yet: "Login" + "Coming soon" badge, as text (no link, no focus).
+            <UnavailableAction
+              label={t("Login", "Entrar")}
+              className="inline-flex px-1 py-2 text-[0.9rem] font-medium whitespace-nowrap text-mist/70 xl:px-3"
+            />
+          )}
           {/* WhatsApp pill only where there is room (≥1280px); the floating button covers smaller screens. */}
           <a
             href={waHref}
@@ -150,9 +159,16 @@ export function Header() {
               </li>
             ))}
             <li>
-              <a href={appRoutes.login} className="flex py-4 text-xl font-medium tracking-tight text-mist">
-                {t("Login", "Entrar")}
-              </a>
+              {appRoutes ? (
+                <a href={appRoutes.login} className="flex py-4 text-xl font-medium tracking-tight text-mist">
+                  {t("Login", "Entrar")}
+                </a>
+              ) : (
+                <UnavailableAction
+                  label={t("Login", "Entrar")}
+                  className="flex w-full justify-between py-4 text-xl font-medium tracking-tight text-mist/70"
+                />
+              )}
             </li>
           </ul>
           <ButtonLink href={DEMO_ANCHOR} size="lg" arrow className="mt-8 w-full" onClick={goTo}>
