@@ -52,6 +52,14 @@ export function whatsappUrl(text?: string): string {
   return text ? `${base}?text=${encodeURIComponent(text)}` : base;
 }
 
+/**
+ * Company Instagram profile. TODO: replace the fallback with the company profile,
+ * e.g. "https://www.instagram.com/dinequora/", or set VITE_INSTAGRAM_URL at build time.
+ * Until then the icon opens Instagram's home page.
+ */
+const rawInstagram = (import.meta.env.VITE_INSTAGRAM_URL as string | undefined)?.trim() ?? "";
+export const INSTAGRAM_URL = rawInstagram || "https://www.instagram.com/";
+
 export const whatsappGreeting: Record<Locale, string> = {
   en: "Hi! I'd like to learn more about Dinequora.",
   pt: "Olá! Quero saber mais sobre o Dinequora.",

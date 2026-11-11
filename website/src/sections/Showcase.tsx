@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cx, Reveal, SectionHeader, StatusBadge } from "../components/ui";
 import { PauseButton, RotateProgress, useAutoRotate } from "../components/autoRotate";
 import { AppWindow, ScaledFrame } from "../components/mockups/frame";
@@ -99,12 +99,48 @@ function Screen({ id }: { id: View["id"] }) {
   }
 }
 
+/** 0 while the stage is below the screen, 1 once its top reaches the upper fifth. */
+function useTilt(ref: React.RefObject<HTMLDivElement | null>) {
+  const [still] = useState(() => typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    if (still) return;
+    let raf = 0;
+    const tick = () => {
+      const el = ref.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      const h = window.innerHeight;
+      const v = Math.min(1, Math.max(0, (h - top) / (h * 0.8)));
+      setP((old) => (Math.abs(old - v) < 0.005 ? old : v));
+    };
+    const on = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    window.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("scroll", on);
+      window.removeEventListener("resize", on);
+    };
+  }, [ref, still]);
+  return still ? 1 : p;
+}
+
 export function Showcase() {
   const { locale } = useLocale();
   const t = <T,>(en: T, pt: T) => pick(locale, en, pt);
   const views = getViews(locale);
   const { active, select, next, running, userPaused, togglePause, bind } = useAutoRotate(views.length);
   const list = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const tilt = useTilt(stage);
+  const tiltStyle = {
+    transform: `rotateX(${(1 - tilt) * 26}deg) scale(${0.84 + tilt * 0.16}) translateY(${(1 - tilt) * 60}px)`,
+    opacity: 0.35 + tilt * 0.65,
+  };
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
   // Keep the active pill visible when the tab strip scrolls sideways (small screens).
@@ -180,7 +216,8 @@ export function Showcase() {
             </div>
 
             {/* Screens share one grid cell: height stays constant and screens crossfade. */}
-            <div className="mt-10 grid grid-cols-[minmax(0,1fr)]">
+            <div ref={stage} className="mt-10 grid grid-cols-[minmax(0,1fr)] [perspective:1800px]">
+              <div className="grid grid-cols-[minmax(0,1fr)] will-change-transform [grid-area:1/1] [transform-style:preserve-3d]" style={tiltStyle}>
               {views.map((v, i) => {
                 const isActive = i === active;
                 return (
@@ -206,6 +243,7 @@ export function Showcase() {
                   </div>
                 );
               })}
+              </div>
             </div>
             <p className="mt-5 text-center text-xs text-mist/60">
               {t(

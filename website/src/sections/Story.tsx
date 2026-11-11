@@ -3,6 +3,7 @@ import { getFeatureCategories, type FeatureCategory } from "../content/features"
 import { cx, StatusBadge } from "../components/ui";
 import { FilmScene, Moment, segment, useSectionProgress, type FrameSet } from "../components/cinema/scene";
 import { OrderFlow, RevenueChart, StockLevels } from "../components/cinema/charts";
+import { NightClock } from "../components/cinema/fx";
 import { pick, useLocale } from "../i18n/locale";
 
 /* =====================================================================
@@ -281,56 +282,6 @@ function ChapterClose({ category }: { category: FeatureCategory }) {
   );
 }
 
-/* ------------------------------------------------------------- Night timeline */
-
-const RAIL = [
-  { id: "chapter-prep", time: "18:00" },
-  { id: "chapter-rush", time: "20:30" },
-  { id: "chapter-close", time: "23:30" },
-];
-
-/** Fixed timeline on wide screens: shows where in the night the visitor is. */
-function NightRail() {
-  const [active, setActive] = useState(-1);
-  useEffect(() => {
-    const onScroll = () => {
-      const mid = window.innerHeight / 2;
-      let next = -1;
-      RAIL.forEach((r, i) => {
-        const rect = document.getElementById(r.id)?.getBoundingClientRect();
-        if (rect && rect.top <= mid && rect.bottom > mid) next = i;
-      });
-      setActive(next);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  return (
-    <div
-      aria-hidden
-      className={cx(
-        "pointer-events-none fixed top-1/2 right-5 z-30 hidden -translate-y-1/2 flex-col items-end gap-5 transition-opacity duration-500 min-[1600px]:flex",
-        active >= 0 ? "opacity-100" : "opacity-0",
-      )}
-    >
-      {RAIL.map((r, i) => (
-        <div key={r.id} className="flex items-center gap-3">
-          <span
-            className={cx(
-              "text-xs font-semibold tabular-nums transition-colors duration-300",
-              i === active ? "text-emerald" : i < active ? "text-offwhite/60" : "text-mist/35",
-            )}
-          >
-            {r.time}
-          </span>
-          <span className={cx("block h-px transition-all duration-500", i === active ? "w-10 bg-emerald" : "w-5 bg-mist/30")} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** The three chapters of one service night (anchor #features for the main navigation). */
 export function NightStory() {
   const { locale } = useLocale();
@@ -338,7 +289,7 @@ export function NightStory() {
   const byId = (id: string) => categories.find((c) => c.id === id)!;
   return (
     <div id="features">
-      <NightRail />
+      <NightClock />
       <ChapterPrep category={byId("inventory")} />
       <ChapterRush category={byId("operations")} />
       <ChapterClose category={byId("finance")} />

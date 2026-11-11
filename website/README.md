@@ -99,12 +99,13 @@ The site is available in **English** (default) and **Brazilian Portuguese**, swi
   `/pt/` or `/`), else the visitor's last choice (localStorage), else the browser language, else English. Switching moves the
   address between `/` and `/pt/` without a reload, keeping the current `#section`.
 - Each piece of copy lives next to its translation (`t("English", "Português")` / `{ en, pt }` objects). Prices, plan inclusions and Available / Rolling-out statuses are defined once and shared by both languages, so the two versions cannot disagree.
-- Prices stay in US dollars in both languages (`$49` / `US$ 49`).
+- Prices stay in US dollars in both languages (`$69` / `US$ 69`; cents only when present, `$399.99` / `US$ 399,99`).
 - Product mockups are translated in the Portuguese version (sidebar, panels, statuses, sample dishes; amounts shown as `US$ 2.184,00`). The application itself is in English today, so the Portuguese captions and FAQ say the screens are translated for illustration only. Proper names (locations, suppliers, people) are not translated.
 - With `VITE_SITE_URL` set, both pages carry `hreflang` alternates (en-US `/`, pt-BR `/pt/`, x-default `/`).
 
 ## Where things live
 
+- `src/config/pricing.ts` — billing periods (`BILLING`): monthly, every 6 months (8% off) and yearly (15% off) on the Starter and Growth subscriptions, paid upfront; implementation is never discounted. Change a discount there only.
 - `src/config/pricing.ts` — **single source of truth for prices** (plans, implementation fees, comparison table). Edit prices here only; tests guard the approved values.
 - `src/config/site.ts` — navigation, app routes, env handling.
 - `src/content/features.ts` — feature catalog with an availability status per capability.
