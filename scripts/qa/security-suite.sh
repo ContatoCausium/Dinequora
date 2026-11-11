@@ -13,7 +13,7 @@
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
 #      0022 cross-organization store scope and organization features, 0024 recipes, 0025 store tax,
-#      0026 menu category archive (rolled back)
+#      0026 menu category archive, 0028 category deactivation through the save (rolled back)
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
@@ -24,6 +24,9 @@
 #   5d. 0027 concurrency: saving a menu product and archiving its category in two PostgreSQL
 #      sessions are serialized in both orders, with COMMIT and ROLLBACK (FOR SHARE / FOR UPDATE);
 #      never an active product in an archived category (own isolated organization, removed at the end)
+#   5e. 0028 concurrency: saving a menu product and deactivating its category through the save, in two
+#      PostgreSQL sessions, both orders, COMMIT and ROLLBACK; a category in use is never deactivated
+#      (own isolated organization, removed at the end)
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -67,7 +70,7 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive; do
+for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate; do
   run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"
@@ -92,6 +95,10 @@ echo "::endgroup::"
 
 echo "::group::5d. menu product save vs category archive concurrency (0027, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/menu_category_race.mjs | tee "$ARTIFACTS/menu-category-race.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5e. menu product save vs category deactivation concurrency (0028, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/menu_category_deactivate_race.mjs | tee "$ARTIFACTS/menu-category-deactivate-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
