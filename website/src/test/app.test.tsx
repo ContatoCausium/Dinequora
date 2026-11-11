@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../App";
-import { appRoutes, getAppRoutes } from "../config/site";
+import { getAppRoutes } from "../config/site";
 import { featureCategories } from "../content/features";
 import { detectInitialLocale, STORAGE_KEY } from "../i18n/locale";
+import { addressFor } from "../i18n/meta";
 
 beforeAll(() => {
   // jsdom lacks these browser APIs used by the layout helpers.
@@ -50,29 +51,6 @@ describe("Dinequora marketing site", () => {
       expect(container.querySelector(href)).not.toBeNull();
     }
     expect(container.querySelector("#demo")).not.toBeNull();
-  });
-
-  it("shows Login and Create account as coming soon, with no link to the unpublished app", () => {
-    expect(appRoutes).toBeNull();
-    const { container } = render(<App />);
-    // Desktop header: "Coming soon" takes the Login slot.
-    const header = container.querySelector("header")!;
-    const desktop = within(header).getByRole("link", { name: "Login — coming soon" });
-    expect(desktop).toHaveTextContent("Coming soon");
-    expect(desktop).toHaveAttribute("aria-disabled", "true");
-    expect(desktop).not.toHaveAttribute("href");
-    // Mobile menu (hidden until opened) and footer.
-    const mobile = container.querySelector("#mobile-menu")!;
-    expect(mobile.querySelector('[data-app-link="unavailable"]')).toHaveAccessibleName("Login — coming soon");
-    const footer = container.querySelector("footer")!;
-    expect(within(footer).getByRole("link", { name: "Login — coming soon" })).not.toHaveAttribute("href");
-    expect(within(footer).getByRole("link", { name: "Create account — coming soon" })).not.toHaveAttribute("href");
-    expect(container.querySelectorAll('[data-app-link="unavailable"]')).toHaveLength(4);
-    // No anchor anywhere points at the app, its routes, or is redirected to the demo form instead.
-    for (const a of container.querySelectorAll("a[href]")) {
-      expect(a.getAttribute("href")!, a.textContent ?? "").not.toMatch(/app\.dinequora\.com|\/auth\b|\/signup\b/);
-    }
-    expect(screen.queryAllByRole("link", { name: /^(Login|Create account)$/ })).toHaveLength(0);
   });
 
   it("keeps app links off unless explicitly enabled", () => {
@@ -201,7 +179,9 @@ describe("Portuguese version", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Comande seu restaurante\.\s*Não o caos\./);
     expect(document.documentElement.lang).toBe("pt-BR");
     expect(document.title).toMatch(/Plataforma de Inteligência para Restaurantes/);
-    expect(window.location.search).toBe("?lang=pt");
+    // The address moves to the static Portuguese page.
+    expect(window.location.pathname).toBe("/pt/");
+    expect(window.location.search).toBe("");
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe("pt");
 
     const nav = screen.getByRole("navigation", { name: "Principal" });
@@ -212,20 +192,20 @@ describe("Portuguese version", () => {
       "Implantação",
       "Sobre",
     ]);
-    const header = document.querySelector("header")!;
-    expect(within(header).getByRole("link", { name: "Entrar — em breve" })).toHaveTextContent("Em breve");
-    const footer = document.querySelector("footer")!;
-    expect(within(footer).getByRole("link", { name: "Criar conta — em breve" })).toHaveTextContent("Em breve");
   });
 
-  it("switches back to English and drops the URL parameter", async () => {
+  it("switches back to English at / and keeps the current section", async () => {
     const user = userEvent.setup();
-    render(<App initialLocale="pt" />);
+    window.history.replaceState(null, "", "/pt/#pricing");
+    render(<App />);
+    expect(window.location.pathname).toBe("/pt/");
     const switcher = screen.getAllByRole("group", { name: "Idioma" })[0]!;
     await user.click(within(switcher).getByRole("button", { name: "English" }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/Run your restaurant/);
     expect(document.documentElement.lang).toBe("en-US");
+    expect(window.location.pathname).toBe("/");
     expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("#pricing");
   });
 
   it("keeps the same prices in US dollars", () => {
@@ -302,7 +282,17 @@ describe("Portuguese version", () => {
 });
 
 describe("initial language detection", () => {
-  it("prefers the URL parameter, then the saved choice, then English", () => {
+  it("uses the path first: /pt/ is always Portuguese, even with an English preference", () => {
+    window.localStorage.setItem(STORAGE_KEY, "en");
+    window.history.replaceState(null, "", "/pt/");
+    expect(detectInitialLocale()).toBe("pt");
+    window.history.replaceState(null, "", "/pt");
+    expect(detectInitialLocale()).toBe("pt");
+    window.history.replaceState(null, "", "/pt/#pricing");
+    expect(detectInitialLocale()).toBe("pt");
+  });
+
+  it("on /, prefers the legacy URL parameter, then the saved choice, then English", () => {
     window.history.replaceState(null, "", "/?lang=pt");
     expect(detectInitialLocale()).toBe("pt");
     window.history.replaceState(null, "", "/");
@@ -310,5 +300,21 @@ describe("initial language detection", () => {
     expect(detectInitialLocale()).toBe("pt");
     window.localStorage.clear();
     expect(detectInitialLocale()).toBe("en");
+  });
+
+  it("moves old ?lang=pt links to /pt/, keeping other parameters and the section", () => {
+    window.history.replaceState(null, "", "/?lang=pt&utm_source=ad#demo");
+    render(<App />);
+    expect(window.location.pathname).toBe("/pt/");
+    expect(window.location.search).toBe("?utm_source=ad");
+    expect(window.location.hash).toBe("#demo");
+    expect(document.documentElement.lang).toBe("pt-BR");
+  });
+
+  it("computes the address of each language", () => {
+    expect(addressFor("pt", "https://dinequora.com/")).toBe("/pt/");
+    expect(addressFor("en", "https://dinequora.com/pt/")).toBe("/");
+    expect(addressFor("pt", "https://dinequora.com/?lang=pt#pricing")).toBe("/pt/#pricing");
+    expect(addressFor("en", "https://dinequora.com/pt/?lang=pt&x=1#faq")).toBe("/?x=1#faq");
   });
 });

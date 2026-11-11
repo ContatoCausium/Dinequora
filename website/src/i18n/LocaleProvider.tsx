@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { detectInitialLocale, htmlLang, LocaleContext, pageMeta, STORAGE_KEY, type Locale } from "./locale";
+import { detectInitialLocale, htmlLang, LocaleContext, localePath, pageMeta, STORAGE_KEY, type Locale } from "./locale";
+import { addressFor } from "./meta";
 
 export function LocaleProvider({ children, initial }: { children: ReactNode; initial?: Locale }) {
   const [locale, setLocaleState] = useState<Locale>(() => initial ?? detectInitialLocale());
@@ -11,26 +12,25 @@ export function LocaleProvider({ children, initial }: { children: ReactNode; ini
     } catch {
       // Ignore storage failures; the choice still applies to this visit.
     }
-    // Keep the address shareable: English is the default, Portuguese adds ?lang=pt.
-    const url = new URL(window.location.href);
-    if (next === "en") url.searchParams.delete("lang");
-    else url.searchParams.set("lang", next);
-    window.history.replaceState(window.history.state, "", url);
   }, []);
 
   useEffect(() => {
+    // Keep the address on the static page of the active language (no reload: same content).
+    const target = addressFor(locale, window.location.href);
+    const current = window.location.pathname + window.location.search + window.location.hash;
+    if (target !== current) window.history.replaceState(window.history.state, "", target);
+
     const meta = pageMeta[locale];
     document.documentElement.lang = htmlLang[locale];
     document.title = meta.title;
     document.querySelector('meta[name="description"]')?.setAttribute("content", meta.description);
-    // Each language version is its own canonical page (present only when VITE_SITE_URL is set).
+    // The static pages already carry these; keep them right after a language switch.
+    // (canonical and og:url exist only when VITE_SITE_URL is set.)
     const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-    if (canonical) {
-      const url = new URL(canonical.href);
-      if (locale === "en") url.searchParams.delete("lang");
-      else url.searchParams.set("lang", locale);
-      canonical.href = url.toString();
-    }
+    if (canonical) canonical.href = new URL(localePath[locale], canonical.href).toString();
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    const ogUrlValue = ogUrl?.getAttribute("content");
+    if (ogUrl && ogUrlValue) ogUrl.setAttribute("content", new URL(localePath[locale], ogUrlValue).toString());
   }, [locale]);
 
   const value = useMemo(() => ({ locale, setLocale }), [locale, setLocale]);
