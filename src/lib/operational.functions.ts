@@ -79,6 +79,10 @@ export const saveOperationalMenu = createServerFn({ method: "POST" })
         kind: z.literal("category"),
         orgId: z.string().min(1),
         category: z.object({
+          // Explicit intent, required by save_operational_menu since 0029 (strict contract): a
+          // creation never overwrites, an edit never changes the active flag, a re-activation is
+          // explicit. Deactivation is archiveOperationalMenu only.
+          op: z.enum(["create", "update", "reactivate"]),
           id: z.string().min(1),
           name: z.string().min(1),
           description: z.string().optional(),

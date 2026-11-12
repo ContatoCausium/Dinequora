@@ -54,6 +54,9 @@
   "errors": {
     "category_in_use": "Esta categoria possui produtos ativos vinculados. Desative ou mova esses produtos antes de arquivar a categoria.",
     "category_required": "Este produto precisa estar vinculado a uma categoria ativa.",
+    "category_exists": "Esta categoria já existe (pode ter sido criada agora em outra sessão). O cardápio foi atualizado.",
+    "category_archived": "Esta categoria está arquivada. Reative-a em Gerenciar Categorias para usá-la de novo. O cardápio foi atualizado.",
+    "category_not_archived": "Esta categoria já está ativa. O cardápio foi atualizado.",
     "forbidden": "Você não tem permissão para realizar esta operação.",
     "permission_denied": "Seu perfil não permite executar esta ação.",
     "location_forbidden": "Este produto é vendido em lojas que você não gerencia.",

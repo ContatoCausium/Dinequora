@@ -123,7 +123,7 @@ async function closeOpenSessions() {
   return { sessions: left.length, terminated: pids.length };
 }
 const category = (s, id) =>
-  s.c`select public.save_operational_menu(${ORG}, 'category', ${s.c.json({ id, name: id })})`;
+  s.c`select public.save_operational_menu(${ORG}, 'category', ${s.c.json({ op: "create", id, name: id })})`;
 // The manager's products are sold at its own store (a manager cannot create all-stores products).
 const saveProduct = (s, id, cat) =>
   s.c`select public.save_operational_menu(${ORG}, 'product', ${s.c.json({

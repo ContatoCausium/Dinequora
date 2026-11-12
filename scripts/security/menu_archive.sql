@@ -38,10 +38,10 @@ END $$;
 SET ROLE authenticated;
 -- ---------------------------------------------------------------- menu of org A (owner A)
 SELECT set_config('request.jwt.claim.sub','a2600000-0000-4000-8000-000000000001',false);
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Drinks"}');
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"desserts","name":"Desserts"}');
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal"}');
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"sides","name":"Sides"}');
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"create","id":"drinks","name":"Drinks"}');
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"create","id":"desserts","name":"Desserts"}');
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"create","id":"seasonal","name":"Seasonal"}');
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"create","id":"sides","name":"Sides"}');
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"soda","name":"Soda","category":"drinks","priceCents":250,"prepTimeMinutes":1,"locationIds":[],"modifierGroups":[]}');
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"cake","name":"Cake","category":"desserts","priceCents":600,"prepTimeMinutes":2,"locationIds":[],"modifierGroups":[],"active":false}');
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"pie","name":"Pie","category":"desserts","priceCents":550,"prepTimeMinutes":2,"locationIds":[],"modifierGroups":[],"active":false}');
@@ -49,7 +49,7 @@ SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','prod
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"a1-special","name":"A1 Special","category":"sides","priceCents":700,"prepTimeMinutes":5,"locationIds":["c2600000-0000-4000-8000-000000000001"],"modifierGroups":[]}');
 -- org B uses the same client id "drinks" for its own category
 SELECT set_config('request.jwt.claim.sub','a2600000-0000-4000-8000-000000000004',false);
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000002','category','{"id":"drinks","name":"B Drinks"}');
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000002','category','{"op":"create","id":"drinks","name":"B Drinks"}');
 RESET ROLE;
 CREATE TEMP TABLE pr26_products_before AS
   SELECT id, org_id, client_id, category_id, name, price_cents, active, location_ids, modifier_groups, updated_at
@@ -246,16 +246,16 @@ DO $$ BEGIN
   RAISE EXCEPTION 'FAIL 8 category sides not archived after its products'; END IF;
 END $$;
 
--- ---------------------------------------------------------------- 9. menu regressions (save_operational_menu unchanged)
+-- ---------------------------------------------------------------- 9. menu regressions (save_operational_menu, intent contract of 0029)
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','a2600000-0000-4000-8000-000000000001',false);
--- edit a category name; a product cannot use an archived category; re-saving a category restores it
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Cold drinks"}');
+-- edit a category name (update); a product cannot use an archived category; only an explicit reactivation restores it (0029)
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"update","id":"drinks","name":"Cold drinks"}');
 DO $$ BEGIN
  PERFORM public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"tart","name":"Tart","category":"desserts","priceCents":500,"locationIds":[],"modifierGroups":[]}');
  RAISE EXCEPTION 'FAIL 9 product saved into an archived category';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'category_required' THEN RAISE EXCEPTION 'FAIL 9 expected category_required, got %', SQLERRM; END IF; END $$;
-SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal"}');
+SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"reactivate","id":"seasonal","name":"Seasonal"}');
 -- edit a product: price, availability, and move it to another category
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"soda","name":"Soda","category":"drinks","priceCents":275,"prepTimeMinutes":1,"locationIds":[],"modifierGroups":[]}');
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"soda","name":"Soda","category":"seasonal","priceCents":275,"prepTimeMinutes":1,"locationIds":[],"modifierGroups":[],"active":false}');
@@ -265,7 +265,7 @@ SELECT set_config('request.jwt.claim.sub','a2600000-0000-4000-8000-000000000002'
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"a1-tea","name":"A1 Tea","category":"seasonal","priceCents":300,"locationIds":["c2600000-0000-4000-8000-000000000001"],"modifierGroups":[]}');
 SELECT public.save_operational_menu('b2600000-0000-4000-8000-000000000001','product','{"id":"a1-tea","name":"A1 Iced Tea","category":"seasonal","priceCents":325,"locationIds":["c2600000-0000-4000-8000-000000000001"],"modifierGroups":[]}');
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"id":"manager-cat","name":"Manager category"}');
+ PERFORM public.save_operational_menu('b2600000-0000-4000-8000-000000000001','category','{"op":"create","id":"manager-cat","name":"Manager category"}');
  RAISE EXCEPTION 'FAIL 9 manager created a category';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 9 manager category: expected forbidden, got %', SQLERRM; END IF; END $$;
 -- staff can read the menu but not change it

@@ -134,7 +134,7 @@ describe.skipIf(!ENABLED).sequential("menu category archive against the database
       ["desserts", "Desserts"],
       ["seasonal", "Seasonal"],
     ] as const) {
-      const { error } = await save(owner, org.orgId, "category", { id, name });
+      const { error } = await save(owner, org.orgId, "category", { op: "create", id, name });
       expect(error, `category ${id}`).toBeNull();
     }
     for (const p of [
@@ -146,6 +146,7 @@ describe.skipIf(!ENABLED).sequential("menu category archive against the database
       expect(error, `product ${p.id}`).toBeNull();
     }
     const { error } = await save(ownerB, other.orgId, "category", {
+      op: "create",
       id: "drinks",
       name: "B Drinks",
     });
@@ -235,7 +236,7 @@ describe.skipIf(!ENABLED).sequential("menu category archive against the database
     expect(auditCount("drinks")).toBe(0);
   });
 
-  it("menu regressions: archive a product, then its category; re-saving a category restores it", async () => {
+  it("menu regressions: archive a product, then its category; only an explicit reactivation restores it", async () => {
     const p = await archive(owner, org.orgId, "product", "soda");
     expect(p.error).toBeNull();
     const c = await archive(owner, org.orgId, "category", "drinks");
@@ -243,7 +244,27 @@ describe.skipIf(!ENABLED).sequential("menu category archive against the database
     expect(await visibleCategories(owner, org.orgId)).toEqual([]);
     const blocked = await save(owner, org.orgId, "product", product("tea", "drinks"));
     expect(blocked.error?.message).toBe("category_required");
-    const restore = await save(owner, org.orgId, "category", { id: "drinks", name: "Drinks" });
+    // 0029: re-saving (no intent), editing or creating the archived category never re-activates it
+    const legacy = await save(owner, org.orgId, "category", { id: "drinks", name: "Drinks" });
+    expect(legacy.error?.message).toBe("invalid_menu");
+    const edit = await save(owner, org.orgId, "category", {
+      op: "update",
+      id: "drinks",
+      name: "Drinks",
+    });
+    expect(edit.error?.message).toBe("category_archived");
+    const create = await save(owner, org.orgId, "category", {
+      op: "create",
+      id: "drinks",
+      name: "Drinks",
+    });
+    expect(create.error?.message).toBe("category_archived");
+    expect(await visibleCategories(owner, org.orgId)).toEqual([]);
+    const restore = await save(owner, org.orgId, "category", {
+      op: "reactivate",
+      id: "drinks",
+      name: "Drinks",
+    });
     expect(restore.error).toBeNull();
     const back = await save(owner, org.orgId, "product", product("soda", "drinks"));
     expect(back.error).toBeNull();

@@ -10,6 +10,10 @@ import { captureError, isExpectedBusinessError, logEvent } from "@/lib/observabi
 export const MENU_ERROR_CODES = [
   "category_in_use",
   "category_required",
+  // 0029 category intents (create / update / reactivate)
+  "category_exists",
+  "category_archived",
+  "category_not_archived",
   "forbidden",
   "permission_denied",
   "location_forbidden",

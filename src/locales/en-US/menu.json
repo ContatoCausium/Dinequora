@@ -54,6 +54,9 @@
   "errors": {
     "category_in_use": "This category still has active products. Mark them unavailable or move them to another category before archiving it.",
     "category_required": "This product needs an active category.",
+    "category_exists": "This category already exists (it may have just been created in another session). The menu has been refreshed.",
+    "category_archived": "This category is archived. Reactivate it in Manage Categories to use it again. The menu has been refreshed.",
+    "category_not_archived": "This category is already active. The menu has been refreshed.",
     "forbidden": "You don't have permission to perform this action.",
     "permission_denied": "Your role doesn't allow this action.",
     "location_forbidden": "This product is sold in stores you don't manage.",
