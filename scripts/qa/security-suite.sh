@@ -23,7 +23,8 @@
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
 #      0022 cross-organization store scope and organization features, 0024 recipes, 0025 store tax,
 #      0026 menu category archive, 0028/0029 category deactivation through the save closed, 0029
-#      category intents create/update/reactivate. Every fixture runs in one transaction that ends in
+#      category intents create/update/reactivate, billing and entitlements (plan limits, subscription
+#      states, suspended organizations, privileged billing tables, team limits). Every fixture runs in one transaction that ends in
 #      ROLLBACK and starts with the target guard; the operations fixture uses fresh ids on every run
 #   3b. the operations fixture leaves nothing behind when it is interrupted by an error, when rows
 #      with the literal ids of its former version already exist, and when it is run again: every
@@ -133,7 +134,7 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent; do
+for f in reconstructed_operations permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent billing_entitlements; do
   run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"

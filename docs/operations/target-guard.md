@@ -54,6 +54,26 @@ origem e deixa de valer. A cópia do QA nem tem marcador.
   - Nunca vale para clusters protegidos.
   - A cópia adotada vale para testes, nunca como "banco novo": a suíte e as migrations do zero continuam
     exigindo `claim`.
+- **Fim automático do `claim`:** um banco marcado como novo e vazio deixa de ser descartável assim que
+  tiver um usuário fora dos domínios reservados para testes (`.test`, `.example`, `.invalid`,
+  `.localhost`) ou sem e-mail. Por exemplo, uma stack de teste mantida como staging ou QA e usada por
+  pessoas. A verificação vale na CLI e no `dq_guard.attest` em SQL.
+
+### Banco persistente novo
+
+Um cluster novo que vai guardar dados importantes (outro QA, staging, um ambiente de piloto) deve entrar
+em `scripts/guard/protected-clusters.json` **antes** de receber esses dados:
+
+```
+docker exec <contêiner> psql -U postgres -At -c "select system_identifier from pg_control_system()"
+printf 'dinequora-cluster:%s' <id> | sha256sum      # só o hash vai para o arquivo
+```
+
+Enquanto não estiver na lista, ele ainda tem três barreiras:
+
+- sem `claim` (que exige banco vazio), ele é `unregistered` e todo script de teste o recusa;
+- se tiver sido marcado vazio e depois recebido usuários reais, o marcador perde a validade;
+- migrations e restaurações exigem a confirmação desse cluster.
 
 ## Por onde cada script é verificado
 
@@ -74,9 +94,23 @@ Detalhes do canal pela API:
 - O `claim` concede `attest` apenas ao `service_role`. A chave `anon` e qualquer API de outra stack são
   recusadas.
 
+**`drizzle-kit` direto.** A `drizzle.config.ts` chama `target-guard.mjs migrate-gate` antes de qualquer
+comando que conecte (`migrate`, `push`, …). A trava lê a URL e a confirmação do ambiente, nunca da
+linha de comando.
+
+| Destino                                | Regra                                                                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Sem URL                                | Nada a proteger                                                                                                  |
+| Banco descartável                      | Passa                                                                                                            |
+| QA, demo ou banco local não registrado | Só com `DQ_GUARD_CONFIRM=migrate:<classe>:<cluster>`, que o `db-ops migrate` define depois das verificações dele |
+| Host remoto (produção)                 | Só com `DQ_GUARD_CONFIRM=migrate:remote:<host>`, do roteiro de produção                                          |
+
+A trava não imprime o código esperado.
+
 Os scripts Python legados (`create_test_accounts`, `regression_locations_team`, `tenant_isolation_check`,
-`onboarding_branding_check`) foram **aposentados**: param na primeira linha. As verificações de billing do
-`regression_locations_team` ainda precisam ser portadas para a suíte protegida.
+`onboarding_branding_check`) foram **aposentados**: param na primeira linha. Os cenários de billing e de
+equipe do `regression_locations_team` foram portados para `scripts/security/billing_entitlements.sql`
+(etapa 3 da suíte, em transação revertida).
 
 ## A suíte
 
@@ -119,6 +153,9 @@ precisa de autorização explícita do responsável.
 - **Mesmo banco nos dois canais:** `--db-url` e `--container` precisam apontar para o mesmo banco
   (cluster e OID).
 - **Lock:** `migrate` e `recover` usam um lock consultivo do cluster; duas operações nunca se sobrepõem.
+- **Prazos:** toda conexão tem prazo de 20 s e toda chamada ao Docker tem prazo (2 min; dump e
+  restauração, 30 min). Conexão resetada ou sem resposta resulta em parada, nunca em espera
+  indefinida.
 - **Clusters protegidos:** só aceitam backups **deles mesmos**.
 - **Falhas:**
   - Uma falha mostra o próximo passo manual. **Nenhuma restauração acontece automaticamente.**

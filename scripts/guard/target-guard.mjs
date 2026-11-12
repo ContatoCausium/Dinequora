@@ -107,6 +107,9 @@ export function describeApiUrl(apiUrl) {
   return `${u.hostname}:${u.port || (u.protocol === "https:" ? 443 : 80)}`;
 }
 
+// auth.users rows that are not test accounts: no e-mail, or a domain outside the reserved test TLDs.
+const NON_TEST_USER = `(email is null or lower(email) !~ '\\.(test|example|invalid|localhost)$')`;
+
 const IDENTITY_SQL = `
   select (select system_identifier::text from pg_control_system()) as sysid,
          (select oid::text from pg_database where datname = current_database()) as datoid,
@@ -125,6 +128,10 @@ async function readIdentity(sql) {
   const users = has_users
     ? (await sql.unsafe(`select count(*)::int as n from auth.users`))[0].n
     : 0;
+  // Users outside the reserved test domains (RFC 2606/6761: .test .example .invalid .localhost).
+  const realUsers = has_users
+    ? (await sql.unsafe(`select count(*)::int as n from auth.users where ${NON_TEST_USER}`))[0].n
+    : 0;
   let marker = null;
   if (id.has_marker) {
     const rows = await sql.unsafe(
@@ -133,9 +140,14 @@ async function readIdentity(sql) {
     marker = rows.length === 1 ? rows[0] : { invalid: `${rows.length} marker rows` };
   }
   const hash = clusterHash(id.sysid);
-  const markerValid = Boolean(
+  const bound = Boolean(
     marker && marker.system_identifier === id.sysid && marker.database_oid === id.datoid,
   );
+  // A database claimed as new and empty that later receives real people is in persistent use now
+  // (e.g. a test stack kept as a staging or QA environment): it stops being disposable. Explicitly
+  // adopted copies are not affected (the operator accepted their data).
+  const outgrown = bound && marker.purpose === "new-empty" && realUsers > 0;
+  const markerValid = bound && !outgrown;
   return {
     hash,
     cluster: short(hash),
@@ -144,9 +156,12 @@ async function readIdentity(sql) {
     marker: marker
       ? markerValid
         ? marker.purpose
-        : "invalid (copied from another cluster or database)"
+        : outgrown
+          ? `no longer disposable (${realUsers} user(s) outside the test domains)`
+          : "invalid (copied from another cluster or database)"
       : null,
     markerValid,
+    realUsers,
     empty: !id.has_tracker && id.public_relations === 0 && users === 0,
     hasTracker: id.has_tracker,
     publicRelations: id.public_relations,
@@ -274,11 +289,17 @@ function guardObjectsSql(purpose, sysid, datoid) {
     insert into dq_guard.marker(system_identifier, database_oid, purpose) values (${quote(sysid)}, ${quote(datoid)}::oid, ${quote(purpose)});
     create or replace function dq_guard.attest(_operation text) returns jsonb
       language plpgsql stable security definer set search_path = pg_catalog as $fn$
-    declare m record; sys text := (select system_identifier::text from pg_control_system()); h text;
+    declare m record; sys text := (select system_identifier::text from pg_control_system()); h text; real_users bigint := 0;
     begin
       select * into m from dq_guard.marker;
       if m is null or m.system_identifier <> sys or m.database_oid <> (select oid from pg_database where datname = current_database()) then
         raise exception 'refused by the target guard: not a disposable database (marker missing, or copied from another cluster or database)';
+      end if;
+      if m.purpose = 'new-empty' and to_regclass('auth.users') is not null then
+        execute 'select count(*) from auth.users where ${NON_TEST_USER.replace(/'/g, "''")}' into real_users;
+        if real_users > 0 then
+          raise exception 'refused by the target guard: no longer disposable (it holds users outside the test domains)';
+        end if;
       end if;
       h := encode(sha256(convert_to('dinequora-cluster:' || sys, 'UTF8')), 'hex');
       if h = any(array[${hashes}]) then raise exception 'refused by the target guard: protected cluster'; end if;
@@ -336,6 +357,40 @@ export async function adopt(dbUrl, confirm) {
   );
 }
 
+/**
+ * Gate for EVERY migration run (drizzle.config.ts calls it, so `npx drizzle-kit …` cannot skip it):
+ *   * no URL: nothing to protect (generate/check do not connect);
+ *   * disposable local database: allowed;
+ *   * protected or unregistered local database: needs DQ_GUARD_CONFIRM=migrate:<class>:<cluster>, which
+ *     scripts/ops/db-ops.mjs sets only after its own checks (backup of this cluster, no client, …);
+ *   * remote (hosted, e.g. production): needs DQ_GUARD_CONFIRM=migrate:remote:<host> (release runbook).
+ * The expected code is not printed: whoever runs drizzle-kit by hand is sent to db-ops.
+ */
+export async function migrationGate(dbUrl, confirm) {
+  if (!dbUrl) return "no database URL (nothing to protect)";
+  let u;
+  try {
+    u = new URL(dbUrl);
+  } catch {
+    throw new GuardRefusal("unreadable migration URL");
+  }
+  if (!LOOPBACK.has(u.hostname)) {
+    if (confirm !== `migrate:remote:${u.hostname}`)
+      throw new GuardRefusal(
+        `migrations on the remote host ${u.hostname} need the release confirmation for that host (docs/operations/production-environment.md)`,
+      );
+    return `remote host ${u.hostname}: confirmed`;
+  }
+  const id = await identity(dbUrl);
+  if (id.class === "disposable") return `disposable cluster ${id.cluster}`;
+  const label = id.protected ?? "unregistered";
+  if (confirm !== `migrate:${label}:${id.cluster}`)
+    throw new GuardRefusal(
+      `migrations on the ${label} cluster ${id.cluster} run only through scripts/ops/db-ops.mjs migrate (backup and preconditions first)`,
+    );
+  return `${label} cluster ${id.cluster}: confirmed`;
+}
+
 // ------------------------------------------------------------------------------------------ CLI
 function args(argv) {
   const out = { _: [] };
@@ -379,9 +434,17 @@ async function main(argv) {
     } else if (cmd === "adopt") {
       const r = await adopt(a["db-url"], a.confirm);
       console.log(`adopted: ${r.where} is a disposable copy (cluster ${r.cluster})`);
+    } else if (cmd === "migrate-gate") {
+      // URL and confirmation from the environment (never on the command line, where the password
+      // would be visible to other processes)
+      const r = await migrationGate(
+        process.env.LOVABLE_DB_MIGRATION_URL,
+        process.env.DQ_GUARD_CONFIRM,
+      );
+      console.error(`target guard: migrations allowed on ${r}`);
     } else {
       console.error(
-        "usage: target-guard.mjs identity|check|check-api|claim|adopt (see the header of this file)",
+        "usage: target-guard.mjs identity|check|check-api|claim|adopt|migrate-gate (see the header of this file)",
       );
       return 2;
     }

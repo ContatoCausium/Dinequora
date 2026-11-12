@@ -124,4 +124,31 @@ refused "adopted copy is not a new database" $G check --db-url "$(url_of "${RUN}
 [ "$(val "${RUN}_d" "select count(*) from public.customer_data")" = 1 ] || fail "adopt changed application data"
 pass "adopt only with adopt:<this cluster>; the adopted copy is accepted for tests, never as a new database; its data untouched"
 
+# ------------------------------------------------------------------ drizzle-kit itself (drizzle.config.ts gate)
+make_db "${RUN}_e"
+s=$(state "${RUN}_e")
+refused "drizzle-kit migrate on an unmarked database" env LOVABLE_DB_MIGRATION_URL="$(url_of "${RUN}_e")" npx --no-install drizzle-kit migrate
+refused "drizzle-kit with another cluster's confirmation" env LOVABLE_DB_MIGRATION_URL="$(url_of "${RUN}_e")" DQ_GUARD_CONFIRM="migrate:unregistered:000000000000" npx --no-install drizzle-kit migrate
+refused "drizzle-kit with generic overrides" env LOVABLE_DB_MIGRATION_URL="$(url_of "${RUN}_e")" DQ_GUARD_DISABLE=1 DQ_GUARD_CONFIRM=yes npx --no-install drizzle-kit migrate
+refused "drizzle-kit push on an unmarked database" env LOVABLE_DB_MIGRATION_URL="$(url_of "${RUN}_e")" npx --no-install drizzle-kit push --force
+[ "$(state "${RUN}_e")" = "$s" ] || fail "a refused drizzle-kit run changed the database"
+[ "$(val "${RUN}_e" "select to_regnamespace('drizzle') is null")" = t ] || fail "drizzle-kit created its schema on a refused database"
+t0=$(date +%s)
+refused "drizzle-kit on a remote host" env LOVABLE_DB_MIGRATION_URL="postgresql://postgres:x@db.example.invalid:5432/postgres" npx --no-install drizzle-kit migrate
+refused "drizzle-kit on a remote host, confirmation for another host" env LOVABLE_DB_MIGRATION_URL="postgresql://postgres:x@db.example.invalid:5432/postgres" DQ_GUARD_CONFIRM="migrate:remote:other.example.invalid" npx --no-install drizzle-kit migrate
+pass "drizzle-kit migrate/push run directly: refused on unmarked, wrongly confirmed and remote targets; nothing changed"
+
+# ------------------------------------------------------------------ a claimed database that starts holding real users
+make_db "${RUN}_f"
+val "${RUN}_f" "create schema auth; create table auth.users(id uuid primary key, email text)" > /dev/null
+allowed "claim f (no user yet)" $G claim --db-url "$(url_of "${RUN}_f")"
+val "${RUN}_f" "insert into auth.users values (gen_random_uuid(), 'owner@qa.dinequora.test'), (gen_random_uuid(), 'x@example.test')" > /dev/null
+allowed "check with test users only" $G check --db-url "$(url_of "${RUN}_f")" --operation test:x
+val "${RUN}_f" "insert into auth.users values (gen_random_uuid(), 'someone@gmail.com')" > /dev/null
+refused "claimed database now holding a real user" $G check --db-url "$(url_of "${RUN}_f")" --operation test:x
+refused "claimed database now holding a real user, SQL attest" psql_db "${RUN}_f" -c "select dq_guard.attest('test:x')"
+val "${RUN}_f" "update auth.users set email = null where email = 'someone@gmail.com'" > /dev/null
+refused "claimed database holding a user without e-mail" $G check --db-url "$(url_of "${RUN}_f")" --operation test:x
+pass "a claimed database stops being disposable once it holds a user outside the test domains (CLI and SQL)"
+
 echo "Target guard self-test passed."

@@ -1,6 +1,7 @@
 # Plans, entitlements and Stripe Billing (prepared, not active)
 
 ## Entitlements (live now)
+
 - Plan definitions live only in `billing_plans`: `default_store_limit` (paid), `trial_store_limit` (trial), `trial_days`, `entitlements` (modules, employees).
 - An organization's plan is `subscriptions.plan_id`. `organizations.plan` / `organizations.store_limit` are derived caches kept in sync by the `subscription_sync_entitlements` trigger — never written by app code.
 - `effective_store_limit(org)` = `organizations.store_limit_override` (operator exception, audited) else the plan's trial or paid allowance.
@@ -10,17 +11,20 @@
 - Plans/status change only through `admin_set_subscription` / `admin_update_organization` (platform admin, reason required, audited) or, later, the verified Stripe webhook.
 
 ## Privileged tables
-| Table | Users | Platform admins | Service role |
-|---|---|---|---|
-| `subscriptions` | owner reads own org | via admin RPCs only | full |
-| `billing_events` | owner reads own org; no writes | no direct read | full (webhook) |
-| `billing_plans` | read active plans | — | full |
-| `stripe_webhook_events` | none | none | full |
-| `platform_bootstrap` | none | none | via `bootstrap_first_platform_admin` |
-| `audit_logs` | owners/managers read own org | read all | insert via `write_audit` only |
-Verified by `scripts/security/regression_locations_team.py`, now retired (PR #23: it wrote to whatever URL its .env named, with no target protection). These billing refusals are not yet covered by the guarded suite: porting them to an SQL fixture or the permission matrix is pending (payment fabrication, subscription writes, override writes, webhook ledger, Stripe RPC all blocked).
+
+| Table                   | Users                          | Platform admins     | Service role                         |
+| ----------------------- | ------------------------------ | ------------------- | ------------------------------------ |
+| `subscriptions`         | owner reads own org            | via admin RPCs only | full                                 |
+| `billing_events`        | owner reads own org; no writes | no direct read      | full (webhook)                       |
+| `billing_plans`         | read active plans              | —                   | full                                 |
+| `stripe_webhook_events` | none                           | none                | full                                 |
+| `platform_bootstrap`    | none                           | none                | via `bootstrap_first_platform_admin` |
+| `audit_logs`            | owners/managers read own org   | read all            | insert via `write_audit` only        |
+
+Verified by `scripts/security/billing_entitlements.sql` (security suite, step 3, on a disposable database): plan allowances read from `billing_plans`, store limits, subscription states that block writes, suspended organizations, owner-only billing, and every refused write to subscriptions, plans, entitlements, payment history, webhook ids, Stripe events, admin plan RPCs and bootstrap. It replaces the retired, unguarded `scripts/security/regression_locations_team.py`.
 
 ## Stripe Billing design (do not enable live without approval)
+
 - **Product**: one product "Servora" with one monthly recurring price per plan, `quantity = billed active locations`. `billing_plans.stripe_price_id` maps plan → price.
 - **Customer mapping**: one Stripe customer per organization, created at first checkout; `subscriptions.stripe_customer_id`, `metadata.org_id` on customer and subscription.
 - **Checkout**: authenticated server function (owner only, verified with `is_org_owner`) creates a Checkout Session (mode `subscription`, price + quantity, `client_reference_id = org_id`). The browser is only redirected; it never reports success.

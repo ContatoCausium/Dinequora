@@ -11,6 +11,10 @@ export function assertDisposableDb(
   options?: { newEmpty?: boolean },
 ): Promise<string>;
 export function exitOnRefusal(e: unknown): never;
+export function migrationGate(
+  dbUrl: string | undefined,
+  confirm: string | undefined,
+): Promise<string>;
 export function assertDisposableApi(
   apiUrl: string | undefined,
   serviceKey: string | undefined,

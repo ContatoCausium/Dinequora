@@ -65,15 +65,41 @@ function parse(argv) {
   return a;
 }
 
+// Every docker call has a deadline (default 2 min; dumps and restores pass a longer one): a hung
+// container or daemon is a stop, never a hang.
 function docker(args, opts = {}) {
   const r = spawnSync("docker", args, {
     encoding: opts.binary ? undefined : "utf8",
     maxBuffer: 1 << 28,
+    timeout: 120_000,
+    killSignal: "SIGKILL",
     ...opts,
   });
-  if (r.error) stop(`docker unavailable: ${r.error.code ?? r.error.message}`);
+  if (r.error)
+    stop(
+      `docker ${args[0]} failed: ${r.error.code === "ETIMEDOUT" ? "no answer within the deadline" : (r.error.code ?? r.error.message)}`,
+    );
   return r;
 }
+/** A database answer within ms, or a stop. */
+async function deadline(promise, ms, what) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise(
+        (_, rej) =>
+          (timer = setTimeout(
+            () => rej(new Stop(`no answer from the database within ${ms / 1000} s (${what})`)),
+            ms,
+          )),
+      ),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+const DB_DEADLINE = 20_000;
 function cpsql(container, sql, { db = "postgres", user = "postgres", readOnly = true } = {}) {
   const env = readOnly ? ["-e", "PGOPTIONS=-c default_transaction_read_only=on"] : [];
   const r = docker(
@@ -140,15 +166,19 @@ function journal() {
 async function trackerRows(dbUrl) {
   const sql = postgres(dbUrl, { max: 1, connect_timeout: 5, onnotice: () => {} });
   try {
-    return await sql.begin("read only", async (tx) => {
-      const [{ ok }] =
-        await tx`select to_regclass('drizzle.__drizzle_migrations') is not null as ok`;
-      return ok
-        ? tx`select id, created_at::text as created_at, hash from drizzle.__drizzle_migrations order by id`
-        : [];
-    });
+    return await deadline(
+      sql.begin("read only", async (tx) => {
+        const [{ ok }] =
+          await tx`select to_regclass('drizzle.__drizzle_migrations') is not null as ok`;
+        return ok
+          ? tx`select id, created_at::text as created_at, hash from drizzle.__drizzle_migrations order by id`
+          : [];
+      }),
+      DB_DEADLINE,
+      "migration tracker",
+    );
   } finally {
-    await sql.end({ timeout: 2 });
+    await sql.end({ timeout: 1 }).catch(() => {});
   }
 }
 function migrationState(rows) {
@@ -162,12 +192,16 @@ function migrationState(rows) {
 async function sessions(dbUrl) {
   const sql = postgres(dbUrl, { max: 1, connect_timeout: 5, onnotice: () => {} });
   try {
-    const rows = await sql.begin(
-      "read only",
-      (
-        tx,
-      ) => tx`select usename, coalesce(application_name, '') as app, backend_type from pg_stat_activity
+    const rows = await deadline(
+      sql.begin(
+        "read only",
+        (
+          tx,
+        ) => tx`select usename, coalesce(application_name, '') as app, backend_type from pg_stat_activity
                            where datname = current_database() and pid <> pg_backend_pid() and backend_type = 'client backend'`,
+      ),
+      DB_DEADLINE,
+      "sessions",
     );
     const direct = rows.filter((r) => !SERVICE_USERS.has(r.usename) && !SERVICE_APPS.test(r.app));
     return {
@@ -176,7 +210,7 @@ async function sessions(dbUrl) {
       apps: [...new Set(direct.map((r) => r.app || "(no name)"))],
     };
   } finally {
-    await sql.end({ timeout: 2 });
+    await sql.end({ timeout: 1 }).catch(() => {});
   }
 }
 function apiRequests(project, minutes = 5) {
@@ -329,7 +363,11 @@ async function withLock(dbUrl, fn) {
   url.pathname = "/template1"; // the lock must survive dropping and recreating the postgres database
   const sql = postgres(url.toString(), { max: 1, connect_timeout: 5, onnotice: () => {} });
   try {
-    const [{ ok }] = await sql`select pg_try_advisory_lock(hashtext(${LOCK_KEY})) as ok`;
+    const [{ ok }] = await deadline(
+      sql`select pg_try_advisory_lock(hashtext(${LOCK_KEY})) as ok`,
+      DB_DEADLINE,
+      "lock",
+    );
     if (!ok) stop("another db-ops operation holds the lock on this cluster; nothing done");
     return await fn();
   } finally {
@@ -352,7 +390,14 @@ async function migrate(t, a) {
         cwd: ROOT,
         encoding: "utf8",
         shell: process.platform === "win32",
-        env: { ...process.env, LOVABLE_DB_MIGRATION_URL: a["db-url"] },
+        // the migrate gate in drizzle.config.ts accepts this target only with this confirmation,
+        // which was checked above against the target's own identity
+        env: {
+          ...process.env,
+          LOVABLE_DB_MIGRATION_URL: a["db-url"],
+          DQ_GUARD_CONFIRM: `migrate:${t.label}:${t.cluster}`,
+        },
+        timeout: 1_800_000,
       },
     );
     const out = `${r.stdout}\n${r.stderr}`
@@ -399,7 +444,7 @@ async function backup(t, a) {
       "postgres",
       "-Fc",
     ],
-    { stdio: ["ignore", dumpFd, "pipe"] },
+    { stdio: ["ignore", dumpFd, "pipe"], timeout: 1_800_000 },
   );
   fs.closeSync(dumpFd);
   if (d.status !== 0) stop("pg_dump failed; the folder is incomplete and must not be used");
@@ -414,7 +459,7 @@ async function backup(t, a) {
       "--globals-only",
       "--no-role-passwords",
     ],
-    { stdio: ["ignore", gFd, "pipe"] },
+    { stdio: ["ignore", gFd, "pipe"], timeout: 600_000 },
   );
   fs.closeSync(gFd);
   if (g.status !== 0) stop("pg_dumpall failed; the folder is incomplete and must not be used");
@@ -531,7 +576,7 @@ async function recover(t, a) {
           "--single-transaction",
           "--exit-on-error",
         ],
-        { input: fs.readFileSync(b.dump) },
+        { input: fs.readFileSync(b.dump), timeout: 1_800_000 },
       );
       if (r.status !== 0)
         stop(

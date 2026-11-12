@@ -8,6 +8,7 @@ import {
   describeDbUrl,
   exitOnRefusal,
   GuardRefusal,
+  migrationGate,
   protectedLabel,
   short,
 } from "../../scripts/guard/target-guard.mjs";
@@ -64,6 +65,35 @@ describe("targets", () => {
     for (const c of protectedList.clusters) expect(protectedLabel(c.hash)).toBe(c.label);
     expect(protectedLabel(clusterHash("123"))).toBeNull();
     expect(read("scripts/guard/protected-clusters.json")).not.toMatch(/\b\d{15,20}\b/);
+  });
+});
+
+describe("migration gate (drizzle.config.ts)", () => {
+  it("does nothing without a URL and never connects to a remote host", async () => {
+    await expect(migrationGate("", undefined)).resolves.toContain("nothing to protect");
+    const prod = "postgresql://postgres:secret@db.abcdefgh.supabase.co:5432/postgres";
+    await expect(migrationGate(prod, undefined)).rejects.toThrow(GuardRefusal);
+    await expect(migrationGate(prod, "migrate:remote:other.supabase.co")).rejects.toThrow(
+      GuardRefusal,
+    );
+    await expect(migrationGate(prod, "migrate:qa:754f347beef5")).rejects.toThrow(GuardRefusal);
+    await expect(migrationGate(prod, "migrate:remote:db.abcdefgh.supabase.co")).resolves.toContain(
+      "confirmed",
+    );
+    await expect(migrationGate("not a url", "x")).rejects.toThrow(GuardRefusal);
+  });
+
+  it("does not reveal the expected confirmation or the password", async () => {
+    const prod = "postgresql://postgres:secret@db.abcdefgh.supabase.co:5432/postgres";
+    const e = await migrationGate(prod, undefined).catch((x: Error) => x);
+    expect(String((e as Error).message)).not.toContain("migrate:remote:");
+    expect(String((e as Error).message)).not.toContain("secret");
+  });
+
+  it("drizzle.config.ts runs the gate before drizzle-kit can connect", () => {
+    const cfg = read("drizzle.config.ts");
+    expect(cfg).toContain('"migrate-gate"');
+    expect(cfg.indexOf("migrate-gate")).toBeLessThan(cfg.indexOf("defineConfig({"));
   });
 });
 
