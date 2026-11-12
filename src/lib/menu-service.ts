@@ -26,6 +26,8 @@ export type MenuItem = {
   notes?: string | undefined;
   active: boolean;
   locationIds: string[]; // empty array = all locations
+  /** Stores of the product the signed-in member cannot see (operational menu read only). */
+  otherStoreCount?: number | undefined;
   modifierGroups: ModifierGroup[];
   createdAt: string;
 };

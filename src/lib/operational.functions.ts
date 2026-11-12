@@ -3,13 +3,9 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  menuItemSchema,
-  modifierGroupsSchema,
-  recipePayloadSchema,
-  saleInputSchema,
-} from "./operational-contracts";
+import { menuItemSchema, recipePayloadSchema, saleInputSchema } from "./operational-contracts";
 import { orderListQuery } from "./orders-query";
+import { toMenuReadModel } from "./menu-read-model";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
 async function scope(client: SupabaseClient<Database>, orgId: string, locationId?: string) {
@@ -43,45 +39,36 @@ function safeSlug(value: string) {
 
 export const fetchOperationalMenu = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ orgId: z.string().min(1) }))
+  // includeArchived: only the Menu screen asks for archived categories (the POS and the inventory
+  // screens keep the original two reads).
+  .inputValidator(z.object({ orgId: z.string().min(1), includeArchived: z.boolean().optional() }))
   .handler(async ({ data, context }) => {
     const s = await scope(context.supabase, data.orgId);
-    const [cats, products] = await Promise.all([
+    const [cats, archived, products] = await Promise.all([
       context.supabase
         .from("menu_categories")
         .select("*")
         .eq("org_id", s.org.id)
         .eq("active", true)
         .order("name"),
+      data.includeArchived
+        ? context.supabase
+            .from("menu_categories")
+            .select("id, client_id, name, description")
+            .eq("org_id", s.org.id)
+            .eq("active", false)
+            .order("name")
+        : Promise.resolve({ data: [], error: null }),
       context.supabase.from("menu_products").select("*").eq("org_id", s.org.id).order("name"),
     ]);
-    if (cats.error || products.error) throw new Error("menu_read_failed");
-    const categoryIds = new Map((cats.data ?? []).map((c) => [c.id, c.client_id]));
-    return {
-      categories: (cats.data ?? []).map((c) => ({
-        id: c.client_id,
-        name: c.name,
-        description: c.description,
-      })),
-      items: (products.data ?? []).map((p) => ({
-        id: p.client_id,
-        orgId: s.org.slug,
-        name: p.name,
-        description: p.description,
-        category: categoryIds.get(p.category_id ?? "") ?? "",
-        priceCents: p.price_cents,
-        prepTimeMinutes: p.prep_time_minutes,
-        ...(p.image_url ? { imageUrl: p.image_url } : {}),
-        ...(p.notes ? { notes: p.notes } : {}),
-        active: p.active,
-        locationIds: p.location_ids.flatMap((id) => {
-          const l = s.locations.find((l) => l.id === id);
-          return l ? [l.slug] : [];
-        }),
-        modifierGroups: modifierGroupsSchema.parse(p.modifier_groups),
-        createdAt: p.created_at,
-      })),
-    };
+    if (cats.error || archived.error || products.error) throw new Error("menu_read_failed");
+    return toMenuReadModel({
+      orgSlug: s.org.slug,
+      locations: s.locations,
+      categories: cats.data ?? [],
+      archivedCategories: archived.data ?? [],
+      products: products.data ?? [],
+    });
   });
 
 export const saveOperationalMenu = createServerFn({ method: "POST" })
