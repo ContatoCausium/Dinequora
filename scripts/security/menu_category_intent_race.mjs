@@ -31,7 +31,7 @@
 // manager with the store) directly in the database, works only there and removes all of it at the
 // end. NOT to be run during step 2b of the security suite (database without any organization).
 //
-//   QA_DB_URL=postgresql://...@127.0.0.1:55322/postgres node scripts/security/menu_category_intent_race.mjs
+//   QA_DB_URL=postgresql://...@127.0.0.1:64422/postgres node scripts/security/menu_category_intent_race.mjs
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import {
@@ -42,12 +42,13 @@ import {
   dropTestUsersSql,
   isolatedOrg,
 } from "../qa/isolated-org.mjs";
+import { assertDisposableDb, exitOnRefusal } from "../guard/target-guard.mjs";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const postgres = require("postgres");
 
 const DB_URL = process.env.QA_DB_URL ?? process.env.DB_URL;
-if (!/@(127\.0\.0\.1|localhost):55322\/postgres$/.test(DB_URL ?? ""))
-  throw new Error("Refusing: QA_DB_URL must be the local QA database (55322)");
+// Before any connection that writes: the database must be disposable (scripts/guard/target-guard.mjs).
+await assertDisposableDb(DB_URL, "test:menu-category-intent-race").catch(exitOnRefusal);
 
 const OWNER = crypto.randomUUID();
 const OWNER2 = crypto.randomUUID(); // a second owner of the same organization (two owner sessions)

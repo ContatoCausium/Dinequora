@@ -12,15 +12,18 @@
 --     so rows left by the old fixture (or anything else) can never collide with this run;
 --   * the checks read through RLS as users this run created (members of this run's organizations
 --     only) or filter by this run's ids, so other data in the database cannot change a result;
---   * it refuses to run unless the runner opted in (custom setting dinequora.fixture_target =
---     disposable, set by scripts/qa/security-suite.sh only on a new, empty database): an accidental
---     psql against the persistent QA, the demo or a hosted project stops before writing anything.
+--   * it refuses to run unless the database is marked disposable (target guard, below): an
+--     accidental psql against the persistent QA, the demo, a restored copy or a hosted project stops
+--     before writing anything. (PR #22 used an opt-in setting; any session could set it.)
 -- psql -v fixture_interrupt=1 makes it fail on purpose after every write (suite step 3b), to prove
 -- that an interrupted run leaves nothing behind.
+-- Target guard (scripts/guard/target-guard.mjs): stops here, before any write, unless this database
+-- was marked disposable (claim on a new, empty stack, or an explicit adopt of a copy).
 DO $$ BEGIN
-  IF coalesce(current_setting('dinequora.fixture_target', true), '') <> 'disposable' THEN
-    RAISE EXCEPTION 'refused: this fixture runs only through scripts/qa/security-suite.sh on a disposable database';
+  IF to_regprocedure('dq_guard.attest(text)') IS NULL THEN
+    RAISE EXCEPTION 'refused by the target guard: not a disposable database (no dq_guard marker)';
   END IF;
+  PERFORM dq_guard.attest('fixture:reconstructed_operations');
 END $$;
 
 BEGIN;

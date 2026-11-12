@@ -4,9 +4,9 @@
 
 | Ambiente                                                             | Portas                 | Uso                                                  | Pode receber escrita de teste?                                                        |
 | -------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Demonstração comercial (`supabase/`, projeto `ilemvaquootxarmisdjb`) | 543xx                  | MARAO, Harbor, Aurora, Org Alpha/Beta                | **Não**. A matriz de permissões recusa 54321 (só com `ALLOW_DEMO_WRITES=1` explícito) |
-| QA descartável (`scripts/qa/supabase`, projeto `dq-rebuild`)         | 553xx                  | Tenant **Dinequora QA (isolated)** + **QA Tenant B** | Sim                                                                                   |
-| CI                                                                   | 553xx dentro do runner | Stack novo a cada execução                           | Sim (efêmero)                                                                         |
+| Demonstração comercial (`supabase/`, projeto `ilemvaquootxarmisdjb`) | 543xx                  | MARAO, Harbor, Aurora, Org Alpha/Beta                | **Não**. Cluster protegido pelo guard de destino (PR #23); não existe mais `ALLOW_DEMO_WRITES` |
+| QA persistente (`dq-rebuild`, configuração própria fora do repositório) | 553xx                  | Tenant **Dinequora QA (isolated)** + **QA Tenant B** | **Não** por scripts de teste: cluster protegido; só operações confirmadas (`scripts/ops/db-ops.mjs`) |
+| CI / testes (`scripts/qa/supabase`, projeto `dq-ci`)                 | 6442x                  | Stack novo a cada execução                           | Sim, depois do `claim` do guard (efêmero)                                             |
 
 O tenant de QA é criado por `scripts/qa/seed-qa-org.mjs` usando as mesmas RPCs da interface: duas lojas
 (QA Downtown / QA Riverside), conta para cada perfil do sistema (gerente, caixa, cozinha, estoque,

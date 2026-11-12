@@ -4,7 +4,22 @@
 -- database when migration 0021 removed the 0000 seed rows. Idempotent: existing rows
 -- (e.g. the current commercial demo, where 0000 created them) are left untouched.
 -- Recreates exactly the state the commercial demo has today (verified 2026-11-09).
+--
+-- Target guard: runs on a database marked disposable (scripts/guard/target-guard.mjs), or on another
+-- local database only with a confirmation that names THAT cluster and this operation, given by the
+-- operator for the session: PGOPTIONS="-c dq_guard.confirm=seed-demo:<cluster>", where <cluster> is
+-- shown by `bash scripts/ops/db-ops.sh inspect`. No generic setting authorizes it, and a
+-- confirmation for one cluster does not work on another.
 \set ON_ERROR_STOP on
+DO $$
+DECLARE h text := encode(sha256(convert_to('dinequora-cluster:' || (SELECT system_identifier::text FROM pg_control_system()), 'UTF8')), 'hex');
+BEGIN
+  IF to_regprocedure('dq_guard.attest(text)') IS NOT NULL THEN
+    PERFORM dq_guard.attest('seed:demo');
+  ELSIF current_setting('dq_guard.confirm', true) IS DISTINCT FROM 'seed-demo:' || left(h, 12) THEN
+    RAISE EXCEPTION 'refused by the target guard: not a disposable database and no confirmation for this cluster (see the header of this file)';
+  END IF;
+END $$;
 BEGIN;
 INSERT INTO public.organizations (slug, name, brand_primary, brand_accent, is_demo, plan, status,
                                   store_limit, store_limit_override, onboarding_step)

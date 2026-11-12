@@ -46,8 +46,8 @@ para a hospedagem. Nunca o deduza do nome nem o grave em arquivo versionado.
 | Ambiente     | Onde                                                     | Dados                                     |
 | ------------ | -------------------------------------------------------- | ----------------------------------------- |
 | Demonstração | Stack local (`supabase/config.toml`), portas 54321/54322 | Fictícios (organizações demo)             |
-| QA           | Stack local `dq-rebuild`, portas 55321/55322             | Fixtures de teste                         |
-| CI           | Banco descartável criado a cada execução do job          | Criados e destruídos pela suíte           |
+| QA           | Stack local `dq-rebuild`, portas 55321/55322 (protegido) | Tenant de QA; scripts de teste recusados  |
+| CI / testes  | Stack `dq-ci` (portas 6442x), novo a cada execução       | Criados e destruídos pela suíte           |
 | **Produção** | Projeto hospedado `dinequora-production`                 | **Somente dados reais, criados pelo uso** |
 
 Nenhuma linha é copiada da demonstração ou do QA para a produção (`data-layers-and-marao-production.md`).

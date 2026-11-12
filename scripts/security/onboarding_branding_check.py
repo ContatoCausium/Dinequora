@@ -1,3 +1,8 @@
+# RETIRED (PR #23): Lovable-era script. It wrote to whatever VITE_SUPABASE_URL its .env named
+# (possibly a hosted project), with no check of the target. Kept only as a record of what it
+# verified; its checks are covered by scripts/security/permission_matrix.mjs and the SQL fixtures,
+# which run only on databases the target guard accepts. Do not re-enable: rewrite it on the guard.
+raise SystemExit("retired: this script has no target protection; see docs/operations/target-guard.md")
 # Run only on a persisted fictional Growth test org with a Juniper Downtown store.
 # Supply owner/outsider minted-session file paths, TEST_ORG_ID and TEST_INVITEE_EMAIL.
 # Creates a scoped invitation and toggles the test store inactive/active; never targets real tenants.

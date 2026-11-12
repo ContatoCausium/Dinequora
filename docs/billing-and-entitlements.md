@@ -18,7 +18,7 @@
 | `stripe_webhook_events` | none | none | full |
 | `platform_bootstrap` | none | none | via `bootstrap_first_platform_admin` |
 | `audit_logs` | owners/managers read own org | read all | insert via `write_audit` only |
-Verified by `scripts/security/regression_locations_team.py` (payment fabrication, subscription writes, override writes, webhook ledger, Stripe RPC all blocked).
+Verified by `scripts/security/regression_locations_team.py`, now retired (PR #23: it wrote to whatever URL its .env named, with no target protection). These billing refusals are not yet covered by the guarded suite: porting them to an SQL fixture or the permission matrix is pending (payment fabrication, subscription writes, override writes, webhook ledger, Stripe RPC all blocked).
 
 ## Stripe Billing design (do not enable live without approval)
 - **Product**: one product "Servora" with one monthly recurring price per plan, `quantity = billed active locations`. `billing_plans.stripe_price_id` maps plan → price.

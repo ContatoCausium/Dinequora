@@ -1,3 +1,8 @@
+# RETIRED (PR #23): Lovable-era script. It wrote to whatever VITE_SUPABASE_URL its .env named
+# (possibly a hosted project), with no check of the target. Kept only as a record of what it
+# verified; its checks are covered by scripts/security/permission_matrix.mjs and the SQL fixtures,
+# which run only on databases the target guard accepts. Do not re-enable: rewrite it on the guard.
+raise SystemExit("retired: this script has no target protection; see docs/operations/target-guard.md")
 # Regression: store creation, employee assignment, role changes, suspended orgs, admin bootstrap.
 # Usage: run create_test_accounts.py, confirm A,B,M,S in the backend, then run phases 0..N:
 #   python3 regression_locations_team.py <phase>  -> prints NEXT_SQL; the operator runs it with privileged

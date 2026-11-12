@@ -1,4 +1,12 @@
 \set ON_ERROR_STOP on
+-- Target guard (scripts/guard/target-guard.mjs): stops here, before any write, unless this database
+-- was marked disposable (claim on a new, empty stack, or an explicit adopt of a copy).
+DO $$ BEGIN
+  IF to_regprocedure('dq_guard.attest(text)') IS NULL THEN
+    RAISE EXCEPTION 'refused by the target guard: not a disposable database (no dq_guard marker)';
+  END IF;
+  PERFORM dq_guard.attest('fixture:menu_archive');
+END $$;
 -- 0026: archive_operational_menu archives categories again (42702 "p.category_id is ambiguous"
 -- since 0013), with the same authorization, tenant isolation and audit; plus menu regressions.
 -- Disposable local database only. Everything runs in ONE transaction that is rolled back.

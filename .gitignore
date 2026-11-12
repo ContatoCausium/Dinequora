@@ -36,3 +36,5 @@ dist-ssr
 # Supabase Local temp
 supabase/.branches/
 supabase/.temp/
+scripts/qa/supabase/.branches/
+scripts/qa/supabase/.temp/

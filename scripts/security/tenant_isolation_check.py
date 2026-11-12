@@ -1,3 +1,8 @@
+# RETIRED (PR #23): Lovable-era script. It wrote to whatever VITE_SUPABASE_URL its .env named
+# (possibly a hosted project), with no check of the target. Kept only as a record of what it
+# verified; its checks are covered by scripts/security/permission_matrix.mjs and the SQL fixtures,
+# which run only on databases the target guard accepts. Do not re-enable: rewrite it on the guard.
+raise SystemExit("retired: this script has no target protection; see docs/operations/target-guard.md")
 # Tenant-isolation regression check. 1) run create_test_accounts.py, 2) confirm A,B,M,S emails (not X) in the backend, 3) run this file, 4) delete the test accounts/orgs. Never run against real customer accounts.
 import json,requests,re,uuid
 env=dict(re.findall(r'^(\w+)="?([^"\n]*)"?',open('/dev-server/.env').read(),re.M))
