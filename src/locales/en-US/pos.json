@@ -35,7 +35,8 @@
     "mobileSummary_one": "{{count}} item · {{total}}",
     "mobileSummary_other": "{{count}} items · {{total}}",
     "mobileEmpty": "The ticket is empty",
-    "view": "View ticket"
+    "view": "View ticket",
+    "store": "Store: {{name}}"
   },
   "orderType": {
     "dine_in": "Dine in",
@@ -135,6 +136,28 @@
   },
   "errors": {
     "tax_rate_changed": "The store's sales-tax rate changed while this ticket was open. The ticket was recalculated with the current rate; review the total and charge again.",
-    "tax_rate_not_configured": "Sales tax is not configured for this store. An owner or store manager must set it before selling."
+    "tax_rate_not_configured": "Sales tax is not configured for this store. An owner or store manager must set it before selling.",
+    "store_unavailable": "This store can no longer record sales: it was deactivated or your access changed. Nothing was charged."
+  },
+  "store": {
+    "chooseTitle": "Choose the store for this register",
+    "chooseBody": "Sales are recorded in the store you choose. You can change it later in the location selector.",
+    "storesLabel": "Stores that can record sales",
+    "sellAt": "Sell at {{name}}",
+    "inactiveTitle": "{{name}} is not active",
+    "inactiveBody": "Inactive stores cannot record sales. Choose an active store to continue.",
+    "inactiveBodyNoOther": "Inactive stores cannot record sales, and none of your other stores is active.",
+    "notAuthorizedTitle": "This store is not available to you",
+    "notAuthorizedBody": "Your access to the selected store has changed. Choose one of your active stores.",
+    "noneTitle": "No store can record sales",
+    "noneBodyManage": "None of your stores is active. Activate or add a store in Locations to start selling.",
+    "noneBodyAsk": "You don’t have access to an active store. Ask the account owner to assign you one.",
+    "manageStores": "Go to Locations",
+    "mismatch": "This ticket belongs to {{name}}. Charge, hold or clear it to switch to {{target}}.",
+    "anotherStore": "another store",
+    "blockedInactive": "{{name}} is no longer active, so this ticket can’t be charged. Hold it or clear it.",
+    "blockedNotAuthorized": "You no longer have access to {{name}}, so this ticket can’t be charged. Clear it to continue.",
+    "heldOnOrgChange": "The open ticket was put on hold in {{org}}.",
+    "holdFailed": "This ticket can’t be held for this store."
   }
 }

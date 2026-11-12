@@ -35,7 +35,8 @@
     "mobileSummary_one": "{{count}} item · {{total}}",
     "mobileSummary_other": "{{count}} itens · {{total}}",
     "mobileEmpty": "O ticket está vazio",
-    "view": "Ver ticket"
+    "view": "Ver ticket",
+    "store": "Loja: {{name}}"
   },
   "orderType": {
     "dine_in": "No salão",
@@ -135,6 +136,28 @@
   },
   "errors": {
     "tax_rate_changed": "A alíquota de imposto da loja mudou enquanto esta comanda estava aberta. A comanda foi recalculada com a alíquota atual; confira o total e cobre novamente.",
-    "tax_rate_not_configured": "O imposto sobre vendas desta loja não está configurado. Um proprietário ou gerente da loja precisa defini-lo antes de vender."
+    "tax_rate_not_configured": "O imposto sobre vendas desta loja não está configurado. Um proprietário ou gerente da loja precisa defini-lo antes de vender.",
+    "store_unavailable": "Esta loja não pode mais registrar vendas: ela foi desativada ou seu acesso mudou. Nada foi cobrado."
+  },
+  "store": {
+    "chooseTitle": "Escolha a loja deste caixa",
+    "chooseBody": "As vendas são registradas na loja escolhida. Você pode trocá-la depois no seletor de lojas.",
+    "storesLabel": "Lojas que podem registrar vendas",
+    "sellAt": "Vender em {{name}}",
+    "inactiveTitle": "{{name}} não está ativa",
+    "inactiveBody": "Lojas inativas não registram vendas. Escolha uma loja ativa para continuar.",
+    "inactiveBodyNoOther": "Lojas inativas não registram vendas, e nenhuma das suas outras lojas está ativa.",
+    "notAuthorizedTitle": "Esta loja não está disponível para você",
+    "notAuthorizedBody": "Seu acesso à loja selecionada mudou. Escolha uma das suas lojas ativas.",
+    "noneTitle": "Nenhuma loja pode registrar vendas",
+    "noneBodyManage": "Nenhuma das suas lojas está ativa. Ative ou cadastre uma loja em Lojas para começar a vender.",
+    "noneBodyAsk": "Você não tem acesso a uma loja ativa. Peça ao proprietário da conta para atribuir uma loja a você.",
+    "manageStores": "Ir para Lojas",
+    "mismatch": "Esta comanda pertence a {{name}}. Cobre, coloque em espera ou limpe a comanda para trocar para {{target}}.",
+    "anotherStore": "outra loja",
+    "blockedInactive": "{{name}} não está mais ativa, por isso esta comanda não pode ser cobrada. Coloque-a em espera ou limpe-a.",
+    "blockedNotAuthorized": "Você não tem mais acesso a {{name}}, por isso esta comanda não pode ser cobrada. Limpe-a para continuar.",
+    "heldOnOrgChange": "A comanda aberta foi colocada em espera em {{org}}.",
+    "holdFailed": "Esta comanda não pode ficar em espera para esta loja."
   }
 }

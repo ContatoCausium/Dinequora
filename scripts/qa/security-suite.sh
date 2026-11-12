@@ -3,10 +3,15 @@
 # local stack). Never run it against the commercial demo or a hosted project: every step below
 # refuses anything other than the QA ports (55321 API / 55322 DB).
 #
+# Those ports and the project id (dq-rebuild) are also the ones of the PERSISTENT local QA stack, so
+# step 0 refuses any database that is not new and empty (no migration tracker, no application
+# table): the persistent QA, a stack the suite already ran on, or anything restored into one.
+#
 #   supabase start --workdir scripts/qa -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
 #   bash scripts/qa/security-suite.sh
 #
 # Steps (any failure stops the suite with a non-zero exit, which blocks the merge in CI):
+#   0. the target database is new and empty (see above)
 #   1. apply every migration from zero with the same tool as production (drizzle-kit migrate)
 #   2. journal/tracker/hash integrity and SQL-first policy (scripts/qa/check-migrations.mjs)
 #   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
@@ -14,7 +19,12 @@
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
 #      0022 cross-organization store scope and organization features, 0024 recipes, 0025 store tax,
 #      0026 menu category archive, 0028/0029 category deactivation through the save closed, 0029
-#      category intents create/update/reactivate (rolled back)
+#      category intents create/update/reactivate. Every fixture runs in one transaction that ends in
+#      ROLLBACK; the operations fixture uses fresh ids on every run and refuses to run without the
+#      opt-in this runner sets (dinequora.fixture_target=disposable)
+#   3b. the operations fixture leaves nothing behind when it is interrupted by an error, when rows
+#      with the literal ids of its former version already exist, when it is run without the opt-in
+#      (refused) and when it is run again: every table of public and auth keeps its exact row count
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
@@ -52,15 +62,36 @@ CREDS_FILE="$ARTIFACTS/qa-credentials.json"   # generated passwords; never print
 
 # psql on the runner; locally (no psql installed) the one inside the QA db container.
 QA_PROJECT=$(sed -n 's/^project_id = "\(.*\)"/\1/p' scripts/qa/supabase/config.toml)
-run_sql() {
-  if command -v psql >/dev/null; then psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -f "$1"
-  else docker exec -i "supabase_db_${QA_PROJECT}" psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 < "$1"; fi
+# One psql session on the QA database, reading stdin; PGOPTIONS is passed through.
+psql_target() {
+  if command -v psql >/dev/null; then psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 "$@"
+  else docker exec -i -e PGOPTIONS="${PGOPTIONS:-}" "supabase_db_${QA_PROJECT}" psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 "$@"; fi
 }
+# The SQL fixtures refuse to run without this opt-in; it is only used after the step 0 check.
+FIXTURE_OPT_IN="-c dinequora.fixture_target=disposable"
+run_sql() { # file [psql args...]
+  local f="$1"; shift
+  PGOPTIONS="$FIXTURE_OPT_IN" psql_target "$@" < "$f"
+}
+sql_value() { PGOPTIONS="" psql_target -At -c "$1"; }
+# Exact row count of every table of public and auth, on one line: the "nothing changed" baseline.
+TABLE_COUNTS_SQL="select string_agg(format('%s.%s=%s', table_schema, table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text), ',' order by table_schema, table_name) from information_schema.tables where table_schema in ('public', 'auth') and table_type = 'BASE TABLE'"
+table_counts() { sql_value "$TABLE_COUNTS_SQL"; }
 # Runs a check file and requires its PASS line.
 run_check() {
   out=$(run_sql "$1" 2>&1) || { echo "$out" | tail -5; echo "FAIL $1"; exit 1; }
   echo "$out" | grep -E "PASS" || { echo "$out" | tail -5; echo "FAIL $1 (no PASS line)"; exit 1; }
 }
+
+echo "::group::0. target is a new, empty database"
+state=$(sql_value "select coalesce(to_regclass('drizzle.__drizzle_migrations')::text, '-') || ' ' || coalesce(to_regclass('public.organizations')::text, '-')")
+[[ "$state" == "- -" ]] || {
+  echo "Refusing: this database is not new and empty (found: $state). The suite applies every migration"
+  echo "and writes test data: it runs only on a freshly started disposable stack, never on the persistent QA."
+  exit 2
+}
+echo "  new and empty"
+echo "::endgroup::"
 
 echo "::group::1. migrations from zero"
 LOVABLE_DB_MIGRATION_URL="$DB_URL" npx --no-install drizzle-kit migrate 2>&1 | grep -E "applied|error|Error" || true
@@ -75,9 +106,39 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent; do
+for f in reconstructed_operations permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent; do
   run_check "scripts/security/$f.sql"
 done
+echo "::endgroup::"
+
+echo "::group::3b. an interrupted, colliding, refused or repeated fixture run leaves nothing behind"
+before=$(table_counts)
+same_counts() { [[ "$(table_counts)" == "$before" ]] || { echo "FAIL $1 changed rows"; exit 1; }; }
+# a) it fails on purpose after every one of its writes
+if run_sql scripts/security/reconstructed_operations.sql -v fixture_interrupt=1 > "$ARTIFACTS/fixture-interrupted.txt" 2>&1; then
+  echo "FAIL the interrupted fixture run did not fail"; exit 1
+fi
+grep -q "fixture interrupted on purpose" "$ARTIFACTS/fixture-interrupted.txt" \
+  || { tail -5 "$ARTIFACTS/fixture-interrupted.txt"; echo "FAIL interrupted run failed for another reason"; exit 1; }
+same_counts "the interrupted fixture run"
+echo "  interrupted run: failed as asked, no row left"
+# b) rows with the former literal ids exist (same transaction): it still passes, nothing is left
+cat scripts/security/fixture_legacy_ids.sql scripts/security/reconstructed_operations.sql > "$ARTIFACTS/fixture-over-legacy-ids.sql"
+run_check "$ARTIFACTS/fixture-over-legacy-ids.sql"
+same_counts "the fixture run over the former literal ids"
+echo "  run over the former literal ids: PASS, no row left"
+# c) without the opt-in it refuses before writing anything
+if PGOPTIONS="" psql_target < scripts/security/reconstructed_operations.sql > "$ARTIFACTS/fixture-no-opt-in.txt" 2>&1; then
+  echo "FAIL the fixture ran without the opt-in"; exit 1
+fi
+grep -q "refused: this fixture runs only through" "$ARTIFACTS/fixture-no-opt-in.txt" \
+  || { tail -5 "$ARTIFACTS/fixture-no-opt-in.txt"; echo "FAIL no-opt-in run failed for another reason"; exit 1; }
+same_counts "the refused fixture run"
+echo "  run without the opt-in: refused, no row changed"
+# d) a second full run passes again (fresh ids on every run)
+run_check scripts/security/reconstructed_operations.sql
+same_counts "the repeated fixture run"
+echo "  repeated run: PASS, no row left"
 echo "::endgroup::"
 
 echo "::group::4. QA tenant"

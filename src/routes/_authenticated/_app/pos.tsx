@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Search,
@@ -19,6 +19,7 @@ import {
   UtensilsCrossed,
   AlertTriangle,
   Check,
+  Store,
 } from "lucide-react";
 
 import { useWorkspace } from "@/components/app/workspace-context";
@@ -47,6 +48,8 @@ import {
   cancelOrderWithReversal,
 } from "@/lib/orders-persistence-service";
 import { confirmedReceipt } from "@/lib/pos-receipt";
+import { canSellAt, resolvePosStore, type PosStoreState } from "@/lib/pos-store";
+import type { Location } from "@/lib/tenants";
 import { type OrderType } from "@/lib/orders-service";
 import { fmtMoneyCents, fmtRatePpm, INVALID_VALUE_TEXT } from "@/lib/format";
 import { captureError, isExpectedBusinessError } from "@/lib/observability";
@@ -103,6 +106,11 @@ const PAYMENT_METHODS: { id: POSPaymentMethod; icon: typeof Banknote }[] = [
 ];
 
 type MenuCategoryOption = { id: string; name: string };
+/**
+ * Sale refusals meaning the store cannot sell for this caller any more: assert_operational_scope
+ * ("forbidden": inactive store, access removed) or the store no longer visible to the caller.
+ */
+const STORE_REFUSALS = new Set(["forbidden", "location_forbidden", "location_required"]);
 type MenuLoadState = "loading" | "ready" | "error";
 type ReceiptRecord = POSSession & {
   persistedOrderId: string;
@@ -128,24 +136,184 @@ function readableDetail(err: unknown): string | undefined {
 // sale stays blocked (cash short / no discount) instead of recording a guessed amount.
 const parseAmountCents = (value: string) => centsFromNumberInput(value) ?? 0;
 
+/** The latest ticket of each organization's register, so an organization switch can hold it there. */
+type LiveTickets = Record<
+  string,
+  { session: POSSession; scope: readonly string[] | undefined; orgName: string }
+>;
+type StoreBlock = "inactive" | "notAuthorized" | null;
+
+/**
+ * Store resolution for the register (src/lib/pos-store.ts): the register opens only on a store that
+ * can sell. A ticket in progress (items, checkout, receipt) stays on the store it was started in:
+ * changing the workspace store never moves it silently. It is charged, held or cleared there, and
+ * only then does the register follow the new scope. If that store stops being able to sell, the
+ * ticket can no longer be charged (the server would refuse it too).
+ */
 export function POSPage() {
+  const { t } = useTranslation("pos");
+  const { org, locationId } = useWorkspace();
+  const resolved = resolvePosStore(org.locations, locationId);
+  const [pinned, setPinned] = useState<{ orgId: string; store: Location } | null>(null);
+  const live = useRef<LiveTickets>({});
+
+  const onBusyChange = useCallback(
+    (busy: boolean, store: Location) => setPinned(busy ? { orgId: org.id, store } : null),
+    [org.id],
+  );
+
+  // Switching organization never carries a ticket into another tenant: an open ticket is held in
+  // its own organization (and store), where it can be resumed later.
+  const lastOrg = useRef(org.id);
+  useEffect(() => {
+    const previous = lastOrg.current;
+    if (previous === org.id) return;
+    lastOrg.current = org.id;
+    setPinned(null);
+    const ticket = live.current[previous];
+    delete live.current[previous];
+    if (!ticket || ticket.session.cart.length === 0) return;
+    try {
+      suspendSession(ticket.session, ticket.scope);
+      toast.info(t("store.heldOnOrgChange", { org: ticket.orgName }));
+    } catch {
+      toast.error(t("store.holdFailed"));
+    }
+  }, [org.id, t]);
+
+  const pin = pinned && pinned.orgId === org.id ? pinned.store : null;
+  if (!pin && resolved.kind !== "ready") return <POSStoreGate state={resolved} />;
+  let view: { store: Location; blocked: StoreBlock; mismatch: Location | "other" | null } | null =
+    null;
+  if (pin) {
+    const fresh = org.locations.find((l) => l.id === pin.id);
+    const target =
+      locationId === "all" || locationId === pin.id
+        ? null
+        : (org.locations.find((l) => l.id === locationId) ?? "other");
+    view = {
+      store: fresh ?? pin,
+      blocked: !fresh ? "notAuthorized" : canSellAt(fresh) ? null : "inactive",
+      mismatch: target,
+    };
+  } else if (resolved.kind === "ready") {
+    view = { store: resolved.store, blocked: null, mismatch: null };
+  }
+
+  if (!view) return null;
+  return (
+    <POSRegister
+      key={`${org.id}:${view.store.id}`}
+      store={view.store}
+      blocked={view.blocked}
+      mismatch={view.mismatch}
+      onBusyChange={onBusyChange}
+      live={live}
+    />
+  );
+}
+
+/** No store to sell in yet: choose one, or explain why none can sell. */
+function POSStoreGate({ state }: { state: Exclude<PosStoreState, { kind: "ready" }> }) {
+  const { t } = useTranslation("pos");
+  const { setLocationId, can } = useWorkspace();
+  const manage = can("settings.locations");
+  const stores = state.kind === "none" ? [] : state.stores;
+  const [title, body] =
+    state.kind === "choose"
+      ? [t("store.chooseTitle"), t("store.chooseBody")]
+      : state.kind === "unavailable" && state.reason === "inactive"
+        ? [
+            t("store.inactiveTitle", { name: state.store?.name ?? "" }),
+            stores.length > 0 ? t("store.inactiveBody") : t("store.inactiveBodyNoOther"),
+          ]
+        : state.kind === "unavailable"
+          ? [t("store.notAuthorizedTitle"), t("store.notAuthorizedBody")]
+          : [t("store.noneTitle"), manage ? t("store.noneBodyManage") : t("store.noneBodyAsk")];
+  return (
+    <section className="surface mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
+      <EmptyState
+        icon={<Store className="size-5" aria-hidden />}
+        title={title}
+        body={body}
+        action={
+          stores.length === 0 && manage ? (
+            <Button asChild variant="outline">
+              <Link to="/locations">{t("store.manageStores")}</Link>
+            </Button>
+          ) : undefined
+        }
+      />
+      {stores.length > 0 && (
+        <ul aria-label={t("store.storesLabel")} className="grid gap-2 sm:grid-cols-2">
+          {stores.map((s) => (
+            <li key={s.id}>
+              <Button
+                variant="outline"
+                onClick={() => setLocationId(s.id)}
+                aria-label={t("store.sellAt", { name: s.name })}
+                className="h-auto w-full flex-col items-start gap-0.5 px-4 py-3 text-left"
+              >
+                <span className="font-medium">{s.name}</span>
+                {s.address && (
+                  <span className="text-xs font-normal text-muted-foreground">{s.address}</span>
+                )}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function POSRegister({
+  store,
+  blocked,
+  mismatch,
+  onBusyChange,
+  live,
+}: {
+  store: Location;
+  blocked: StoreBlock;
+  mismatch: Location | "other" | null;
+  onBusyChange: (busy: boolean, store: Location) => void;
+  live: MutableRefObject<LiveTickets>;
+}) {
   const { t, i18n } = useTranslation("pos");
   const lng = i18n.language;
   const money = (cents: number) => fmtMoneyCents(cents, lng);
-  const { org, locationId, user, role, can, refresh } = useWorkspace();
+  const { org, user, role, can, refresh } = useWorkspace();
   // Owners are org-wide; managers/staff are limited to their authorized stores.
   const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
-  const activeLocId = locationId === "all" ? org.locations[0]?.id || "loc-1" : locationId;
+  // The store of this register (POSPage remounts the register for another store).
+  const activeLocId = store.id;
   // Data only; the translated fallback is applied at render time so a language switch never resets the cart.
   const cashierName = user.fullName || user.email || "";
   // The store's configured sales-tax rate (parts per million, migration 0025). null = not
   // configured: the ticket shows no rate and the checkout stays blocked; the server would refuse
   // the sale anyway. The rate is never chosen here.
-  const taxRatePpm = org.locations.find((l) => l.id === activeLocId)?.taxRatePpm ?? null;
+  const taxRatePpm = store.taxRatePpm ?? null;
 
   const [session, setSession] = useState(() =>
     getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm),
   );
+  // A new empty ticket for this store, with the store's current rate. When the caller lost access
+  // to the store the local held-ticket list can no longer be read for it: the ticket is just emptied.
+  const newSession = () => {
+    try {
+      return getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm);
+    } catch {
+      return savePOSSession({
+        ...session,
+        id: `pos-${Date.now()}`,
+        cart: [],
+        discountCents: 0,
+        customerName: undefined,
+        suspendedSessions: [],
+      });
+    }
+  };
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState<string>("all");
   const [modModalItem, setModModalItem] = useState<MenuItem | null>(null);
@@ -163,9 +331,25 @@ export function POSPage() {
   const [cancellingSale, setCancellingSale] = useState(false);
   const [submittingSale, setSubmittingSale] = useState(false);
 
+  // A profile name change only relabels the open ticket; it never discards it.
   useEffect(() => {
-    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm));
-  }, [org.id, activeLocId, cashierName]);
+    setSession((s) => (s.cashierName === cashierName ? s : { ...s, cashierName }));
+  }, [cashierName]);
+
+  // A ticket in progress keeps the register on this store (see POSPage).
+  const busy =
+    session.cart.length > 0 ||
+    checkoutOpen ||
+    submittingSale ||
+    receiptSession !== null ||
+    cancellingSale;
+  useEffect(() => {
+    onBusyChange(busy, store);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, onBusyChange]);
+  useEffect(() => {
+    live.current[org.id] = { session, scope: locationScope, orgName: org.name };
+  });
 
   // The owner may change the store's rate while a ticket is open: the open ticket is recalculated
   // with the current rate (the server refuses the previous one with tax_rate_changed).
@@ -301,7 +485,8 @@ export function POSPage() {
 
   const handleClearTicket = () => {
     if (session.cart.length === 0) return;
-    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope));
+    // With the store's rate: an emptied ticket must not look like a store without sales tax.
+    setSession(newSession());
     setClearConfirmOpen(false);
     toast.info(t("toast.cleared"));
   };
@@ -315,9 +500,15 @@ export function POSPage() {
 
   const handleSuspend = () => {
     if (session.cart.length === 0) return;
-    suspendSession(session, locationScope);
+    try {
+      suspendSession(session, locationScope);
+    } catch {
+      // No longer one of the caller's stores: the ticket cannot be kept for it.
+      toast.error(t("store.holdFailed"));
+      return;
+    }
     toast.info(t("toast.held"));
-    setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm));
+    setSession(newSession());
   };
 
   const handleResume = (id: string) => {
@@ -330,7 +521,7 @@ export function POSPage() {
   };
 
   const handleStartCheckout = () => {
-    if (session.cart.length === 0 || submittingSale || !taxConfigured) return;
+    if (session.cart.length === 0 || submittingSale || !taxConfigured || blocked) return;
     setTenderedInput(centsToDecimalString(session.totalCents));
     setCheckoutOpen(true);
   };
@@ -339,7 +530,9 @@ export function POSPage() {
   const cashShort = payMethod === "cash" && tenderedCents < session.totalCents;
 
   const handleCompleteSale = async () => {
-    if (submittingSale) return;
+    // The store is re-validated by the server inside the sale transaction (access, active status,
+    // organization); this only avoids sending a sale the workspace already knows cannot be recorded.
+    if (submittingSale || blocked) return;
     const paid = simulatePayment(session, payMethod, tenderedCents);
     if (payMethod === "cash" && tenderedCents < paid.totalCents) {
       toast.error(t("checkout.insufficient"));
@@ -361,7 +554,7 @@ export function POSPage() {
       });
       setCheckoutOpen(false);
       // Only reset active cart once server confirmed sale ID
-      setSession(getPOSSession(org.id, activeLocId, cashierName, locationScope, taxRatePpm));
+      setSession(newSession());
       toast.success(t("toast.saleRecorded", { number: orderNumber }));
     } catch (err) {
       captureError(err, {
@@ -372,15 +565,19 @@ export function POSPage() {
       const code = err instanceof Error ? err.message : "";
       // The store's rate changed (or was removed) since this ticket was prepared: reload the
       // workspace so the ticket is recalculated with the current rate, and say why.
-      if (code === "tax_rate_changed" || code === "tax_rate_not_configured") {
+      // The store was deactivated or the caller lost access to it since the workspace loaded: reload
+      // it, so the register shows that the store can no longer sell. Nothing was charged.
+      const storeRefused = STORE_REFUSALS.has(code);
+      if (code === "tax_rate_changed" || code === "tax_rate_not_configured" || storeRefused) {
         refresh();
         setCheckoutOpen(false);
       }
-      const detail =
-        readableDetail(err) ??
-        (code === "tax_rate_changed" || code === "tax_rate_not_configured"
-          ? t(`errors.${code}`)
-          : undefined);
+      const detail = storeRefused
+        ? t("errors.store_unavailable")
+        : (readableDetail(err) ??
+          (code === "tax_rate_changed" || code === "tax_rate_not_configured"
+            ? t(`errors.${code}`)
+            : undefined));
       toast.error(t("toast.saleFailed"), detail ? { description: detail } : undefined);
     } finally {
       setSubmittingSale(false);
@@ -619,6 +816,25 @@ export function POSPage() {
               {t("ticket.attendant", { name: displayCashier })}
             </span>
           </div>
+          {/* The store every sale of this ticket is recorded in, always visible. */}
+          <p
+            className="flex min-w-0 items-center gap-1.5 text-sm font-medium"
+            data-testid="pos-store"
+          >
+            <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="truncate">{t("ticket.store", { name: store.name })}</span>
+          </p>
+          {mismatch && (
+            <p
+              role="status"
+              className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-foreground"
+            >
+              {t("store.mismatch", {
+                name: store.name,
+                target: mismatch === "other" ? t("store.anotherStore") : mismatch.name,
+              })}
+            </p>
+          )}
           <div
             role="radiogroup"
             aria-label={t("ticket.orderTypeLabel")}
@@ -731,7 +947,20 @@ export function POSPage() {
               <dd className="tabular">{money(session.totalCents)}</dd>
             </div>
           </dl>
-          {!taxConfigured && (
+          {blocked && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
+            >
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span>
+                {blocked === "inactive"
+                  ? t("store.blockedInactive", { name: store.name })
+                  : t("store.blockedNotAuthorized", { name: store.name })}
+              </span>
+            </p>
+          )}
+          {!taxConfigured && !blocked && (
             <p
               role="alert"
               className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
@@ -778,7 +1007,7 @@ export function POSPage() {
           <Button
             className="tabular h-12 w-full text-base font-semibold"
             onClick={handleStartCheckout}
-            disabled={session.cart.length === 0 || submittingSale || !taxConfigured}
+            disabled={session.cart.length === 0 || submittingSale || !taxConfigured || !!blocked}
             aria-busy={submittingSale}
           >
             {submittingSale ? (
@@ -959,7 +1188,7 @@ export function POSPage() {
             </Button>
             <Button
               className="h-11"
-              disabled={submittingSale || cashShort}
+              disabled={submittingSale || cashShort || !!blocked}
               aria-busy={submittingSale}
               onClick={handleCompleteSale}
             >
