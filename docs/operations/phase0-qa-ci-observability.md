@@ -17,7 +17,7 @@ venda próprios para testar isolamento. Senhas são geradas e gravadas só no `C
 
 - **quality**: `tsc --noEmit`, ESLint, Vitest, `npm run build`, `check-migrations` (arquivos).
 - **security**: Supabase novo → `drizzle-kit migrate` do zero → `check-migrations` com banco (hash LF) →
-  fixtures SQL (`reconstructed_operations/hardening/purchases`) → seed do QA → `permission_matrix.mjs` (144 verificações:
+  fixtures SQL (`reconstructed_operations`, que reúne as antigas `hardening/purchases`, em transação com ROLLBACK e ids próprios) → seed do QA → `permission_matrix.mjs` (144 verificações:
   seis perfis, escopo de loja, isolamento entre organizações, custos de estoque, admin da plataforma).
 - Sem segredos, sem deploy, sem acesso a projeto hospedado.
 - O Supabase CLI não é dependência do projeto: o job **security** instala a versão fixa **3.0.0** com
