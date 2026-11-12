@@ -134,7 +134,7 @@ const BOTH = [creds.locations.downtown, creds.locations.riverside];
 await rpc(owner, "save_operational_menu", {
   _org_id: creds.orgId,
   _kind: "category",
-  _payload: { id: "cat-drinks", name: "Drinks" },
+  _payload: { op: "create", id: "cat-drinks", name: "Drinks" },
 });
 await rpc(owner, "save_operational_menu", {
   _org_id: creds.orgId,
@@ -281,7 +281,7 @@ const { data: bRow } = await b.from("organizations").select("slug").eq("id", bOr
 await rpc(b, "save_operational_menu", {
   _org_id: bOrg,
   _kind: "category",
-  _payload: { id: "cat-b", name: "B" },
+  _payload: { op: "create", id: "cat-b", name: "B" },
 });
 await rpc(b, "save_operational_menu", {
   _org_id: bOrg,

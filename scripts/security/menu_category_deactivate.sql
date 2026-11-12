@@ -1,7 +1,11 @@
 \set ON_ERROR_STOP on
--- 0028: saving a category ({"active": false}) can no longer deactivate it while it still has active
--- products (issue #18). Disposable local database only. Everything runs in ONE transaction that is
--- rolled back.
+-- 0028 + 0029: a category can no longer be deactivated (or re-activated) through
+-- save_operational_menu (issue #18). 0028 refused the deactivation while an active product used the
+-- category; 0029 (strict intent contract) closes the path entirely: any "active" key in a category
+-- save is refused with invalid_menu, nothing is written and nothing is audited. Deactivation exists
+-- only through archive_operational_menu (0026, category_in_use), re-activation only through the
+-- explicit "reactivate" intent. Disposable local database only. Everything runs in ONE transaction
+-- that is rolled back.
 --
 --   org A: owner A · manager A (default manager permissions) with store A1 · staff A with store A1
 --   org B: owner B (also uses the category client id "drinks", with an active product)
@@ -30,16 +34,16 @@ INSERT INTO public.member_location_access VALUES
 SET ROLE authenticated;
 -- ---------------------------------------------------------------- menus
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000001',false);
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Drinks"}');
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"desserts","name":"Desserts"}');
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal"}');
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"sides","name":"Sides"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"create","id":"drinks","name":"Drinks"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"create","id":"desserts","name":"Desserts"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"create","id":"seasonal","name":"Seasonal"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"create","id":"sides","name":"Sides"}');
 SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','product','{"id":"soda","name":"Soda","category":"drinks","priceCents":250,"locationIds":[],"modifierGroups":[]}');
 SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','product','{"id":"cake","name":"Cake","category":"desserts","priceCents":600,"locationIds":[],"modifierGroups":[],"active":false}');
 SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','product','{"id":"pie","name":"Pie","category":"desserts","priceCents":550,"locationIds":[],"modifierGroups":[],"active":false}');
 SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','product','{"id":"fries","name":"Fries","category":"sides","priceCents":400,"locationIds":[],"modifierGroups":[]}');
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000004',false);
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"id":"drinks","name":"B Drinks"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"op":"create","id":"drinks","name":"B Drinks"}');
 SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000002','product','{"id":"b-soda","name":"B Soda","category":"drinks","priceCents":250,"locationIds":[],"modifierGroups":[]}');
 RESET ROLE;
 
@@ -52,6 +56,11 @@ CREATE FUNCTION pg_temp.cat(_org uuid, _cid text) RETURNS public.menu_categories
 CREATE FUNCTION pg_temp.saves(_org uuid, _cid text) RETURNS bigint LANGUAGE sql AS
   $$ SELECT count(*) FROM public.audit_logs a JOIN public.menu_categories c ON a.target=c.id::text
      WHERE a.org_id=_org AND c.org_id=_org AND c.client_id=_cid AND a.action='menu.saved' AND a.metadata->>'kind'='category' $$;
+-- a category save that must be refused with invalid_menu (runs as the caller: SET ROLE authenticated)
+CREATE FUNCTION pg_temp.refused(_org uuid, _payload text, _label text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN
+ PERFORM public.save_operational_menu(_org,'category',_payload::jsonb);
+ RAISE EXCEPTION 'FAIL % accepted', _label;
+EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_menu' THEN RAISE EXCEPTION 'FAIL % expected invalid_menu, got %', _label, SQLERRM; END IF; END $$;
 DO $$ BEGIN
  IF (SELECT count(*) FROM public.menu_categories WHERE org_id='b2800000-0000-4000-8000-000000000001' AND active)<>4
     OR pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>1 THEN
@@ -61,22 +70,31 @@ DO $$ BEGIN
   RAISE EXCEPTION 'FAIL fixture: manager must hold menu.edit, staff must not'; END IF;
 END $$;
 
--- ---------------------------------------------------------------- 1. no product at all: deactivation allowed and audited
+-- ---------------------------------------------------------------- 1. no product at all: deactivation through the save refused; through the archive allowed
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000001',false);
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal","active":false}');
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"op":"update","id":"seasonal","name":"Seasonal","active":false}','1 update with active false');
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"id":"seasonal","name":"Seasonal","active":false}','1 legacy deactivation (no op)');
 RESET ROLE;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 1 empty category not deactivated'; END IF;
- IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>2 THEN RAISE EXCEPTION 'FAIL 1 deactivation must be audited once'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 1 a refused save deactivated the category'; END IF;
+ IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>1 THEN RAISE EXCEPTION 'FAIL 1 a refused save was audited'; END IF;
+END $$;
+SET ROLE authenticated;
+SELECT public.archive_operational_menu('b2800000-0000-4000-8000-000000000001','category','seasonal');
+RESET ROLE;
+DO $$ BEGIN
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 1 empty category not archived'; END IF;
 END $$;
 
--- ---------------------------------------------------------------- 2. an active product: refused, nothing written (not even the new name), no audit
+-- ---------------------------------------------------------------- 2. an active product: every deactivation path refused, nothing written (not even the new name), no audit
 SET ROLE authenticated;
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"op":"update","id":"drinks","name":"Renamed while deactivating","active":false}','2 update with active false');
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"id":"drinks","name":"Renamed while deactivating","active":false}','2 legacy deactivation');
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Renamed while deactivating","active":false}');
- RAISE EXCEPTION 'FAIL 2 category with an active product deactivated';
-EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'category_in_use' THEN RAISE EXCEPTION 'FAIL 2 expected category_in_use, got %', SQLERRM; END IF; END $$;
+ PERFORM public.archive_operational_menu('b2800000-0000-4000-8000-000000000001','category','drinks');
+ RAISE EXCEPTION 'FAIL 2 category with an active product archived';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'category_in_use' THEN RAISE EXCEPTION 'FAIL 2 archive: expected category_in_use, got %', SQLERRM; END IF; END $$;
 RESET ROLE;
 DO $$ DECLARE c public.menu_categories; BEGIN
  c := pg_temp.cat('b2800000-0000-4000-8000-000000000001','drinks');
@@ -84,12 +102,12 @@ DO $$ DECLARE c public.menu_categories; BEGIN
  IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','drinks')<>1 THEN RAISE EXCEPTION 'FAIL 2 audit row recorded for a refused save'; END IF;
 END $$;
 
--- ---------------------------------------------------------------- 3. only inactive products: deactivation allowed; products untouched
+-- ---------------------------------------------------------------- 3. only inactive products: the archive is allowed; products untouched
 SET ROLE authenticated;
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"desserts","name":"Desserts","active":false}');
+SELECT public.archive_operational_menu('b2800000-0000-4000-8000-000000000001','category','desserts');
 RESET ROLE;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','desserts')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 3 category with only inactive products not deactivated'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','desserts')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 3 category with only inactive products not archived'; END IF;
  IF EXISTS(
    (SELECT id, org_id, client_id, category_id, name, price_cents, active, updated_at FROM public.menu_products
      WHERE org_id IN ('b2800000-0000-4000-8000-000000000001','b2800000-0000-4000-8000-000000000002')
@@ -101,48 +119,71 @@ DO $$ BEGIN
   RAISE EXCEPTION 'FAIL 3 a product changed'; END IF;
 END $$;
 
--- ---------------------------------------------------------------- 4. re-activation and rename still work
+-- ---------------------------------------------------------------- 4. re-activation only explicit; rename keeps the active flag
 SET ROLE authenticated;
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal again"}');
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"desserts","name":"Desserts","active":true}');
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Cold drinks"}');
+-- implicit re-activation paths are closed: "active": true, re-saving without op, editing or creating an archived category
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"op":"update","id":"desserts","name":"Desserts","active":true}','4 update with active true');
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"id":"seasonal","name":"Seasonal again"}','4 legacy re-save (no op)');
+DO $$ BEGIN
+ PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"seasonal","name":"Seasonal again"}');
+ RAISE EXCEPTION 'FAIL 4 edit re-activated or changed an archived category';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'category_archived' THEN RAISE EXCEPTION 'FAIL 4 edit of an archived category: expected category_archived, got %', SQLERRM; END IF; END $$;
+DO $$ BEGIN
+ PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"create","id":"seasonal","name":"Seasonal again"}');
+ RAISE EXCEPTION 'FAIL 4 create re-activated an archived category';
+EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'category_archived' THEN RAISE EXCEPTION 'FAIL 4 create over an archived category: expected category_archived, got %', SQLERRM; END IF; END $$;
+RESET ROLE;
+DO $$ BEGIN
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM false
+    OR (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).name IS DISTINCT FROM 'Seasonal' THEN RAISE EXCEPTION 'FAIL 4 a refused save changed the archived category'; END IF;
+ IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>1 THEN RAISE EXCEPTION 'FAIL 4 a refused save was audited'; END IF;
+END $$;
+-- explicit re-activation, then rename
+SET ROLE authenticated;
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"reactivate","id":"seasonal","name":"Seasonal"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"reactivate","id":"desserts","name":"Desserts"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"seasonal","name":"Seasonal again"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"drinks","name":"Cold drinks"}');
 RESET ROLE;
 DO $$ BEGIN
  IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM true
-    OR (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).name IS DISTINCT FROM 'Seasonal again' THEN RAISE EXCEPTION 'FAIL 4 re-activation with "active" omitted'; END IF;
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','desserts')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 4 re-activation with "active": true'; END IF;
+    OR (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).name IS DISTINCT FROM 'Seasonal again' THEN RAISE EXCEPTION 'FAIL 4 explicit re-activation then rename'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','desserts')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 4 explicit re-activation'; END IF;
  IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','drinks')).name IS DISTINCT FROM 'Cold drinks'
     OR (pg_temp.cat('b2800000-0000-4000-8000-000000000001','drinks')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 4 rename of a category in use'; END IF;
+ -- seasonal: create (1) + reactivate (2) + rename (3); refused calls and the archive (menu.archived) add no menu.saved row
+ IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>3 THEN RAISE EXCEPTION 'FAIL 4 seasonal audit rows: %', pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal'); END IF;
 END $$;
 
--- ---------------------------------------------------------------- 5. a new category created inactive is allowed (no product can use it)
+-- ---------------------------------------------------------------- 5. a category cannot be created inactive any more (no "active" key at all)
 SET ROLE authenticated;
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"draft","name":"Draft","active":false}');
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"op":"create","id":"draft","name":"Draft","active":false}','5 create inactive');
+SELECT pg_temp.refused('b2800000-0000-4000-8000-000000000001','{"id":"draft","name":"Draft","active":false}','5 legacy create inactive');
 RESET ROLE;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','draft')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 5 new inactive category'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','draft')).id IS NOT NULL THEN RAISE EXCEPTION 'FAIL 5 a refused create wrote a category'; END IF;
 END $$;
 
 -- ---------------------------------------------------------------- 6. authorization: categories are owner-only; staff has no menu.edit
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000002',false);
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal","active":false}');
- RAISE EXCEPTION 'FAIL 6 manager deactivated a category';
+ PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"seasonal","name":"Manager rename"}');
+ RAISE EXCEPTION 'FAIL 6 manager renamed a category';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 6 manager: expected forbidden, got %', SQLERRM; END IF; END $$;
--- authorization before the in-use check: a manager naming a category in use gets forbidden, not category_in_use
+-- authorization before the contract check: a manager gets forbidden, not invalid_menu
 DO $$ BEGIN
  PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Drinks","active":false}');
  RAISE EXCEPTION 'FAIL 6 manager deactivated a category in use';
-EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 6 manager, category in use: expected forbidden, got %', SQLERRM; END IF; END $$;
+EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 6 manager, legacy payload: expected forbidden, got %', SQLERRM; END IF; END $$;
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000003',false);
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal","active":false}');
- RAISE EXCEPTION 'FAIL 6 staff deactivated a category';
+ PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"seasonal","name":"Staff rename"}');
+ RAISE EXCEPTION 'FAIL 6 staff renamed a category';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'permission_denied' THEN RAISE EXCEPTION 'FAIL 6 staff: expected permission_denied, got %', SQLERRM; END IF; END $$;
 RESET ROLE;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 6 a refused call changed the category'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).name IS DISTINCT FROM 'Seasonal again' THEN RAISE EXCEPTION 'FAIL 6 a refused call changed the category'; END IF;
  IF NOT (SELECT prosecdef FROM pg_proc WHERE oid='public.save_operational_menu(uuid,text,jsonb)'::regprocedure)
     OR NOT EXISTS(SELECT 1 FROM pg_proc, unnest(proconfig) c WHERE oid='public.save_operational_menu(uuid,text,jsonb)'::regprocedure AND c='search_path=public')
     OR has_function_privilege('anon','public.save_operational_menu(uuid,text,jsonb)','EXECUTE')
@@ -154,41 +195,43 @@ END $$;
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000004',false);
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal","active":false}');
+ PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"seasonal","name":"Hijacked"}');
  RAISE EXCEPTION 'FAIL 7 owner B changed a category of org A';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 7 owner B on org A: expected forbidden, got %', SQLERRM; END IF; END $$;
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"id":"drinks","name":"B Drinks","active":false}');
- RAISE EXCEPTION 'FAIL 7 org B category with an active product deactivated';
+ PERFORM public.archive_operational_menu('b2800000-0000-4000-8000-000000000002','category','drinks');
+ RAISE EXCEPTION 'FAIL 7 org B category with an active product archived';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'category_in_use' THEN RAISE EXCEPTION 'FAIL 7 org B: expected category_in_use, got %', SQLERRM; END IF; END $$;
--- the check is per organization: org B "seasonal" (new, no product) can be created inactive
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"id":"seasonal","name":"B Seasonal","active":false}');
+-- the same client id in another organization is a different category: org B can create "seasonal"
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"op":"create","id":"seasonal","name":"B Seasonal"}');
 SELECT set_config('request.jwt.claim.sub','a2800000-0000-4000-8000-000000000001',false);
 DO $$ BEGIN
- PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"id":"drinks","name":"B Drinks","active":false}');
+ PERFORM public.save_operational_menu('b2800000-0000-4000-8000-000000000002','category','{"op":"update","id":"drinks","name":"B Drinks hijacked"}');
  RAISE EXCEPTION 'FAIL 7 owner A changed a category of org B';
 EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE EXCEPTION 'FAIL 7 owner A on org B: expected forbidden, got %', SQLERRM; END IF; END $$;
 RESET ROLE;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000002','drinks')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 7 org B drinks changed'; END IF;
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000002','seasonal')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 7 org B seasonal (no product) not created inactive'; END IF;
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM true
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000002','drinks')).active IS DISTINCT FROM true
+    OR (pg_temp.cat('b2800000-0000-4000-8000-000000000002','drinks')).name IS DISTINCT FROM 'B Drinks' THEN RAISE EXCEPTION 'FAIL 7 org B drinks changed'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000002','seasonal')).name IS DISTINCT FROM 'B Seasonal' THEN RAISE EXCEPTION 'FAIL 7 org B seasonal not created'; END IF;
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).name IS DISTINCT FROM 'Seasonal again'
     OR (pg_temp.cat('b2800000-0000-4000-8000-000000000001','drinks')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 7 org A categories changed by org B calls'; END IF;
 END $$;
 
--- ---------------------------------------------------------------- 8. rollback: an allowed deactivation that is rolled back leaves no change and no audit row
+-- ---------------------------------------------------------------- 8. rollback: allowed operations that are rolled back leave no change and no audit row
 SAVEPOINT pr28_before_rollback;
 SET ROLE authenticated;
-SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"id":"seasonal","name":"Seasonal","active":false}');
+SELECT public.archive_operational_menu('b2800000-0000-4000-8000-000000000001','category','seasonal');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"reactivate","id":"seasonal","name":"Seasonal again"}');
+SELECT public.save_operational_menu('b2800000-0000-4000-8000-000000000001','category','{"op":"update","id":"seasonal","name":"Rolled back"}');
 RESET ROLE;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM false THEN RAISE EXCEPTION 'FAIL 8 deactivation inside the savepoint'; END IF;
- IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>4 THEN RAISE EXCEPTION 'FAIL 8 the deactivation inside the savepoint was not audited'; END IF;
+ IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>5 THEN RAISE EXCEPTION 'FAIL 8 the operations inside the savepoint were not audited'; END IF;
 END $$;
 ROLLBACK TO SAVEPOINT pr28_before_rollback;
 DO $$ BEGIN
- IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL 8 rolled-back deactivation persisted'; END IF;
- -- seasonal saves so far: setup, deactivation (1), re-activation (4) = 3; the rolled-back one is gone
+ IF (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).active IS DISTINCT FROM true
+    OR (pg_temp.cat('b2800000-0000-4000-8000-000000000001','seasonal')).name IS DISTINCT FROM 'Seasonal again' THEN RAISE EXCEPTION 'FAIL 8 rolled-back operations persisted'; END IF;
  IF pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal')<>3 THEN RAISE EXCEPTION 'FAIL 8 audit rows after rollback: %', pg_temp.saves('b2800000-0000-4000-8000-000000000001','seasonal'); END IF;
 END $$;
 
@@ -205,5 +248,5 @@ DO $$ BEGIN
   RAISE EXCEPTION 'FAIL 9 an active product is in an inactive category'; END IF;
 END $$;
 
-SELECT ' PASS: category deactivation through save_operational_menu: allowed with no product or only inactive ones (audited), refused with category_in_use while an active product uses it (nothing written, no audit, new name not applied), re-activation and rename unchanged, new inactive category allowed, owner-only (manager forbidden before the in-use check, staff permission_denied), SECURITY DEFINER/search_path/grants kept, per-organization check with the same client id, rolled-back deactivation leaves no change or audit, archive still refuses, no active product in an inactive category';
+SELECT ' PASS: a category can no longer be deactivated or re-activated through save_operational_menu (any "active" key, with or without op: invalid_menu, nothing written, no audit); deactivation only through the archive (category_in_use while an active product uses it); re-activation only through the explicit reactivate intent; editing or creating an archived category refused (category_archived); rename keeps the active flag; owner-only (manager forbidden before the contract check, staff permission_denied), SECURITY DEFINER/search_path/grants unchanged, tenant isolation, rollback leaves no change and no audit row, no active product in an inactive category';
 ROLLBACK;

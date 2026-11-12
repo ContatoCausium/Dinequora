@@ -17,7 +17,7 @@ INSERT INTO public.organization_members(id,org_id,user_id,role) VALUES
 INSERT INTO public.member_location_access VALUES('dddddddd-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000001');
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000001',false);
-SELECT public.save_operational_menu('bbbbbbbb-0000-4000-8000-000000000001','category','{"id":"food","name":"Food"}');
+SELECT public.save_operational_menu('bbbbbbbb-0000-4000-8000-000000000001','category','{"op":"create","id":"food","name":"Food"}');
 SELECT public.save_operational_menu('bbbbbbbb-0000-4000-8000-000000000001','product','{"id":"burger","name":"Burger","category":"food","priceCents":1500,"prepTimeMinutes":10,"locationIds":[],"modifierGroups":[{"id":"extras","name":"Extras","required":false,"minSelections":0,"maxSelections":1,"options":[{"id":"cheese","name":"Cheese","priceCents":250}]}]}');
 SELECT public.save_operational_record('bbbbbbbb-0000-4000-8000-000000000001','cccccccc-0000-4000-8000-000000000001','inventory','{"name":"Beef","category":"meat","unit":"lb","quantity":10,"costCents":400}') AS inventory_id \gset
 SELECT public.save_operational_record('bbbbbbbb-0000-4000-8000-000000000001','cccccccc-0000-4000-8000-000000000001','recipe',jsonb_build_object('productId','burger','servings',1,'yieldQuantity',1,'ingredients',jsonb_build_array(jsonb_build_object('inventoryItemId',:'inventory_id','quantity',0.5,'unit','lb','wastePercentage',0)))) AS recipe_id \gset

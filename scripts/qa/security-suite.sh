@@ -13,7 +13,8 @@
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
 #      0022 cross-organization store scope and organization features, 0024 recipes, 0025 store tax,
-#      0026 menu category archive, 0028 category deactivation through the save (rolled back)
+#      0026 menu category archive, 0028/0029 category deactivation through the save closed, 0029
+#      category intents create/update/reactivate (rolled back)
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
@@ -24,9 +25,13 @@
 #   5d. 0027 concurrency: saving a menu product and archiving its category in two PostgreSQL
 #      sessions are serialized in both orders, with COMMIT and ROLLBACK (FOR SHARE / FOR UPDATE);
 #      never an active product in an archived category (own isolated organization, removed at the end)
-#   5e. 0028 concurrency: saving a menu product and deactivating its category through the save, in two
-#      PostgreSQL sessions, both orders, COMMIT and ROLLBACK; a category in use is never deactivated
-#      (own isolated organization, removed at the end)
+#   5e. 0028/0029: deactivating a category through the save is refused at once (invalid_menu), and
+#      saving a menu product while the category is edited ("update") serializes in both orders, with
+#      COMMIT and ROLLBACK (own isolated organization, removed at the end)
+#   5f. 0029 concurrency: category intents in two PostgreSQL sessions (create x create, create x
+#      archive, update x archive, update x reactivate, reactivate x reactivate, archive x product
+#      activation): no overwrite, no implicit re-activation, the audit trail holds exactly the
+#      committed operations (own isolated organization, removed at the end)
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -70,7 +75,7 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate; do
+for f in reconstructed_operations reconstructed_hardening reconstructed_purchases permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent; do
   run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"
@@ -97,8 +102,12 @@ echo "::group::5d. menu product save vs category archive concurrency (0027, two 
 QA_DB_URL="$DB_URL" node scripts/security/menu_category_race.mjs | tee "$ARTIFACTS/menu-category-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
-echo "::group::5e. menu product save vs category deactivation concurrency (0028, two PostgreSQL sessions)"
+echo "::group::5e. category deactivation through the save closed; product save vs category edit (0028/0029, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/menu_category_deactivate_race.mjs | tee "$ARTIFACTS/menu-category-deactivate-race.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5f. category intents concurrency (0029, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/menu_category_intent_race.mjs | tee "$ARTIFACTS/menu-category-intent-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

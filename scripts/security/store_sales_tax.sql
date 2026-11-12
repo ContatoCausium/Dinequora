@@ -40,7 +40,7 @@ END $$;
 
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000001',false);
-SELECT public.save_operational_menu('b2500000-0000-4000-8000-000000000001','category','{"id":"drinks","name":"Drinks"}');
+SELECT public.save_operational_menu('b2500000-0000-4000-8000-000000000001','category','{"op":"create","id":"drinks","name":"Drinks"}');
 SELECT public.save_operational_menu('b2500000-0000-4000-8000-000000000001','product','{"id":"soda","name":"Soda","category":"drinks","priceCents":1000,"prepTimeMinutes":1,"locationIds":[],"modifierGroups":[]}');
 
 -- 1. Without a configured rate no sale is recorded, whatever the client claims.

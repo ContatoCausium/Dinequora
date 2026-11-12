@@ -26,7 +26,7 @@ END $$;
 
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','a2400000-0000-4000-8000-000000000001',false);
-SELECT public.save_operational_menu('b2400000-0000-4000-8000-000000000001','category','{"id":"food","name":"Food"}');
+SELECT public.save_operational_menu('b2400000-0000-4000-8000-000000000001','category','{"op":"create","id":"food","name":"Food"}');
 SELECT public.save_operational_menu('b2400000-0000-4000-8000-000000000001','product','{"id":"burger","name":"Burger","category":"food","priceCents":1500,"prepTimeMinutes":10,"locationIds":[],"modifierGroups":[]}');
 SELECT public.save_operational_menu('b2400000-0000-4000-8000-000000000001','product','{"id":"veggie","name":"Veggie Burger","category":"food","priceCents":1400,"prepTimeMinutes":10,"locationIds":[],"modifierGroups":[]}');
 SELECT public.save_operational_menu('b2400000-0000-4000-8000-000000000001','product','{"id":"salad","name":"Salad","category":"food","priceCents":900,"prepTimeMinutes":5,"locationIds":[],"modifierGroups":[]}');

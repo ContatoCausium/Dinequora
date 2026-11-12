@@ -125,7 +125,7 @@ try {
   await fixtures.unsafe(createIsolatedOrgSql(org));
   {
     const owner = await session(SELLER);
-    await owner.c`select public.save_operational_menu(${ORG}, 'category', ${owner.c.json({ id: "conc-drinks", name: "Drinks" })})`;
+    await owner.c`select public.save_operational_menu(${ORG}, 'category', ${owner.c.json({ op: "create", id: "conc-drinks", name: "Drinks" })})`;
     await owner.c`select public.save_operational_menu(${ORG}, 'product', ${owner.c.json({ id: PRODUCT, name: "Concurrency soda", category: "conc-drinks", priceCents: 275, prepTimeMinutes: 1, locationIds: [], modifierGroups: [] })})`;
     await owner.end();
   }
