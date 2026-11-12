@@ -70,6 +70,7 @@ import type { MovementType } from "@/lib/inventory-movements-service";
 import {
   checkRecipeStockAvailability,
   calculateIngredientCost,
+  ingredientForItem,
   type ProductRecipe,
   type RecipeIngredient,
   type RecipeUnit,
@@ -1663,19 +1664,9 @@ export function InventoryPage() {
                           const chosen = recipeStoreItems.find((i) => i.id === e.target.value);
                           if (!chosen) return;
                           const updated = [...recipeFormData.ingredients];
-                          const costs = calculateIngredientCost(
-                            chosen,
-                            ing.quantity,
-                            ing.unit,
-                            ing.wastePercentage,
-                          );
-                          updated[idx] = {
-                            ...ing,
-                            inventoryItemId: chosen.id,
-                            name: chosen.name,
-                            unitCostCents: costs.unitCostCents,
-                            subtotalCostCents: costs.subtotalCostCents,
-                          };
+                          // Unit follows the chosen item (ingredientForItem); the quantity is reset
+                          // when the unit changes, so it is never re-read in another unit.
+                          updated[idx] = ingredientForItem(ing, chosen);
                           setRecipeFormData({ ...recipeFormData, ingredients: updated });
                         }}
                         className="h-8 w-full truncate rounded-md border bg-background px-2 text-xs"

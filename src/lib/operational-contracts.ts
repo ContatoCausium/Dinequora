@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RECIPE_UNITS } from "./units";
 
 export const modifierGroupsSchema = z.array(
   z.object({
@@ -74,7 +75,8 @@ export const recipeIngredientInputSchema = z
   .object({
     inventoryItemId: z.string().min(1),
     quantity: z.number().positive().finite(),
-    unit: z.enum(["oz", "lb", "g", "kg", "ml", "l", "units", "pack", "tsp", "tbsp", "cup"]),
+    // Same list the server converts (units.ts); a stock unit such as "gal" must be accepted here.
+    unit: z.enum(RECIPE_UNITS),
     wastePercentage: z.number().min(0).max(100).finite().default(0),
   })
   .strict();

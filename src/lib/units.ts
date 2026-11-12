@@ -22,6 +22,31 @@ const VOLUME_IN_ML: Readonly<Record<string, number>> = {
   cup: 236.5882365,
 };
 
+/**
+ * Every unit a recipe ingredient may use: the three families above, as the server converts them.
+ * This is the single list behind the recipe contract (operational-contracts.ts), the recipe read
+ * model (operational-mappers.ts) and the editor type, so a unit the server can convert ("gal" was
+ * missing from the former copies) is never refused before it reaches the server.
+ */
+export const RECIPE_UNITS = [
+  "oz",
+  "lb",
+  "g",
+  "kg",
+  "ml",
+  "l",
+  "gal",
+  "units",
+  "pack",
+  "tsp",
+  "tbsp",
+  "cup",
+] as const;
+export type RecipeUnit = (typeof RECIPE_UNITS)[number];
+export function isRecipeUnit(unit: string): unit is RecipeUnit {
+  return (RECIPE_UNITS as readonly string[]).includes(unit);
+}
+
 export type UnitFamily = "mass" | "volume" | "count";
 
 export function unitFamily(unit: string): UnitFamily | null {
