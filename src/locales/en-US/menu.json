@@ -16,7 +16,7 @@
   "deleteSafeTitle": "Remove “{{name}}” from the menu?",
   "deleteSafePrompt": "It is marked unavailable and disappears from the POS and the customer menu. Orders already placed are not affected, and you can make it available again at any time.",
   "readOnlyNotice": "View only. Your role can see the catalog but cannot change it.",
-  "categoriesOwnerOnlyNotice": "Categories are managed by the account owner. You can still add and edit products in your stores.",
+  "categoriesOwnerOnlyNotice": "Categories are managed by the account owner.",
   "filters": {
     "status": "Availability",
     "all": "All",
@@ -35,7 +35,9 @@
     "createCategoryFirst": "Create a category",
     "filteredEmptyTitle": "No products match these filters",
     "filteredEmptyBody": "Try another category, availability or search term.",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "stale": "The menu could not be refreshed, so what you see may be out of date.",
+    "reload": "Reload"
   },
   "toast": {
     "productCreated": "Product created",
@@ -70,7 +72,8 @@
     "categoryNameRequired": "Enter a category name.",
     "categoryExists": "A category named “{{name}}” already exists.",
     "categoryArchivedExists": "“{{name}}” is an archived category. Reactivate it instead of creating a new one.",
-    "noActiveCategory": "There is no active category yet. Create one before adding products."
+    "noActiveCategory": "There is no active category yet. Create one before adding products.",
+    "noStore": "You have no active store to sell this product in."
   },
   "empty": {
     "title": "No products found",
@@ -97,7 +100,9 @@
     "copyName": "{{name}} (copy)",
     "duplicateLabel": "Duplicate {{name}}",
     "editLabel": "Edit {{name}}",
-    "deleteLabel": "Remove {{name}} from the menu"
+    "deleteLabel": "Remove {{name}} from the menu",
+    "ownerOnlyAllStores": "Sold in every store: only the account owner can change it.",
+    "inactiveStore": "Sold in a store that is not active. Activate the store to change this product."
   },
   "form": {
     "titleNew": "Create Product",

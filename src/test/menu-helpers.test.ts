@@ -2,17 +2,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-import { menuAbilities } from "@/lib/menu-abilities";
+import { menuAbilities, type MenuStore } from "@/lib/menu-abilities";
 import {
   canArchiveCategory,
   categoryIdFromName,
+  categoryKey,
   categoryUsage,
   findCategoryCollision,
   hasActiveCategory,
+  uniqueCategoryId,
 } from "@/lib/menu-categories";
 import { MENU_ERROR_CODES, menuErrorCode, menuErrorKey, reportMenuError } from "@/lib/menu-errors";
+import { toMenuReadModel } from "@/lib/menu-read-model";
 import { roleDefaults, type Permission } from "@/lib/permissions";
 import { __resetObservabilityForTests, setLogWriter } from "@/lib/observability";
+import type { Database } from "@/integrations/supabase/types";
 
 const SRC = path.resolve(__dirname, "..");
 const locale = (lang: string) =>
@@ -26,34 +30,69 @@ const lookup = (data: Record<string, unknown>, key: string) =>
 describe("menu abilities (UI hints mirroring the RPC rules)", () => {
   const roleCan = (role: "owner" | "manager" | "staff") => (p: Permission) =>
     (roleDefaults(role) as readonly string[]).includes(p);
+  const stores: MenuStore[] = [
+    { id: "a", lifecycle: "active" },
+    { id: "b", lifecycle: "active" },
+    { id: "p", lifecycle: "placeholder" },
+    { id: "x", lifecycle: "inactive" },
+  ];
 
-  it("owner manages categories and every product", () => {
-    const a = menuAbilities({ role: "owner", can: roleCan("owner"), storeIds: ["a", "b"] });
+  it("owner manages categories and products of active stores, every store included", () => {
+    const a = menuAbilities({ role: "owner", can: roleCan("owner"), stores });
     expect(a.manageCategories).toBe(true);
     expect(a.anyWrite).toBe(true);
-    expect(a.canTouchProduct({ locationIds: [] })).toBe(true);
-    expect(a.canTouchProduct({ locationIds: ["z"] })).toBe(true);
+    expect(a.productAccess({ locationIds: [] })).toBe("ok");
+    expect(a.productAccess({ locationIds: ["a", "b"] })).toBe("ok");
+    expect(a.newProductStores("all")).toEqual([]);
   });
 
-  it("manager edits products of their stores only and never categories", () => {
-    const a = menuAbilities({ role: "manager", can: roleCan("manager"), storeIds: ["a"] });
+  it("owners too are refused for a product listed in a placeholder or inactive store", () => {
+    // save_operational_menu checks can_operate_location for every listed store, owners included.
+    const a = menuAbilities({ role: "owner", can: roleCan("owner"), stores });
+    expect(a.productAccess({ locationIds: ["a", "p"] })).toBe("inactiveStore");
+    expect(a.productAccess({ locationIds: ["x"] })).toBe("inactiveStore");
+  });
+
+  it("manager: only products sold exclusively in their active stores, never categories", () => {
+    const mine: MenuStore[] = [
+      { id: "a", lifecycle: "active" },
+      { id: "p", lifecycle: "placeholder" },
+    ];
+    const a = menuAbilities({ role: "manager", can: roleCan("manager"), stores: mine });
     expect(a.manageCategories).toBe(false);
     expect([a.createProducts, a.editProducts, a.archiveProducts]).toEqual([true, true, true]);
-    expect(a.canTouchProduct({ locationIds: ["a"] })).toBe(true);
-    expect(a.canTouchProduct({ locationIds: ["a", "b"] })).toBe(false);
+    expect(a.productAccess({ locationIds: ["a"] })).toBe("ok");
     // Sold in every store (no list): owner-only in the database.
-    expect(a.canTouchProduct({ locationIds: [] })).toBe(false);
+    expect(a.productAccess({ locationIds: [] })).toBe("allStores");
+    // Also sold in a store the manager cannot see (the read drops it; the count says so).
+    expect(a.productAccess({ locationIds: ["a"], otherStoreCount: 1 })).toBe("otherStores");
+    expect(a.productAccess({ locationIds: ["a", "b"] })).toBe("otherStores");
+    expect(a.productAccess({ locationIds: ["p"] })).toBe("inactiveStore");
+    // New products are sold in active stores only.
+    expect(a.newProductStores("all")).toEqual(["a"]);
+    expect(a.newProductStores("a")).toEqual(["a"]);
+    expect(a.newProductStores("p")).toBeNull();
+  });
+
+  it("a manager without any active store cannot create products", () => {
+    const a = menuAbilities({
+      role: "manager",
+      can: roleCan("manager"),
+      stores: [{ id: "p", lifecycle: "placeholder" }],
+    });
+    expect(a.createProducts).toBe(false);
+    expect(a.newProductStores("all")).toBeNull();
   });
 
   it("staff is read-only (menu.view only)", () => {
-    const a = menuAbilities({ role: "staff", can: roleCan("staff"), storeIds: ["a"] });
+    const a = menuAbilities({ role: "staff", can: roleCan("staff"), stores });
     expect(a.anyWrite).toBe(false);
     expect([a.createProducts, a.editProducts, a.archiveProducts]).toEqual([false, false, false]);
     expect(a.manageCategories).toBe(false);
   });
 
   it("follows the member's actual permissions, not the role name", () => {
-    const a = menuAbilities({ role: "manager", can: (p) => p === "menu.edit", storeIds: ["a"] });
+    const a = menuAbilities({ role: "manager", can: (p) => p === "menu.edit", stores });
     expect([a.createProducts, a.editProducts, a.archiveProducts]).toEqual([false, true, false]);
     expect(a.anyWrite).toBe(true);
   });
@@ -68,23 +107,41 @@ describe("menu categories", () => {
     expect(categoryIdFromName("!!!", () => "fallback")).toBe("fallback");
   });
 
+  it("gives a new category a free id (a renamed category keeps its old id)", () => {
+    expect(uniqueCategoryId("drinks", ["burgers"])).toBe("drinks");
+    expect(uniqueCategoryId("drinks", ["drinks"])).toBe("drinks-2");
+    expect(uniqueCategoryId("drinks", ["drinks", "drinks-2"])).toBe("drinks-3");
+  });
+
   const active = [{ id: "burgers", name: "Burgers" }];
   const archived = [{ id: "drinks", name: "Drinks", productCount: 2 }];
 
-  it("reports a new category that would overwrite an active one", () => {
-    expect(findCategoryCollision("burgers", "burgers", active, archived).kind).toBe("active");
-    expect(findCategoryCollision(" BURGERS ", "other-id", active, archived).kind).toBe("active");
+  it("reports a name already used, ignoring case, accents, spacing and punctuation", () => {
+    expect(findCategoryCollision(" BURGERS ", active, archived).kind).toBe("active");
+    expect(findCategoryCollision("Burgers.", active, archived).kind).toBe("active");
+    expect(findCategoryCollision("cafes", [{ id: "cafes", name: "Cafés" }], []).kind).toBe(
+      "active",
+    );
+    expect(
+      findCategoryCollision("Bebidas  Quentes", [{ id: "b", name: "Bebidas Quentes" }], []).kind,
+    ).toBe("active");
   });
 
-  it("reports a new category that would silently reactivate an archived one", () => {
-    const c = findCategoryCollision("Drinks", "drinks", active, archived);
-    expect(c).toEqual({ kind: "archived", category: archived[0] });
+  it("reports a name used by an archived category (reactivate it instead)", () => {
+    expect(findCategoryCollision("Drinks", active, archived)).toEqual({
+      kind: "archived",
+      category: archived[0],
+    });
   });
 
-  it("compares only names for a rename", () => {
-    expect(findCategoryCollision("Burgers", null, [], archived).kind).toBe("none");
-    expect(findCategoryCollision("drinks", null, [], archived).kind).toBe("archived");
-    expect(findCategoryCollision("Sides", "sides", active, archived).kind).toBe("none");
+  it("compares names, not ids: the old id of a renamed category does not block its old name", () => {
+    expect(findCategoryCollision("Drinks", [{ id: "drinks", name: "Beverages" }], []).kind).toBe(
+      "none",
+    );
+    expect(findCategoryCollision("Sides", active, archived).kind).toBe("none");
+    // names without any letter or digit are compared as typed
+    expect(categoryKey("!!!")).toBe("");
+    expect(findCategoryCollision("!!!", [{ id: "c1", name: "!!!" }], []).kind).toBe("active");
   });
 
   it("counts products and allows archiving only without active ones", () => {
@@ -103,6 +160,63 @@ describe("menu categories", () => {
     expect(hasActiveCategory({ category: "burgers", active: true }, active)).toBe(true);
     expect(hasActiveCategory({ category: "", active: false }, active)).toBe(false);
     expect(hasActiveCategory({ category: "drinks", active: false }, active)).toBe(false);
+  });
+});
+
+describe("menu read model (fetchOperationalMenu)", () => {
+  type ProductRow = Database["public"]["Tables"]["menu_products"]["Row"];
+  const product = (over: Partial<ProductRow>) =>
+    ({
+      id: `uuid-${over.client_id ?? "x"}`,
+      org_id: "org-uuid",
+      client_id: "classic",
+      category_id: "cat-burgers",
+      name: "Classic",
+      description: "",
+      price_cents: 1250,
+      prep_time_minutes: 8,
+      image_url: null,
+      notes: null,
+      active: true,
+      location_ids: [],
+      modifier_groups: [],
+      created_at: "2026-11-01T00:00:00Z",
+      updated_at: "2026-11-01T00:00:00Z",
+      ...over,
+    }) as ProductRow;
+  const model = toMenuReadModel({
+    orgSlug: "org",
+    locations: [{ id: "loc-a", slug: "a" }],
+    categories: [{ id: "cat-burgers", client_id: "burgers", name: "Burgers", description: "" }],
+    archivedCategories: [
+      { id: "cat-desserts", client_id: "desserts", name: "Desserts", description: "" },
+      { id: "cat-empty", client_id: "empty", name: "Empty", description: "" },
+    ],
+    products: [
+      product({ client_id: "classic", location_ids: [] }),
+      product({ client_id: "fries", location_ids: ["loc-a", "loc-hidden"], notes: "crispy" }),
+      product({ client_id: "brownie", category_id: "cat-desserts", active: false }),
+    ],
+  });
+
+  it("keeps categories active-only and counts the products of archived ones", () => {
+    expect(model.categories.map((c) => c.id)).toEqual(["burgers"]);
+    expect(model.archivedCategories).toEqual([
+      { id: "desserts", name: "Desserts", description: "", productCount: 1 },
+      { id: "empty", name: "Empty", description: "", productCount: 0 },
+    ]);
+  });
+
+  it("maps stores to slugs and counts the stores the caller cannot see", () => {
+    const fries = model.items.find((i) => i.id === "fries")!;
+    expect(fries.locationIds).toEqual(["a"]);
+    expect(fries.otherStoreCount).toBe(1);
+    expect(fries.notes).toBe("crispy");
+    expect(model.items.find((i) => i.id === "classic")!.otherStoreCount).toBe(0);
+  });
+
+  it("a product of an archived category has no category in the read", () => {
+    expect(model.items.find((i) => i.id === "brownie")!.category).toBe("");
   });
 });
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -48,6 +48,7 @@ import {
   categoryIdFromName,
   categoryUsage,
   findCategoryCollision,
+  uniqueCategoryId,
   hasActiveCategory,
   type ArchivedCategoryRef,
 } from "@/lib/menu-categories";
@@ -57,7 +58,15 @@ import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
 
 type LoadState = "loading" | "ready" | "error";
 type StatusFilter = "all" | "active" | "inactive";
-type CategoryForm = { mode: "new" | "edit"; id?: string; name: string; description: string };
+type CategoryForm = {
+  mode: "new" | "edit";
+  id?: string;
+  name: string;
+  description: string;
+  /** New category: id used when the name has no letter or digit (fixed while the form is open). */
+  fallbackId?: string;
+};
+type MenuData = Awaited<ReturnType<typeof fetchOperationalMenu>>;
 
 /**
  * Menu & Products. Every write goes through the menu RPCs, which remain the authority
@@ -68,7 +77,12 @@ export function MenuPage() {
   const { t, i18n } = useTranslation("menu");
   const { org, locationId, role, can } = useWorkspace();
   const ability = useMemo(
-    () => menuAbilities({ role, can, storeIds: org.locations.map((l) => l.id) }),
+    () =>
+      menuAbilities({
+        role,
+        can,
+        stores: org.locations.map((l) => ({ id: l.id, lifecycle: l.lifecycle })),
+      }),
     [role, can, org.locations],
   );
 
@@ -78,49 +92,63 @@ export function MenuPage() {
   const [archived, setArchived] = useState<ArchivedCategoryRef[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  /** The last refresh failed: what is shown may be out of date (a write may have succeeded). */
+  const [stale, setStale] = useState(false);
 
-  const applyMenu = useCallback((data: Awaited<ReturnType<typeof fetchOperationalMenu>>) => {
+  const applyMenu = useCallback((data: MenuData) => {
     setCategories(data.categories);
-    setArchived(data.archivedCategories ?? []);
+    setArchived(data.archivedCategories);
     setItems(data.items);
+    setStale(false);
   }, []);
-  const reload = useCallback(async () => {
-    applyMenu(await fetchOperationalMenu({ data: { orgId: org.id } }));
-  }, [applyMenu, org.id]);
 
-  const load = useCallback(
-    (isActive: () => boolean = () => true) => {
-      setState("loading");
-      fetchOperationalMenu({ data: { orgId: org.id } })
-        .then((data) => {
-          if (!isActive()) return;
-          applyMenu(data);
-          setState("ready");
-        })
-        .catch((error: unknown) => {
-          if (!isActive()) return;
-          reportMenuError("load", error);
-          setState("error");
-        });
-    },
-    [applyMenu, org.id],
-  );
+  // Only the latest read of the CURRENT organization is applied: a slower earlier read, or a read
+  // for the organization the member just switched away from, is ignored.
+  const currentOrg = useRef(org.id);
+  const requestSeq = useRef(0);
   useEffect(() => {
-    let active = true;
-    setCategories([]);
-    setArchived([]);
-    setItems([]);
-    load(() => active);
-    return () => {
-      active = false;
-    };
-  }, [load]);
+    currentOrg.current = org.id;
+  }, [org.id]);
+  const fetchLatest = useCallback(async (): Promise<MenuData | null> => {
+    const orgId = org.id;
+    const ticket = ++requestSeq.current;
+    const isCurrent = () => ticket === requestSeq.current && orgId === currentOrg.current;
+    try {
+      const data = await fetchOperationalMenu({ data: { orgId, includeArchived: true } });
+      return isCurrent() ? data : null;
+    } catch (error) {
+      if (isCurrent()) throw error;
+      return null;
+    }
+  }, [org.id]);
 
-  /** Re-reads the menu after a write; a failed refresh is logged, never reported as a failed write. */
-  const refresh = useCallback(
-    () => reload().catch((error: unknown) => reportMenuError("reload", error)),
-    [reload],
-  );
+  const load = useCallback(() => {
+    setState("loading");
+    fetchLatest()
+      .then((data) => {
+        if (!data) return;
+        applyMenu(data);
+        setState("ready");
+      })
+      .catch((error: unknown) => {
+        reportMenuError("load", error);
+        setState("error");
+      });
+  }, [applyMenu, fetchLatest]);
+
+  /**
+   * Re-reads the menu after a write. A failed refresh is never reported as a failed write: the
+   * screen says it may be out of date and offers to reload.
+   */
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchLatest();
+      if (data) applyMenu(data);
+    } catch (error) {
+      reportMenuError("reload", error);
+      setStale(true);
+    }
+  }, [applyMenu, fetchLatest]);
 
   /**
    * Runs one write: a translated success message, or a translated refusal (the original code is
@@ -197,9 +225,13 @@ export function MenuPage() {
   const [formActive, setFormActive] = useState(true);
   const [formModifiers, setFormModifiers] = useState<ModifierGroup[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  // Id of the product being created, fixed while its form is open: a retry after an uncertain
+  // failure (e.g. the response was lost) saves the same product again instead of a second one.
+  const [draftId, setDraftId] = useState("");
 
   function openNewItem() {
     setEditingItem(null);
+    setDraftId(`item-${crypto.randomUUID()}`);
     setFormName("");
     setFormDesc("");
     setFormCategory(activeCategory !== "all" ? activeCategory : (categories[0]?.id ?? ""));
@@ -233,9 +265,14 @@ export function MenuPage() {
       return setFormError(t("validation.categoryRequired"));
     const cents = centsFromNumberInput(formPrice || "0");
     if (cents === null) return setFormError(t("form.invalidPrice"));
+    // Owners sell everywhere by default; a manager's new product is sold in their active stores.
+    const locationIds = editingItem
+      ? editingItem.locationIds
+      : ability.newProductStores(locationId);
+    if (locationIds === null) return setFormError(t("validation.noStore"));
     setFormError(null);
     const toSave: MenuItem = {
-      id: editingItem?.id || `item-${crypto.randomUUID()}`,
+      id: editingItem?.id ?? draftId,
       orgId: org.id,
       name: formName.trim(),
       description: formDesc.trim(),
@@ -243,15 +280,10 @@ export function MenuPage() {
       priceCents: cents,
       prepTimeMinutes: Math.max(0, parseInt(formPrep || "0", 10) || 0),
       imageUrl: formImage.trim() || undefined,
+      // The form does not edit kitchen notes: keep them (the save replaces every column).
+      ...(editingItem?.notes ? { notes: editingItem.notes } : {}),
       active: formActive,
-      // Owners sell everywhere by default; a manager's new product is sold in their own stores.
-      locationIds:
-        editingItem?.locationIds ||
-        (role === "owner"
-          ? []
-          : locationId === "all"
-            ? org.locations.map((l) => l.id)
-            : [locationId]),
+      locationIds,
       modifierGroups: formModifiers,
       createdAt: editingItem?.createdAt || new Date().toISOString(),
     };
@@ -311,7 +343,12 @@ export function MenuPage() {
 
   function openNewCategory() {
     setCategoryError(null);
-    setCategoryForm({ mode: "new", name: "", description: "" });
+    setCategoryForm({
+      mode: "new",
+      name: "",
+      description: "",
+      fallbackId: `cat-${crypto.randomUUID().slice(0, 8)}`,
+    });
   }
   function openEditCategory(c: MenuCategory) {
     setCategoryError(null);
@@ -322,21 +359,14 @@ export function MenuPage() {
     if (!categoryForm) return;
     const name = categoryForm.name.trim();
     if (!name) return setCategoryError(t("validation.categoryNameRequired"));
-    const id =
-      categoryForm.mode === "edit" && categoryForm.id
-        ? categoryForm.id
-        : categoryIdFromName(name, () => `cat-${Date.now().toString(36)}`);
-    // A new category must not silently overwrite (or re-activate) an existing one; a rename must
-    // not take the name of another category, active or archived.
-    const collision =
-      categoryForm.mode === "edit"
-        ? findCategoryCollision(
-            name,
-            null,
-            categories.filter((c) => c.id !== id),
-            archived,
-          )
-        : findCategoryCollision(name, id, categories, archived);
+    const editing = categoryForm.mode === "edit" ? categoryForm.id : undefined;
+    // No two categories with the same name (accents, case, spacing and punctuation ignored), active
+    // or archived: a new one would be ambiguous, and an archived one should be reactivated instead.
+    const collision = findCategoryCollision(
+      name,
+      categories.filter((c) => c.id !== editing),
+      archived.filter((c) => c.id !== editing),
+    );
     if (collision.kind === "active")
       return setCategoryError(t("validation.categoryExists", { name: collision.category.name }));
     if (collision.kind === "archived")
@@ -344,6 +374,15 @@ export function MenuPage() {
         t("validation.categoryArchivedExists", { name: collision.category.name }),
       );
     setCategoryError(null);
+    // A rename keeps the id. A new category takes a free id: the save is an upsert on the id, so a
+    // taken one (e.g. the old name of a renamed category) would overwrite that category.
+    const fallbackId = categoryForm.fallbackId;
+    const id =
+      editing ??
+      uniqueCategoryId(
+        categoryIdFromName(name, () => fallbackId ?? "category"),
+        [...categories, ...archived].map((c) => c.id),
+      );
     const description = categoryForm.description.trim();
     const ok = await run(
       categoryForm.mode === "edit" ? "category.update" : "category.create",
@@ -411,6 +450,22 @@ export function MenuPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const noCategories = state === "ready" && categories.length === 0;
 
+  // Organization (re)selected: nothing of the previous organization stays on screen or in a form.
+  useEffect(() => {
+    setCategories([]);
+    setArchived([]);
+    setItems([]);
+    setStale(false);
+    setItemDialogOpen(false);
+    setEditingItem(null);
+    setRemoveItem(null);
+    setCategoriesOpen(false);
+    setCategoryForm(null);
+    setArchiveTarget(null);
+    setPreviewOpen(false);
+    load();
+  }, [load]);
+
   // ---------------------------------------------------------------- render
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -448,6 +503,27 @@ export function MenuPage() {
       {!ability.anyWrite && <Notice>{t("readOnlyNotice")}</Notice>}
       {ability.anyWrite && !ability.manageCategories && (
         <Notice>{t("categoriesOwnerOnlyNotice")}</Notice>
+      )}
+      {stale && (
+        <div
+          role="status"
+          className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span className="flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0 text-warning" aria-hidden />
+            {t("states.stale")}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 self-start sm:self-auto"
+            disabled={busy !== null}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw className="mr-1.5 size-3.5" aria-hidden />
+            {t("states.reload")}
+          </Button>
+        </div>
       )}
 
       {/* Filters */}
@@ -579,7 +655,9 @@ export function MenuPage() {
           {filteredItems.map((item) => {
             const cat = categories.find((c) => c.id === item.category);
             const categoryOk = hasActiveCategory(item, categories);
-            const touchable = ability.canTouchProduct(item);
+            const access = ability.productAccess(item);
+            const touchable = access === "ok";
+            const storeCount = item.locationIds.length + (item.otherStoreCount ?? 0);
             const working = busy !== null;
             return (
               <li
@@ -638,20 +716,24 @@ export function MenuPage() {
                     </span>
                     <span className="inline-flex items-center gap-1">
                       <Store className="size-3.5" aria-hidden />
-                      {item.locationIds.length === 0
+                      {storeCount === 0
                         ? t("item.allStores")
-                        : t("item.stores", { count: item.locationIds.length })}
+                        : t("item.stores", { count: storeCount })}
                     </span>
                   </div>
 
-                  {!categoryOk && ability.anyWrite && (
+                  {!categoryOk && ability.anyWrite && touchable && (
                     <p className="mt-2 text-xs text-muted-foreground">
                       {t("item.categoryArchivedHint")}
                     </p>
                   )}
                   {ability.anyWrite && !touchable && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {t("item.notInYourStores")}
+                      {access === "allStores"
+                        ? t("item.ownerOnlyAllStores")
+                        : access === "inactiveStore"
+                          ? t("item.inactiveStore")
+                          : t("item.notInYourStores")}
                     </p>
                   )}
 
@@ -661,7 +743,7 @@ export function MenuPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          disabled={working || (!item.active && !categoryOk)}
+                          disabled={working || !categoryOk}
                           onClick={() => toggleItemActive(item)}
                         >
                           {item.active ? t("item.markUnavailable") : t("item.markAvailable")}
@@ -843,7 +925,10 @@ export function MenuPage() {
       </Dialog>
 
       {/* Category create / edit */}
-      <Dialog open={categoryForm !== null} onOpenChange={(open) => !open && setCategoryForm(null)}>
+      <Dialog
+        open={categoryForm !== null}
+        onOpenChange={(open) => !open && busy === null && setCategoryForm(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -888,7 +973,12 @@ export function MenuPage() {
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCategoryForm(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => setCategoryForm(null)}
+              >
                 {t("form.cancel")}
               </Button>
               <Button type="submit" disabled={busy !== null}>
@@ -906,7 +996,7 @@ export function MenuPage() {
       {/* Archive category confirmation */}
       <Dialog
         open={archiveTarget !== null}
-        onOpenChange={(open) => !open && setArchiveTarget(null)}
+        onOpenChange={(open) => !open && busy === null && setArchiveTarget(null)}
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -916,7 +1006,11 @@ export function MenuPage() {
             <DialogDescription>{t("archiveCategory.body")}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-2 gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setArchiveTarget(null)}>
+            <Button
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => setArchiveTarget(null)}
+            >
               {t("form.cancel")}
             </Button>
             <Button
@@ -931,7 +1025,10 @@ export function MenuPage() {
       </Dialog>
 
       {/* Product create / edit */}
-      <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
+      <Dialog
+        open={itemDialogOpen}
+        onOpenChange={(open) => (open || busy === null) && setItemDialogOpen(open)}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingItem ? t("form.titleEdit") : t("form.titleNew")}</DialogTitle>
@@ -1082,7 +1179,12 @@ export function MenuPage() {
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setItemDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => setItemDialogOpen(false)}
+              >
                 {t("form.cancel")}
               </Button>
               <Button type="submit" disabled={busy !== null}>
@@ -1094,14 +1196,17 @@ export function MenuPage() {
       </Dialog>
 
       {/* Remove product confirmation */}
-      <Dialog open={removeItem !== null} onOpenChange={(open) => !open && setRemoveItem(null)}>
+      <Dialog
+        open={removeItem !== null}
+        onOpenChange={(open) => !open && busy === null && setRemoveItem(null)}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("deleteSafeTitle", { name: removeItem?.name ?? "" })}</DialogTitle>
             <DialogDescription>{t("deleteSafePrompt")}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-2 gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setRemoveItem(null)}>
+            <Button variant="outline" disabled={busy !== null} onClick={() => setRemoveItem(null)}>
               {t("form.cancel")}
             </Button>
             <Button

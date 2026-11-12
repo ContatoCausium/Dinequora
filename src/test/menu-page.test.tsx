@@ -35,6 +35,8 @@ type Item = {
   prepTimeMinutes: number;
   active: boolean;
   locationIds: string[];
+  otherStoreCount?: number;
+  notes?: string;
   modifierGroups: [];
   createdAt: string;
 };
@@ -71,17 +73,25 @@ const baseMenu = (): Menu => ({
   ],
 });
 
-function setWorkspace(role: OrgRole, stores = ["downtown", "riverside"]) {
+type Lifecycle = "active" | "inactive" | "placeholder";
+function setWorkspace(
+  role: OrgRole,
+  stores: (string | [string, Lifecycle])[] = ["downtown", "riverside"],
+  orgId = "org-1",
+) {
   const perms = new Set<Permission>(roleDefaults(role));
   workspace.current = {
     role,
     can: (p: Permission) => perms.has(p),
     canAny: (ps: Permission[]) => ps.some((p) => perms.has(p)),
     org: {
-      id: "org-1",
-      name: "Test Kitchen",
+      id: orgId,
+      name: orgId === "org-1" ? "Test Kitchen" : "Other Kitchen",
       fictional: false,
-      locations: stores.map((id) => ({ id, name: id, status: "verified", timezone: "UTC" })),
+      locations: stores.map((s) => {
+        const [id, lifecycle] = typeof s === "string" ? [s, "active" as const] : s;
+        return { id, name: id, status: "verified", timezone: "UTC", lifecycle };
+      }),
     },
     locationId: "all",
   };
@@ -352,7 +362,17 @@ describe("products and categories", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Product marked unavailable"));
     await waitFor(() => expect(api.fetchOperationalMenu).toHaveBeenCalledTimes(2));
     expect(toast.error).not.toHaveBeenCalled();
-    expect(screen.getByText("Classic Burger")).toBeInTheDocument();
+    // The screen does not pretend to be up to date: it says so and offers to reload.
+    const notice = await screen.findByText(/could not be refreshed/);
+    expect(notice).toBeInTheDocument();
+    const updated = baseMenu();
+    updated.items[0] = { ...updated.items[0]!, active: false };
+    api.fetchOperationalMenu.mockResolvedValue(updated);
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() => expect(screen.queryByText(/could not be refreshed/)).toBeNull());
+    expect(
+      within(screen.getByText("Classic Burger").closest("li")!).getByText("Unavailable"),
+    ).toBeInTheDocument();
   });
 
   it("shows the generic message, never technical text, for unexpected failures", async () => {
@@ -383,7 +403,9 @@ describe("roles", () => {
     // Sold in every store: owner-only in the database.
     const all = screen.getByText("Classic Burger").closest("li")!;
     expect(within(all).queryByRole("button", { name: "Edit Classic Burger" })).toBeNull();
-    expect(within(all).getByText("Sold in stores you don't manage")).toBeInTheDocument();
+    expect(
+      within(all).getByText("Sold in every store: only the account owner can change it."),
+    ).toBeInTheDocument();
     // Sold only in the manager's store.
     const own = screen.getByText("Store Fries").closest("li")!;
     expect(within(own).getByRole("button", { name: "Edit Store Fries" })).toBeInTheDocument();
@@ -426,5 +448,153 @@ describe("roles", () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Seu perfil não permite executar esta ação."),
     );
+  });
+});
+
+describe("review fixes", () => {
+  const saved = (n = 0) => api.saveOperationalMenu.mock.calls[n]![0].data;
+
+  it("only the Menu screen asks for archived categories", async () => {
+    await renderMenu();
+    expect(api.fetchOperationalMenu).toHaveBeenCalledWith({
+      data: { orgId: "org-1", includeArchived: true },
+    });
+  });
+
+  it("a retry after an uncertain failure saves the same new product, not a second one", async () => {
+    await renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: "New Product" }));
+    fireEvent.change(screen.getByLabelText("Item Name"), { target: { value: "Shake" } });
+    api.saveOperationalMenu.mockRejectedValueOnce(new Error("TypeError: Failed to fetch"));
+    fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
+    await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(2));
+    expect(saved(1).item.id).toBe(saved(0).item.id);
+    expect(saved(0).item.id).toMatch(/^item-/);
+    expect(saved(0).item.locationIds).toEqual([]); // owner: every store
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Product created"));
+  });
+
+  it("manager: a new product is sold in their ACTIVE stores only", async () => {
+    setWorkspace("manager", ["downtown", ["riverside", "placeholder"]]);
+    await renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: "New Product" }));
+    fireEvent.change(screen.getByLabelText("Item Name"), { target: { value: "Shake" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
+    await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
+    expect(saved().item.locationIds).toEqual(["downtown"]);
+  });
+
+  it("manager without any active store is not offered New Product", async () => {
+    setWorkspace("manager", [["downtown", "inactive"]]);
+    await renderMenu();
+    expect(screen.queryByRole("button", { name: "New Product" })).toBeNull();
+  });
+
+  it("keeps the kitchen notes when a product is edited", async () => {
+    const menu = baseMenu();
+    menu.items[0] = { ...menu.items[0]!, notes: "No onions" };
+    await renderMenu(menu);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Classic Burger" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
+    await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
+    expect(saved().item.notes).toBe("No onions");
+  });
+
+  it("Cancel is disabled while a save is in progress", async () => {
+    await renderMenu();
+    let finish!: () => void;
+    api.saveOperationalMenu.mockReturnValueOnce(new Promise<void>((r) => (finish = r)));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Classic Burger" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled());
+    finish();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("a description-only edit of a category is not a collision with itself", async () => {
+    await renderMenu();
+    openCategories();
+    fireEvent.click(screen.getByRole("button", { name: "Edit Sides" }));
+    fireEvent.change(screen.getByLabelText(/Description/), { target: { value: "Crispy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
+    expect(saved().category).toEqual({ id: "sides", name: "Sides", description: "Crispy" });
+  });
+
+  it("a rename cannot take another category's name, even with other accents or punctuation", async () => {
+    await renderMenu();
+    openCategories();
+    fireEvent.click(screen.getByRole("button", { name: "Edit Sides" }));
+    fireEvent.change(screen.getByLabelText(/Category Name/), { target: { value: "búrgers." } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("“Burgers” already exists");
+    expect(api.saveOperationalMenu).not.toHaveBeenCalled();
+  });
+
+  it("a new category with the old name of a renamed one gets a new id (no overwrite)", async () => {
+    const menu = baseMenu();
+    menu.categories.push({ id: "drinks", name: "Beverages" });
+    await renderMenu(menu);
+    openCategories();
+    fireEvent.click(screen.getByRole("button", { name: "New Category" }));
+    fireEvent.change(screen.getByLabelText(/Category Name/), { target: { value: "Drinks" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Category" }));
+    await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
+    expect(saved().category).toEqual({ id: "drinks-2", name: "Drinks" });
+  });
+
+  it("manager: a product also sold in stores they cannot see is not offered, and counts every store", async () => {
+    setWorkspace("manager", ["downtown"]);
+    const menu = baseMenu();
+    menu.items[1] = { ...menu.items[1]!, otherStoreCount: 1 };
+    await renderMenu(menu);
+    const card = screen.getByText("Store Fries").closest("li")!;
+    expect(within(card).queryByRole("button", { name: "Edit Store Fries" })).toBeNull();
+    expect(within(card).queryByRole("button", { name: /Duplicate/ })).toBeNull();
+    expect(within(card).getByText("Sold in stores you don't manage")).toBeInTheDocument();
+    expect(within(card).getByText("2 stores")).toBeInTheDocument();
+  });
+
+  it("owner: a product listed in a store that is not active is explained, not offered", async () => {
+    setWorkspace("owner", ["downtown", ["pop-up", "placeholder"]]);
+    const menu = baseMenu();
+    menu.items[1] = { ...menu.items[1]!, locationIds: ["pop-up"] };
+    await renderMenu(menu);
+    const card = screen.getByText("Store Fries").closest("li")!;
+    expect(within(card).queryByRole("button", { name: "Edit Store Fries" })).toBeNull();
+    expect(within(card).getByText(/Sold in a store that is not active/)).toBeInTheDocument();
+  });
+
+  it("switching organization: a late response of the previous organization is ignored", async () => {
+    api.fetchOperationalMenu.mockResolvedValue(baseMenu());
+    const view = render(<MenuPage />);
+    await screen.findByText("Classic Burger");
+    const other: Menu = {
+      categories: [{ id: "pizza", name: "Pizza" }],
+      archivedCategories: [],
+      items: [item({ id: "p-1", name: "Margherita", category: "pizza" })],
+    };
+    let lateOrg1: ((m: Menu) => void) | undefined;
+    api.fetchOperationalMenu.mockImplementation(({ data }: { data: { orgId: string } }) =>
+      data.orgId === "org-1" ? new Promise<Menu>((r) => (lateOrg1 = r)) : Promise.resolve(other),
+    );
+    // A write in org-1 whose refresh is still in flight when the member switches organization
+    // (same mounted screen, as the organization switcher does).
+    fireEvent.click(
+      within(screen.getByText("Classic Burger").closest("li")!).getByRole("button", {
+        name: "Mark unavailable",
+      }),
+    );
+    await waitFor(() => expect(lateOrg1).toBeDefined());
+    setWorkspace("owner", undefined, "org-2");
+    view.rerender(<MenuPage />);
+    expect(await screen.findByText("Margherita")).toBeInTheDocument();
+    lateOrg1!(baseMenu());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Classic Burger")).toBeNull();
+    expect(screen.getByText("Margherita")).toBeInTheDocument();
   });
 });

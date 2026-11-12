@@ -16,7 +16,7 @@
   "deleteSafeTitle": "Remover “{{name}}” do cardápio?",
   "deleteSafePrompt": "O produto fica indisponível e deixa de aparecer no PDV e no cardápio do cliente. Pedidos já feitos não são afetados, e você pode disponibilizá-lo de novo a qualquer momento.",
   "readOnlyNotice": "Somente visualização. Seu perfil pode ver o catálogo, mas não alterá-lo.",
-  "categoriesOwnerOnlyNotice": "As categorias são gerenciadas pelo proprietário da conta. Você ainda pode criar e editar produtos nas suas lojas.",
+  "categoriesOwnerOnlyNotice": "As categorias são gerenciadas pelo proprietário da conta.",
   "filters": {
     "status": "Disponibilidade",
     "all": "Todos",
@@ -35,7 +35,9 @@
     "createCategoryFirst": "Criar categoria",
     "filteredEmptyTitle": "Nenhum produto corresponde a esses filtros",
     "filteredEmptyBody": "Tente outra categoria, disponibilidade ou termo de busca.",
-    "clearFilters": "Limpar filtros"
+    "clearFilters": "Limpar filtros",
+    "stale": "Não foi possível atualizar o cardápio; o que você vê pode estar desatualizado.",
+    "reload": "Recarregar"
   },
   "toast": {
     "productCreated": "Produto criado",
@@ -70,7 +72,8 @@
     "categoryNameRequired": "Informe o nome da categoria.",
     "categoryExists": "Já existe uma categoria chamada “{{name}}”.",
     "categoryArchivedExists": "“{{name}}” é uma categoria arquivada. Reative-a em vez de criar uma nova.",
-    "noActiveCategory": "Ainda não há nenhuma categoria ativa. Crie uma antes de cadastrar produtos."
+    "noActiveCategory": "Ainda não há nenhuma categoria ativa. Crie uma antes de cadastrar produtos.",
+    "noStore": "Você não tem nenhuma loja ativa para vender este produto."
   },
   "empty": {
     "title": "Nenhum produto encontrado",
@@ -97,7 +100,9 @@
     "copyName": "{{name}} (cópia)",
     "duplicateLabel": "Duplicar {{name}}",
     "editLabel": "Editar {{name}}",
-    "deleteLabel": "Remover {{name}} do cardápio"
+    "deleteLabel": "Remover {{name}} do cardápio",
+    "ownerOnlyAllStores": "Vendido em todas as lojas: só o proprietário da conta pode alterá-lo.",
+    "inactiveStore": "Vendido em uma loja que não está ativa. Ative a loja para alterar este produto."
   },
   "form": {
     "titleNew": "Criar Produto",
