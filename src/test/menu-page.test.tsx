@@ -184,7 +184,7 @@ describe("owner: category lifecycle", () => {
         data: {
           kind: "category",
           orgId: "org-1",
-          category: { id: "smash-burgers", name: "Smash Burgers" },
+          category: { op: "create", id: "smash-burgers", name: "Smash Burgers" },
         },
       }),
     );
@@ -231,7 +231,7 @@ describe("owner: category lifecycle", () => {
         data: {
           kind: "category",
           orgId: "org-1",
-          category: { id: "sides", name: "Sides & Snacks", description: "Crispy" },
+          category: { op: "update", id: "sides", name: "Sides & Snacks", description: "Crispy" },
         },
       }),
     );
@@ -289,7 +289,11 @@ describe("owner: category lifecycle", () => {
     fireEvent.click(within(archived).getByRole("button", { name: "Reactivate Desserts" }));
     await waitFor(() =>
       expect(api.saveOperationalMenu).toHaveBeenCalledWith({
-        data: { kind: "category", orgId: "org-1", category: { id: "desserts", name: "Desserts" } },
+        data: {
+          kind: "category",
+          orgId: "org-1",
+          category: { op: "reactivate", id: "desserts", name: "Desserts" },
+        },
       }),
     );
     expect(toast.success).toHaveBeenCalledWith("Category reactivated");
@@ -521,7 +525,12 @@ describe("review fixes", () => {
     fireEvent.change(screen.getByLabelText(/Description/), { target: { value: "Crispy" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
-    expect(saved().category).toEqual({ id: "sides", name: "Sides", description: "Crispy" });
+    expect(saved().category).toEqual({
+      op: "update",
+      id: "sides",
+      name: "Sides",
+      description: "Crispy",
+    });
   });
 
   it("a rename cannot take another category's name, even with other accents or punctuation", async () => {
@@ -543,7 +552,7 @@ describe("review fixes", () => {
     fireEvent.change(screen.getByLabelText(/Category Name/), { target: { value: "Drinks" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Category" }));
     await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
-    expect(saved().category).toEqual({ id: "drinks-2", name: "Drinks" });
+    expect(saved().category).toEqual({ op: "create", id: "drinks-2", name: "Drinks" });
   });
 
   it("manager: a product also sold in stores they cannot see is not offered, and counts every store", async () => {
@@ -596,5 +605,56 @@ describe("review fixes", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByText("Classic Burger")).toBeNull();
     expect(screen.getByText("Margherita")).toBeInTheDocument();
+  });
+});
+
+describe("category intents (0029): database refusals explained", () => {
+  it("a creation refused because the category was just created elsewhere (category_exists)", async () => {
+    await renderMenu();
+    api.saveOperationalMenu.mockRejectedValueOnce(new Error("category_exists"));
+    openCategories();
+    fireEvent.click(screen.getByRole("button", { name: "New Category" }));
+    fireEvent.change(screen.getByLabelText(/Category Name/), { target: { value: "Shakes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Category" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "This category already exists (it may have just been created in another session). The menu has been refreshed.",
+      ),
+    );
+    expect(api.saveOperationalMenu.mock.calls[0]![0].data.category.op).toBe("create");
+    // refreshed after the refusal; the form stays open so nothing typed is lost
+    await waitFor(() => expect(api.fetchOperationalMenu).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText(/Category Name/)).toHaveValue("Shakes");
+  });
+
+  it("an edit refused because the category was archived meanwhile (category_archived)", async () => {
+    await renderMenu();
+    api.saveOperationalMenu.mockRejectedValueOnce(new Error("category_archived"));
+    openCategories();
+    fireEvent.click(screen.getByRole("button", { name: "Edit Sides" }));
+    fireEvent.change(screen.getByLabelText(/Category Name/), { target: { value: "Sides 2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "This category is archived. Reactivate it in Manage Categories to use it again. The menu has been refreshed.",
+      ),
+    );
+    expect(api.saveOperationalMenu.mock.calls[0]![0].data.category.op).toBe("update");
+  });
+
+  it("a re-activation refused because it was already re-activated (category_not_archived), in pt-BR", async () => {
+    await i18n.changeLanguage("pt-BR");
+    await renderMenu();
+    api.saveOperationalMenu.mockRejectedValueOnce(new Error("category_not_archived"));
+    fireEvent.click(screen.getByRole("button", { name: "Gerenciar Categorias" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reativar Desserts" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Esta categoria já está ativa. O cardápio foi atualizado.",
+      ),
+    );
+    expect(api.saveOperationalMenu.mock.calls[0]![0].data.category.op).toBe("reactivate");
+    // no technical code is ever shown
+    for (const [msg] of toast.error.mock.calls) expect(String(msg)).not.toMatch(/category_/);
   });
 });

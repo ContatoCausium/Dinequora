@@ -391,7 +391,14 @@ export function MenuPage() {
           data: {
             kind: "category",
             orgId: org.id,
-            category: { id, name, ...(description ? { description } : {}) },
+            category: {
+              // The database refuses a creation over an existing id (category_exists /
+              // category_archived) and an edit of an archived category (category_archived).
+              op: categoryForm.mode === "edit" ? "update" : "create",
+              id,
+              name,
+              ...(description ? { description } : {}),
+            },
           },
         }),
       categoryForm.mode === "edit" ? "toast.categoryUpdated" : "toast.categoryCreated",
@@ -413,7 +420,7 @@ export function MenuPage() {
   }
 
   function reactivateCategory(c: ArchivedCategoryRef) {
-    // Saving an existing category re-activates it (the upsert sets active = true by default).
+    // Explicit re-activation (0029): only an archived category; name and description are kept.
     void run(
       "category.reactivate",
       () =>
@@ -422,6 +429,7 @@ export function MenuPage() {
             kind: "category",
             orgId: org.id,
             category: {
+              op: "reactivate",
               id: c.id,
               name: c.name,
               ...(c.description ? { description: c.description } : {}),
