@@ -1,11 +1,13 @@
 // Seeds the isolated QA tenant used by the security/permission regression suites.
 //
-// This is NOT the commercial demo (MARAO / Aurora). It runs only against the disposable QA stack
-// (local `dq-rebuild` on port 55321, or the ephemeral Supabase started inside CI) and refuses the
-// demo stack (54321) and any hosted URL.
+// This is NOT the commercial demo (MARAO / Aurora). It writes only through the API of a DISPOSABLE
+// stack: before anything else the target guard (scripts/guard/target-guard.mjs) asks the database
+// behind SB_URL to attest that it was marked disposable (claim on a new, empty stack, or an explicit
+// adopt of a copy). The persistent QA, the demo, an unmarked restored copy and any hosted URL are
+// refused, whatever the port or project id.
 //
 // Usage (repo root):
-//   SB_URL=http://127.0.0.1:55321 SB_ANON=<qa anon key> SB_SERVICE=<qa service key> \
+//   SB_URL=http://127.0.0.1:64421 SB_ANON=<anon key> SB_SERVICE=<service key> \
 //   CREDS_FILE=<path outside the repo> node scripts/qa/seed-qa-org.mjs
 //
 // Everything is created through the same RPCs the UI calls (create_organization, create_location,
@@ -15,18 +17,19 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
+import { assertDisposableApi, exitOnRefusal } from "../guard/target-guard.mjs";
 
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { createClient } = require("@supabase/supabase-js");
 
 const URL_ = process.env.SB_URL ?? "";
-if (!/^http:\/\/(127\.0\.0\.1|localhost):55321$/.test(URL_))
-  throw new Error("Refusing: SB_URL must be the disposable QA stack (http://127.0.0.1:55321)");
 const ANON = process.env.SB_ANON;
 const SERVICE = process.env.SB_SERVICE;
 const CREDS_FILE = process.env.CREDS_FILE;
 if (!ANON || !SERVICE || !CREDS_FILE)
   throw new Error("SB_ANON, SB_SERVICE and CREDS_FILE are required");
+// Before any write: the database behind this API must be disposable (there is no override).
+await assertDisposableApi(URL_, SERVICE, "seed:qa-tenant").catch(exitOnRefusal);
 
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 const svc = createClient(URL_, SERVICE, opts);

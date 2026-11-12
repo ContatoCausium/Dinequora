@@ -19,7 +19,7 @@
 // database, works only there and removes all of it at the end. It does not read or change the
 // shared QA tenant and can run in parallel with every other test.
 //
-//   QA_DB_URL=postgresql://...@127.0.0.1:55322/postgres node scripts/security/tax_rate_concurrency.mjs
+//   QA_DB_URL=postgresql://...@127.0.0.1:64422/postgres node scripts/security/tax_rate_concurrency.mjs
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import {
@@ -30,12 +30,13 @@ import {
   dropTestUsersSql,
   isolatedOrg,
 } from "../qa/isolated-org.mjs";
+import { assertDisposableDb, exitOnRefusal } from "../guard/target-guard.mjs";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const postgres = require("postgres");
 
 const DB_URL = process.env.QA_DB_URL ?? process.env.DB_URL;
-if (!/@(127\.0\.0\.1|localhost):55322\/postgres$/.test(DB_URL ?? ""))
-  throw new Error("Refusing: QA_DB_URL must be the local QA database (55322)");
+// Before any connection that writes: the database must be disposable (scripts/guard/target-guard.mjs).
+await assertDisposableDb(DB_URL, "test:tax-rate-concurrency").catch(exitOnRefusal);
 
 const SEEDED = 88750;
 const PRODUCT = "conc-soda";

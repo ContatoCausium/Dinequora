@@ -1,22 +1,30 @@
-# Disposable QA / CI stack (Dinequora). NOT the commercial demo (that one is ../../../supabase,
-# ports 543xx). Same identity as the local `dq-rebuild` stack: ports 553xx, project_id dq-rebuild.
-# Started with `supabase start --workdir scripts/qa`. It never points at a hosted project and has
-# no seed: the schema comes only from drizzle/migrations, the QA tenant from scripts/qa/seed-qa-org.mjs.
-project_id = "dq-rebuild"
+# Disposable CI / test stack (Dinequora). Its own identity: project_id dq-ci, ports 6442x. It is NOT
+# the commercial demo (../../../supabase, ports 543xx) and NOT the persistent local QA (dq-rebuild,
+# ports 553xx, its own config outside this repository): the two used to share project id and ports.
+# Ports and names are not what protects the persistent stacks: every script that writes requires a
+# database marked disposable by scripts/guard/target-guard.mjs (see docs/operations/target-guard.md).
+# Started with `supabase start --workdir scripts/qa`. It never points at a hosted project. Its only
+# seed is the empty dq_guard schema: the schema comes from drizzle/migrations, the QA tenant from
+# scripts/qa/seed-qa-org.mjs.
+project_id = "dq-ci"
 
 [api]
 enabled = true
-port = 55321
-schemas = ["public", "graphql_public"]
+port = 64421
+# dq_guard exposes only dq_guard.attest() to the service role: a script holding this stack's API
+# key can prove that the database behind the API is disposable (scripts/guard/target-guard.mjs).
+schemas = ["public", "graphql_public", "dq_guard"]
 extra_search_path = ["public", "extensions"]
 
 [db]
-port = 55322
-shadow_port = 55320
+port = 64422
+shadow_port = 64420
 major_version = 17
 
 [db.seed]
-enabled = false
+# Only the empty dq_guard schema (guard-schema.sql); no application data.
+enabled = true
+sql_paths = ["./guard-schema.sql"]
 
 [studio]
 enabled = false

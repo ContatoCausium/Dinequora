@@ -46,8 +46,8 @@ para a hospedagem. Nunca o deduza do nome nem o grave em arquivo versionado.
 | Ambiente     | Onde                                                     | Dados                                     |
 | ------------ | -------------------------------------------------------- | ----------------------------------------- |
 | Demonstração | Stack local (`supabase/config.toml`), portas 54321/54322 | Fictícios (organizações demo)             |
-| QA           | Stack local `dq-rebuild`, portas 55321/55322             | Fixtures de teste                         |
-| CI           | Banco descartável criado a cada execução do job          | Criados e destruídos pela suíte           |
+| QA           | Stack local `dq-rebuild`, portas 55321/55322 (protegido) | Tenant de QA; scripts de teste recusados  |
+| CI / testes  | Stack `dq-ci` (portas 6442x), novo a cada execução       | Criados e destruídos pela suíte           |
 | **Produção** | Projeto hospedado `dinequora-production`                 | **Somente dados reais, criados pelo uso** |
 
 Nenhuma linha é copiada da demonstração ou do QA para a produção (`data-layers-and-marao-production.md`).
@@ -264,9 +264,14 @@ não serve para migrations. A conexão direta exige IPv6 ou o complemento de IPv
 
    ```bash
    read -rs LOVABLE_DB_MIGRATION_URL && export LOVABLE_DB_MIGRATION_URL
+   # guard de destino (drizzle.config.ts): um host remoto só passa com a confirmação desse host
+   export DQ_GUARD_CONFIRM=migrate:remote:<host do banco de produção>
    npx drizzle-kit migrate
-   unset LOVABLE_DB_MIGRATION_URL
+   unset LOVABLE_DB_MIGRATION_URL DQ_GUARD_CONFIRM
    ```
+
+   Sem `DQ_GUARD_CONFIRM`, ou com a de outro host, o `drizzle-kit` para antes de conectar
+   (`docs/operations/target-guard.md`).
 
    **Transação** — conferido no código das versões fixadas (`drizzle-kit` 0.31.11,
    `drizzle-orm` 0.45.4, driver `postgres` 3.4.9; o pacote `pg` não está instalado):

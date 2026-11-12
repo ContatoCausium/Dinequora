@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Security & integration regression suite on a FRESH disposable QA stack (CI, or a newly started
-# local stack). Never run it against the commercial demo or a hosted project: every step below
-# refuses anything other than the QA ports (55321 API / 55322 DB).
-#
-# Those ports and the project id (dq-rebuild) are also the ones of the PERSISTENT local QA stack, so
-# step 0 refuses any database that is not new and empty (no migration tracker, no application
-# table): the persistent QA, a stack the suite already ran on, or anything restored into one.
+# Security & integration regression suite on a FRESH disposable stack (CI, or a newly started local
+# stack from scripts/qa: project dq-ci, ports 6442x, its own identity). It never relies on ports or
+# names: step 0 claims the database with the target guard (scripts/guard/target-guard.mjs), which
+# accepts only a NEW, EMPTY local database of a cluster that is not protected, and every script below
+# re-checks that marker through the channel it writes with. The persistent QA, the demo, a stack the
+# suite already ran on, a restored copy and any hosted project are refused.
 #
 #   supabase start --workdir scripts/qa -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
 #   bash scripts/qa/security-suite.sh
 #
 # Steps (any failure stops the suite with a non-zero exit, which blocks the merge in CI):
-#   0. the target database is new and empty (see above)
+#   0a. direct runs on the still unmarked new database are refused and change nothing: QA seed,
+#      permission matrix, a race script, an integration test, a fixture, the demo seed, and the
+#      generic overrides that used to exist (ALLOW_DEMO_WRITES, the PR #22 fixture opt-in)
+#   0b. claim: the new, empty database is marked disposable (bound to its cluster and database)
+#   0c. target guard self-test on probe databases of this cluster: remote and closed targets, copied
+#      and tampered markers, populated databases, adopt confirmations, concurrent claims
 #   1. apply every migration from zero with the same tool as production (drizzle-kit migrate)
 #   2. journal/tracker/hash integrity and SQL-first policy (scripts/qa/check-migrations.mjs)
 #   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
@@ -19,12 +23,12 @@
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
 #      0022 cross-organization store scope and organization features, 0024 recipes, 0025 store tax,
 #      0026 menu category archive, 0028/0029 category deactivation through the save closed, 0029
-#      category intents create/update/reactivate. Every fixture runs in one transaction that ends in
-#      ROLLBACK; the operations fixture uses fresh ids on every run and refuses to run without the
-#      opt-in this runner sets (dinequora.fixture_target=disposable)
+#      category intents create/update/reactivate, billing and entitlements (plan limits, subscription
+#      states, suspended organizations, privileged billing tables, team limits). Every fixture runs in one transaction that ends in
+#      ROLLBACK and starts with the target guard; the operations fixture uses fresh ids on every run
 #   3b. the operations fixture leaves nothing behind when it is interrupted by an error, when rows
-#      with the literal ids of its former version already exist, when it is run without the opt-in
-#      (refused) and when it is run again: every table of public and auth keeps its exact row count
+#      with the literal ids of its former version already exist, and when it is run again: every
+#      table of public and auth keeps its exact row count
 #   4. seed the isolated QA tenant (two stores, six profiles, second tenant)
 #   5. permission matrix: six profiles x store scope x tenant isolation x inventory costs
 #   5b. 0022 equivalence on the seeded data: every member x permission x store gives the 0019
@@ -52,8 +56,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 eval "$(supabase status --workdir scripts/qa -o env 2>/dev/null | grep -E '^(API_URL|DB_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
-[[ "${API_URL:-}" =~ ^http://(127\.0\.0\.1|localhost):55321$ ]] || { echo "Refusing: QA API must be on 55321 (got '${API_URL:-}')"; exit 2; }
-[[ "${DB_URL:-}" =~ @(127\.0\.0\.1|localhost):55322/postgres$ ]] || { echo "Refusing: QA DB must be on 55322"; exit 2; }
+[[ -n "${API_URL:-}" && -n "${DB_URL:-}" && -n "${SERVICE_ROLE_KEY:-}" ]] || { echo "Refusing: the scripts/qa stack is not running (supabase start --workdir scripts/qa)"; exit 2; }
+GUARD="node scripts/guard/target-guard.mjs"
 
 ARTIFACTS="${QA_ARTIFACTS:-$(mktemp -d)}"
 mkdir -p "$ARTIFACTS"
@@ -62,18 +66,25 @@ CREDS_FILE="$ARTIFACTS/qa-credentials.json"   # generated passwords; never print
 
 # psql on the runner; locally (no psql installed) the one inside the QA db container.
 QA_PROJECT=$(sed -n 's/^project_id = "\(.*\)"/\1/p' scripts/qa/supabase/config.toml)
-# One psql session on the QA database, reading stdin; PGOPTIONS is passed through.
+# One psql session on the QA database, reading stdin. The SQL files check the target guard
+# themselves (dq_guard.attest), whatever channel reaches the database.
 psql_target() {
   if command -v psql >/dev/null; then psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 "$@"
   else docker exec -i -e PGOPTIONS="${PGOPTIONS:-}" "supabase_db_${QA_PROJECT}" psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 "$@"; fi
 }
-# The SQL fixtures refuse to run without this opt-in; it is only used after the step 0 check.
-FIXTURE_OPT_IN="-c dinequora.fixture_target=disposable"
 run_sql() { # file [psql args...]
   local f="$1"; shift
-  PGOPTIONS="$FIXTURE_OPT_IN" psql_target "$@" < "$f"
+  psql_target "$@" < "$f"
 }
 sql_value() { PGOPTIONS="" psql_target -At -c "$1"; }
+with_opts() { local o="$1"; shift; PGOPTIONS="$o" "$@"; } # session options for one call
+# A direct run that the guard must refuse (output kept in the artifacts).
+must_refuse() { # label, command...
+  local label="$1"; shift; local log="$ARTIFACTS/refused-${label// /-}.txt"
+  if "$@" > "$log" 2>&1; then echo "FAIL $label ran on an unmarked database"; exit 1; fi
+  grep -q "refused by the target guard" "$log" || { tail -5 "$log"; echo "FAIL $label failed for another reason"; exit 1; }
+  echo "  refused: $label"
+}
 # Exact row count of every table of public and auth, on one line: the "nothing changed" baseline.
 TABLE_COUNTS_SQL="select string_agg(format('%s.%s=%s', table_schema, table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text), ',' order by table_schema, table_name) from information_schema.tables where table_schema in ('public', 'auth') and table_type = 'BASE TABLE'"
 table_counts() { sql_value "$TABLE_COUNTS_SQL"; }
@@ -83,17 +94,34 @@ run_check() {
   echo "$out" | grep -E "PASS" || { echo "$out" | tail -5; echo "FAIL $1 (no PASS line)"; exit 1; }
 }
 
-echo "::group::0. target is a new, empty database"
-state=$(sql_value "select coalesce(to_regclass('drizzle.__drizzle_migrations')::text, '-') || ' ' || coalesce(to_regclass('public.organizations')::text, '-')")
-[[ "$state" == "- -" ]] || {
-  echo "Refusing: this database is not new and empty (found: $state). The suite applies every migration"
-  echo "and writes test data: it runs only on a freshly started disposable stack, never on the persistent QA."
-  exit 2
-}
-echo "  new and empty"
+echo "::group::0a. direct runs on the unmarked new database are refused"
+# Nothing is claimed yet: an existing (claimed) database means the suite already ran here.
+if $GUARD check --db-url "$DB_URL" --operation suite:start > /dev/null 2>&1; then
+  echo "Refusing: this database is already marked; the suite needs a freshly started stack"; exit 2
+fi
+before0=$(table_counts)
+must_refuse "QA seed" env SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" node scripts/qa/seed-qa-org.mjs
+must_refuse "permission matrix with ALLOW_DEMO_WRITES" env ALLOW_DEMO_WRITES=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" node scripts/security/permission_matrix.mjs
+must_refuse "API check with the anon key" env SB_SERVICE="$ANON_KEY" $GUARD check-api --api-url "$API_URL" --operation test:x
+must_refuse "race script" env QA_DB_URL="$DB_URL" node scripts/security/tax_rate_concurrency.mjs
+must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
+must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
+must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
+[[ "$(table_counts)" == "$before0" ]] || { echo "FAIL a refused run changed rows"; exit 1; }
+[[ ! -e "$ARTIFACTS/refused-seed.json" ]] || { echo "FAIL the refused seed wrote its credentials file"; exit 1; }
+echo "  nothing changed"
+echo "::endgroup::"
+
+echo "::group::0b. claim the new, empty database"
+$GUARD claim --db-url "$DB_URL"
+echo "::endgroup::"
+
+echo "::group::0c. target guard self-test (probe databases of this cluster)"
+DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" bash scripts/guard/selftest.sh
 echo "::endgroup::"
 
 echo "::group::1. migrations from zero"
+$GUARD check --db-url "$DB_URL" --operation suite:migrate --new-empty
 LOVABLE_DB_MIGRATION_URL="$DB_URL" npx --no-install drizzle-kit migrate 2>&1 | grep -E "applied|error|Error" || true
 echo "::endgroup::"
 
@@ -106,7 +134,7 @@ run_check scripts/security/fresh_database_no_demo.sql
 echo "::endgroup::"
 
 echo "::group::3. SQL security fixtures"
-for f in reconstructed_operations permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent; do
+for f in reconstructed_operations permission_scope_features recipe_product_and_metadata store_sales_tax menu_archive menu_category_deactivate menu_category_intent billing_entitlements; do
   run_check "scripts/security/$f.sql"
 done
 echo "::endgroup::"
@@ -127,15 +155,8 @@ cat scripts/security/fixture_legacy_ids.sql scripts/security/reconstructed_opera
 run_check "$ARTIFACTS/fixture-over-legacy-ids.sql"
 same_counts "the fixture run over the former literal ids"
 echo "  run over the former literal ids: PASS, no row left"
-# c) without the opt-in it refuses before writing anything
-if PGOPTIONS="" psql_target < scripts/security/reconstructed_operations.sql > "$ARTIFACTS/fixture-no-opt-in.txt" 2>&1; then
-  echo "FAIL the fixture ran without the opt-in"; exit 1
-fi
-grep -q "refused: this fixture runs only through" "$ARTIFACTS/fixture-no-opt-in.txt" \
-  || { tail -5 "$ARTIFACTS/fixture-no-opt-in.txt"; echo "FAIL no-opt-in run failed for another reason"; exit 1; }
-same_counts "the refused fixture run"
-echo "  run without the opt-in: refused, no row changed"
-# d) a second full run passes again (fresh ids on every run)
+# (an unmarked or copied database: refused before writing, see 0a and 0c)
+# c) a second full run passes again (fresh ids on every run)
 run_check scripts/security/reconstructed_operations.sql
 same_counts "the repeated fixture run"
 echo "  repeated run: PASS, no row left"
@@ -181,7 +202,7 @@ echo "::endgroup::"
 echo "::group::7. order history, kitchen board and menu archive against the database"
 # Each file works only in organizations it creates and removes (scripts/qa/isolated-org.mjs), so
 # the files run in parallel (vitest default) and nothing the earlier steps recorded can interfere.
-QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
+QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL" \
   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run \
   src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts \
   src/test/integration/menu-archive.db.test.ts

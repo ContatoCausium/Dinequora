@@ -1,28 +1,25 @@
 // Permission / store-scope / tenant-isolation regression (0018-0020). LOCAL/CI Supabase ONLY.
 //
-// Default target: the isolated QA tenant on the disposable QA stack (port 55321), seeded by
-// scripts/qa/seed-qa-org.mjs. Usage (repo root):
-//   SB_URL=http://127.0.0.1:55321 SB_ANON=<qa anon key> SB_SERVICE=<qa service key> \
+// Target: the isolated QA tenant seeded by scripts/qa/seed-qa-org.mjs on a DISPOSABLE stack.
+// Usage (repo root):
+//   SB_URL=http://127.0.0.1:64421 SB_ANON=<anon key> SB_SERVICE=<service key> \
 //   CREDS_FILE=<path outside the repo> node scripts/security/permission_matrix.mjs
 // CREDS_FILE: { orgId, locations:{downtown,riverside}, owner, admin, team:{manager},
 //   roles:{<email>:{userId,password}}, emails:{cashier,kitchen,stock,finance},
 //   fixtures:{sodaSku,productId,otherOrgSlug} }. Never commit it.
 // The suite performs real writes in the target org (sales, a stock entry, a receipt, an
-// expense), so it refuses the commercial demo stack (54321) unless ALLOW_DEMO_WRITES=1 is set
-// explicitly, and refuses every other URL.
+// expense, a store), so before anything else the database behind SB_URL must attest that it is
+// disposable (scripts/guard/target-guard.mjs). The commercial demo, the persistent QA, unmarked
+// copies and hosted URLs are refused; the former ALLOW_DEMO_WRITES switch no longer exists.
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { assertDisposableApi, exitOnRefusal } from "../guard/target-guard.mjs";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { createClient } = require("@supabase/supabase-js");
 const URL_ = process.env.SB_URL;
-const QA_STACK = /^http:\/\/(127\.0\.0\.1|localhost):55321$/.test(URL_ ?? "");
-const DEMO_STACK = /^http:\/\/(127\.0\.0\.1|localhost):54321$/.test(URL_ ?? "");
-if (!QA_STACK && !DEMO_STACK)
-  throw new Error("Refusing: SB_URL must be the local QA stack (55321)");
-if (DEMO_STACK && process.env.ALLOW_DEMO_WRITES !== "1")
-  throw new Error(
-    "Refusing: 54321 is the commercial demo and this suite writes data; use the QA stack",
-  );
+await assertDisposableApi(URL_, process.env.SB_SERVICE, "test:permission-matrix").catch(
+  exitOnRefusal,
+);
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 const serviceClient = () => createClient(URL_, process.env.SB_SERVICE, opts);
 async function signedIn(email, password) {

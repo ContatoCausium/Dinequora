@@ -1,0 +1,15 @@
+{
+  "$comment": "PostgreSQL clusters that test scripts must never write to, identified by sha256('dinequora-cluster:' + system_identifier) so the raw identifiers stay out of the repository and the logs. A protected cluster can never be claimed or adopted as disposable; persistent operations on it (scripts/ops/db-ops.sh) need a confirmation bound to its identity. Add a cluster here BEFORE it holds data that matters. Hosted (remote) databases are refused by the guard without being listed.",
+  "clusters": [
+    {
+      "label": "qa",
+      "description": "persistent local QA (dq-rebuild)",
+      "hash": "754f347beef585607d3c63adfe6dadc2e9dbc98d34447db9e2af1653374624c4"
+    },
+    {
+      "label": "demo",
+      "description": "commercial demo stack (local)",
+      "hash": "6929a3961714e982cbbf6c529b47ee9d1d2061dbc175adb97b60301de207b1bf"
+    }
+  ]
+}

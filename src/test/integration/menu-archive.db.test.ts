@@ -27,7 +27,7 @@ import {
   isolatedOrg,
   type IsolatedOrg,
 } from "../../../scripts/qa/isolated-org.mjs";
-import { qaSql, type QaSql } from "./qa-db";
+import { disposableQa, type QaSql } from "./qa-db";
 
 const ENABLED = process.env["QA_PAGING_DB"] === "1";
 const URL_ = process.env["SB_URL"] ?? "";
@@ -106,12 +106,12 @@ describe.skipIf(!ENABLED).sequential("menu category archive against the database
     );
 
   beforeAll(async () => {
-    if (!/^http:\/\/(127\.0\.0\.1|localhost):55321$/.test(URL_))
-      throw new Error("refusing: not the QA stack");
+    // Target guard: both channels (SQL and API) must reach a disposable database.
+    const guarded = await disposableQa(URL_, "test:menu-archive");
     const creds = JSON.parse(fs.readFileSync(process.env["CREDS_FILE"]!, "utf8")) as Creds;
     const kitchen = creds.roles[creds.emails["kitchen"]!]!;
     ownerUserId = creds.owner.userId;
-    sql = qaSql();
+    sql = guarded;
     org = isolatedOrg("menu", {
       members: [
         { userId: creds.owner.userId, role: "owner" },
