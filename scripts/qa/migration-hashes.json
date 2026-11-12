@@ -29,7 +29,8 @@
     "0025_store_sales_tax_rate": "a0dc102a0f0b43a40ae07f6e74d54b1a28dc6f6a856ab96e4c6a5319eb998d78",
     "0026_fix_archive_operational_menu_category": "8f5e3dca47b6dded7daee4a8e8704e754fcbc5b7826f6383b629163089563425",
     "0027_save_operational_menu_category_lock": "879243da28ab136b245fd2820112d447848ecee30c90547f8e836f44baf403fe",
-    "0028_save_operational_menu_category_deactivation": "71042f0c0bc543f527807293daf6fb6005b6f0a1099d5b814088d3bcddc361c9"
+    "0028_save_operational_menu_category_deactivation": "71042f0c0bc543f527807293daf6fb6005b6f0a1099d5b814088d3bcddc361c9",
+    "0029_save_operational_menu_category_intent": "d3deec3b23fea7eb6454082557392922a36620f0f985c319e3da708ac12a2b9d"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

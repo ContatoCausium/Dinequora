@@ -204,6 +204,13 @@
       "when": 1794428061911,
       "tag": "0028_save_operational_menu_category_deactivation",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794452221851,
+      "tag": "0029_save_operational_menu_category_intent",
+      "breakpoints": true
     }
   ]
 }
