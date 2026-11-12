@@ -46,22 +46,37 @@ export const fetchOperationalMenu = createServerFn({ method: "POST" })
   .inputValidator(z.object({ orgId: z.string().min(1) }))
   .handler(async ({ data, context }) => {
     const s = await scope(context.supabase, data.orgId);
-    const [cats, products] = await Promise.all([
+    const [cats, archived, products] = await Promise.all([
       context.supabase
         .from("menu_categories")
         .select("*")
         .eq("org_id", s.org.id)
         .eq("active", true)
         .order("name"),
+      context.supabase
+        .from("menu_categories")
+        .select("id, client_id, name, description")
+        .eq("org_id", s.org.id)
+        .eq("active", false)
+        .order("name"),
       context.supabase.from("menu_products").select("*").eq("org_id", s.org.id).order("name"),
     ]);
-    if (cats.error || products.error) throw new Error("menu_read_failed");
+    if (cats.error || archived.error || products.error) throw new Error("menu_read_failed");
     const categoryIds = new Map((cats.data ?? []).map((c) => [c.id, c.client_id]));
     return {
+      // Active categories only (used as is by the POS and the inventory screens).
       categories: (cats.data ?? []).map((c) => ({
         id: c.client_id,
         name: c.name,
         description: c.description,
+      })),
+      // Archived categories, for the Menu screen (review and reactivation), with how many products
+      // still point at each one (none of them can be active: migrations 0026-0028).
+      archivedCategories: (archived.data ?? []).map((c) => ({
+        id: c.client_id,
+        name: c.name,
+        description: c.description,
+        productCount: (products.data ?? []).filter((p) => p.category_id === c.id).length,
       })),
       items: (products.data ?? []).map((p) => ({
         id: p.client_id,
