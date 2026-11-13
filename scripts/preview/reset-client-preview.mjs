@@ -1,29 +1,32 @@
-// Resets the fictional "Dinequora Demo Restaurant" on the hosted CLIENT PREVIEW project only
-// (removes it and recreates it from the deterministic dataset, so every presentation starts equal).
+// Resets the fictional "Dinequora Demo Restaurant" on a checked destination only: removes the demo
+// organization (public.client_preview_purge, demo organizations only) and the demo accounts
+// (reserved .test domain), then seeds the same dataset again anchored at the current time, so every
+// presentation starts from the same state. New passwords are written to the credentials file.
 //
-// Usage (repo root; values from a file outside the repo, never from the command line):
-//   PREVIEW_API_URL=https://<ref>.supabase.co PREVIEW_SERVICE_KEY=<secret key of that project> \
-//   DQ_PREVIEW_CONFIRM=client-preview:reset:client-preview:<ref> node scripts/preview/reset-client-preview.mjs
+//   PREVIEW_TARGET=local|hosted PREVIEW_API_URL=… PREVIEW_SERVICE_KEY=… PREVIEW_PUBLISHABLE_KEY=… \
+//   PREVIEW_CREDS_FILE=<path outside the repo> [DQ_PREVIEW_CONFIRM=client-preview:reset:client-preview:<ref>] \
+//   [PREVIEW_PURGE_ONLY=1] node scripts/preview/reset-client-preview.mjs
 //
-// The client-preview guard (scripts/preview/preview-target.mjs) runs first and refuses any
-// destination that is not the marked client-preview project holding no real data; there is no
-// override. The reset will only ever touch the preview's demo organization.
-//
-// Stage 2 of the client-preview plan delivers the guard only: after a successful check this script
-// stops without deleting or writing anything (the reset steps need their own authorization).
-import {
-  assertClientPreviewApi,
-  exitOnPreviewRefusal,
-  previewTargetFromEnv,
-} from "./preview-target.mjs";
+// resolvePreviewTarget() runs the guard of the destination first; any other target is refused
+// (exit 3). There is no override. The reset never touches another organization or account.
+import { exitOnTargetRefusal, resolvePreviewTarget } from "./client-preview-target.mjs";
 
 const OPERATION = "reset:client-preview";
 
-const target = await assertClientPreviewApi(previewTargetFromEnv(process.env, OPERATION)).catch(
-  exitOnPreviewRefusal,
-);
-console.log(`client-preview guard: ${OPERATION} accepted for project ${target.ref}`);
-console.error(
-  "the client-preview reset is not implemented in this stage; nothing was deleted or written (needs its own authorization)",
-);
-process.exit(4);
+const target = await resolvePreviewTarget(process.env, OPERATION).catch(exitOnTargetRefusal);
+console.log(`client-preview guard: ${OPERATION} accepted for the ${target.where}`);
+const { purgeClientPreview, seedClientPreview, SeedError } = await import("./seed-core.mjs");
+try {
+  await purgeClientPreview(target);
+  if (process.env.PREVIEW_PURGE_ONLY !== "1")
+    await seedClientPreview(target, {
+      credsFile: process.env.PREVIEW_CREDS_FILE,
+      profile: process.env.PREVIEW_DATASET_PROFILE ?? "ledger-safe",
+    });
+} catch (e) {
+  if (e instanceof SeedError) {
+    console.error(`reset stopped: ${e.message}`);
+    process.exit(1);
+  }
+  throw e;
+}

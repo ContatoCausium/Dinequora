@@ -20,7 +20,12 @@ import { Buffer } from "node:buffer";
 
 export const PREVIEW_LABEL = "client-preview";
 export const PREVIEW_MARKER_VERSION = 1;
-export const PREVIEW_OPERATIONS = Object.freeze(["seed:client-preview", "reset:client-preview"]);
+// verify is read-only but still needs a checked destination (a server key reads everything).
+export const PREVIEW_OPERATIONS = Object.freeze([
+  "seed:client-preview",
+  "reset:client-preview",
+  "verify:client-preview",
+]);
 
 const REF = /^[a-z0-9]{20}$/;
 const HOST = /^([a-z0-9]{20})\.supabase\.co$/;

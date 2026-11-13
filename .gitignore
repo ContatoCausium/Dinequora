@@ -38,3 +38,5 @@ supabase/.branches/
 supabase/.temp/
 scripts/qa/supabase/.branches/
 scripts/qa/supabase/.temp/
+scripts/preview/supabase/.branches/
+scripts/preview/supabase/.temp/

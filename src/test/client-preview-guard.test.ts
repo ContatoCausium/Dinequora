@@ -175,8 +175,8 @@ describe("full check through the API", () => {
     const init = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect((init.headers as Record<string, string>)["authorization"]).toBe(`Bearer ${key}`);
   });
-  it("accepts both operations, each with its own confirmation", async () => {
-    expect(PREVIEW_OPERATIONS).toEqual([SEED, RESET]);
+  it("accepts seed, reset and verify, each with its own confirmation", async () => {
+    expect(PREVIEW_OPERATIONS).toEqual([SEED, RESET, "verify:client-preview"]);
     await expect(
       assertClientPreviewApi(target({ operation: RESET, confirm: confirmFor(RESET) })),
     ).resolves.toMatchObject({ ref: REF });
@@ -251,6 +251,11 @@ describe("policy: seed and reset of the client preview", () => {
     "scripts/preview/reset-client-preview.mjs",
   ];
 
+  // Guards a script may run before touching a database: the preview guard itself, the resolver
+  // that runs the right guard for the destination (local disposable stack or hosted preview), or
+  // the brand check of a destination the resolver produced.
+  const GUARD_CALLS = ["assertClientPreviewApi(", "resolvePreviewTarget(", "assertResolvedTarget("];
+
   it("every preview script that writes calls the guard first, with no override", () => {
     for (const f of fs
       .readdirSync(path.join(ROOT, "scripts/preview"))
@@ -262,30 +267,100 @@ describe("policy: seed and reset of the client preview", () => {
       // database access only (Buffer.from, file writes and regex groups are not database writes)
       const firstWrite = code.search(/createClient\(|\bpostgres\((?!\?)|\.rpc\(|\.from\(["'`]/);
       if (firstWrite === -1) continue;
-      const guard = code.indexOf("assertClientPreviewApi(");
+      if (f === "smoke-app.mjs") continue; // signs in as the demo accounts only; covered below
+      const found = GUARD_CALLS.map((g) => code.indexOf(g)).filter((i) => i >= 0);
+      const guard = found.length ? Math.min(...found) : -1;
       expect(guard, `${f} writes without the client-preview guard`).toBeGreaterThan(-1);
       expect(guard, `${f}: a write comes before the guard`).toBeLessThan(firstWrite);
     }
   });
 
-  it("seed and reset run the guard for their own operation before doing anything", () => {
+  it("seed, reset and verify resolve their own operation before loading anything that writes", () => {
     for (const [f, op] of [
       [scripts[0]!, SEED],
       [scripts[1]!, RESET],
+      ["scripts/preview/verify-dataset.mjs", "verify:client-preview"],
     ] as const) {
       const code = read(f).replace(/^\s*\/\/.*$/gm, "");
       expect(code).toContain(`const OPERATION = "${op}";`);
-      expect(code).toMatch(
-        /await assertClientPreviewApi\(previewTargetFromEnv\(process\.env, OPERATION\)\)/,
+      const resolve = code.search(
+        /await resolvePreviewTarget\(process\.env, OPERATION\)\.catch\(exitOnTargetRefusal\)/,
       );
-      expect(code).toContain("exitOnPreviewRefusal");
-      // this stage writes nothing: no client, no connection
-      expect(code).not.toMatch(/createClient\(|postgres\(|fetch\(/);
+      expect(resolve, f).toBeGreaterThan(-1);
+      // the writer is imported (and any client created) only after the destination was accepted
+      const writer = code.search(/import\("\.\/seed-core\.mjs"\)|createClient\(/);
+      if (writer >= 0) expect(resolve, f).toBeLessThan(writer);
+      expect(code, `${f} imports the writer statically`).not.toMatch(/^import .*seed-core/m);
     }
   });
 
+  it("the resolver runs the target guard for local stacks and the preview guard for the hosted project", () => {
+    const code = read("scripts/preview/client-preview-target.mjs");
+    expect(code).toMatch(
+      /mode === "local"[\s\S]*assertDisposableApi\(apiUrl, serviceKey, operation\)/,
+    );
+    expect(code).toMatch(/assertClientPreviewApi\(\{[\s\S]*confirm: env\.DQ_PREVIEW_CONFIRM/);
+    expect(code).toContain("Symbol(");
+    const core = read("scripts/preview/seed-core.mjs").replace(/^\s*\/\/.*$/gm, "");
+    const brand = core.indexOf("assertResolvedTarget(target)");
+    expect(brand).toBeGreaterThan(-1);
+    expect(brand).toBeLessThan(core.indexOf("createClient(target"));
+  });
+
+  it("the app smoke test only talks to a local run, workers.dev or the preview domain", () => {
+    const m = /const ALLOWED_APP =\s*(\/.*\/);/.exec(read("scripts/preview/smoke-app.mjs"));
+    expect(m).not.toBeNull();
+    const allowed = new Function(`return ${m![1]}`)() as RegExp;
+    for (const good of [
+      "http://127.0.0.1:8799",
+      "https://dinequora-client-preview.demo.workers.dev",
+      "https://preview.dinequora.com",
+    ])
+      expect(allowed.test(good), good).toBe(true);
+    for (const bad of [
+      "https://dinequora.com",
+      "https://app.dinequora.com",
+      "http://10.0.0.5:8095",
+      "https://evil.example/x.workers.dev",
+      "https://preview.dinequora.com.evil.example",
+    ])
+      expect(allowed.test(bad), bad).toBe(false);
+  });
+
+  it("the dataset functions refuse anything but the preview or a disposable stack, and act on demo organizations only", () => {
+    const sql = read("scripts/preview/sql/client-preview-functions.sql").replace(/--.*$/gm, "");
+    const guard = sql.indexOf("PERFORM dq_guard.attest('seed:client-preview')");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(sql.search(/CREATE OR REPLACE FUNCTION/));
+    expect(sql).toContain("to_regclass('dq_preview.marker') IS NULL");
+    for (const fn of ["client_preview_backdate", "client_preview_purge"]) {
+      const body = sql.slice(sql.indexOf(`FUNCTION public.${fn}(`));
+      expect(body.indexOf("PERFORM public.client_preview_assert_target(_org_id)")).toBeGreaterThan(
+        -1,
+      );
+      expect(sql).toContain(`REVOKE ALL ON FUNCTION public.${fn}(`);
+      expect(sql).toMatch(
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${fn}\\([^)]*\\) TO service_role;`),
+      );
+    }
+    expect(sql).toMatch(
+      /NOT EXISTS \(SELECT 1 FROM public\.organizations WHERE id = _org_id AND is_demo\)/,
+    );
+    expect(sql).toMatch(/DELETE FROM public\.organizations WHERE id = _org_id AND is_demo;/);
+    expect(sql).not.toMatch(/DELETE FROM (public\.)?audit_logs|DELETE FROM auth\./i);
+    expect(sql).not.toMatch(/GRANT [^;]* TO (anon|authenticated|PUBLIC)/i);
+    // every time moved by the back-dating is checked against now
+    expect((sql.match(/> now\(\)/g) ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+
   it("the destination comes from the environment, never from the command line", () => {
-    for (const f of scripts) expect(read(f)).not.toMatch(/process\.argv/);
+    for (const f of [
+      ...scripts,
+      "scripts/preview/verify-dataset.mjs",
+      "scripts/preview/seed-core.mjs",
+      "scripts/preview/client-preview-target.mjs",
+    ])
+      expect(read(f), f).not.toMatch(/process\.argv/);
   });
 
   it("the identity marker refuses real data and is executable by service_role only", () => {
@@ -318,7 +393,7 @@ describe("policy: seed and reset of the client preview", () => {
     const migrations = fs.readdirSync(path.join(ROOT, "drizzle/migrations"));
     expect(migrations.some((m) => /client.?preview/i.test(m))).toBe(false);
     for (const m of migrations.filter((x) => x.endsWith(".sql")))
-      expect(read(`drizzle/migrations/${m}`), m).not.toMatch(/client_preview_identity|dq_preview/);
+      expect(read(`drizzle/migrations/${m}`), m).not.toMatch(/client_preview_|dq_preview/);
   });
 
   it("the existing seeds keep refusing hosted databases", () => {

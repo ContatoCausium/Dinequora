@@ -1,7 +1,11 @@
 // Types of scripts/preview/preview-target.mjs (used by src/test/client-preview-guard.test.ts).
 export const PREVIEW_LABEL: "client-preview";
 export const PREVIEW_MARKER_VERSION: 1;
-export const PREVIEW_OPERATIONS: readonly ["seed:client-preview", "reset:client-preview"];
+export const PREVIEW_OPERATIONS: readonly [
+  "seed:client-preview",
+  "reset:client-preview",
+  "verify:client-preview",
+];
 export class PreviewRefusal extends Error {}
 export function exitOnPreviewRefusal(e: unknown): never;
 export function assertPreviewOperation(operation: string): void;

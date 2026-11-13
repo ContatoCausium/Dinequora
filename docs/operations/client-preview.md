@@ -82,33 +82,112 @@ profile/URL/key, a Worker not named `dinequora-client-preview`, `vars`/bindings 
 or missing `robots.txt`/`_headers` hardening. Findings never print the matched value. A build path in
 the server-side route manifest is a warning (not served; build from a neutral path to avoid it).
 
-## 5. Seed and reset guard
+## 5. Destinations, dataset, seed, reset and verification
 
-`scripts/preview/seed-client-preview.mjs` and `scripts/preview/reset-client-preview.mjs` call
-`assertClientPreviewApi` (`scripts/preview/preview-target.mjs`) before anything else. The destination
-is read from the environment only:
+### 5.1 Destinations (the only two)
+
+Every dataset script resolves its destination first with `resolvePreviewTarget`
+(`scripts/preview/client-preview-target.mjs`), from the environment only:
+
+| `PREVIEW_TARGET` | Destination                                     | Guard                                                                                                                         |
+| ---------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `local`          | the local **disposable** rehearsal stack (§5.2) | `scripts/guard/target-guard.mjs`: loopback host, database marked disposable by `claim`, protected clusters (QA, demo) refused |
+| `hosted`         | the hosted client-preview project               | `scripts/preview/preview-target.mjs` (below)                                                                                  |
+
+Anything else is refused (exit 3). The writer (`scripts/preview/seed-core.mjs`) accepts only the
+branded object the resolver returns, so a hand-built destination cannot reach it.
+
+Hosted guard: accepted only when the operation is `seed:client-preview`, `reset:client-preview` or
+`verify:client-preview`; the URL is exactly `https://<ref>.supabase.co`; the confirmation
+`DQ_PREVIEW_CONFIRM=client-preview:<operation>:<ref>` names this operation and this project; the key
+is an `sb_secret_` key or a service_role JWT whose `ref` is this project (publishable/anon refused);
+`public.client_preview_identity()` answers with label `client-preview`, marker version 1 and the same
+ref; and the database holds 0 non-demo organizations, 0 accounts outside `.test`/`.example`/`.invalid`
+and 0 platform roles. Keys and the expected confirmation are never printed. There is no override.
+
+### 5.2 Local rehearsal stack (`dq-client-preview`, ports 6473x)
 
 ```bash
-PREVIEW_API_URL=https://<ref>.supabase.co \
-PREVIEW_SERVICE_KEY=<secret key of that project, from a file outside the repo> \
-DQ_PREVIEW_CONFIRM=client-preview:seed:client-preview:<ref> \
-node scripts/preview/seed-client-preview.mjs
-# reset: DQ_PREVIEW_CONFIRM=client-preview:reset:client-preview:<ref>
+supabase start --workdir scripts/preview -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
+# API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY from: supabase status --workdir scripts/preview -o env
+node scripts/guard/target-guard.mjs claim --db-url "$DB_URL"          # new and empty only
+LOVABLE_DB_MIGRATION_URL="$DB_URL" npx drizzle-kit migrate            # 0000-0029
+DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
+docker exec -i supabase_db_dq-client-preview psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  < scripts/preview/sql/client-preview-functions.sql
 ```
 
-Accepted only when: the operation is `seed:client-preview` or `reset:client-preview`; the URL is
-exactly `https://<ref>.supabase.co` (local and private hosts are refused and belong to
-`scripts/guard/target-guard.mjs`, which keeps refusing every hosted database); the confirmation names
-this operation and this project; the key is an `sb_secret_` key or a service_role JWT whose `ref` is
-this project (publishable/anon keys refused); `public.client_preview_identity()` answers with label
-`client-preview`, marker version 1 and the same project ref; and the database holds 0 non-demo
-organizations, 0 accounts outside `.test`/`.example`/`.invalid` and 0 platform roles. Any failure,
-timeout or unexpected answer is a refusal (exit 3); keys and the expected confirmation are never
-printed. There is no override.
+Its own identity (`scripts/preview/supabase/config.toml`): not the demo (543xx), not the persistent
+QA (553xx), not CI (6442x). Sign-up is off as on the hosted preview (`auth.enable_signup = false`;
+never `auth.email.enable_signup`, which CLI 3 reads as the switch of the whole e-mail provider). The
+CLI publishes its ports on all interfaces, like every local stack; it only ever holds fictional data.
 
-**Stage 2 status:** both scripts implement the guard only. After a successful check they stop
-(exit 4) without writing; the dataset (Dinequora Demo Restaurant, Downtown / Westside / Airport, menu,
-stock, recipes, sales history) and the reset steps are a separate, separately authorized change.
+### 5.3 Dataset (`scripts/preview/dataset.mjs`)
+
+Deterministic (seeded) and fictional: **Dinequora Demo Restaurant** (Growth, active), stores
+**Downtown**, **Westside**, **Airport** (America/New_York, 7% / 7% / 7.75% sales tax, opening hours),
+5 categories / 19 products (burger add-ons), 31 stock items per store (lb, oz, gal, units, pack), one
+recipe per product sold in each store (including gal recipes), 4 "Demo …" suppliers, weekly purchase
+orders received in full plus one open order per store, 42 expenses (rent, payroll, energy, water,
+internet, marketing; paid, pending and one overdue), sales with dine-in/takeout/delivery,
+card/cash/digital, discounts, ~1.5% cancellations, kitchen steps, and a live kitchen board (open
+tickets from the last minutes). Accounts (reserved `.test` domain): the owner, a Westside manager and a
+Downtown kitchen account. Food cost ≈ 29% of net sales. Stock is planned with the server's own
+consumption rule, so, executed in business-time order, no sale finds insufficient stock; four items
+end below their minimum (a recorded closing-check loss) so the alerts are real.
+
+Profiles (`PREVIEW_DATASET_PROFILE`):
+
+| Profile                 | Period  | Orders  | Ledger rows     |
+| ----------------------- | ------- | ------- | --------------- |
+| `ledger-safe` (default) | 22 days | ≈ 410   | ≈ 860 (< 1,000) |
+| `full`                  | 36 days | ≈ 3,300 | ≈ 6,800         |
+
+**Known app limitation (product finding, not changed here):** `fetchOperationalResources` reads
+`finance_entries` in one PostgREST request without paging, and PostgREST returns at most 1,000 rows
+(Supabase default). Above that, the Finance and Reports screens add up an arbitrary subset of the
+ledger while the Dashboard (paged orders) stays right. `ledger-safe` keeps the whole ledger under the
+cap (room for ~70 live sales before the next reset); `full` needs a paged or aggregated ledger read
+first. The same limit affects any real organization above ~480 sales.
+
+### 5.4 Seed, reset, verify, smoke test
+
+```bash
+export PREVIEW_TARGET=local PREVIEW_API_URL="$API_URL" PREVIEW_SERVICE_KEY="$SERVICE_ROLE_KEY" \
+       PREVIEW_PUBLISHABLE_KEY="$ANON_KEY" PREVIEW_CREDS_FILE=<file outside the repo>
+node scripts/preview/seed-client-preview.mjs      # refuses if the demo already exists
+node scripts/preview/reset-client-preview.mjs     # purge + seed again, anchored at now
+node scripts/preview/verify-dataset.mjs           # 30 read-only checks (exit 1 on any failure)
+PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # 20 checks through the app
+# hosted: PREVIEW_TARGET=hosted, the project values, and DQ_PREVIEW_CONFIRM for each operation
+```
+
+- **Seed** writes through the same RPCs as the UI, signed in as the demo owner (organization by
+  `create_test_restaurant`, stores, menu, stock, recipes, suppliers, expenses, purchases and receipts,
+  POS sales, kitchen statuses, invitations accepted by the manager and kitchen accounts). With the
+  server key it only creates the confirmed demo accounts, sets the demo subscription (Growth/active,
+  no billing provider, as `seed-demo-orgs.sql`) and calls the dataset functions. Passwords go only to
+  the credentials file (outside the repository, mode 600), which must be writable before anything is
+  created.
+- **Reset** removes the demo organization (`public.client_preview_purge`) and the demo accounts, then
+  seeds again. Run it before each presentation: the live tickets and "today" follow the seed time.
+- **Verify** recomputes orders (total, lines, store tax), ledger (revenue, COGS), payments,
+  cancellations, stock (quantity = sum of movements), receipts, time coverage, the kitchen board, the
+  ledger cap, and isolation through RLS (owner, Westside manager, Downtown kitchen, anonymous, no
+  platform admin).
+- **Smoke test** calls the built Worker's server functions as the browser does (pages and headers,
+  reads for every store, a POS sale, the kitchen moving it to delivered, the recipe consumption in
+  gal, the ledger read, store isolation) and prints the time and size of each call.
+
+### 5.5 Dataset functions (`scripts/preview/sql/client-preview-functions.sql`)
+
+Installed on the hosted preview after the marker, or on the local disposable stack; refused anywhere
+else. `client_preview_backdate` moves the rows the RPCs stamped `now()` (orders, status history,
+payments, ledger, stock movements, purchase orders and receipts, opening stock) to the planned
+business times (past only, 120-day window, steps in order). `client_preview_purge` deletes the demo
+organization's rows in dependency order and the organization (audit rows are kept, with `org_id` set
+to null). Both are `SECURITY DEFINER` with an empty `search_path`, executable by `service_role` only,
+and act only on an organization classified as demo.
 
 ## 6. Identity marker
 
@@ -127,7 +206,17 @@ and the preview never gets a platform admin, so `/control` and every `admin_*` R
 ## 7. Tests
 
 `src/test/client-preview-profile.test.tsx`, `client-preview-social.test.ts`,
-`client-preview-security-headers.test.ts`, `client-preview-guard.test.ts` and
-`client-preview-build.test.ts` cover the profile, the headers through the real `src/server.ts`, the
-guard (URL, confirmation, key, identity, real-data refusals, repository policy) and the build and
-bundle checks. No test reaches a network or a database.
+`client-preview-security-headers.test.ts`, `client-preview-guard.test.ts`,
+`client-preview-build.test.ts` and `client-preview-dataset.test.ts` cover the profile, the headers
+through the real `src/server.ts`, the guards and the repository policy (every script that writes
+resolves its destination first; the dataset functions act on demo organizations only), the build and
+bundle checks, and the dataset (determinism, app contracts, stock never short, fictional data, ledger
+cap). No unit test reaches a network or a database; `verify-dataset.mjs` and `smoke-app.mjs` are the
+database and end-to-end checks.
+
+## 8. Remaining risk for Workers Free
+
+The resources read (`fetchOperationalResources`) answers 260–360 KiB per store and ~900 KiB for "All
+stores" with the `ledger-safe` dataset; parsing and serializing that much may exceed the 10 ms of CPU
+per request of Workers Free (error 1102). It can only be measured on the deployed Worker: run the
+smoke test against `*.workers.dev` and read the Worker logs before any presentation.
