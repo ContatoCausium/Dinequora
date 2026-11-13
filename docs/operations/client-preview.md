@@ -227,11 +227,68 @@ branding) — never a platform role, so the Control Center stays closed.
   Cloudflare Access with their own e-mail, then opens the link in the same browser. On Windows the
   file mode is not enforced: keep the file in the operator's own secrets folder.
 
+### 5.7 Direct SQL on the hosted preview (`scripts/preview/hosted-db.mjs`)
+
+The only way to run SQL directly on the hosted project: inspect it, apply the migrations, mark it
+and install the dataset functions. Everything comes from the secrets file (environment), never from
+the command line:
+
+```bash
+PREVIEW_DB_OPERATION=inspect|migrate|mark|functions \
+PREVIEW_API_URL=https://<ref>.supabase.co \
+PREVIEW_DB_URL=<Session pooler connection string of the project> \
+PREVIEW_FORBIDDEN_REFS=<ref of production>[,<other hosted projects>] \
+PREVIEW_DB_CA_FILE=<Supabase server root certificate (PEM)> \
+DQ_PREVIEW_CONFIRM=client-preview:db-<operation>:client-preview:<ref> \
+PREVIEW_PERSONAL_OWNERS=<mark only> node scripts/preview/hosted-db.mjs
+```
+
+Before any connection: a known operation; the API URL of the project; `PREVIEW_FORBIDDEN_REFS`
+declared (production at least) and not containing this ref, so production is blocked by name even if
+every other value were copied from it; the operator confirmation for this operation and project; and
+a database URL that is the **Session pooler of this project** — host `aws-…pooler.supabase.com`, port
+5432, database `postgres`, user `postgres.<ref>` with the same ref as the API URL (the pooler host is
+shared by many projects; the user name selects the project), a real password, and no option other
+than `sslmode=verify-full`. Local and private hosts (the QA, the demo, CI), the direct host, the
+transaction pooler (6543) and any other host are refused.
+
+**TLS is always fully verified.** The server certificate chain must lead to a CA certificate of
+`PREVIEW_DB_CA_FILE` and the certificate must be issued for the pooler host name (`verify-full`
+semantics). The pooler's chain ends in Supabase's own root, which no system trust store contains, so
+the file is required: download the server root certificate from the project (Database Settings > SSL
+Configuration) and keep it with the secrets file. `hosted-db` refuses a missing file, anything that
+is not a certificate, a private key, a certificate that is not a CA, and a CA outside its validity
+period, and prints the subject, expiry and SHA-256 fingerprint of what it will trust (compare the
+fingerprint with the dashboard's certificate). This process trusts only that file
+(`rejectUnauthorized: true`, Node's own host-name check, TLS 1.2 or newer); the `drizzle-kit` child
+connects with `sslmode=verify-full` and gets the same file through `NODE_EXTRA_CA_CERTS` (its driver
+then trusts Node's default store plus that file). Encryption without verification
+(`sslmode=require`, `prefer`, `allow`, `disable`, `verify-ca`, `NODE_TLS_REJECT_UNAUTHORIZED=0`) is
+refused, and nothing in the file can turn verification off. A failed verification stops before
+anything (start-up message, password) is sent to the server.
+
+After connecting, in a read-only session, the state decides what may run:
+
+| State               | Meaning                                                                                         | Allowed                        |
+| ------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------ |
+| `empty`             | nothing in `public`, no tracker, no account, no stored object                                   | `migrate` (first)              |
+| `migrated-unmarked` | every migration of this repository applied, no data, no marker                                  | `mark`                         |
+| `preview`           | marked for this ref, no real data, no platform role                                             | `migrate` (later), `functions` |
+| anything else       | another project's marker, a local stack, tables without a tracker, a partial history, real data | `inspect` only                 |
+
+`migrate` runs `drizzle-kit migrate` in a child process with a minimal environment and gives the
+repository's migration gate its `migrate:remote:<host>` confirmation only after every check above;
+this session never writes. `mark` and `functions` render the psql scripts (`\set ON_ERROR_STOP on`
+dropped, `:'variable'` quoted; any other psql command refused) and run each as one batch, so a
+refusal inside the file rolls everything back; the session is writable only for that batch. Then
+PostgREST is told to reload its schema and the state is read again. Passwords, keys, complete URLs
+and personal addresses are never printed; database and child messages are redacted.
+
 ## 6. Identity marker
 
-`scripts/preview/sql/client-preview-identity.sql` (marker version 2) is run once by the operator on
-the preview project after its migrations:
-`psql "<session-pooler connection>" -v project_ref=<ref> -v personal_owners=<PREVIEW_PERSONAL_OWNERS> -f …`.
+`scripts/preview/sql/client-preview-identity.sql` (marker version 2) is run once on the preview
+project after its migrations, through `hosted-db.mjs` (`PREVIEW_DB_OPERATION=mark`, §5.7); with psql
+the equivalent is `-v project_ref=<ref> -v personal_owners=<PREVIEW_PERSONAL_OWNERS> -f …`.
 It is not a migration and never reaches QA or production, and it never echoes the addresses. Before
 writing, it refuses a missing/malformed ref, a malformed personal-owner list (more than two,
 duplicates, not an address, a reserved test domain), missing migrations, an already marked database, a
@@ -249,13 +306,15 @@ platform admin, so `/control` and every `admin_*` RPC stay closed.
 
 `src/test/client-preview-profile.test.tsx`, `client-preview-social.test.ts`,
 `client-preview-security-headers.test.ts`, `client-preview-guard.test.ts`,
-`client-preview-build.test.ts`, `client-preview-dataset.test.ts` and
-`client-preview-personal.test.ts` cover the profile, the headers through the real `src/server.ts`, the
+`client-preview-build.test.ts`, `client-preview-dataset.test.ts`, `client-preview-personal.test.ts`
+and `client-preview-hosted-db.test.ts` cover the profile, the headers through the real `src/server.ts`, the
 guards and the repository policy (every script that writes resolves its destination first; the
 dataset functions act on demo organizations only; a reset keeps people; no personal mailbox address in
 any client-preview file), the build and bundle checks, the dataset (determinism, app contracts, stock
 never short, fictional data, ledger cap), and the personal owners (declaration rules per mode, the
-fixed marker list, individual links that never reach a log). No unit test reaches a network or a database; `verify-dataset.mjs` and `smoke-app.mjs` are the
+fixed marker list, individual links that never reach a log), and direct SQL on the hosted preview
+(pooler URL and ref rules, production blocked by name, database states, psql-file rendering,
+migration child process, redaction). No unit test reaches a network or a database; `verify-dataset.mjs` and `smoke-app.mjs` are the
 database and end-to-end checks.
 
 ## 8. Remaining risk for Workers Free

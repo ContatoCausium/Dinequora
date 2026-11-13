@@ -259,8 +259,15 @@ describe("policy: seed and reset of the client preview", () => {
 
   // Guards a script may run before touching a database: the preview guard itself, the resolver
   // that runs the right guard for the destination (local disposable stack or hosted preview), or
-  // the brand check of a destination the resolver produced.
-  const GUARD_CALLS = ["assertClientPreviewApi(", "resolvePreviewTarget(", "assertResolvedTarget("];
+  // the brand check of a destination the resolver produced; for direct SQL on the hosted preview,
+  // the offline checks of scripts/preview/hosted-db.mjs and the brand check of its target.
+  const GUARD_CALLS = [
+    "assertClientPreviewApi(",
+    "resolvePreviewTarget(",
+    "assertResolvedTarget(",
+    "assertHostedPreviewDb(",
+    "assertHostedDbTarget(",
+  ];
 
   it("every preview script that writes calls the guard first, with no override", () => {
     for (const f of fs

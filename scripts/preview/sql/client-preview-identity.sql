@@ -1,6 +1,10 @@
 -- CLIENT PREVIEW identity marker (version 2). Run ONCE, by the operator, on the hosted client-preview
 -- project right after its migrations, and never anywhere else:
 --
+--   PREVIEW_DB_OPERATION=mark node scripts/preview/hosted-db.mjs      (checked target; see its header)
+--
+-- or, with psql:
+--
 --   psql "<session-pooler connection string of the client-preview project>" \
 --        -v project_ref=<20-character project ref> \
 --        -v personal_owners=<the operator's PREVIEW_PERSONAL_OWNERS, comma-separated, at most 2> \
