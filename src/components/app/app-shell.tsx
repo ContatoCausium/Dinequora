@@ -37,6 +37,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { auth } from "@/lib/auth";
 import { clearTemporaryDeviceData, countHeldTicketsOnDevice } from "@/lib/session-cleanup";
+import { stopPresentation } from "@/lib/presentation-mode";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +55,8 @@ import { chooseLanguage } from "@/lib/profile-service";
 import { operationalAlerts } from "@/lib/demo-data";
 import { useWorkspace } from "./workspace-context";
 import { BrandMark, DemoBadge, OrgLogo } from "./brand-mark";
+import { PresentationBanner, PresentationModeToggle } from "./presentation-mode";
+import { usePresentationMode } from "./use-presentation-mode";
 import { EmptyState, SuspendedState } from "./states";
 import { OnboardingProgress } from "./onboarding-progress";
 import { storeConfigured } from "@/lib/onboarding-checklist";
@@ -329,11 +332,13 @@ export function LocationSelector({ className }: { className?: string }) {
   );
 }
 
-function Notifications() {
+export function Notifications() {
   const { t } = useTranslation();
   const { org } = useWorkspace();
-  // The sample alerts are synthetic: only demo organizations (organizations.is_demo) get them.
-  const alerts = org.fictional ? operationalAlerts(org.locations) : [];
+  // The sample alerts are synthetic: they exist only while presentation mode is explicitly on (demo
+  // organizations only). By default no organization — demo or not — gets invented alerts.
+  const { active: showcase } = usePresentationMode();
+  const alerts = showcase ? operationalAlerts(org.locations) : [];
   return (
     <Popover>
       <PopoverTrigger
@@ -348,7 +353,7 @@ function Notifications() {
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <p className="text-sm font-semibold">{t("shell.notifications")}</p>
-          {org.fictional && <DemoBadge label={t("demo.badge")} />}
+          {showcase && <DemoBadge label={t("demo.badge")} />}
         </div>
         {alerts.length === 0 && (
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">
@@ -400,6 +405,7 @@ function PreferencesMenu() {
     await auth.signOut();
     // Also cleared by the root sign-out listener; repeated here in case the event never arrives.
     clearTemporaryDeviceData();
+    stopPresentation();
     await navigate({ to: "/auth", replace: true });
   };
   const requestSignOut = () => {
@@ -641,6 +647,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <Search className="size-4" strokeWidth={1.75} />
               </button>
+              <PresentationModeToggle />
               <LanguageQuick />
               <Notifications />
               <PreferencesMenu />
@@ -655,6 +662,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <SuspendedState reason={suspendedReason} />
             ) : (
               <>
+                <PresentationBanner />
                 <OnboardingProgress />
                 {children}
               </>

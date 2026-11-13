@@ -18,6 +18,7 @@ import {
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { DemoBadge } from "@/components/app/brand-mark";
+import { usePresentationMode } from "@/components/app/use-presentation-mode";
 import { PageHeader } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { Button } from "@/components/ui/button";
@@ -96,21 +97,21 @@ const TIMEZONES = [
   "America/Recife",
 ];
 
-function LocationsPage() {
+export function LocationsPage() {
   const { t, i18n } = useTranslation("locations");
   const lng = i18n.language;
   const { org, role, orgDbId, storeLimit, orgStatus, setLocationId, refresh, canAny } =
     useWorkspace();
   const navigate = useNavigate();
   const isOwner = role === "owner";
-  // Synthetic figures exist only for organizations flagged as demo (organizations.is_demo).
-  // Real organizations see their own recorded sales, and only with a financial permission.
-  const fictional = org.fictional;
+  // Every organization — demo-classified ones included — sees its own recorded sales (with a
+  // financial permission). Synthetic figures appear only while presentation mode is explicitly on.
+  const { active: showcase } = usePresentationMode();
   const canSeeSales = canAny(["dashboard.financials", "finance.view"]);
   const recorded = useQuery({
     queryKey: ["locations-sales", org.id],
     queryFn: () => fetchAllOrders(org.id, "all", storeMetricsSince()),
-    enabled: !fictional && canSeeSales && org.locations.length > 0,
+    enabled: !showcase && canSeeSales && org.locations.length > 0,
   });
   const billable = countBillableStores(org.locations.map((l) => l.lifecycle ?? "active"));
   const canAdd = canAddStore(role, billable, storeLimit, orgStatus === "suspended");
@@ -140,7 +141,7 @@ function LocationsPage() {
         eyebrow={
           <>
             <span className="eyebrow">{org.name}</span>
-            {fictional && <DemoBadge label={t("common:demo.badge")} />}
+            {showcase && <DemoBadge label={t("common:demo.badge")} />}
           </>
         }
         title={t("title")}
@@ -199,7 +200,7 @@ function LocationsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {org.locations.map((l) => {
-            const metrics = fictional
+            const metrics = showcase
               ? (() => {
                   const k = computeKpis([l], 30);
                   return [
@@ -326,8 +327,8 @@ function LocationsPage() {
       )}
 
       <p className="mt-6 text-xs text-muted-foreground">
-        {t(fictional ? "placeholderNote" : canSeeSales ? "recordedNote" : "setupNote")}
-        {!fictional && recorded.data?.truncated ? ` ${t("metrics.truncated")}` : ""}
+        {t(showcase ? "placeholderNote" : canSeeSales ? "recordedNote" : "setupNote")}
+        {!showcase && recorded.data?.truncated ? ` ${t("metrics.truncated")}` : ""}
       </p>
 
       {creating && <CreateDialog onClose={() => setCreating(false)} />}
