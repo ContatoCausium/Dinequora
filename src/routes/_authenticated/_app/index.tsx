@@ -48,6 +48,7 @@ import {
 import { fmtCurrency, fmtDate, fmtNumber, fmtPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { RecordedOverview } from "@/components/app/recorded-overview";
+import { usePresentationMode } from "@/components/app/use-presentation-mode";
 
 export const Route = createFileRoute("/_authenticated/_app/")({
   head: () => ({
@@ -69,9 +70,14 @@ export const Route = createFileRoute("/_authenticated/_app/")({
   component: OverviewEntry,
 });
 
-function OverviewEntry() {
-  const { org } = useWorkspace();
-  return org.fictional ? <Overview /> : <RecordedOverview />;
+/**
+ * Every organization — including the ones classified as demo (organizations.is_demo) — sees its
+ * recorded orders and ledger. The synthetic showcase (Overview, demo-data.ts) is shown only while
+ * the user has explicitly turned presentation mode on; it never replaces real figures by default.
+ */
+export function OverviewEntry() {
+  const { active } = usePresentationMode();
+  return active ? <Overview /> : <RecordedOverview />;
 }
 
 type Range = "7" | "30" | "90";

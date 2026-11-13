@@ -73,7 +73,14 @@
   "demo": {
     "badge": "Dados de demonstração",
     "fictional": "Fictícia",
-    "disclaimer": "Todos os valores de vendas, pedidos, estoque e alertas exibidos são dados sintéticos de demonstração. Eles não representam resultados reais, e nenhum sistema de PDV, pagamento ou delivery está conectado."
+    "disclaimer": "Modo apresentação: todos os valores de vendas, pedidos, estoque e alertas exibidos neste painel são ilustrativos e não representam resultados desta organização. As vendas registradas no PDV, os pagamentos, o estoque e o financeiro continuam reais e aparecem ao sair do modo apresentação."
+  },
+  "presentation": {
+    "start": "Modo apresentação",
+    "startHint": "Mostrar dados ilustrativos para uma demonstração (não altera nenhum registro)",
+    "stop": "Sair do modo apresentação",
+    "bannerTitle": "Modo apresentação ativo: dados ilustrativos",
+    "bannerBody": "Dashboard, notificações, unidades e tela da cozinha mostram números fictícios para demonstração. Vendas, pagamentos, estoque e financeiro continuam reais e não são alterados por este modo."
   },
   "states": {
     "loading": "Carregando…",

@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { useWorkspace } from "@/components/app/workspace-context";
+import { usePresentationMode } from "@/components/app/use-presentation-mode";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -98,10 +99,12 @@ export function KDSPage() {
   const { org, orgDbId, locationId, role } = useWorkspace();
   // Owners are org-wide; managers/staff are limited to their authorized stores.
   const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
-  // Real organizations: the board shows persisted tickets only (filled by the fetch below), never
-  // browser-local leftovers such as simulated tickets. Local tickets exist only for demo orgs.
+  // Every organization — demo-classified ones included — sees persisted tickets only (filled by the
+  // fetch below), never browser-local simulated tickets. Those, and the "simulate" button, exist only
+  // while presentation mode is explicitly on; simulated tickets are never sent to the server.
+  const { active: showcase } = usePresentationMode();
   const [orders, setOrders] = useState<Order[]>(() =>
-    org.fictional ? listOrders(org.id, locationId, locationScope) : [],
+    showcase ? listOrders(org.id, locationId, locationScope) : [],
   );
   const [stationFilter, setStationFilter] = useState<KitchenStation | "all">("all");
   const [nowTick, setNowTick] = useState(Date.now());
@@ -209,6 +212,14 @@ export function KDSPage() {
     };
   }, [org.id, locationId]);
 
+  // Leaving presentation mode: reload the board from the server at once, so no simulated ticket
+  // stays on screen until the next 15 s refresh.
+  const wasShowcase = useRef(showcase);
+  useEffect(() => {
+    if (wasShowcase.current && !showcase) void refreshRef.current();
+    wasShowcase.current = showcase;
+  }, [showcase]);
+
   const filteredOrders = useMemo(() => {
     const list = orders.filter(
       (o) => o.orgId === org.id && (locationId === "all" || o.locationId === locationId),
@@ -265,7 +276,7 @@ export function KDSPage() {
   };
 
   const handleSimulateNewOrder = () => {
-    if (!org.fictional) return;
+    if (!showcase) return;
     const targetLoc = locationId === "all" ? org.locations[0]?.id || "loc-1" : locationId;
     const newOrd = simulateIncomingOrder(org.id, targetLoc);
     setOrders(listOrders(org.id, locationId, locationScope));
@@ -350,7 +361,7 @@ export function KDSPage() {
             {audioAlerts ? t("chime.on") : t("chime.off")}
           </Button>
 
-          {org.fictional && (
+          {showcase && (
             <Button variant="outline" onClick={handleSimulateNewOrder} className="h-11">
               <Sparkles aria-hidden /> {t("simulate")}
             </Button>

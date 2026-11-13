@@ -73,7 +73,14 @@
   "demo": {
     "badge": "Demo data",
     "fictional": "Fictional",
-    "disclaimer": "All sales, orders, inventory and alert figures shown are synthetic demonstration data. They do not represent real business results, and no POS, payment or delivery system is connected."
+    "disclaimer": "Presentation mode: every sales, order, inventory and alert figure on this dashboard is illustrative and does not represent this organization's results. Sales recorded at the POS, payments, inventory and finance remain real and are shown again when you leave presentation mode."
+  },
+  "presentation": {
+    "start": "Presentation mode",
+    "startHint": "Show illustrative data for a demonstration (no record is changed)",
+    "stop": "Leave presentation mode",
+    "bannerTitle": "Presentation mode on: illustrative data",
+    "bannerBody": "The dashboard, notifications, stores and kitchen screen show fictional figures for a demonstration. Sales, payments, inventory and finance remain real and are not changed by this mode."
   },
   "states": {
     "loading": "Loading…",

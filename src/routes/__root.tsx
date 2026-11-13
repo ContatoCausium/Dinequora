@@ -20,6 +20,7 @@ import {
 import { applyClientLanguageAfterHydration } from "../lib/i18n";
 import { auth } from "@/lib/auth";
 import { clearTemporaryDeviceData } from "@/lib/session-cleanup";
+import { stopPresentation } from "@/lib/presentation-mode";
 import { Toaster } from "@/components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -143,6 +144,7 @@ function RootComponent() {
         if (event === "signed_out") {
           queryClient.clear();
           clearTemporaryDeviceData();
+          stopPresentation(); // the illustrative showcase never survives a session
           setObservabilityScope({});
         }
         if (event === "signed_in" || event === "signed_out" || event === "user_updated")
