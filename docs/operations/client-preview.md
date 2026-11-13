@@ -97,13 +97,16 @@ Every dataset script resolves its destination first with `resolvePreviewTarget`
 Anything else is refused (exit 3). The writer (`scripts/preview/seed-core.mjs`) accepts only the
 branded object the resolver returns, so a hand-built destination cannot reach it.
 
-Hosted guard: accepted only when the operation is `seed:client-preview`, `reset:client-preview` or
-`verify:client-preview`; the URL is exactly `https://<ref>.supabase.co`; the confirmation
-`DQ_PREVIEW_CONFIRM=client-preview:<operation>:<ref>` names this operation and this project; the key
-is an `sb_secret_` key or a service_role JWT whose `ref` is this project (publishable/anon refused);
-`public.client_preview_identity()` answers with label `client-preview`, marker version 1 and the same
-ref; and the database holds 0 non-demo organizations, 0 accounts outside `.test`/`.example`/`.invalid`
-and 0 platform roles. Keys and the expected confirmation are never printed. There is no override.
+Hosted guard: accepted only when the operation is `seed:client-preview`, `reset:client-preview`,
+`verify:client-preview` or `access:client-preview`; the URL is exactly `https://<ref>.supabase.co`; the
+confirmation `DQ_PREVIEW_CONFIRM=client-preview:<operation>:<ref>` names this operation and this
+project; the key is an `sb_secret_` key or a service_role JWT whose `ref` is this project
+(publishable/anon refused); `public.client_preview_identity()` answers with label `client-preview`,
+marker version 2 and the same ref; the database holds 0 non-demo organizations, 0 platform roles and
+no account outside `.test`/`.example`/`.invalid`/`.localhost` other than the personal owners fixed in
+the marker; and those personal owners are exactly the ones the operator declares
+(`PREVIEW_PERSONAL_OWNERS`, §5.6). Keys, personal addresses and the expected confirmation are never
+printed. There is no override.
 
 ### 5.2 Local rehearsal stack (`dq-client-preview`, ports 6473x)
 
@@ -154,12 +157,15 @@ first. The same limit affects any real organization above ~480 sales.
 
 ```bash
 export PREVIEW_TARGET=local PREVIEW_API_URL="$API_URL" PREVIEW_SERVICE_KEY="$SERVICE_ROLE_KEY" \
-       PREVIEW_PUBLISHABLE_KEY="$ANON_KEY" PREVIEW_CREDS_FILE=<file outside the repo>
-node scripts/preview/seed-client-preview.mjs      # refuses if the demo already exists
-node scripts/preview/reset-client-preview.mjs     # purge + seed again, anchored at now
-node scripts/preview/verify-dataset.mjs           # 30 read-only checks (exit 1 on any failure)
+       PREVIEW_PUBLISHABLE_KEY="$ANON_KEY" PREVIEW_CREDS_FILE=<file outside the repo> \
+       PREVIEW_PERSONAL_OWNERS="first.owner@personal.test,second.owner@personal.test"  # local stand-ins
+node scripts/preview/seed-client-preview.mjs      # first run; refuses if the demo already exists
+node scripts/preview/reset-client-preview.mjs     # keeps people, replaces operational data
+PREVIEW_TEARDOWN=1 node scripts/preview/reset-client-preview.mjs   # removes everything, seeds nothing
+node scripts/preview/verify-dataset.mjs           # 34 read-only checks (exit 1 on any failure)
 PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # 20 checks through the app
-# hosted: PREVIEW_TARGET=hosted, the project values, and DQ_PREVIEW_CONFIRM for each operation
+# hosted: PREVIEW_TARGET=hosted, the project values from the secrets file (real personal owners),
+# and DQ_PREVIEW_CONFIRM for each operation
 ```
 
 - **Seed** writes through the same RPCs as the UI, signed in as the demo owner (organization by
@@ -169,12 +175,20 @@ PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # 20 
   no billing provider, as `seed-demo-orgs.sql`) and calls the dataset functions. Passwords go only to
   the credentials file (outside the repository, mode 600), which must be writable before anything is
   created.
-- **Reset** removes the demo organization (`public.client_preview_purge`) and the demo accounts, then
-  seeds again. Run it before each presentation: the live tickets and "today" follow the seed time.
+- **Reset** keeps the organization, its stores, every member (personal owners and demo accounts),
+  their store assignments and invitations, and replaces only the operational data
+  (`public.client_preview_purge_operational`, run before any account is touched); demo accounts get
+  new passwords, personal owners keep theirs. Run it before each presentation: the live tickets and
+  "today" follow the seed time. **Teardown** (`PREVIEW_TEARDOWN=1`) removes the organization
+  (`public.client_preview_purge`), the demo accounts and the personal owners' accounts.
+- Every run first refuses a database holding any account outside the demo domain and the declared
+  personal owners, or any platform role, before writing anything.
 - **Verify** recomputes orders (total, lines, store tax), ledger (revenue, COGS), payments,
   cancellations, stock (quantity = sum of movements), receipts, time coverage, the kitchen board, the
-  ledger cap, and isolation through RLS (owner, Westside manager, Downtown kitchen, anonymous, no
-  platform admin).
+  ledger cap, isolation through RLS (owner, Westside manager, Downtown kitchen, anonymous, no
+  platform admin), and the people: the three demo accounts and exactly the declared personal owners,
+  each an individual confirmed account, Owner of the demo organization only, joined through an
+  accepted Owner invitation, with no open invitation to anyone else.
 - **Smoke test** calls the built Worker's server functions as the browser does (pages and headers,
   reads for every store, a POS sale, the kitchen moving it to delivered, the recipe consumption in
   gal, the ledger read, store isolation) and prints the time and size of each call.
@@ -184,34 +198,64 @@ PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # 20 
 Installed on the hosted preview after the marker, or on the local disposable stack; refused anywhere
 else. `client_preview_backdate` moves the rows the RPCs stamped `now()` (orders, status history,
 payments, ledger, stock movements, purchase orders and receipts, opening stock) to the planned
-business times (past only, 120-day window, steps in order). `client_preview_purge` deletes the demo
-organization's rows in dependency order and the organization (audit rows are kept, with `org_id` set
-to null). Both are `SECURITY DEFINER` with an empty `search_path`, executable by `service_role` only,
-and act only on an organization classified as demo.
+business times (past only, 120-day window, steps in order). `client_preview_purge_operational`
+deletes the demo organization's operational rows in dependency order (reset);
+`client_preview_purge` does that and then deletes the organization (teardown; audit rows are kept,
+with `org_id` set to null). All are `SECURITY DEFINER` with an empty `search_path`, executable by
+`service_role` only, and act only on an organization classified as demo.
+
+### 5.6 Personal owners and individual access links
+
+At most **two real people** (`scripts/preview/personal-owners.mjs`), each with an individual Supabase
+Auth account and the **Owner** role of the demo organization only (all three stores, settings,
+branding) — never a platform role, so the Control Center stays closed.
+
+- Their addresses never enter this public repository: they come from `PREVIEW_PERSONAL_OWNERS` in the
+  operator's secrets file and are fixed in the hosted marker (§6). Logs show "personal owner 1/2".
+- Hosted preview: real addresses only. Local stack: stand-in `.test` addresses only — real people
+  never enter a local stack (its target guard treats a database with real accounts as no longer
+  disposable).
+- The seed creates each account confirmed with a one-time password kept only in memory, invites it
+  as Owner (`create_invitation`) and accepts with that single sign-in (`accept_invitation`). Nobody
+  knows the final password: each person sets their own.
+- `scripts/preview/personal-access-link.mjs` (`access:client-preview`; `PREVIEW_ACCESS_EMAIL`,
+  `PREVIEW_APP_URL`, `PREVIEW_LINK_FILE`) writes ONE person's single-use recovery link to a new file
+  outside the repository (never overwritten, never printed; the e-mail OTP is discarded), only for a
+  declared owner who is an Owner of the demo organization with no platform role, pointing only at the
+  preview's `/reset-password` (`*.workers.dev`, `https://preview.dinequora.com`, or a local run for the
+  local stack). Send it privately to that person and delete the file. The person first passes
+  Cloudflare Access with their own e-mail, then opens the link in the same browser. On Windows the
+  file mode is not enforced: keep the file in the operator's own secrets folder.
 
 ## 6. Identity marker
 
-`scripts/preview/sql/client-preview-identity.sql` is run once by the operator on the preview project
-after its migrations (`psql "<connection>" -v project_ref=<ref> -f …`). It is not a migration and
-never reaches QA or production. Before writing, it refuses a missing/malformed ref, missing
-migrations, an already marked database, a local disposable stack (`dq_guard`), non-demo
-organizations, accounts outside the reserved test domains and platform roles. It creates
-`dq_preview.marker` (the ref the database was marked for; a copy restored into another project no
-longer matches) and `public.client_preview_identity()`, `SECURITY DEFINER` with an empty
-`search_path`, executable by `service_role` only.
+`scripts/preview/sql/client-preview-identity.sql` (marker version 2) is run once by the operator on
+the preview project after its migrations:
+`psql "<session-pooler connection>" -v project_ref=<ref> -v personal_owners=<PREVIEW_PERSONAL_OWNERS> -f …`.
+It is not a migration and never reaches QA or production, and it never echoes the addresses. Before
+writing, it refuses a missing/malformed ref, a malformed personal-owner list (more than two,
+duplicates, not an address, a reserved test domain), missing migrations, an already marked database, a
+local disposable stack (`dq_guard`), non-demo organizations, any account outside the reserved test
+domains, and platform roles. It creates `dq_preview.marker` (the ref the database was marked for; a
+copy restored into another project no longer matches), `dq_preview.personal_accounts` (the fixed
+personal owners: not reachable through the API, and a trigger refuses any later insert or update) and
+`public.client_preview_identity()`, `SECURITY DEFINER` with an empty `search_path`, executable by
+`service_role` only, which reports real accounts outside the fixed list (must be 0) and the list.
 
-The preview accounts therefore use reserved test domains (e.g. `…@client-preview.dinequora.test`),
-and the preview never gets a platform admin, so `/control` and every `admin_*` RPC stay closed.
+Demo accounts use the reserved test domain `…@client-preview.dinequora.test`; the preview never gets a
+platform admin, so `/control` and every `admin_*` RPC stay closed.
 
 ## 7. Tests
 
 `src/test/client-preview-profile.test.tsx`, `client-preview-social.test.ts`,
 `client-preview-security-headers.test.ts`, `client-preview-guard.test.ts`,
-`client-preview-build.test.ts` and `client-preview-dataset.test.ts` cover the profile, the headers
-through the real `src/server.ts`, the guards and the repository policy (every script that writes
-resolves its destination first; the dataset functions act on demo organizations only), the build and
-bundle checks, and the dataset (determinism, app contracts, stock never short, fictional data, ledger
-cap). No unit test reaches a network or a database; `verify-dataset.mjs` and `smoke-app.mjs` are the
+`client-preview-build.test.ts`, `client-preview-dataset.test.ts` and
+`client-preview-personal.test.ts` cover the profile, the headers through the real `src/server.ts`, the
+guards and the repository policy (every script that writes resolves its destination first; the
+dataset functions act on demo organizations only; a reset keeps people; no personal mailbox address in
+any client-preview file), the build and bundle checks, the dataset (determinism, app contracts, stock
+never short, fictional data, ledger cap), and the personal owners (declaration rules per mode, the
+fixed marker list, individual links that never reach a log). No unit test reaches a network or a database; `verify-dataset.mjs` and `smoke-app.mjs` are the
 database and end-to-end checks.
 
 ## 8. Remaining risk for Workers Free

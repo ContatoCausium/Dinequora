@@ -13,18 +13,26 @@
 //      scripts/preview/sql/client-preview-identity.sql, executable by service_role only) with the
 //      client-preview label, marker version 1 and the SAME project ref, which the database stored
 //      when it was marked (a marker restored or copied to another project does not match);
-//   6. the database holds no real data: 0 non-demo organizations, 0 accounts outside the reserved test
-//      domains (.test/.example/.invalid) and 0 platform roles. Production fails here even if marked.
-// A missing answer, a failed request or any unexpected value is a refusal. Keys are never printed.
+//   6. the database holds no real data: 0 non-demo organizations, 0 platform roles, and no account
+//      outside the reserved test domains (.test/.example/.invalid) other than the personal owners
+//      fixed in the marker (at most two). Production fails here even if marked;
+//   7. the personal owners fixed in the marker are EXACTLY the ones the operator declares
+//      (PREVIEW_PERSONAL_OWNERS), so no script can add a third real person.
+// A missing answer, a failed request or any unexpected value is a refusal. Keys and personal
+// addresses are never printed.
 import { Buffer } from "node:buffer";
+import { MAX_PERSONAL_OWNERS, parsePersonalOwners, sameOwners } from "./personal-owners.mjs";
 
 export const PREVIEW_LABEL = "client-preview";
-export const PREVIEW_MARKER_VERSION = 1;
-// verify is read-only but still needs a checked destination (a server key reads everything).
+// 2: the identity carries the personal owners fixed when the database was marked.
+export const PREVIEW_MARKER_VERSION = 2;
+// verify is read-only but still needs a checked destination (a server key reads everything);
+// access generates an individual password-recovery link for one personal owner.
 export const PREVIEW_OPERATIONS = Object.freeze([
   "seed:client-preview",
   "reset:client-preview",
   "verify:client-preview",
+  "access:client-preview",
 ]);
 
 const REF = /^[a-z0-9]{20}$/;
@@ -115,7 +123,11 @@ export function inspectServiceKey(key, ref) {
 }
 
 /** Validates the identity document returned by public.client_preview_identity(). */
-export function assertPreviewIdentity(identity, ref) {
+/**
+ * Validates the identity document returned by public.client_preview_identity(). `personalOwners` is
+ * the operator's declared list (parsePersonalOwners); it must equal the list fixed in the marker.
+ */
+export function assertPreviewIdentity(identity, ref, personalOwners = []) {
   if (!identity || typeof identity !== "object" || Array.isArray(identity))
     throw new PreviewRefusal("the database returned no client-preview identity");
   if (identity.label !== PREVIEW_LABEL)
@@ -136,6 +148,19 @@ export function assertPreviewIdentity(identity, ref) {
       throw new PreviewRefusal(`the identity has no ${field} count`);
     if (n !== 0) throw new PreviewRefusal(`the database has ${n} ${what}: it holds real data`);
   }
+  const fixed = identity.personal_accounts;
+  if (!Array.isArray(fixed) || fixed.length > MAX_PERSONAL_OWNERS)
+    throw new PreviewRefusal("the identity has no valid personal-owner list");
+  let normalized;
+  try {
+    normalized = parsePersonalOwners(fixed.join(","));
+  } catch {
+    throw new PreviewRefusal("the personal-owner list fixed in the marker is not valid");
+  }
+  if (normalized.length !== fixed.length || !sameOwners(normalized, personalOwners))
+    throw new PreviewRefusal(
+      "the declared personal owners (PREVIEW_PERSONAL_OWNERS) differ from the ones fixed in the marker",
+    );
 }
 
 /**
@@ -147,6 +172,7 @@ export async function assertClientPreviewApi({
   serviceKey,
   operation,
   confirm,
+  personalOwners = [],
   fetchImpl = globalThis.fetch,
   timeoutMs = 8000,
 }) {
@@ -175,7 +201,7 @@ export async function assertClientPreviewApi({
     throw new PreviewRefusal(
       `project ${ref} is not marked as the client preview (${res.status} ${String(body?.code ?? "").slice(0, 40)})`,
     );
-  assertPreviewIdentity(body, ref);
+  assertPreviewIdentity(body, ref, personalOwners);
   return { ref, keyKind };
 }
 

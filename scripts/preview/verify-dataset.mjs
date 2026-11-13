@@ -11,6 +11,8 @@
 //              sales on every day, the live kitchen board (open tickets) present
 //   isolation  owner sees one organization and three stores; the Westside manager and the Downtown
 //              kitchen account see only their store; anonymous sees nothing; no platform admin
+//   people     the demo accounts and exactly the declared personal owners (Owner of the demo
+//              organization only, joined through accepted invitations); no stray invitation
 //
 //   PREVIEW_TARGET=local|hosted PREVIEW_API_URL=… PREVIEW_SERVICE_KEY=… PREVIEW_PUBLISHABLE_KEY=… \
 //   PREVIEW_CREDS_FILE=<credentials file written by the seed> [PREVIEW_REPORT_FILE=<json path>] \
@@ -23,7 +25,7 @@ import {
   exitOnTargetRefusal,
   resolvePreviewTarget,
 } from "./client-preview-target.mjs";
-import { LEDGER_READ_CAP, ORG, PRODUCTS, STOCK, STORES } from "./dataset.mjs";
+import { EMAIL_DOMAIN, LEDGER_READ_CAP, ORG, PRODUCTS, STOCK, STORES } from "./dataset.mjs";
 
 const OPERATION = "verify:client-preview";
 const target = await resolvePreviewTarget(process.env, OPERATION).catch(exitOnTargetRefusal);
@@ -408,10 +410,60 @@ check(
 );
 check("no platform admin (Control Center closed)", (await count(svc, "user_roles")) === 0);
 const users = (await svc.auth.admin.listUsers({ perPage: 200 })).data.users;
+const owners = target.personalOwners;
+const demoUsers = users.filter((u) => u.email.toLowerCase().endsWith(`@${EMAIL_DOMAIN}`));
+const personalUsers = users.filter((u) => owners.includes(u.email.toLowerCase()));
 check(
-  "only the three demo accounts, all in the reserved .test domain",
-  users.length === 3 && users.every((u) => u.email.endsWith(".test")),
-  users.length,
+  "accounts: the three demo accounts (.test) and exactly the declared personal owners, nobody else",
+  demoUsers.length === 3 &&
+    personalUsers.length === owners.length &&
+    users.length === demoUsers.length + personalUsers.length,
+  `${demoUsers.length} demo, ${personalUsers.length}/${owners.length} personal, ${users.length - demoUsers.length - personalUsers.length} other`,
+);
+const allMembers = await all(svc, "organization_members", "id,org_id,user_id,role");
+const personalMembers = personalUsers.map((u) => allMembers.filter((m) => m.user_id === u.id));
+check(
+  "personal owners: Owner of the demo organization (all three stores), member of nothing else",
+  personalMembers.every(
+    (ms) => ms.length === 1 && ms[0].org_id === org.id && ms[0].role === "owner",
+  ),
+  personalMembers
+    .map(
+      (ms, i) =>
+        `personal owner ${i + 1}/${owners.length}: ${ms.map((m) => m.role).join(",") || "none"}`,
+    )
+    .join("; "),
+);
+check(
+  "personal owners: individual, confirmed accounts (no shared account)",
+  new Set(personalUsers.map((u) => u.id)).size === owners.length &&
+    personalUsers.every((u) => u.email_confirmed_at) &&
+    personalUsers.every((u) => !demoUsers.some((d) => d.id === u.id)),
+);
+const invitations = await all(
+  svc,
+  "invitations",
+  "id,email,role,accepted_at,revoked_at,expires_at",
+  (q) => q.eq("org_id", org.id),
+);
+check(
+  "personal owners joined through accepted Owner invitations",
+  owners.every((e) =>
+    invitations.some((i) => i.email === e && i.role === "owner" && i.accepted_at),
+  ),
+);
+const strayInvites = invitations.filter(
+  (i) =>
+    !i.accepted_at &&
+    !i.revoked_at &&
+    Date.parse(i.expires_at) > Date.now() &&
+    !i.email.endsWith(`@${EMAIL_DOMAIN}`) &&
+    !owners.includes(i.email),
+);
+check(
+  "no open invitation to anyone outside the preview accounts",
+  strayInvites.length === 0,
+  strayInvites.length,
 );
 
 // ---- business figures (last 30 days, recorded) -------------------------------------------------

@@ -20,7 +20,9 @@
 --     "openings_at": ts | null }
 -- Every time must be in the past and within 120 days; steps must be in order and after the order.
 --
--- client_preview_purge(_org_id): deletes every row of the demo organization (dependency order) and
+-- client_preview_purge_operational(_org_id): deletes the operational rows of the demo organization
+-- (what a reset replaces) and keeps the organization, stores, members and invitations.
+-- client_preview_purge(_org_id): teardown — the operational rows, then the organization itself.
 -- then the organization itself. Accounts are removed by the seed through the Auth admin API.
 \set ON_ERROR_STOP on
 DO $$
@@ -138,13 +140,16 @@ END $$;
 REVOKE ALL ON FUNCTION public.client_preview_backdate(uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.client_preview_backdate(uuid, jsonb) TO service_role;
 
-CREATE OR REPLACE FUNCTION public.client_preview_purge(_org_id uuid) RETURNS jsonb
+-- client_preview_purge_operational(_org_id): what a reset replaces — orders, payments, ledger, stock,
+-- recipes, menu, suppliers, purchases, expenses. The organization, its stores, members (the personal
+-- owners and the demo accounts), store assignments, invitations, subscription and audit trail stay, so
+-- every person keeps their own access across resets without a new invitation.
+CREATE OR REPLACE FUNCTION public.client_preview_purge_operational(_org_id uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE t text; n bigint; removed jsonb := '{}'::jsonb;
 BEGIN
   PERFORM public.client_preview_assert_target(_org_id);
-  -- Children before parents; audit_logs is kept (its foreign key sets org_id to null).
-  -- order_item_modifiers has no org_id: reached through the organization's order lines.
+  -- Children before parents. order_item_modifiers has no org_id: reached through the order lines.
   DELETE FROM public.order_item_modifiers m USING public.order_items i
     WHERE m.order_item_id = i.id AND i.org_id = _org_id;
   GET DIAGNOSTICS n = ROW_COUNT;
@@ -159,6 +164,18 @@ BEGIN
     GET DIAGNOSTICS n = ROW_COUNT;
     removed := removed || jsonb_build_object(t, n);
   END LOOP;
+  RETURN removed;
+END $$;
+REVOKE ALL ON FUNCTION public.client_preview_purge_operational(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.client_preview_purge_operational(uuid) TO service_role;
+
+-- client_preview_purge(_org_id): teardown only — the operational data, then the organization itself
+-- (stores, members, invitations, subscription cascade; audit rows are kept with org_id set to null).
+CREATE OR REPLACE FUNCTION public.client_preview_purge(_org_id uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE n bigint; removed jsonb;
+BEGIN
+  removed := public.client_preview_purge_operational(_org_id);
   DELETE FROM public.organizations WHERE id = _org_id AND is_demo;
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN removed || jsonb_build_object('organizations', n);

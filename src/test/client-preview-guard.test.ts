@@ -33,10 +33,11 @@ const jwt = (payload: Record<string, unknown>) =>
 const IDENTITY = {
   label: "client-preview",
   project_ref: REF,
-  marker_version: 1,
+  marker_version: 2,
   marked_at: "2026-11-14T00:00:00Z",
   non_demo_organizations: 0,
   non_test_users: 0,
+  personal_accounts: [] as string[],
   platform_roles: 0,
 };
 const ok = (body: unknown, status = 200) =>
@@ -140,7 +141,7 @@ describe("database identity", () => {
     ["no identity", null],
     ["an array", []],
     ["other label", { ...IDENTITY, label: "qa" }],
-    ["other marker version", { ...IDENTITY, marker_version: 2 }],
+    ["an old marker (version 1, no personal-owner list)", { ...IDENTITY, marker_version: 1 }],
     ["marker of another project (copied database)", { ...IDENTITY, project_ref: OTHER }],
     ["real organizations", { ...IDENTITY, non_demo_organizations: 3 }],
     ["real accounts", { ...IDENTITY, non_test_users: 1 }],
@@ -175,8 +176,13 @@ describe("full check through the API", () => {
     const init = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect((init.headers as Record<string, string>)["authorization"]).toBe(`Bearer ${key}`);
   });
-  it("accepts seed, reset and verify, each with its own confirmation", async () => {
-    expect(PREVIEW_OPERATIONS).toEqual([SEED, RESET, "verify:client-preview"]);
+  it("accepts seed, reset, verify and access, each with its own confirmation", async () => {
+    expect(PREVIEW_OPERATIONS).toEqual([
+      SEED,
+      RESET,
+      "verify:client-preview",
+      "access:client-preview",
+    ]);
     await expect(
       assertClientPreviewApi(target({ operation: RESET, confirm: confirmFor(RESET) })),
     ).resolves.toMatchObject({ ref: REF });
@@ -333,11 +339,36 @@ describe("policy: seed and reset of the client preview", () => {
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(sql.search(/CREATE OR REPLACE FUNCTION/));
     expect(sql).toContain("to_regclass('dq_preview.marker') IS NULL");
-    for (const fn of ["client_preview_backdate", "client_preview_purge"]) {
-      const body = sql.slice(sql.indexOf(`FUNCTION public.${fn}(`));
-      expect(body.indexOf("PERFORM public.client_preview_assert_target(_org_id)")).toBeGreaterThan(
-        -1,
+    const fnBody = (fn: string) => {
+      const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${fn}(`);
+      return sql.slice(start, sql.indexOf("END $$;", start));
+    };
+    // every function that writes checks the destination first (purge through purge_operational)
+    for (const fn of ["client_preview_backdate", "client_preview_purge_operational"])
+      expect(fnBody(fn), fn).toMatch(
+        /^[^;]*;[\s\S]*?PERFORM public\.client_preview_assert_target\(_org_id\);/,
       );
+    expect(
+      fnBody("client_preview_purge").indexOf("public.client_preview_purge_operational(_org_id)"),
+    ).toBeLessThan(fnBody("client_preview_purge").indexOf("DELETE FROM public.organizations"));
+    // a reset keeps the organization, its stores, members, invitations and subscription
+    const operational = fnBody("client_preview_purge_operational");
+    for (const kept of [
+      "organizations",
+      "locations",
+      "organization_members",
+      "member_location_access",
+      "invitations",
+      "subscriptions",
+    ])
+      expect(operational, `purge_operational must keep ${kept}`).not.toMatch(
+        new RegExp(`'${kept}'|public\\.${kept}\\b`),
+      );
+    for (const fn of [
+      "client_preview_backdate",
+      "client_preview_purge",
+      "client_preview_purge_operational",
+    ]) {
       expect(sql).toContain(`REVOKE ALL ON FUNCTION public.${fn}(`);
       expect(sql).toMatch(
         new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${fn}\\([^)]*\\) TO service_role;`),
@@ -374,11 +405,34 @@ describe("policy: seed and reset of the client preview", () => {
       "FROM public.organizations WHERE NOT is_demo",
       "FROM auth.users",
       "FROM public.user_roles",
+      "cardinality(owners) > 2",
+      "duplicate personal owner",
+      "a personal owner is not an e-mail address",
+      "a personal owner uses a reserved test domain",
     ])
       expect(body, check).toContain(check);
-    // every refusal happens before the first write
-    const lastRefusal = body.lastIndexOf("RAISE EXCEPTION");
-    expect(lastRefusal).toBeLessThan(body.indexOf("CREATE SCHEMA"));
+    // every refusal of the guard block happens before the first write
+    const firstWrite = body.indexOf("CREATE SCHEMA");
+    const guardBlock = body.slice(0, firstWrite);
+    expect(guardBlock.match(/RAISE EXCEPTION/g)?.length).toBeGreaterThanOrEqual(11);
+    // after the first write, the only refusal is the trigger that keeps the personal list fixed
+    expect(body.slice(firstWrite).match(/RAISE EXCEPTION/g)).toHaveLength(1);
+    expect(body).toMatch(
+      /CREATE TRIGGER personal_accounts_fixed BEFORE INSERT OR UPDATE ON dq_preview\.personal_accounts/,
+    );
+    expect(body).toMatch(
+      /REVOKE ALL ON dq_preview\.personal_accounts FROM PUBLIC, anon, authenticated, service_role;/,
+    );
+    // the identity counts real accounts outside the fixed list and reports the list (version 2)
+    expect(body).toContain("'marker_version', 2");
+    expect(body).toMatch(/NOT IN \(SELECT p\.email FROM dq_preview\.personal_accounts p\)/);
+    expect(body).toContain("'personal_accounts'");
+    // psql must never echo the personal addresses, and the settings must really be applied (a
+    // WHERE-false query is optimized away without running set_config)
+    expect(body).toMatch(
+      /SELECT set_config\('dq_preview\.project_ref', :'project_ref', true\) IS NOT NULL\s+AND set_config\('dq_preview\.personal_owners', :'personal_owners', true\) IS NOT NULL\s+AS settings_applied;/,
+    );
+    expect(body).not.toMatch(/WHERE false/i);
     expect(body).toMatch(
       /REVOKE ALL ON FUNCTION public\.client_preview_identity\(\) FROM PUBLIC, anon, authenticated;/,
     );

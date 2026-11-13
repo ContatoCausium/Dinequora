@@ -1,19 +1,31 @@
 // Executes the client-preview dataset (scripts/preview/dataset.mjs) on a destination checked by
-// scripts/preview/client-preview-target.mjs, and removes it again (purge). Writes only:
-//   * through the same RPCs as the UI, signed in as the demo owner (organization, stores, menu,
-//     stock, recipes, suppliers, expenses, purchases + receipts, POS sales, kitchen statuses,
-//     invitations), so prices, tax, stock, COGS, payments and the ledger come from the server;
-//   * with the server key, three things the UI cannot do on a demo: confirmed demo accounts (Auth
-//     admin API), the demo subscription (Growth, active — the demo has no billing provider, as in
-//     scripts/seeds/demo/seed-demo-orgs.sql), and the history back-dating / purge functions of
-//     scripts/preview/sql/client-preview-functions.sql, which only act on a demo organization.
-// Generated passwords are written only to the credentials file (outside the repository, mode 600).
+// scripts/preview/client-preview-target.mjs. Three entry points:
+//   seed      first run: demo accounts, personal owners, organization, stores, team, operational data;
+//   reset     keeps the organization, its stores, every member (personal owners included) and their
+//             store assignments, and replaces only the operational data (client_preview_purge_operational);
+//   teardown  removes everything: the organization, the demo accounts and the personal owners' accounts.
+// Writes only:
+//   * through the same RPCs as the UI, signed in as the demo owner (organization, stores, menu, stock,
+//     recipes, suppliers, expenses, purchases + receipts, POS sales, kitchen statuses, invitations),
+//     so prices, tax, stock, COGS, payments and the ledger come from the server;
+//   * with the server key, what the UI cannot do on a demo: confirmed accounts (Auth admin API), the
+//     demo subscription (Growth, active, no billing provider, as scripts/seeds/demo/seed-demo-orgs.sql),
+//     and the functions of scripts/preview/sql/client-preview-functions.sql (demo organization only).
+// Personal owners (scripts/preview/personal-owners.mjs): at most two real people, each with an
+// individual account, made Owner of the demo organization only through create_invitation +
+// accept_invitation, with a one-time password that is never stored or printed (each person then sets
+// their own password through an individual recovery link: scripts/preview/personal-access-link.mjs).
+// Never a platform role. Before writing anything, every run refuses a database that holds any account
+// outside the demo domain and the declared personal owners, or any platform role.
+// Demo-account passwords are written only to the credentials file (outside the repository, mode 600);
+// personal owners' passwords are never written anywhere, and their addresses are never logged.
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { assertResolvedTarget } from "./client-preview-target.mjs";
+import { personalLabel } from "./personal-owners.mjs";
 import {
   ACCOUNTS,
   buildDataset,
@@ -93,18 +105,17 @@ async function must(promise, what) {
   return data;
 }
 
-async function demoAccounts(svc) {
+async function allUsers(svc) {
   const found = [];
   for (let page = 1; page < 50; page++) {
     const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 200 });
     if (error) throw new SeedError(`listUsers: ${error.message}`);
-    found.push(
-      ...data.users.filter((u) => (u.email ?? "").toLowerCase().endsWith(`@${EMAIL_DOMAIN}`)),
-    );
+    found.push(...data.users);
     if (data.users.length < 200) break;
   }
   return found;
 }
+const isDemoAccount = (u) => (u.email ?? "").toLowerCase().endsWith(`@${EMAIL_DOMAIN}`);
 async function demoOrganizations(svc) {
   return must(
     svc.from("organizations").select("id,slug").eq("name", ORG.name).eq("is_demo", true),
@@ -123,36 +134,103 @@ const hoursOf = (store) => {
   );
 };
 
-/** Removes the demo organization(s) and the demo accounts. */
-export async function purgeClientPreview(target, { log = console.log } = {}) {
+const newPassword = () => `${crypto.randomBytes(15).toString("base64url")}!7a`;
+
+/**
+ * Refuses (before any write) a database that holds an account outside the demo domain and the declared
+ * personal owners, or any platform role. Returns the users classified.
+ */
+async function auditAccounts(svc, personalOwners) {
+  const users = await allUsers(svc);
+  const outside = users.filter((u) => {
+    const email = (u.email ?? "").toLowerCase();
+    if (isDemoAccount(u)) return false;
+    if (personalOwners.includes(email)) return false;
+    return true; // any other account (real or another test domain) is not part of the preview
+  });
+  if (outside.length)
+    throw new SeedError(
+      `the database has ${outside.length} account(s) outside the demo domain and the declared personal owners; nothing was written`,
+    );
+  const { count, error } = await svc
+    .from("user_roles")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new SeedError(`user_roles: ${error.message}`);
+  if (count)
+    throw new SeedError(
+      `the database has ${count} platform role(s); the preview has no platform admin`,
+    );
+  return {
+    demo: users.filter(isDemoAccount),
+    personal: users.filter((u) => personalOwners.includes((u.email ?? "").toLowerCase())),
+  };
+}
+
+async function members(svc, orgId) {
+  return must(
+    svc.from("organization_members").select("id,user_id,role").eq("org_id", orgId),
+    "members",
+  );
+}
+
+/** Removes everything: the demo organization(s), the demo accounts and the personal owners' accounts. */
+export async function teardownClientPreview(target, { log = console.log } = {}) {
   const { svc } = clients(target);
+  const { demo, personal } = await auditAccounts(svc, target.personalOwners);
   const removed = [];
   for (const org of await demoOrganizations(svc))
     removed.push(await rpc(svc, "client_preview_purge", { _org_id: org.id }));
-  const accounts = await demoAccounts(svc);
-  for (const u of accounts) {
+  for (const u of [...demo, ...personal]) {
     const { error } = await svc.auth.admin.deleteUser(u.id);
     if (error) throw new SeedError(`deleteUser: ${error.message}`);
   }
-  log(`purged ${removed.length} demo organization(s) and ${accounts.length} demo account(s)`);
-  return { organizations: removed, accounts: accounts.length };
+  log(
+    `teardown: ${removed.length} demo organization(s), ${demo.length} demo account(s) and ${personal.length} personal owner account(s) removed`,
+  );
+  return { organizations: removed, demoAccounts: demo.length, personalAccounts: personal.length };
 }
 
-/** Seeds the dataset. Refuses when the demo organization or demo accounts already exist. */
-export async function seedClientPreview(
+/** First run. Refuses when the demo organization or any preview account already exists. */
+export function seedClientPreview(target, options = {}) {
+  return run(target, { ...options, mode: "seed" });
+}
+
+/**
+ * Replaces the operational data and keeps the organization, stores, members and personal owners.
+ * On a database without the demo organization it seeds it (only when no preview account exists).
+ */
+export function resetClientPreview(target, options = {}) {
+  return run(target, { ...options, mode: "reset" });
+}
+
+async function run(
   target,
-  { now = Date.now(), profile = "ledger-safe", credsFile, log = console.log, concurrency = 3 } = {},
+  {
+    mode,
+    now = Date.now(),
+    profile = "ledger-safe",
+    credsFile,
+    log = console.log,
+    concurrency = 3,
+  },
 ) {
   const credsPath = assertCredsFileOutsideRepo(credsFile);
   const { svc, signIn } = clients(target);
-  if ((await demoOrganizations(svc)).length)
+  const owners = target.personalOwners;
+  const audit = await auditAccounts(svc, owners);
+  const orgs = await demoOrganizations(svc);
+  if (orgs.length > 1) throw new SeedError("more than one demo organization (run teardown)");
+  const existing = orgs[0] ?? null;
+  if (mode === "seed" && existing)
     throw new SeedError("the demo organization already exists (use reset)");
-  if ((await demoAccounts(svc)).length)
-    throw new SeedError("demo accounts already exist (use reset)");
+  if (!existing && (audit.demo.length || audit.personal.length))
+    throw new SeedError(
+      "preview accounts exist without the demo organization (run teardown first)",
+    );
 
   const plan = buildDataset({ now, profile });
   log(
-    `dataset profile ${profile}: ${plan.summary.orders} orders over ${plan.summary.days + 1} days, ~${plan.summary.ledgerEntries} ledger entries`,
+    `${existing ? "reset" : "seed"}: dataset profile ${profile}, ${plan.summary.orders} orders over ${plan.summary.days + 1} days, ~${plan.summary.ledgerEntries} ledger entries; ${owners.length} personal owner(s) declared`,
   );
   const started = Date.now();
   const creds = {
@@ -170,28 +248,57 @@ export async function seedClientPreview(
     throw new SeedError(`cannot write the credentials file (${e.code ?? e.message})`);
   }
 
-  // 1. Accounts (confirmed; passwords only in the credentials file).
+  // 1. Demo accounts: created on the first run, new passwords on every reset.
+  const byEmail = new Map(audit.demo.map((u) => [u.email.toLowerCase(), u]));
   for (const a of ACCOUNTS) {
-    const password = `${crypto.randomBytes(15).toString("base64url")}!7a`;
-    const { data, error } = await svc.auth.admin.createUser({
-      email: a.email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: a.fullName, preferred_language: "en-US" },
-    });
-    if (error) throw new SeedError(`createUser ${a.email}: ${error.message}`);
-    creds.accounts[a.key] = { email: a.email, password, userId: data.user.id, role: a.role };
+    const password = newPassword();
+    const found = byEmail.get(a.email);
+    let userId;
+    if (found) {
+      const { error } = await svc.auth.admin.updateUserById(found.id, { password });
+      if (error) throw new SeedError(`updateUser ${a.key}: ${error.message}`);
+      userId = found.id;
+    } else {
+      const { data, error } = await svc.auth.admin.createUser({
+        email: a.email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: a.fullName, preferred_language: "en-US" },
+      });
+      if (error) throw new SeedError(`createUser ${a.key}: ${error.message}`);
+      userId = data.user.id;
+    }
+    creds.accounts[a.key] = { email: a.email, password, userId, role: a.role };
     save();
   }
   const owner = await signIn(creds.accounts.owner.email, creds.accounts.owner.password);
 
-  // 2. Organization (onboarding path: classified as demo), plan, brand, stores.
-  const orgId = await rpc(owner, "create_test_restaurant", {
-    _name: ORG.name,
-    _company_name: ORG.companyName,
-    _company_address: ORG.companyAddress,
-    _location_name: STORES[0].name,
-  });
+  // 2. Organization and stores: created on the first run (onboarding path, classified as demo),
+  //    reused on a reset. Plan, brand, tax and hours are applied on every run.
+  let orgId;
+  const loc = {};
+  if (existing) {
+    orgId = existing.id;
+    const m = (await members(svc, orgId)).find((x) => x.user_id === creds.accounts.owner.userId);
+    if (m?.role !== "owner")
+      throw new SeedError("the demo owner is not an owner of the demo organization");
+    const found = await must(
+      owner.from("locations").select("id,name").eq("org_id", orgId),
+      "stores",
+    );
+    for (const s of STORES) {
+      const l = found.find((x) => x.name === s.name);
+      if (!l) throw new SeedError(`store ${s.name} is missing (run teardown, then seed)`);
+      loc[s.key] = l.id;
+    }
+  } else {
+    orgId = await rpc(owner, "create_test_restaurant", {
+      _name: ORG.name,
+      _company_name: ORG.companyName,
+      _company_address: ORG.companyAddress,
+      _location_name: STORES[0].name,
+    });
+  }
   await must(
     svc
       .from("subscriptions")
@@ -217,23 +324,28 @@ export async function seedClientPreview(
     owner.from("organizations").select("slug").eq("id", orgId).single(),
     "org slug",
   );
-  const first = await must(owner.from("locations").select("id").eq("org_id", orgId), "first store");
-  if (first.length !== 1) throw new SeedError("expected exactly one store after onboarding");
-  const loc = { [STORES[0].key]: first[0].id };
-  await rpc(owner, "set_location_tax_rate", {
-    _location_id: loc[STORES[0].key],
-    _tax_rate_ppm: STORES[0].taxRatePpm,
-  });
-  for (const s of STORES.slice(1))
-    loc[s.key] = await rpc(owner, "create_location_with_tax_rate", {
-      _org_id: orgId,
-      _name: s.name,
-      _address: s.address,
-      _timezone: TIMEZONE,
-      _phone: s.phone,
+  if (!existing) {
+    const first = await must(
+      owner.from("locations").select("id").eq("org_id", orgId),
+      "first store",
+    );
+    if (first.length !== 1) throw new SeedError("expected exactly one store after onboarding");
+    loc[STORES[0].key] = first[0].id;
+    for (const s of STORES.slice(1))
+      loc[s.key] = await rpc(owner, "create_location_with_tax_rate", {
+        _org_id: orgId,
+        _name: s.name,
+        _address: s.address,
+        _timezone: TIMEZONE,
+        _phone: s.phone,
+        _tax_rate_ppm: s.taxRatePpm,
+      });
+  }
+  for (const s of STORES) {
+    await rpc(owner, "set_location_tax_rate", {
+      _location_id: loc[s.key],
       _tax_rate_ppm: s.taxRatePpm,
     });
-  for (const s of STORES)
     await rpc(owner, "update_location", {
       _id: loc[s.key],
       _name: s.name,
@@ -242,10 +354,127 @@ export async function seedClientPreview(
       _timezone: TIMEZONE,
       _hours: hoursOf(s),
     });
+  }
   Object.assign(creds, { org: { id: orgId, slug: org.slug, name: ORG.name }, stores: loc });
   save();
-  log(`organization ${org.slug} with stores ${STORES.map((s) => s.name).join(", ")}`);
+  log(
+    `organization ${org.slug} with stores ${STORES.map((s) => s.name).join(", ")} (${existing ? "kept" : "created"})`,
+  );
 
+  // 3. On a reset, the previous operational data goes first (organization, stores and members stay).
+  //    It runs through the destination check of the dataset functions, so a refused destination
+  //    stops here, before any account or invitation is created.
+  if (existing) {
+    const removed = await rpc(svc, "client_preview_purge_operational", { _org_id: orgId });
+    log(
+      `previous operational data removed (${removed.orders ?? 0} orders, ${removed.inventory_items ?? 0} stock items)`,
+    );
+  }
+
+  // 4. Team through the real invitation flow: demo manager and kitchen accounts (store-scoped) and the
+  //    personal owners (Owner, organization-wide). Existing members are kept as they are.
+  const current = await members(svc, orgId);
+  const isMember = (userId) => current.some((m) => m.user_id === userId);
+  const profiles = await must(
+    owner.from("permission_profiles").select("id,key").eq("is_system", true),
+    "profiles",
+  );
+  const P = Object.fromEntries(profiles.map((p) => [p.key, p.id]));
+  for (const a of ACCOUNTS.filter((x) => x.role !== "owner")) {
+    if (isMember(creds.accounts[a.key].userId)) continue;
+    const token = await rpc(owner, "create_invitation", {
+      _org_id: orgId,
+      _email: a.email,
+      _role: a.role,
+      _location_ids: a.stores.map((k) => loc[k]),
+      _profile_id: a.profile ? P[a.profile] : null,
+    });
+    const member = await signIn(creds.accounts[a.key].email, creds.accounts[a.key].password);
+    await rpc(member, "accept_invitation", { _token: token });
+  }
+  const personalState = [];
+  for (const email of owners) {
+    const label = personalLabel(owners, email);
+    const found = audit.personal.find((u) => u.email.toLowerCase() === email);
+    if (found) {
+      const m = current.find((x) => x.user_id === found.id);
+      if (m?.role !== "owner")
+        throw new SeedError(
+          `${label} has an account but is not an owner of the demo organization (run teardown)`,
+        );
+      personalState.push({ label, userId: found.id, state: "kept" });
+      continue;
+    }
+    // New person: a confirmed account with a one-time password kept only in memory for the single
+    // sign-in that accepts the invitation; the person then sets their own password (recovery link).
+    const oneTime = newPassword();
+    const { data, error } = await svc.auth.admin.createUser({
+      email,
+      password: oneTime,
+      email_confirm: true,
+      user_metadata: { preferred_language: "en-US" },
+    });
+    if (error) throw new SeedError(`createUser ${label}: ${error.message}`);
+    const token = await rpc(owner, "create_invitation", {
+      _org_id: orgId,
+      _email: email,
+      _role: "owner",
+      _location_ids: [],
+      _profile_id: null,
+    });
+    let person;
+    try {
+      person = await signIn(email, oneTime);
+    } catch {
+      throw new SeedError(`sign-in of ${label} for the invitation failed`);
+    }
+    await rpc(person, "accept_invitation", { _token: token });
+    await person.auth.signOut();
+    personalState.push({
+      label,
+      userId: data.user.id,
+      state: "created, invited as Owner, accepted",
+    });
+  }
+  for (const p of personalState) log(`${p.label}: ${p.state}`);
+  creds.personalOwners = personalState;
+  save();
+
+  // 5. Operational data.
+  await seedOperational({ owner, svc, orgId, org, loc, plan, log, concurrency });
+
+  let onboarding = "complete";
+  try {
+    await rpc(owner, "set_onboarding_step", { _org_id: orgId, _step: 5 });
+  } catch (e) {
+    onboarding = `not completed: ${e.message}`;
+  }
+  creds.seededAt = new Date().toISOString();
+  creds.anchorNow = iso(now);
+  creds.summary = {
+    ...plan.summary,
+    mode: existing ? "reset" : "seed",
+    startYmd: plan.startYmd,
+    todayYmd: plan.todayYmd,
+    onboarding,
+    seconds: Math.round((Date.now() - started) / 1000),
+  };
+  save();
+  log(
+    `client-preview dataset ready on ${target.where} in ${creds.summary.seconds}s (credentials in the credentials file; passwords and personal addresses not printed)`,
+  );
+  return {
+    orgId,
+    slug: org.slug,
+    stores: loc,
+    summary: creds.summary,
+    credsPath,
+    personalOwners: personalState,
+  };
+}
+
+/** Menu, stock, recipes, suppliers, expenses, purchases, sales history, alerts, open orders, times. */
+async function seedOperational({ owner, svc, orgId, org, loc, plan, log, concurrency }) {
   // 3. Menu.
   for (const c of CATEGORIES)
     await rpc(owner, "save_operational_menu", {
@@ -513,43 +742,4 @@ export async function seedClientPreview(
   log(
     `history back-dated: ${counts.orders} orders, ${counts.receipts} receipts, ${counts.openings} opening movements`,
   );
-
-  // 8. Team (invited and accepted through the real flow) and onboarding.
-  const profiles = await must(
-    owner.from("permission_profiles").select("id,key").eq("is_system", true),
-    "profiles",
-  );
-  const P = Object.fromEntries(profiles.map((p) => [p.key, p.id]));
-  for (const a of ACCOUNTS.filter((x) => x.role !== "owner")) {
-    const token = await rpc(owner, "create_invitation", {
-      _org_id: orgId,
-      _email: a.email,
-      _role: a.role,
-      _location_ids: a.stores.map((k) => loc[k]),
-      _profile_id: a.profile ? P[a.profile] : null,
-    });
-    const member = await signIn(creds.accounts[a.key].email, creds.accounts[a.key].password);
-    await rpc(member, "accept_invitation", { _token: token });
-  }
-  let onboarding = "complete";
-  try {
-    await rpc(owner, "set_onboarding_step", { _org_id: orgId, _step: 5 });
-  } catch (e) {
-    onboarding = `not completed: ${e.message}`;
-  }
-
-  creds.seededAt = new Date().toISOString();
-  creds.anchorNow = iso(now);
-  creds.summary = {
-    ...plan.summary,
-    startYmd: plan.startYmd,
-    todayYmd: plan.todayYmd,
-    onboarding,
-    seconds: Math.round((Date.now() - started) / 1000),
-  };
-  save();
-  log(
-    `client-preview dataset ready on ${target.where} in ${creds.summary.seconds}s (credentials in the credentials file; passwords not printed)`,
-  );
-  return { orgId, slug: org.slug, stores: loc, summary: creds.summary, credsPath };
 }

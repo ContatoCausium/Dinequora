@@ -12,6 +12,7 @@
 // hand-built object can never stand in for a checked destination. Keys are never printed.
 import { assertDisposableApi, GuardRefusal } from "../guard/target-guard.mjs";
 import { assertClientPreviewApi, PREVIEW_OPERATIONS, PreviewRefusal } from "./preview-target.mjs";
+import { parsePersonalOwners, PersonalOwnersError } from "./personal-owners.mjs";
 
 const BRAND = Symbol("client-preview-target");
 
@@ -27,6 +28,16 @@ export async function resolvePreviewTarget(env, operation) {
     );
   if (typeof publishableKey !== "string" || publishableKey.length < 20)
     throw new PreviewRefusal("missing publishable key (PREVIEW_PUBLISHABLE_KEY)");
+  // The personal owners (at most two): real people on the hosted preview, where they must also equal
+  // the list fixed in its marker; stand-in .test addresses on a local stack (never real people).
+  let personalOwners;
+  try {
+    personalOwners = parsePersonalOwners(env.PREVIEW_PERSONAL_OWNERS, { mode });
+  } catch (e) {
+    throw new PreviewRefusal(
+      e instanceof PersonalOwnersError ? e.message : "invalid personal owners",
+    );
+  }
   let where;
   if (mode === "local") {
     const cluster = await assertDisposableApi(apiUrl, serviceKey, operation);
@@ -37,6 +48,7 @@ export async function resolvePreviewTarget(env, operation) {
       serviceKey,
       operation,
       confirm: env.DQ_PREVIEW_CONFIRM,
+      personalOwners,
     });
     where = `hosted client-preview project ${ref}`;
   }
@@ -48,6 +60,7 @@ export async function resolvePreviewTarget(env, operation) {
     apiUrl: String(apiUrl).replace(/\/+$/, ""),
     serviceKey,
     publishableKey,
+    personalOwners,
   });
 }
 

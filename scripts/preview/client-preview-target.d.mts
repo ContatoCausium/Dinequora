@@ -6,6 +6,7 @@ export type PreviewTarget = Readonly<{
   apiUrl: string;
   serviceKey: string;
   publishableKey: string;
+  personalOwners: readonly string[];
 }>;
 export function resolvePreviewTarget(
   env: Record<string, string | undefined>,
