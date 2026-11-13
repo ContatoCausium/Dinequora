@@ -15,6 +15,7 @@ import {
 } from "@/components/auth/auth-layout";
 import { isPlatformAdmin } from "@/lib/admin-service";
 import { auth, AuthError, pendingRedirect, safeRedirect, sessionPersistence } from "@/lib/auth";
+import { isClientPreview } from "@/lib/deployment-profile";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: z.object({ redirect: z.string().optional() }),
@@ -178,16 +179,19 @@ function LoginPage() {
         </label>
         <SubmitButton loading={loading}>{t("login.submit")}</SubmitButton>
       </form>
-      <p className="mt-8 text-center text-sm text-muted-foreground">
-        {t("login.noAccount")}{" "}
-        <Link
-          to="/signup"
-          search={redirect ? { redirect } : {}}
-          className="font-medium text-foreground hover:underline"
-        >
-          {t("login.createAccount")}
-        </Link>
-      </p>
+      {/* Client preview: accounts are provisioned, never self-created. */}
+      {!isClientPreview() && (
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          {t("login.noAccount")}{" "}
+          <Link
+            to="/signup"
+            search={redirect ? { redirect } : {}}
+            className="font-medium text-foreground hover:underline"
+          >
+            {t("login.createAccount")}
+          </Link>
+        </p>
+      )}
     </AuthLayout>
   );
 }

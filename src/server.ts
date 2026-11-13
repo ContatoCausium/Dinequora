@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { captureError } from "./lib/observability";
 import { configureObservability } from "./lib/observability-config";
+import { withSecurityHeaders } from "./lib/security-headers";
 
 // Alert/exception destinations come only from server environment variables; none by default.
 configureObservability(process.env);
@@ -66,23 +67,29 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+async function handle(request: Request, env: unknown, ctx: unknown): Promise<Response> {
+  const language = request.headers.get("accept-language") ?? "en-US";
+  try {
+    const handler = await getServerEntry();
+    const response = await handler.fetch(request, env, ctx);
+    return await normalizeCatastrophicSsrResponse(response, language, request);
+  } catch (error) {
+    captureError(error, {
+      event: "server.request_failed",
+      critical: true,
+      ...requestContext(request),
+    });
+    return new Response(renderErrorPage(language), {
+      status: 500,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+}
+
 export default {
+  // Security and no-index headers on every server response, error pages included (client-preview
+  // profile only; a no-op in the standard profile).
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    const language = request.headers.get("accept-language") ?? "en-US";
-    try {
-      const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response, language, request);
-    } catch (error) {
-      captureError(error, {
-        event: "server.request_failed",
-        critical: true,
-        ...requestContext(request),
-      });
-      return new Response(renderErrorPage(language), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
+    return withSecurityHeaders(await handle(request, env, ctx), request);
   },
 };

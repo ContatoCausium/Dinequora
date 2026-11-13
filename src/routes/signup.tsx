@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MailCheck } from "lucide-react";
@@ -15,9 +15,14 @@ import {
   SubmitButton,
 } from "@/components/auth/auth-layout";
 import { auth, AuthError, pendingRedirect, safeRedirect } from "@/lib/auth";
+import { isClientPreview } from "@/lib/deployment-profile";
 
 export const Route = createFileRoute("/signup")({
   validateSearch: z.object({ redirect: z.string().optional(), email: z.string().optional() }),
+  // Client preview: public sign-up does not exist (sign-ups are also off in its Supabase Auth).
+  beforeLoad: () => {
+    if (isClientPreview()) throw redirect({ to: "/auth" });
+  },
   head: () => ({
     meta: [
       { title: "Create account · Dinequora" },

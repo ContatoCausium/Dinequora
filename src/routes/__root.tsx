@@ -18,6 +18,7 @@ import {
   setObservabilityScope,
 } from "../lib/observability";
 import { applyClientLanguageAfterHydration } from "../lib/i18n";
+import { isClientPreview } from "../lib/deployment-profile";
 import { auth } from "@/lib/auth";
 import { clearTemporaryDeviceData } from "@/lib/session-cleanup";
 import { stopPresentation } from "@/lib/presentation-mode";
@@ -94,6 +95,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      ...(isClientPreview() ? [{ name: "robots", content: "noindex, nofollow, noarchive" }] : []),
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
