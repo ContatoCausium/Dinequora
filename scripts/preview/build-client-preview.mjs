@@ -162,6 +162,11 @@ export function hardenOutput(outputDir) {
   const wranglerFile = path.join(outputDir, "server/wrangler.json");
   const wrangler = JSON.parse(fs.readFileSync(wranglerFile, "utf8"));
   wrangler.name = WORKER_NAME;
+  // Stated explicitly so `wrangler deploy` keeps them: without `preview_urls` in the config, wrangler
+  // turns the version preview URLs ON at every deploy, and those hosts are outside the Cloudflare
+  // Access application that protects the workers.dev URL (seen on 2026-11-16).
+  wrangler.workers_dev = true;
+  wrangler.preview_urls = false;
   fs.writeFileSync(wranglerFile, `${JSON.stringify(wrangler, null, 2)}\n`);
 }
 

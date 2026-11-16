@@ -192,6 +192,41 @@ describe("post-build hardening", () => {
     const wrangler = JSON.parse(fs.readFileSync(path.join(out, "server/wrangler.json"), "utf8"));
     expect(wrangler.name).toBe(WORKER_NAME);
     expect(wrangler.compatibility_flags).toEqual(["nodejs_compat"]);
+    // wrangler deploy would otherwise turn the version preview URLs on (outside Cloudflare Access).
+    expect(wrangler.preview_urls).toBe(false);
+    expect(wrangler.workers_dev).toBe(true);
+  });
+});
+
+describe("Worker exposure: workers.dev only, never version preview URLs", () => {
+  const withWrangler = (patch: (w: Record<string, unknown>) => Record<string, unknown>) => {
+    const out = fixture();
+    hardenOutput(out);
+    const file = path.join(out, "server/wrangler.json");
+    const w = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+    fs.writeFileSync(file, JSON.stringify(patch(w)));
+    return messages(scan(out));
+  };
+  it("rejects a build whose config leaves preview URLs unset or on", () => {
+    const unset = withWrangler((w) => {
+      const copy = { ...w };
+      delete copy["preview_urls"];
+      return copy;
+    });
+    expect(unset.some((m) => m.startsWith("preview_urls must be false"))).toBe(true);
+    const on = withWrangler((w) => ({ ...w, preview_urls: true }));
+    expect(on.some((m) => m.startsWith("preview_urls must be false"))).toBe(true);
+  });
+  it("rejects a build that turns workers.dev off or adds routes or custom domains", () => {
+    const off = withWrangler((w) => ({ ...w, workers_dev: false }));
+    expect(off.some((m) => m.startsWith("workers_dev must be true"))).toBe(true);
+    for (const key of ["routes", "custom_domains"]) {
+      const extra = withWrangler((w) => ({ ...w, [key]: ["preview.example.com"] }));
+      expect(
+        extra.some((m) => m.startsWith(`unexpected ${key}`)),
+        key,
+      ).toBe(true);
+    }
   });
 });
 

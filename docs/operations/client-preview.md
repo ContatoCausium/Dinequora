@@ -346,6 +346,16 @@ fixed marker list, individual links that never reach a log), and direct SQL on t
 migration child process, redaction). No unit test reaches a network or a database; `verify-dataset.mjs` and `smoke-app.mjs` are the
 database and end-to-end checks.
 
+## 7a. Worker exposure: workers.dev only, version preview URLs off
+
+The preview is protected by a Cloudflare Access application on its workers.dev host only. Version
+preview URLs (`<version>-<worker>.<subdomain>.workers.dev`) are other hosts, outside that application,
+and `wrangler deploy` turns them ON whenever the config does not set `preview_urls` (observed on
+2026-11-16; reverted within a minute). The build therefore writes `"workers_dev": true` and
+`"preview_urls": false` into `.output/server/wrangler.json` (`hardenOutput`), and `verify-bundle.mjs`
+fails a build without them or with routes/custom domains. After any deploy, still confirm on the
+Worker (read-only) that previews are disabled and that a version URL answers 404.
+
 ## 8. Remaining risk for Workers Free
 
 The resources read (`fetchOperationalResources`) answers 260–360 KiB per store and ~900 KiB for "All

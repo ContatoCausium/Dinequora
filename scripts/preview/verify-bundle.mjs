@@ -111,6 +111,18 @@ export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishable
     err("server/wrangler.json", `worker name is ${String(wrangler.name)}, expected ${WORKER_NAME}`);
   if (!(wrangler.compatibility_flags ?? []).includes("nodejs_compat"))
     err("server/wrangler.json", "nodejs_compat flag missing");
+  // Version preview URLs bypass the Cloudflare Access application of the workers.dev URL, and
+  // wrangler enables them on deploy unless the config says otherwise.
+  if (wrangler.preview_urls !== false)
+    err(
+      "server/wrangler.json",
+      "preview_urls must be false (preview URLs bypass Cloudflare Access)",
+    );
+  if (wrangler.workers_dev !== true)
+    err("server/wrangler.json", "workers_dev must be true (the preview is served on workers.dev)");
+  for (const key of ["routes", "route", "custom_domains"])
+    if (wrangler[key] !== undefined)
+      err("server/wrangler.json", `unexpected ${key} (the preview is served on workers.dev only)`);
   for (const key of ["vars", "secrets", "d1_databases", "kv_namespaces", "r2_buckets"])
     if (wrangler[key] !== undefined)
       err(
