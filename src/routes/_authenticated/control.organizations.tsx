@@ -31,6 +31,7 @@ import type { OrgInsight } from "@/lib/admin-service";
 import { attentionReasons, onboardingSteps } from "@/lib/platform-metrics";
 import { fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { FormSelect } from "@/components/ui/form-select";
 
 const search = z.object({
   org: z.string().optional(),
@@ -114,7 +115,7 @@ function Organizations() {
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
-        <select
+        <FormSelect
           aria-label={t("orgs.plan")}
           className={inputCls}
           value={s.plan ?? "all"}
@@ -126,8 +127,8 @@ function Organizations() {
               {t(`plans.${p}`)}
             </option>
           ))}
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("orgs.status")}
           className={inputCls}
           value={s.status ?? "all"}
@@ -139,8 +140,8 @@ function Organizations() {
               {t(`status.${x}`)}
             </option>
           ))}
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("orgsPage.kind")}
           className={inputCls}
           value={s.kind ?? "all"}
@@ -149,7 +150,7 @@ function Organizations() {
           <option value="all">{t("orgsPage.allKinds")}</option>
           <option value="customer">{t("orgsPage.customers")}</option>
           <option value="demo">{t("orgsPage.demos")}</option>
-        </select>
+        </FormSelect>
       </div>
 
       {error && <LoadFailure kind={error} retry={() => void reload()} />}

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { PlatformAudit } from "@/lib/admin-service";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const Route = createFileRoute("/_authenticated/control/audit")({
   head: () => ({
@@ -110,7 +111,7 @@ function Audit() {
             </button>
           )}
         </div>
-        <select
+        <FormSelect
           aria-label={t("audit.org")}
           className={`${inputCls} max-w-[200px]`}
           value={org}
@@ -125,8 +126,8 @@ function Audit() {
               {o.name}
             </option>
           ))}
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("auditPage.actionFilter")}
           className={`${inputCls} max-w-[200px]`}
           value={actionFilter}
@@ -141,8 +142,8 @@ function Audit() {
               {t(`actions.${act}`, { defaultValue: act })}
             </option>
           ))}
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("auditPage.scope")}
           className={`${inputCls} max-w-[160px]`}
           value={scope}
@@ -153,7 +154,7 @@ function Audit() {
         >
           <option value="all">{t("auditPage.allEvents")}</option>
           <option value="platform">{t("auditPage.platformOnly")}</option>
-        </select>
+        </FormSelect>
       </div>
       {error && <LoadFailure kind={error} retry={() => void reload()} />}
       {loading ? (

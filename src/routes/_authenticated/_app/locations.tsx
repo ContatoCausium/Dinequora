@@ -63,6 +63,8 @@ import {
 } from "@/lib/access-rules";
 import type { Location } from "@/lib/tenants";
 import { cn } from "@/lib/utils";
+import { FormSelect } from "@/components/ui/form-select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/_authenticated/_app/locations")({
   head: () => ({
@@ -396,7 +398,7 @@ function TzSelect({
 }) {
   const opts = TIMEZONES.includes(value) ? TIMEZONES : [value, ...TIMEZONES];
   return (
-    <select
+    <FormSelect
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -407,7 +409,7 @@ function TzSelect({
           {z.replace(/_/g, " ")}
         </option>
       ))}
-    </select>
+    </FormSelect>
   );
 }
 
@@ -773,12 +775,10 @@ function EditSheet({
                     key={m.id}
                     className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 hover:bg-muted/60"
                   >
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-[var(--primary)]"
+                    <Checkbox
                       checked={mgrs.includes(m.id)}
-                      onChange={(e) =>
-                        setMgrs(e.target.checked ? [...mgrs, m.id] : mgrs.filter((x) => x !== m.id))
+                      onCheckedChange={(v) =>
+                        setMgrs(v === true ? [...mgrs, m.id] : mgrs.filter((x) => x !== m.id))
                       }
                     />
                     <span className="text-sm">{m.full_name ?? t("team:page.unnamed")}</span>

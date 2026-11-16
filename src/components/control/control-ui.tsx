@@ -14,6 +14,7 @@ import {
 import { assignOwner, updateOrganization, type PlanId } from "@/lib/admin-service";
 import type { OrgStatus } from "@/lib/org-service";
 import { cn } from "@/lib/utils";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const STATUS: OrgStatus[] = ["trial", "active", "suspended"];
 export const PLANS: PlanId[] = ["starter", "growth", "enterprise"];
@@ -224,7 +225,7 @@ export function EditOrgDialog({
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1.5 text-sm font-medium">
           {t("orgs.plan")}
-          <select
+          <FormSelect
             className={inputCls}
             value={plan}
             onChange={(e) => setPlan(e.target.value as PlanId)}
@@ -234,7 +235,7 @@ export function EditOrgDialog({
                 {t(`plans.${p}`)}
               </option>
             ))}
-          </select>
+          </FormSelect>
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
           {t("edit.storeLimit")}

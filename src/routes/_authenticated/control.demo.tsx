@@ -16,6 +16,7 @@ import {
   type BrandColors,
 } from "@/lib/theme-engine";
 import { cn } from "@/lib/utils";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const Route = createFileRoute("/_authenticated/control/demo")({
   head: () => ({
@@ -127,7 +128,7 @@ function DemoStudio() {
           <div className="grid gap-4 p-5">
             <label className="grid gap-1.5 text-sm font-medium">
               {t("demo.tenant")}
-              <select
+              <FormSelect
                 className="h-9 rounded-md border bg-card px-3 text-sm"
                 value={tenantId}
                 onChange={(e) => setTenantId(e.target.value)}
@@ -138,7 +139,7 @@ function DemoStudio() {
                     {o.name} — {t("demo.demoTenant")}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
               {t("demo.name")}
@@ -151,7 +152,7 @@ function DemoStudio() {
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
               {t("demo.planSelector")}
-              <select
+              <FormSelect
                 className="h-9 rounded-md border bg-card px-3 text-sm"
                 value={selectedPlan}
                 onChange={(e) =>
@@ -163,7 +164,7 @@ function DemoStudio() {
                 <option value="enterprise">
                   Enterprise ({PLANS.enterprise.maxLocations} lojas)
                 </option>
-              </select>
+              </FormSelect>
             </label>
             <div className="grid gap-1.5">
               <span className="text-sm font-medium">{t("demo.logo")}</span>

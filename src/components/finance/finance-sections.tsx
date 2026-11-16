@@ -35,6 +35,7 @@ import {
   type StoreResult,
 } from "./finance-model";
 import { averageCents } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 /** Shared row actions and display context passed down from the page. */
 export interface ExpenseActions {
@@ -306,7 +307,7 @@ export function ExpensesPanel({
           onChange={(e) => set("search", e.target.value)}
           className="h-9 w-full text-xs sm:w-64"
         />
-        <select
+        <FormSelect
           aria-label={t("table.statusFilter")}
           value={filters.status}
           onChange={(e) => set("status", e.target.value as ExpenseFilters["status"])}
@@ -316,8 +317,8 @@ export function ExpensesPanel({
           <option value="overdue">{t("status.overdue")}</option>
           <option value="pending">{t("status.pending")}</option>
           <option value="paid">{t("status.paid")}</option>
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("table.categoryFilter")}
           value={filters.category}
           onChange={(e) => set("category", e.target.value as ExpenseCategory | "all")}
@@ -329,9 +330,9 @@ export function ExpensesPanel({
               {t(`categories.${c}`)}
             </option>
           ))}
-        </select>
+        </FormSelect>
         {actions.showStore && (
-          <select
+          <FormSelect
             aria-label={t("table.storeFilter")}
             value={filters.locationId}
             onChange={(e) => set("locationId", e.target.value)}
@@ -343,9 +344,9 @@ export function ExpensesPanel({
                 {s.name}
               </option>
             ))}
-          </select>
+          </FormSelect>
         )}
-        <select
+        <FormSelect
           aria-label={t("table.recurrenceFilter")}
           value={filters.recurrence}
           onChange={(e) => set("recurrence", e.target.value as ExpenseFilters["recurrence"])}
@@ -355,7 +356,7 @@ export function ExpensesPanel({
           <option value="fixed">{t("recurrence.fixed")}</option>
           <option value="variable">{t("recurrence.variable")}</option>
           <option value="recurring">{t("recurrence.recurring")}</option>
-        </select>
+        </FormSelect>
         {filtersActive && (
           <Button
             size="sm"

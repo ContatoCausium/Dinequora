@@ -54,6 +54,7 @@ import {
 import { cn } from "@/lib/utils";
 import { fmtMoneyCents } from "@/lib/format";
 import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 type LoadState = "loading" | "ready" | "error";
 type StatusFilter = "all" | "active" | "inactive";
@@ -1072,7 +1073,7 @@ export function MenuPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="menu-item-category">{t("form.category")}</Label>
-                <select
+                <FormSelect
                   id="menu-item-category"
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
@@ -1086,7 +1087,7 @@ export function MenuPage() {
                       {c.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="menu-item-price">{t("form.price")}</Label>

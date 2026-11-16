@@ -161,9 +161,10 @@ export function Field({
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-err` : undefined}
         className={cn(
-          "h-10 rounded-md border bg-card px-3 text-sm shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70",
-          "focus:border-ring focus:ring-3 focus:ring-ring/15",
-          error && "border-destructive focus:border-destructive focus:ring-destructive/15",
+          "h-10 rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground",
+          "focus-visible:focus-field",
+          error &&
+            "border-destructive shadow-[0_0_0_3px_color-mix(in_oklab,var(--destructive)_18%,transparent)]",
           className,
         )}
         {...props}

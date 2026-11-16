@@ -39,6 +39,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function toPath(href: string | undefined) {
   if (!href) return null;
@@ -169,12 +170,7 @@ function LoginPage() {
           }
         />
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="size-4 rounded border accent-[var(--primary)]"
-          />
+          <Checkbox checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
           {t("fields.remember")}
         </label>
         <SubmitButton loading={loading}>{t("login.submit")}</SubmitButton>

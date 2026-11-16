@@ -18,6 +18,8 @@ import {
   type ExpenseStatus,
 } from "@/lib/finance-service";
 import type { ExpenseFormValues } from "./finance-model";
+import { FormSelect } from "@/components/ui/form-select";
+import { DateField } from "@/components/ui/date-field";
 
 export function ExpenseFormDialog({
   open,
@@ -72,7 +74,7 @@ export function ExpenseFormDialog({
               <label htmlFor={`${id}-store`} className={label}>
                 {t("form.store")}
               </label>
-              <select
+              <FormSelect
                 id={`${id}-store`}
                 value={v.locationId}
                 disabled={storeLocked}
@@ -86,7 +88,7 @@ export function ExpenseFormDialog({
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
               {editing && (
                 <p className="mt-1 text-[11px] text-muted-foreground">{t("form.storeLocked")}</p>
               )}
@@ -130,9 +132,8 @@ export function ExpenseFormDialog({
                 <label htmlFor={`${id}-due`} className={label}>
                   {t("form.dueDate")}
                 </label>
-                <Input
+                <DateField
                   id={`${id}-due`}
-                  type="date"
                   value={v.dueDate}
                   onChange={(e) => {
                     const due = e.target.value;
@@ -146,7 +147,6 @@ export function ExpenseFormDialog({
                           : cur.competencyDate,
                     }));
                   }}
-                  className={field}
                   required
                 />
               </div>
@@ -156,13 +156,11 @@ export function ExpenseFormDialog({
               <label htmlFor={`${id}-competency`} className={label}>
                 {t("form.competencyDate")}
               </label>
-              <Input
+              <DateField
                 id={`${id}-competency`}
-                type="date"
                 value={v.competencyDate}
                 onChange={(e) => set("competencyDate", e.target.value)}
                 aria-describedby={`${id}-competency-hint`}
-                className={field}
                 required
               />
               <p id={`${id}-competency-hint`} className="mt-1 text-[11px] text-muted-foreground">
@@ -175,7 +173,7 @@ export function ExpenseFormDialog({
                 <label htmlFor={`${id}-cat`} className={label}>
                   {t("form.category")}
                 </label>
-                <select
+                <FormSelect
                   id={`${id}-cat`}
                   value={v.category}
                   onChange={(e) => set("category", e.target.value as ExpenseCategory)}
@@ -186,13 +184,13 @@ export function ExpenseFormDialog({
                       {t(`categories.${c}`)}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <label htmlFor={`${id}-rec`} className={label}>
                   {t("form.recurrence")}
                 </label>
-                <select
+                <FormSelect
                   id={`${id}-rec`}
                   value={v.recurrence}
                   onChange={(e) => set("recurrence", e.target.value as ExpenseRecurrence)}
@@ -201,7 +199,7 @@ export function ExpenseFormDialog({
                   <option value="fixed">{t("recurrence.fixed")}</option>
                   <option value="recurring">{t("recurrence.recurring")}</option>
                   <option value="variable">{t("recurrence.variable")}</option>
-                </select>
+                </FormSelect>
               </div>
             </div>
 
@@ -222,7 +220,7 @@ export function ExpenseFormDialog({
                 <label htmlFor={`${id}-status`} className={label}>
                   {t("form.status")}
                 </label>
-                <select
+                <FormSelect
                   id={`${id}-status`}
                   value={v.status}
                   onChange={(e) => set("status", e.target.value as ExpenseStatus)}
@@ -230,7 +228,7 @@ export function ExpenseFormDialog({
                 >
                   <option value="pending">{t("status.pending")}</option>
                   <option value="paid">{t("status.paid")}</option>
-                </select>
+                </FormSelect>
               </div>
             </div>
 

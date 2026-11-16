@@ -25,6 +25,7 @@ import {
   type StoreRef,
   type StoreResult,
 } from "./finance-model";
+import { FormSelect } from "@/components/ui/form-select";
 
 type DataType = "all" | "realized" | "projected" | "simulated";
 
@@ -187,7 +188,7 @@ export function FinanceReports({
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <FormSelect
             aria-label={t("reports.reportType")}
             value={reportType}
             onChange={(e) => setReportType(e.target.value as FinancialReportType)}
@@ -198,9 +199,9 @@ export function FinanceReports({
                 {t(`reports.types.${r.label}`)}
               </option>
             ))}
-          </select>
+          </FormSelect>
           {locations.length > 1 && (
-            <select
+            <FormSelect
               aria-label={t("reports.locationFilter")}
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
@@ -212,9 +213,9 @@ export function FinanceReports({
                   {loc.name}
                 </option>
               ))}
-            </select>
+            </FormSelect>
           )}
-          <select
+          <FormSelect
             aria-label={t("reports.dataFilter")}
             value={selectedDataType}
             onChange={(e) => setSelectedDataType(e.target.value as DataType)}
@@ -224,7 +225,7 @@ export function FinanceReports({
             <option value="realized">{t("reports.onlyRealized")}</option>
             <option value="projected">{t("reports.onlyProjected")}</option>
             <option value="simulated">{t("reports.onlySimulated")}</option>
-          </select>
+          </FormSelect>
         </div>
         <span className="text-xs text-muted-foreground">
           {t("reports.recordsCount", { count: report.rows.length })}

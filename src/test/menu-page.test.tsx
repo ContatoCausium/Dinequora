@@ -313,13 +313,18 @@ describe("products and categories", () => {
     await renderMenu();
     fireEvent.click(screen.getByRole("button", { name: "Edit Old Brownie" }));
     expect(screen.getByText(/The category of this product was archived/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Category")).toHaveValue("");
+    // Design-system select: no category chosen yet shows the prompt.
+    expect(screen.getByRole("combobox", { name: "Category" })).toHaveTextContent(
+      "Select category…",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Choose an active category for this product.",
     );
     expect(api.saveOperationalMenu).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "sides" } });
+    // Opened from the keyboard, as a keyboard user would (also proves it is reachable without a mouse).
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Category" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "Sides" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
     await waitFor(() => expect(api.saveOperationalMenu).toHaveBeenCalledTimes(1));
     expect(api.saveOperationalMenu.mock.calls[0]![0].data.item).toMatchObject({

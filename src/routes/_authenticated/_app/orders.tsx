@@ -43,6 +43,7 @@ import { isRecordedSale } from "@/lib/report-metrics";
 import { displayAmount, fmtDateTime, fmtMoneyCents, fmtNumber, fmtRatePpm } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { averageCents } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const Route = createFileRoute("/_authenticated/_app/orders")({
   head: () => ({
@@ -416,7 +417,7 @@ function FilterSelect<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <select
+    <FormSelect
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as T | "all")}
@@ -428,7 +429,7 @@ function FilterSelect<T extends string>({
           {o.label}
         </option>
       ))}
-    </select>
+    </FormSelect>
   );
 }
 

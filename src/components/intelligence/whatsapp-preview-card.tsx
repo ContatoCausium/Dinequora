@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FormSelect } from "@/components/ui/form-select";
 
 const TEMPLATE_KINDS = [
   "financial_summary",
@@ -301,7 +302,7 @@ export function WhatsAppPreviewCard({
                     onChange={(e) => setNewContactPhone(e.target.value)}
                     className="h-9"
                   />
-                  <select
+                  <FormSelect
                     aria-label={t("whatsapp.contactRole")}
                     value={newContactRole}
                     onChange={(e) => setNewContactRole(e.target.value as RecipientRole)}
@@ -312,7 +313,7 @@ export function WhatsAppPreviewCard({
                         {t(`whatsapp.roles.${r}`)}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
                 <label className="flex items-start gap-2 text-xs">
                   <input

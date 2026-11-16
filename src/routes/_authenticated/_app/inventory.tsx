@@ -83,6 +83,7 @@ import {
   multiplyQuantityCents,
   sumCents,
 } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const Route = createFileRoute("/_authenticated/_app/inventory")({
   head: () => ({
@@ -879,7 +880,7 @@ export function InventoryPage() {
             className="pl-9"
           />
         </div>
-        <select
+        <FormSelect
           aria-label={t("categories.label")}
           className="h-9 rounded-md border bg-background px-3 text-sm lg:w-56"
           value={categoryFilter}
@@ -891,7 +892,7 @@ export function InventoryPage() {
               {t(`categories.${c}`)}
             </option>
           ))}
-        </select>
+        </FormSelect>
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <div
             role="radiogroup"
@@ -1541,7 +1542,7 @@ export function InventoryPage() {
               {!selectedRecipe && org.locations.length > 1 && (
                 <div className="col-span-2 space-y-1.5">
                   <Label htmlFor="recipe-store">{t("recipeDialog.store")}</Label>
-                  <select
+                  <FormSelect
                     id="recipe-store"
                     className="h-9 w-full rounded-md border bg-background px-3"
                     value={recipeStore}
@@ -1561,12 +1562,12 @@ export function InventoryPage() {
                         {l.name}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
               )}
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="recipe-product">{t("recipeDialog.product")}</Label>
-                <select
+                <FormSelect
                   id="recipe-product"
                   className="h-9 w-full rounded-md border bg-background px-3"
                   value={selectedRecipeProduct}
@@ -1580,7 +1581,7 @@ export function InventoryPage() {
                       {p.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="recipe-servings">{t("recipeDialog.servings")}</Label>
@@ -1651,7 +1652,7 @@ export function InventoryPage() {
                     className="grid grid-cols-12 items-center gap-2 rounded-md border bg-muted/30 p-2 text-xs"
                   >
                     <div className="col-span-5">
-                      <select
+                      <FormSelect
                         aria-label={t("recipeDialog.ingredient", { index: idx + 1 })}
                         value={ing.inventoryItemId}
                         onChange={(e) => {
@@ -1676,7 +1677,7 @@ export function InventoryPage() {
                               : i.name}
                           </option>
                         ))}
-                      </select>
+                      </FormSelect>
                     </div>
                     <div className="col-span-4 flex items-center gap-1.5">
                       <Input
@@ -1890,7 +1891,7 @@ export function InventoryPage() {
           <div className="space-y-4 py-2 text-sm">
             <div className="space-y-1.5">
               <Label htmlFor="move-item">{t("moveDialog.item")}</Label>
-              <select
+              <FormSelect
                 id="move-item"
                 value={selectedItemForMove?.id ?? ""}
                 onChange={(e) => {
@@ -1912,7 +1913,7 @@ export function InventoryPage() {
                     })}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
 
             <div className="space-y-1.5">
@@ -1955,7 +1956,7 @@ export function InventoryPage() {
                 {transferTargets.length === 0 ? (
                   <p className="text-xs text-muted-foreground">{t("moveDialog.noTargetStore")}</p>
                 ) : (
-                  <select
+                  <FormSelect
                     id="move-target"
                     value={targetLocationId}
                     onChange={(e) => setTargetLocationId(e.target.value)}
@@ -1966,7 +1967,7 @@ export function InventoryPage() {
                         {l.name}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 )}
               </div>
             )}

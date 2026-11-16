@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const Route = createFileRoute("/_authenticated/control/admins")({
   head: () => ({
@@ -288,7 +289,7 @@ function Admins() {
                   </button>
                 )}
               </div>
-              <select
+              <FormSelect
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value as "all" | PlatformRole)}
                 className="h-9 rounded-md border bg-card px-3 text-sm"
@@ -296,7 +297,7 @@ function Admins() {
                 <option value="all">{t("admins.allRoles")}</option>
                 <option value="platform_admin">{t("roles.platform_admin")}</option>
                 <option value="support">{t("roles.support")}</option>
-              </select>
+              </FormSelect>
             </div>
           </div>
 
@@ -437,7 +438,7 @@ function Admins() {
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
               {t("admins.role")}
-              <select
+              <FormSelect
                 className={inputCls}
                 value={grantRole}
                 onChange={(e) => setGrantRole(e.target.value as PlatformRole)}
@@ -448,7 +449,7 @@ function Admins() {
                 <option value="platform_admin">
                   {t("roles.platform_admin")} ({t("admins.adminDesc")})
                 </option>
-              </select>
+              </FormSelect>
             </label>
             <label className="grid gap-1.5 text-sm font-medium">
               {t("edit.reason")}
