@@ -443,6 +443,7 @@ function TokenStrip({ tokens }: { tokens: ThemeTokens }) {
     "semanticSuccess",
     "semanticWarning",
     "semanticDanger",
+    "semanticInfo",
   ];
   return (
     <div className="mt-5">

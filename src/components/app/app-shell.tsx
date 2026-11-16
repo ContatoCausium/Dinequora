@@ -168,8 +168,8 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
                   className={cn(
                     "group relative flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium transition-colors",
                     active
-                      ? "bg-sidebar-accent text-foreground"
-                      : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-foreground",
+                      ? "raised text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground hover:bg-secondary hover:text-foreground",
                     collapsed && "justify-center px-0",
                   )}
                 >
@@ -179,7 +179,7 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
                       active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
                     )}
                   >
-                    <Icon className="size-[15px]" strokeWidth={1.75} />
+                    <Icon className="size-[18px]" />
                   </span>
                   {!collapsed && <span className="truncate">{t(`nav.${key}`)}</span>}
                 </Link>
@@ -211,7 +211,7 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
               )}
             >
               <span className="inline-flex size-6 shrink-0 items-center justify-center">
-                <Icon className="size-[15px] opacity-70" strokeWidth={1.75} />
+                <Icon className="size-[18px] opacity-70" />
               </span>
               {!collapsed && (
                 <>
@@ -230,12 +230,12 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
             to="/control"
             onClick={onNavigate}
             className={cn(
-              "flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground",
+              "flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium text-sidebar-foreground/80 hover:bg-secondary hover:text-foreground",
               collapsed && "justify-center px-0",
             )}
           >
             <span className="inline-flex size-6 items-center justify-center text-muted-foreground">
-              <ServerCog className="size-[15px]" strokeWidth={1.75} />
+              <ServerCog className="size-[18px]" />
             </span>
             {!collapsed && <span className="truncate">{t("nav.controlCenter")}</span>}
           </Link>
@@ -252,7 +252,7 @@ function OrgSwitcher({ compact }: { compact?: boolean }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-sidebar-accent/60",
+          "flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-secondary",
           compact && "w-auto",
         )}
         aria-label={t("shell.switchOrg")}
@@ -296,7 +296,7 @@ export function LocationSelector({ className }: { className?: string }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex h-9 min-w-0 items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:bg-muted",
+          "inline-flex h-9 min-w-0 items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:border-input",
           className,
         )}
         aria-label={t("shell.selectLocation")}
@@ -347,7 +347,7 @@ export function Notifications() {
   return (
     <Popover>
       <PopoverTrigger
-        className="relative inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="relative inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
         aria-label={t("shell.notifications")}
       >
         <Bell className="size-4" strokeWidth={1.75} />
@@ -564,6 +564,19 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
   );
 }
 
+/** Keyboard hint for the command palette: ⌘K on Apple platforms, Ctrl K elsewhere (after hydration). */
+function ShortcutHint() {
+  const [mac, setMac] = useState(false);
+  useEffect(() => {
+    setMac(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent));
+  }, []);
+  return (
+    <kbd className="inline-flex h-5 items-center gap-0.5 rounded border border-b-2 bg-card px-1.5 font-sans text-[10.5px] font-medium text-muted-foreground">
+      {mac ? <CommandIcon className="size-2.5" /> : "Ctrl"} K
+    </kbd>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { orgStatus, suspendedReason, org } = useWorkspace();
@@ -600,7 +613,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         >
           <div
-            className={cn("flex h-16 items-center border-b px-3", collapsed && "justify-center")}
+            className={cn("flex h-14 items-center border-b px-3", collapsed && "justify-center")}
           >
             <OrgSwitcher compact={collapsed} />
           </div>
@@ -616,7 +629,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               ))}
             <button
               onClick={() => setCollapsed((c) => !c)}
-              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/60"
+              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
               aria-label={collapsed ? t("a11y.expandSidebar") : t("a11y.collapseSidebar")}
             >
               {collapsed ? (
@@ -629,10 +642,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-6">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-6">
             <button
               onClick={() => setMobileOpen(true)}
-              className="inline-flex size-9 items-center justify-center rounded-md hover:bg-muted lg:hidden"
+              className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-secondary lg:hidden"
               aria-label={t("a11y.openMenu")}
             >
               <Menu className="size-5" strokeWidth={1.75} />
@@ -640,13 +653,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <LocationSelector className="max-w-[220px] sm:max-w-xs" />
             <button
               onClick={() => setCmdOpen(true)}
-              className="ml-2 hidden h-9 w-64 items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground shadow-xs hover:bg-muted md:inline-flex"
+              className="ml-2 hidden h-9 w-64 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:border-input md:inline-flex"
             >
               <Search className="size-4" strokeWidth={1.75} />
               <span className="flex-1 text-left">{t("shell.search")}</span>
-              <kbd className="inline-flex items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px]">
-                <CommandIcon className="size-2.5" />K
-              </kbd>
+              <ShortcutHint />
             </button>
             <div className="ml-auto flex items-center gap-1">
               {/* One honest workspace-level indicator instead of a different badge on every page. */}
@@ -658,7 +669,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
               <button
                 onClick={() => setCmdOpen(true)}
-                className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted md:hidden"
+                className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary md:hidden"
                 aria-label={t("shell.search")}
               >
                 <Search className="size-4" strokeWidth={1.75} />

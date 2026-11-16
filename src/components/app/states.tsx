@@ -47,7 +47,7 @@ export function StateCard({
     <div className="mx-auto flex max-w-md flex-col items-center px-6 py-16 text-center">
       <span
         className={cn(
-          "mb-4 inline-flex size-11 items-center justify-center rounded-full border",
+          "mb-4 inline-flex size-12 items-center justify-center rounded-xl border bg-secondary [&_svg]:size-5",
           tone === "danger"
             ? "border-destructive/25 text-destructive"
             : tone === "warning"

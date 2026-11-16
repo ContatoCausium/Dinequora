@@ -98,11 +98,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       ...(isClientPreview() ? [{ name: "robots", content: "noindex, nofollow, noarchive" }] : []),
     ],
     links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      // Geist is self-hosted (src/styles.css @font-face); preload the Latin face used on first paint.
       {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap",
+        rel: "preload",
+        href: "/fonts/geist/geist-latin.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
       },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

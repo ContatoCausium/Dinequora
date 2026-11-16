@@ -36,90 +36,193 @@ export type ThemeTokens = {
   semanticSuccess: string;
   semanticWarning: string;
   semanticDanger: string;
+  semanticInfo: string;
 };
 
 export type BrandColors = { primary: string; accent: string };
 
 export const FALLBACK_BRAND: BrandColors = { primary: "#b5452a", accent: "#e2a23b" };
 
+/**
+ * "Ember & Sand" design system (approved 2026-11-16). Neutrals are a fixed warm sand scale, so every
+ * workspace keeps the same calm surfaces and measured contrast whatever its brand: the brand drives
+ * the primary action, its soft tint, focus ring, active navigation and the first chart series.
+ * Status colors are reserved (never chart series) and green only ever means success.
+ * Values are the hex form of the oklch tokens documented in src/styles.css.
+ */
+const SAND = {
+  light: {
+    background: "#fcfbf9", // oklch(0.988 0.003 75)
+    card: "#ffffff",
+    foreground: "#1d1713", // 0.21 — 17.7:1 on card
+    subtle: "#f2f0ec", // 0.955 — secondary/muted surfaces
+    mutedForeground: "#68625d", // 0.50 — 6.0:1 on card
+    border: "#e5e2df", // 0.915 — decorative borders
+    input: "#96918d", // 0.66 — control borders, 3.1:1 (WCAG 1.4.11)
+    sidebar: "#f8f6f4", // 0.975
+    sidebarForeground: "#4d4642", // 0.40
+  },
+  dark: {
+    background: "#0f0d0b", // oklch(0.16 0.006 60)
+    card: "#181513", // 0.20
+    foreground: "#f3f1f0",
+    subtle: "#24211f", // 0.25
+    mutedForeground: "#a8a3a0", // 0.72
+    border: "#302d2b", // 0.30
+    input: "#6d6864", // 0.52 — control borders, 3.3:1 on card
+    sidebar: "#14110f", // 0.18
+    sidebarForeground: "#d0cdca",
+  },
+} as const;
+
+/** Reserved status colors (icon + label always accompany them). */
+const STATUS = {
+  light: { success: "#187c49", warning: "#945a00", danger: "#be2132", info: "#386695" },
+  dark: { success: "#57bc80", warning: "#f2af48", danger: "#f3625d", info: "#79a9db" },
+} as const;
+
+/**
+ * Categorical chart order after the brand (slot 1), validated for color-vision deficiency and
+ * contrast with Ember first (light: #c2512e,#3f6fb5,#1a9a8a,#b47c0c,#9b4f96; dark: #d9653c,…).
+ * `chart6` is the previous-period / comparison gray, never a series.
+ */
+const SERIES = {
+  light: ["#3f6fb5", "#1a9a8a", "#b47c0c", "#9b4f96"],
+  dark: ["#6a7fdc", "#13a58a", "#c08a1a", "#b168a8"],
+} as const;
+const PREVIOUS_PERIOD = { light: "#a9a39e", dark: "#76706c" } as const;
+
+/** OKLab ΔE ×100 between two hex colors (the metric of the data-viz palette validator). */
+export function deltaE(a: string, b: string): number {
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const lab = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16))) as [
+      number,
+      number,
+      number,
+    ];
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * bl);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * bl);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * bl);
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    ];
+  };
+  const [x, y] = [lab(a), lab(b)];
+  return Math.hypot(x[0]! - y[0]!, x[1]! - y[1]!, x[2]! - y[2]!) * 100;
+}
+
+/** Below this OKLab ΔE two marks are hard to tell apart even with full color vision. */
+export const SERIES_MIN_DELTA_E = 15;
+
+/**
+ * Orders the validated series after the tenant's brand (slot 1). Charts read neighbouring slots
+ * together, so slots 2 and 3 must be distinguishable from the brand (ΔE ≥ 15): a series that is
+ * too close moves later in the order. Every color appears exactly once — nothing is ever repeated.
+ */
+function seriesAfterBrand(primary: string, palette: readonly string[]): string[] {
+  const far = (c: string, others: string[]) =>
+    others.every((o) => deltaE(c, o) >= SERIES_MIN_DELTA_E);
+  const remaining = [...palette];
+  const ordered: string[] = [];
+  for (const slot of [0, 1]) {
+    const neighbours = slot === 0 ? [primary] : [primary, ordered[0]!];
+    const i = remaining.findIndex((c) => far(c, neighbours));
+    ordered.push(remaining.splice(i === -1 ? 0 : i, 1)[0]!);
+  }
+  return [...ordered, ...remaining];
+}
+
 export function generateTheme(brand: BrandColors, mode: "light" | "dark"): ThemeTokens {
   const p = hexToHsl(brand.primary);
   const a = hexToHsl(brand.accent);
-  const ns = Math.min(p.s, 0.14) * 0.5; // neutral saturation: a whisper of the brand hue
 
   if (mode === "light") {
-    const background = hsl(p.h, ns, 0.985);
-    const card = "#ffffff";
-    const foreground = hsl(p.h, ns + 0.05, 0.11);
-    const primary = ensureContrast(brand.primary, "#ffffff", 4.5);
-    const accentFg = ensureContrast(hsl(a.h, Math.max(a.s, 0.5), 0.3), hsl(a.h, 0.7, 0.94), 4.5);
+    const n = SAND.light;
+    const primary = ensureContrast(brand.primary, n.card, 4.5);
+    const primarySoft = hsl(p.h, Math.min(p.s, 0.7), 0.965);
+    const accent = hsl(a.h, Math.min(a.s, 0.75), 0.93);
+    const [s2, s3, s4, s5] = seriesAfterBrand(primary, SERIES.light);
     return {
       primary,
       primaryForeground: readableOn(primary),
-      primarySoft: hsl(p.h, Math.min(p.s, 0.7), 0.95),
-      secondary: hsl(p.h, ns, 0.955),
-      secondaryForeground: foreground,
-      accent: hsl(a.h, Math.min(a.s, 0.75), 0.93),
-      accentForeground: accentFg,
-      background,
-      foreground,
-      card,
-      cardForeground: foreground,
-      muted: hsl(p.h, ns, 0.955),
-      mutedForeground: ensureContrast(hsl(p.h, ns + 0.04, 0.45), background, 4.6),
-      border: hsl(p.h, ns + 0.04, 0.905),
-      input: hsl(p.h, ns + 0.04, 0.88),
+      primarySoft,
+      secondary: n.subtle,
+      secondaryForeground: n.foreground,
+      accent,
+      accentForeground: ensureContrast(hsl(a.h, Math.max(a.s, 0.5), 0.3), accent, 4.5),
+      background: n.background,
+      foreground: n.foreground,
+      card: n.card,
+      cardForeground: n.foreground,
+      muted: n.subtle,
+      mutedForeground: ensureContrast(n.mutedForeground, n.background, 4.5),
+      border: n.border,
+      input: n.input,
       focusRing: primary,
       chart1: primary,
-      chart2: ensureContrast(brand.accent, "#ffffff", 2.2),
-      chart3: hsl(p.h + 200, 0.25, 0.42),
-      chart4: hsl(p.h + 150, 0.35, 0.45),
-      chart5: hsl(a.h + 40, 0.3, 0.6),
-      chart6: hsl(p.h, 0.08, 0.7),
-      sidebarBackground: hsl(p.h, ns, 0.972),
-      sidebarForeground: hsl(p.h, ns + 0.05, 0.28),
-      sidebarActive: hsl(p.h, Math.min(p.s, 0.6), 0.93),
-      sidebarActiveForeground: ensureContrast(primary, hsl(p.h, Math.min(p.s, 0.6), 0.93), 4.5),
-      semanticSuccess: "#1f8a5b",
-      semanticWarning: "#c27a0e",
-      semanticDanger: "#c73a2b",
+      chart2: s2!,
+      chart3: s3!,
+      chart4: s4!,
+      chart5: s5!,
+      chart6: PREVIOUS_PERIOD.light,
+      sidebarBackground: n.sidebar,
+      sidebarForeground: n.sidebarForeground,
+      // Active navigation sits on a raised card surface (border + shadow in the shell); its ink is
+      // the regular foreground and the icon takes the brand color.
+      sidebarActive: n.card,
+      sidebarActiveForeground: n.foreground,
+      semanticSuccess: STATUS.light.success,
+      semanticWarning: STATUS.light.warning,
+      semanticDanger: STATUS.light.danger,
+      semanticInfo: STATUS.light.info,
     };
   }
 
-  const background = hsl(p.h, ns + 0.03, 0.075);
-  const card = hsl(p.h, ns + 0.03, 0.105);
-  const foreground = hsl(p.h, ns, 0.95);
-  const primary = ensureContrast(hsl(p.h, Math.min(p.s, 0.75), Math.max(p.l, 0.6)), background, 5);
+  const n = SAND.dark;
+  const primary = ensureContrast(
+    hsl(p.h, Math.min(p.s, 0.75), Math.max(p.l, 0.6)),
+    n.background,
+    5,
+  );
+  const accent = hsl(a.h, Math.min(a.s, 0.45), 0.18);
+  const [s2, s3, s4, s5] = seriesAfterBrand(primary, SERIES.dark);
   return {
     primary,
     primaryForeground: readableOn(primary),
     primarySoft: hsl(p.h, Math.min(p.s, 0.5), 0.17),
-    secondary: hsl(p.h, ns + 0.03, 0.15),
-    secondaryForeground: foreground,
-    accent: hsl(a.h, Math.min(a.s, 0.45), 0.18),
-    accentForeground: hsl(a.h, Math.min(a.s, 0.8), 0.78),
-    background,
-    foreground,
-    card,
-    cardForeground: foreground,
-    muted: hsl(p.h, ns + 0.03, 0.15),
-    mutedForeground: hsl(p.h, ns, 0.68),
-    border: hsl(p.h, ns + 0.03, 0.18),
-    input: hsl(p.h, ns + 0.03, 0.22),
+    secondary: n.subtle,
+    secondaryForeground: n.foreground,
+    accent,
+    accentForeground: ensureContrast(hsl(a.h, Math.min(a.s, 0.8), 0.78), accent, 4.5),
+    background: n.background,
+    foreground: n.foreground,
+    card: n.card,
+    cardForeground: n.foreground,
+    muted: n.subtle,
+    mutedForeground: ensureContrast(n.mutedForeground, n.background, 4.5),
+    border: n.border,
+    input: n.input,
     focusRing: primary,
     chart1: primary,
-    chart2: ensureContrast(brand.accent, card, 3),
-    chart3: hsl(p.h + 200, 0.35, 0.65),
-    chart4: hsl(p.h + 150, 0.35, 0.6),
-    chart5: hsl(a.h + 40, 0.35, 0.7),
-    chart6: hsl(p.h, 0.06, 0.45),
-    sidebarBackground: hsl(p.h, ns + 0.03, 0.09),
-    sidebarForeground: hsl(p.h, ns, 0.78),
-    sidebarActive: hsl(p.h, Math.min(p.s, 0.4), 0.17),
-    sidebarActiveForeground: hsl(p.h, Math.min(p.s, 0.8), 0.85),
-    semanticSuccess: "#3fbf85",
-    semanticWarning: "#e8a53a",
-    semanticDanger: "#f0705f",
+    chart2: s2!,
+    chart3: s3!,
+    chart4: s4!,
+    chart5: s5!,
+    chart6: PREVIOUS_PERIOD.dark,
+    sidebarBackground: n.sidebar,
+    sidebarForeground: n.sidebarForeground,
+    sidebarActive: n.subtle,
+    sidebarActiveForeground: n.foreground,
+    semanticSuccess: STATUS.dark.success,
+    semanticWarning: STATUS.dark.warning,
+    semanticDanger: STATUS.dark.danger,
+    semanticInfo: STATUS.dark.info,
   };
 }
 
@@ -153,6 +256,7 @@ const VAR_MAP: Record<keyof ThemeTokens, string[]> = {
   semanticSuccess: ["--success"],
   semanticWarning: ["--warning"],
   semanticDanger: ["--destructive"],
+  semanticInfo: ["--info"],
 };
 
 export function themeToCssVars(t: ThemeTokens): Record<string, string> {

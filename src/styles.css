@@ -5,16 +5,62 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Servora design system.
- * Base tokens below are the neutral platform fallback theme.
- * Tenant themes override the same variables at runtime (see src/lib/theme-engine.ts),
- * so components must only ever use semantic tokens.
+ * Dinequora design system — "Ember & Sand" (approved 2026-11-16).
+ * Terracotta brand, warm sand neutrals, green only for success, crimson for errors.
+ * The values below are the first-paint defaults and MUST equal generateTheme(FALLBACK_BRAND)
+ * (src/lib/theme-engine.ts), which re-applies them — or a tenant's brand — at runtime. Components
+ * only ever use semantic tokens.
  */
+
+/* Geist Sans / Mono, self-hosted (SIL OFL 1.1 — public/fonts/geist/OFL.txt). Variable weights. */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/geist/geist-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/geist/geist-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/geist/geist-mono-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/geist/geist-mono-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
 
 @theme inline {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
 
+  /* Radius scale: 4 · 6 · 8 (controls) · 12 (cards) · 16 (dialogs). */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -30,6 +76,9 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-soft: var(--primary-soft);
+  /* Hover/pressed steps derived from the (tenant) primary so white-label themes keep working. */
+  --color-primary-hover: color-mix(in oklab, var(--primary) 88%, black);
+  --color-primary-active: color-mix(in oklab, var(--primary) 76%, black);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -40,6 +89,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -59,81 +109,103 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Warm, discreet elevation (ink = warm near-black, never pure black). */
   --shadow-xs: 0 1px 2px 0 color-mix(in oklab, var(--foreground) 6%, transparent);
-  --shadow-card: 0 1px 2px 0 color-mix(in oklab, var(--foreground) 5%, transparent),
-    0 1px 1px -0.5px color-mix(in oklab, var(--foreground) 4%, transparent);
-  --shadow-pop: 0 12px 32px -12px color-mix(in oklab, var(--foreground) 22%, transparent),
+  --shadow-card:
+    0 1px 2px 0 color-mix(in oklab, var(--foreground) 5%, transparent),
+    0 1px 3px 0 color-mix(in oklab, var(--foreground) 3%, transparent);
+  --shadow-raised:
+    0 1px 2px 0 color-mix(in oklab, var(--foreground) 7%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent);
+  --shadow-pop:
+    0 12px 32px -12px color-mix(in oklab, var(--foreground) 22%, transparent),
     0 2px 6px -2px color-mix(in oklab, var(--foreground) 10%, transparent);
+  --shadow-dialog:
+    0 24px 48px -12px color-mix(in oklab, var(--foreground) 28%, transparent),
+    0 4px 12px -4px color-mix(in oklab, var(--foreground) 10%, transparent);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.985 0.002 75);
-  --foreground: oklch(0.2 0.01 60);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 60);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.01 60);
-  --primary: oklch(0.52 0.17 35);
-  --primary-foreground: oklch(0.99 0 0);
-  --primary-soft: oklch(0.95 0.03 35);
-  --secondary: oklch(0.96 0.004 75);
-  --secondary-foreground: oklch(0.25 0.01 60);
-  --muted: oklch(0.96 0.004 75);
-  --muted-foreground: oklch(0.5 0.01 60);
-  --accent: oklch(0.95 0.04 80);
-  --accent-foreground: oklch(0.38 0.08 70);
-  --destructive: oklch(0.55 0.2 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.56 0.13 155);
-  --warning: oklch(0.7 0.15 70);
-  --border: oklch(0.915 0.004 75);
-  --input: oklch(0.9 0.004 75);
-  --ring: oklch(0.52 0.17 35);
-  --chart-1: oklch(0.52 0.17 35);
-  --chart-2: oklch(0.72 0.14 75);
-  --chart-3: oklch(0.45 0.05 250);
-  --chart-4: oklch(0.65 0.1 180);
-  --chart-5: oklch(0.6 0.12 320);
-  --chart-6: oklch(0.7 0.05 60);
-  --sidebar: oklch(0.975 0.003 75);
-  --sidebar-foreground: oklch(0.3 0.01 60);
-  --sidebar-primary: oklch(0.52 0.17 35);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.94 0.02 35);
-  --sidebar-accent-foreground: oklch(0.3 0.08 35);
-  --sidebar-border: oklch(0.915 0.004 75);
-  --sidebar-ring: oklch(0.52 0.17 35);
+  --radius: 0.5rem;
+  --background: #fcfbf9;
+  --foreground: #1d1713;
+  --card: #ffffff;
+  --card-foreground: #1d1713;
+  --popover: #ffffff;
+  --popover-foreground: #1d1713;
+  --primary: #b5452a;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fcf3f1;
+  --secondary: #f2f0ec;
+  --secondary-foreground: #1d1713;
+  --muted: #f2f0ec;
+  --muted-foreground: #68625d;
+  --accent: #faf0e0;
+  --accent-foreground: #855a14;
+  --destructive: #be2132;
+  --destructive-foreground: #ffffff;
+  --success: #187c49;
+  --warning: #945a00;
+  --info: #386695;
+  --border: #e5e2df;
+  --input: #96918d;
+  --ring: #b5452a;
+  --chart-1: #b5452a;
+  --chart-2: #3f6fb5;
+  --chart-3: #1a9a8a;
+  --chart-4: #b47c0c;
+  --chart-5: #9b4f96;
+  --chart-6: #a9a39e;
+  --sidebar: #f8f6f4;
+  --sidebar-foreground: #4d4642;
+  --sidebar-primary: #b5452a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #1d1713;
+  --sidebar-border: #e5e2df;
+  --sidebar-ring: #b5452a;
+  /* The Dinequora mark is always Ember, whatever a tenant's brand is. */
+  --dinequora-ember: #b5452a;
 }
 
 .dark {
-  --background: oklch(0.16 0.006 60);
-  --foreground: oklch(0.96 0.003 75);
-  --card: oklch(0.2 0.006 60);
-  --card-foreground: oklch(0.96 0.003 75);
-  --popover: oklch(0.22 0.006 60);
-  --popover-foreground: oklch(0.96 0.003 75);
-  --primary: oklch(0.7 0.15 38);
-  --primary-foreground: oklch(0.16 0.01 60);
-  --primary-soft: oklch(0.28 0.05 35);
-  --secondary: oklch(0.25 0.006 60);
-  --secondary-foreground: oklch(0.94 0.003 75);
-  --muted: oklch(0.25 0.006 60);
-  --muted-foreground: oklch(0.7 0.008 60);
-  --accent: oklch(0.3 0.05 75);
-  --accent-foreground: oklch(0.9 0.08 80);
-  --destructive: oklch(0.68 0.18 25);
-  --destructive-foreground: oklch(0.16 0.01 60);
-  --success: oklch(0.72 0.13 155);
-  --warning: oklch(0.8 0.14 75);
-  --border: oklch(0.3 0.006 60);
-  --input: oklch(0.32 0.006 60);
-  --ring: oklch(0.7 0.15 38);
-  --sidebar: oklch(0.18 0.006 60);
-  --sidebar-foreground: oklch(0.85 0.005 75);
-  --sidebar-accent: oklch(0.27 0.04 35);
-  --sidebar-accent-foreground: oklch(0.95 0.02 35);
-  --sidebar-border: oklch(0.27 0.006 60);
+  --background: #0f0d0b;
+  --foreground: #f3f1f0;
+  --card: #181513;
+  --card-foreground: #f3f1f0;
+  --popover: #181513;
+  --popover-foreground: #f3f1f0;
+  --primary: #d97259;
+  --primary-foreground: #141210;
+  --primary-soft: #411e16;
+  --secondary: #24211f;
+  --secondary-foreground: #f3f1f0;
+  --muted: #24211f;
+  --muted-foreground: #a8a3a0;
+  --accent: #433319;
+  --accent-foreground: #f1d19d;
+  --destructive: #f3625d;
+  --destructive-foreground: #141210;
+  --success: #57bc80;
+  --warning: #f2af48;
+  --info: #79a9db;
+  --border: #302d2b;
+  --input: #6d6864;
+  --ring: #d97259;
+  --chart-1: #d97259;
+  --chart-2: #6a7fdc;
+  --chart-3: #13a58a;
+  --chart-4: #c08a1a;
+  --chart-5: #b168a8;
+  --chart-6: #76706c;
+  --sidebar: #14110f;
+  --sidebar-foreground: #d0cdca;
+  --sidebar-primary: #d97259;
+  --sidebar-primary-foreground: #141210;
+  --sidebar-accent: #24211f;
+  --sidebar-accent-foreground: #f3f1f0;
+  --sidebar-border: #302d2b;
+  --sidebar-ring: #d97259;
 }
 
 @layer base {
@@ -143,7 +215,8 @@
   html {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: "ss01", "cv11";
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   body {
     background-color: var(--color-background);
@@ -153,6 +226,13 @@
   :focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
+  }
+  /* One icon language (Lucide): 1.75 stroke for the interface, 2 on touch surfaces (POS/KDS). */
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+  .touch-ui svg.lucide {
+    stroke-width: 2;
   }
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -179,10 +259,24 @@
 
 @utility eyebrow {
   font-size: 0.6875rem;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-muted-foreground);
+}
+
+/* Raised selection surface (active nav item, selected segment): white card + hairline + xs shadow. */
+@utility raised {
+  background-color: var(--color-card);
+  color: var(--color-foreground);
+  box-shadow: var(--shadow-raised);
+}
+
+/* Focus ring for form controls: 3px brand halo at 30%, plus the brand border. */
+@utility focus-field {
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 30%, transparent);
+  outline: none;
 }
 
 @utility demo-stripe {

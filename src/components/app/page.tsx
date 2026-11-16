@@ -14,14 +14,21 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div className="min-w-0">
+      <div className="min-w-0 md:flex-1">
         {eyebrow && <div className="mb-2 flex flex-wrap items-center gap-2">{eyebrow}</div>}
-        <h1 className="text-[22px] font-semibold tracking-[-0.02em] md:text-[26px]">{title}</h1>
+        <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.018em] md:text-2xl">
+          {title}
+        </h1>
         {description && (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">{description}</p>
         )}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && (
+        // Actions keep their row: the title block gives way (wraps) before the buttons do.
+        <div className="flex flex-wrap items-center gap-2 md:shrink-0 md:flex-nowrap">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
@@ -44,10 +51,10 @@ export function Panel({
   return (
     <section className={cn("surface flex min-w-0 flex-col", className)}>
       {(title || action) && (
-        <header className="flex items-start justify-between gap-3 px-5 pt-4">
+        <header className="flex items-start justify-between gap-3 px-5 pt-4.5">
           <div className="min-w-0">
-            {title && <h2 className="text-[13.5px] font-semibold tracking-[-0.005em]">{title}</h2>}
-            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+            {title && <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>}
+            {subtitle && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitle}</p>}
           </div>
           {action}
         </header>
@@ -72,7 +79,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex h-9 items-center rounded-md border bg-card p-0.5 shadow-xs"
+      className="inline-flex h-9 items-center gap-0.5 rounded-lg border bg-secondary p-[3px]"
     >
       {options.map((o) => (
         <button
@@ -81,9 +88,9 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "h-full rounded-[5px] px-3 text-xs font-medium transition-colors",
+            "h-full rounded-md px-3 text-[13px] font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             value === o.value
-              ? "bg-foreground text-background"
+              ? "raised text-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
