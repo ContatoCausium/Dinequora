@@ -650,7 +650,6 @@ function POSRegister({
             />
           </div>
           <div className="flex min-w-0 items-center gap-2">
-            {org.fictional && <DemoBadge label={t("simulatedBadge")} />}
             {session.suspendedSessions.length > 0 && (
               <div className="flex items-center gap-1.5 overflow-x-auto">
                 <span className="eyebrow hidden text-muted-foreground sm:inline">

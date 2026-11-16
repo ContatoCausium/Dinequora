@@ -8,3 +8,7 @@ export function parsePersonalOwners(
 ): readonly string[];
 export function sameOwners(a: readonly string[], b: readonly string[]): boolean;
 export function personalLabel(owners: readonly string[], email: string): string;
+export function parsePersonalOwnerNames(
+  rawOwners: string | undefined,
+  rawNames: string | undefined,
+): Readonly<Record<string, string>>;

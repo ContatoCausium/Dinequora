@@ -7,6 +7,8 @@ export type PreviewTarget = Readonly<{
   serviceKey: string;
   publishableKey: string;
   personalOwners: readonly string[];
+  /** Optional display names by lower-cased address (PREVIEW_PERSONAL_OWNER_NAMES). */
+  personalOwnerNames: Readonly<Record<string, string>>;
 }>;
 export function resolvePreviewTarget(
   env: Record<string, string | undefined>,

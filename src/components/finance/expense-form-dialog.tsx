@@ -134,11 +134,40 @@ export function ExpenseFormDialog({
                   id={`${id}-due`}
                   type="date"
                   value={v.dueDate}
-                  onChange={(e) => set("dueDate", e.target.value)}
+                  onChange={(e) => {
+                    const due = e.target.value;
+                    // The competency date follows the due date until the user sets it on purpose.
+                    setV((cur) => ({
+                      ...cur,
+                      dueDate: due,
+                      competencyDate:
+                        !cur.competencyDate || cur.competencyDate === cur.dueDate
+                          ? due
+                          : cur.competencyDate,
+                    }));
+                  }}
                   className={field}
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor={`${id}-competency`} className={label}>
+                {t("form.competencyDate")}
+              </label>
+              <Input
+                id={`${id}-competency`}
+                type="date"
+                value={v.competencyDate}
+                onChange={(e) => set("competencyDate", e.target.value)}
+                aria-describedby={`${id}-competency-hint`}
+                className={field}
+                required
+              />
+              <p id={`${id}-competency-hint`} className="mt-1 text-[11px] text-muted-foreground">
+                {t("form.competencyHint")}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -26,7 +26,6 @@ import {
 } from "@/lib/operational.functions";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
-import { DemoBadge } from "@/components/app/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -481,7 +480,6 @@ export function MenuPage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            {org.fictional && <DemoBadge label={t("interactiveBadge")} />}
           </div>
         }
         title={t("title")}

@@ -104,6 +104,8 @@
     "activeLocations": "Unidades ativas / permitidas",
     "billedPendingSync": "{{count}} — ainda sem sincronização: os pagamentos online não estão conectados",
     "planUpTo_one": "Até {{total}} / mês com {{count}} unidade",
-    "planUpTo_other": "Até {{total}} / mês com {{count}} unidades"
+    "planUpTo_other": "Até {{total}} / mês com {{count}} unidades",
+    "previewManaged": "Durante o preview, a cobrança deste ambiente é combinada diretamente com o seu contato na Dinequora. Nenhum cartão é guardado ou cobrado aqui.",
+    "renewsManaged": "Gerenciado pela Dinequora"
   }
 }

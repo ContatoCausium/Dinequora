@@ -223,6 +223,70 @@ describe("valid against the app contracts", () => {
   });
 });
 
+describe("expenses v2: recognized when incurred, sized from each store's own sales", () => {
+  const COGS_SHARE = 0.32; // above the recipe food cost of the menu mix
+  const keys = STORES.map((s) => s.key);
+  const resultOf = (p: typeof plan, stores: string[], from: string) => {
+    const net = p.stores
+      .filter((s) => stores.includes(s.key))
+      .flatMap((s) => s.sales)
+      .filter((x) => localYmd(x.at) >= from && localYmd(x.at) <= p.todayYmd)
+      .reduce((n, x) => n + x.subtotalCents - x.discountCents, 0);
+    const exp = p.expenses
+      .filter((e) => stores.includes(e.store))
+      .map((e) => e.payload)
+      .filter(
+        (x) => String(x["competencyDate"]) >= from && String(x["competencyDate"]) <= p.todayYmd,
+      )
+      .reduce((n, x) => n + Number(x["amountCents"]), 0);
+    return { net, margin: (net * (1 - COGS_SHARE) - exp) / net };
+  };
+
+  it("every product keeps a realistic food cost (beverages under 30%, everything under 40%)", () => {
+    for (const p of PRODUCTS) {
+      const cost = p.recipe.reduce(
+        (n, [sku, q, unit, waste]) =>
+          n +
+          convertQuantity(q, unit, stockBySku[sku]!.unit) *
+            (1 + waste / 100) *
+            stockBySku[sku]!.costCents,
+        0,
+      );
+      expect(cost / p.priceCents, p.id).toBeLessThan(p.category === "cat-drinks" ? 0.3 : 0.4);
+    }
+  });
+  it("every expense is dated the day it is incurred, from the first day of history to 14 days ahead", () => {
+    for (const e of plan.expenses) {
+      const p = e.payload;
+      expect(p["competencyDate"]).toBe(p["dueDate"]);
+      expect(String(p["competencyDate"]) >= plan.startYmd).toBe(true);
+      expect(String(p["competencyDate"]) <= "2026-11-27").toBe(true);
+      expect(Number(p["amountCents"]) % 100).toBe(0);
+    }
+  });
+  it("future expenses are pending (never paid ahead); past ones are paid or the one overdue bill", () => {
+    for (const e of plan.expenses) {
+      const p = e.payload;
+      if (String(p["dueDate"]) >= plan.todayYmd) expect(p["status"]).toBe("pending");
+      else expect(["paid", "overdue"]).toContain(p["status"]);
+    }
+    expect(plan.expenses.filter((e) => e.payload["status"] === "overdue")).toHaveLength(1);
+  });
+  it("each store closes the recorded period with a plausible positive operating margin", () => {
+    for (const s of plan.stores) {
+      const { margin } = resultOf(plan, [s.key], plan.startYmd);
+      expect(margin, s.key).toBeGreaterThan(0.05);
+      expect(margin, s.key).toBeLessThan(0.3);
+    }
+  });
+  it("whatever the date, month to date is positive once the first week has passed", () => {
+    for (const iso of ["2026-11-09T15:00:00Z", "2026-11-28T15:00:00Z", "2026-12-15T15:00:00Z"]) {
+      const p = buildDataset({ now: Date.parse(iso) });
+      expect(resultOf(p, keys, `${p.todayYmd.slice(0, 7)}-01`).margin, iso).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe("stock is consistent with the server's consumption rule", () => {
   it("executed in business-time order, no sale ever finds insufficient stock", () => {
     for (const s of plan.stores) {
@@ -281,17 +345,26 @@ describe("fictional by construction", () => {
   it("accounts use the reserved .test domain and stores the fictional 555-01xx range", () => {
     expect(EMAIL_DOMAIN.endsWith(".test")).toBe(true);
     for (const a of ACCOUNTS) expect(a.email.endsWith(`@${EMAIL_DOMAIN}`)).toBe(true);
-    for (const s of STORES) {
-      expect(s.phone).toMatch(/^\+1 555-01\d\d$/);
-      expect(s.address).toMatch(/\(fictional\)$/);
-    }
+    for (const s of STORES) expect(s.phone).toMatch(/^\+1 555-01\d\d$/);
     for (const sale of plan.events.flatMap((e) => (e.kind === "sale" ? [e.sale] : [])))
       if (sale.customerPhone) expect(sale.customerPhone).toMatch(/^\+1 555-01\d\d$/);
   });
-  it("suppliers and the organization are clearly demo", () => {
-    for (const s of SUPPLIERS) expect(s.name.startsWith("Demo ")).toBe(true);
+  it("the organization is the demo one; names read as a real business, without per-row tags", () => {
+    // The workspace carries one honest indicator (is_demo -> "Demo workspace · fictional data" in
+    // the header), so rows are not tagged one by one: no "(demo)", "(fictional)" or "Demo …" names.
     expect(ORG.name).toBe("Dinequora Demo Restaurant");
-    expect(ORG.companyAddress).toMatch(/fictional/);
+    const tagged = /\(demo\)|\(fictional\)|^Demo |Fictional supplier/i;
+    const texts = [
+      ORG.companyAddress,
+      ...ACCOUNTS.map((a) => a.fullName),
+      ...STORES.map((s) => s.address),
+      ...SUPPLIERS.flatMap((s) => [s.name, s.notes]),
+      ...plan.events.flatMap((e) =>
+        e.kind === "sale" ? [e.sale.customerName, e.sale.deliveryAddress] : [],
+      ),
+      ...plan.expenses.flatMap((e) => [e.payload["description"], e.payload["responsiblePerson"]]),
+    ].map(String);
+    for (const t of texts) expect(t, t).not.toMatch(tagged);
   });
   it("roles: one owner, one store manager, one kitchen account", () => {
     expect(ACCOUNTS.map((a) => [a.role, a.profile ?? null, a.stores ?? []])).toEqual([

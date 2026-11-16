@@ -1,4 +1,9 @@
-import { effectiveStatus, financialResult, type ExpenseStatusView } from "@/lib/expense-metrics";
+import {
+  effectiveStatus,
+  financialResult,
+  type ExpenseStatusView,
+  type ExpenseSummary,
+} from "@/lib/expense-metrics";
 import {
   PERSONNEL_CATEGORIES,
   type Expense,
@@ -54,6 +59,12 @@ export function monthlyTrend(
   currentMonth: string,
   /** Store zone: a sale belongs to the month it happened in locally, like expense competency. */
   timeZone?: string,
+  /**
+   * Today (YYYY-MM-DD). When given, an expense whose competency date has not arrived yet is left
+   * out, so the current month never anticipates bills scheduled for later (same rule as the result
+   * cards, see isRecognizedInPeriod).
+   */
+  today?: string,
 ): MonthPoint[] {
   const ledgerByMonth = new Map<string, LedgerEntry[]>();
   for (const e of entries) {
@@ -67,6 +78,7 @@ export function monthlyTrend(
   const expByMonth = new Map<string, number>();
   for (const e of expenses) {
     if (e.isSimulation) continue;
+    if (today && (e.competencyDate || e.dueDate) > today) continue;
     const m = expenseMonth(e);
     if (!/^\d{4}-\d{2}$/.test(m) || m > currentMonth) continue;
     expByMonth.set(m, (expByMonth.get(m) ?? 0) + e.amountCents);
@@ -88,6 +100,49 @@ export function monthlyTrend(
     });
   }
   return out;
+}
+
+/** Reporting period of the Finance result cards, P&L and store comparison. */
+export type FinancePeriod = "month" | "30d" | "90d" | "all";
+export const FINANCE_PERIODS: readonly FinancePeriod[] = ["month", "30d", "90d", "all"];
+
+function shiftDay(day: string, days: number) {
+  const d = new Date(day + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** First day of the period (null = from the first record); a period always ends today. */
+export function financePeriodStart(period: FinancePeriod, today: string): string | null {
+  if (period === "month") return `${today.slice(0, 7)}-01`;
+  if (period === "30d") return shiftDay(today, -29);
+  if (period === "90d") return shiftDay(today, -89);
+  return null;
+}
+
+/** Ledger rows whose local day (store zone) falls in [since, today]; since null = no lower bound. */
+export function ledgerInPeriod(
+  entries: readonly LedgerEntry[],
+  sinceDay: string | null,
+  today: string,
+  timeZone?: string,
+): LedgerEntry[] {
+  return entries.filter((e) => {
+    const d = dayKey(e.created_at, timeZone);
+    return (sinceDay === null || d >= sinceDay) && d <= today;
+  });
+}
+
+/**
+ * P&L lines under each parent: personnel categories (salaries, payroll…) under "Personnel", every
+ * other category under "Other operating expenses". Each category appears exactly once.
+ */
+export function pnlExpenseGroups(summary: Pick<ExpenseSummary, "byCategory">) {
+  const isPersonnel = (c: ExpenseCategory) => PERSONNEL_CATEGORIES.includes(c);
+  return {
+    personnel: summary.byCategory.filter((c) => isPersonnel(c.category)),
+    operating: summary.byCategory.filter((c) => !isPersonnel(c.category)),
+  };
 }
 
 export function nextMonth(month: string): string {
@@ -293,6 +348,8 @@ export interface ExpenseFormValues {
   description: string;
   amount: string;
   dueDate: string;
+  /** Day the cost belongs to (accrual); results count it only once this day has arrived. */
+  competencyDate: string;
   category: ExpenseCategory;
   recurrence: ExpenseRecurrence;
   status: ExpenseStatus;
@@ -310,6 +367,7 @@ export function initialFormValues(
       description: editing.description,
       amount: centsToDecimalString(editing.amountCents),
       dueDate: editing.dueDate,
+      competencyDate: editing.competencyDate || editing.dueDate,
       category: editing.category,
       recurrence: editing.recurrence,
       // "overdue" is derived from the due date; the form only chooses paid or not paid.
@@ -323,6 +381,7 @@ export function initialFormValues(
     description: "",
     amount: "",
     dueDate: defaults.dueDate,
+    competencyDate: defaults.dueDate,
     category: "rent",
     recurrence: "fixed",
     status: "pending",

@@ -62,7 +62,9 @@
       "0": "Salve um logo ou as cores da marca primeiro.",
       "2": "Adicione endereço, horários e a alíquota de imposto sobre vendas a pelo menos uma loja primeiro.",
       "4": "Conclua o branding e a configuração da loja primeiro."
-    }
+    },
+    "previewTitle": "Acesso por convite",
+    "previewSubtitle": "Este ambiente é aberto por convite do proprietário."
   },
   "common": {
     "cancel": "Cancelar",
@@ -104,7 +106,7 @@
     "pendingHint": "Os links de convite não são enviados por e-mail — compartilhe você mesmo.",
     "noPending": "Nenhum convite pendente.",
     "you": "Você",
-    "unnamed": "Membro sem nome",
+    "unnamed": "Membro (nome não definido)",
     "expires": "Expira em {{date}}",
     "expiredShort": "Expirado",
     "revoke": "Cancelar convite",

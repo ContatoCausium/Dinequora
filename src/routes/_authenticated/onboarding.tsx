@@ -15,6 +15,7 @@ import {
 import { auth } from "@/lib/auth";
 import { createTestRestaurant, fetchMemberships } from "@/lib/org-service";
 import { isPlatformAdmin } from "@/lib/admin-service";
+import { isClientPreview } from "@/lib/deployment-profile";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
@@ -38,6 +39,12 @@ export const Route = createFileRoute("/_authenticated/onboarding")({
   // Platform administrators never need a restaurant; send them to the Control Center
   // unless they explicitly chose to create a workspace (?create=1).
   beforeLoad: async ({ context, search }) => {
+    // Client preview: accounts are provisioned into the demo workspace, so nobody creates a
+    // restaurant here; a member goes straight to the workspace.
+    if (isClientPreview()) {
+      if ((await fetchMemberships(context.user.id)).length > 0) throw redirect({ to: "/" });
+      return;
+    }
     if (search.create === "1") return;
     if ((await isPlatformAdmin()) && (await fetchMemberships(context.user.id)).length === 0)
       throw redirect({ to: "/control" });
@@ -84,68 +91,78 @@ function Onboarding() {
     }
   };
 
+  // Client preview: no self-service workspace creation (and no "fictional restaurant for testing"
+  // wording); only the invitation path is offered.
+  const preview = isClientPreview();
+
   return (
     <AuthLayout>
       <AuthHeading
         eyebrow={t("onboarding.eyebrow")}
-        title={t("onboarding.title")}
-        subtitle={t("onboarding.subtitle")}
+        title={preview ? t("onboarding.previewTitle") : t("onboarding.title")}
+        subtitle={preview ? t("onboarding.previewSubtitle") : t("onboarding.subtitle")}
       />
-      <div className="mb-6 rounded-lg border bg-card p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {t("onboarding.stepsTitle")}
-        </p>
-        <ol className="mt-3 flex flex-col gap-2.5">
-          {(["step1", "step2", "step3"] as const).map((k, i) => (
-            <li key={k} className="flex items-start gap-3 text-sm">
-              <span className="tabular flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-                {i + 1}
-              </span>
-              <span>{t(`onboarding.${k}`)}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
-          {t("onboarding.trialNote")}
-        </p>
-      </div>
-      <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-        {error && <FormAlert>{t(`auth:errors.${error}`)}</FormAlert>}
-        <Field
-          id="org"
-          label={t("onboarding.orgName")}
-          placeholder={t("onboarding.orgPlaceholder")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          error={err}
-          maxLength={80}
-        />
-        <Field
-          id="company"
-          label={t("onboarding.companyName")}
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          maxLength={120}
-        />
-        <Field
-          id="address"
-          label={t("onboarding.companyAddress")}
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          maxLength={240}
-        />
-        <Field
-          id="loc"
-          label={t("onboarding.location")}
-          hint={t("onboarding.locationHint")}
-          placeholder={t("onboarding.locationPlaceholder")}
-          value={loc}
-          onChange={(e) => setLoc(e.target.value)}
-          maxLength={80}
-        />
-        <SubmitButton loading={loading}>{t("onboarding.submit")}</SubmitButton>
-      </form>
-      <div className="mt-8 rounded-lg border bg-card p-4">
+      {!preview && (
+        <>
+          <div className="mb-6 rounded-lg border bg-card p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t("onboarding.stepsTitle")}
+            </p>
+            <ol className="mt-3 flex flex-col gap-2.5">
+              {(["step1", "step2", "step3"] as const).map((k, i) => (
+                <li key={k} className="flex items-start gap-3 text-sm">
+                  <span className="tabular flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                    {i + 1}
+                  </span>
+                  <span>{t(`onboarding.${k}`)}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
+              {t("onboarding.trialNote")}
+            </p>
+          </div>
+          <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+            {error && <FormAlert>{t(`auth:errors.${error}`)}</FormAlert>}
+            <Field
+              id="org"
+              label={t("onboarding.orgName")}
+              placeholder={t("onboarding.orgPlaceholder")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              error={err}
+              maxLength={80}
+            />
+            <Field
+              id="company"
+              label={t("onboarding.companyName")}
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              maxLength={120}
+            />
+            <Field
+              id="address"
+              label={t("onboarding.companyAddress")}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              maxLength={240}
+            />
+            <Field
+              id="loc"
+              label={t("onboarding.location")}
+              hint={t("onboarding.locationHint")}
+              placeholder={t("onboarding.locationPlaceholder")}
+              value={loc}
+              onChange={(e) => setLoc(e.target.value)}
+              maxLength={80}
+            />
+            <SubmitButton loading={loading}>{t("onboarding.submit")}</SubmitButton>
+          </form>
+        </>
+      )}
+      <div
+        className={preview ? "rounded-lg border bg-card p-4" : "mt-8 rounded-lg border bg-card p-4"}
+      >
         <p className="flex items-center gap-2 text-sm font-medium">
           <Mail className="size-4 text-muted-foreground" />
           {t("onboarding.invitedTitle")}

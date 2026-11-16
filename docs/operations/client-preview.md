@@ -130,14 +130,28 @@ CLI publishes its ports on all interfaces, like every local stack; it only ever 
 Deterministic (seeded) and fictional: **Dinequora Demo Restaurant** (Growth, active), stores
 **Downtown**, **Westside**, **Airport** (America/New_York, 7% / 7% / 7.75% sales tax, opening hours),
 5 categories / 19 products (burger add-ons), 31 stock items per store (lb, oz, gal, units, pack), one
-recipe per product sold in each store (including gal recipes), 4 "Demo …" suppliers, weekly purchase
-orders received in full plus one open order per store, 42 expenses (rent, payroll, energy, water,
-internet, marketing; paid, pending and one overdue), sales with dine-in/takeout/delivery,
-card/cash/digital, discounts, ~1.5% cancellations, kitchen steps, and a live kitchen board (open
-tickets from the last minutes). Accounts (reserved `.test` domain): the owner, a Westside manager and a
-Downtown kitchen account. Food cost ≈ 29% of net sales. Stock is planned with the server's own
-consumption rule, so, executed in business-time order, no sale finds insufficient stock; four items
-end below their minimum (a recorded closing-check loss) so the alerts are real.
+recipe per product sold in each store (including gal recipes, priced at the menu product), 4
+suppliers, weekly purchase orders received in full plus one open order per store, ~55 expenses, sales
+with dine-in/takeout/delivery, card/cash/digital, discounts, ~1.5% cancellations, kitchen steps, and a
+live kitchen board (open tickets from the last minutes). Accounts (reserved `.test` domain): the
+owner, a Westside manager and a Downtown kitchen account. Food cost ≈ 29% of net sales. Stock is
+planned with the server's own consumption rule, so, executed in business-time order, no sale finds
+insufficient stock; four items end below their minimum (a recorded closing-check loss) so the alerts
+are real.
+
+Names read as a real business (Springfield suppliers and addresses, no "(demo)" tags on rows): the
+workspace is marked once, honestly, by the header indicator "Demo workspace · fictional data"
+(`is_demo`). Phones stay in the fictional 555-01xx range and accounts in the `.test` domain.
+
+**Expenses (dataset v2).** Each store's costs are a share of its own planned net sales (weekly
+payroll ~31%, lease 9%, electricity 3.5%, benefits 3.5%, marketing 3%, maintenance 1.5%, water 1%,
+internet 0.4%), so the stores close the period with a plausible positive operating margin whatever the
+profile. Every cost is dated the day it is incurred and that day is its competency date: the app
+recognizes it only once it has arrived (`isRecognizedInPeriod`), never ahead. Revenue and costs cover
+the same days: the part of the first month (and payroll week) inside the history is prorated and
+labeled so. Past bills are paid (one overdue electricity bill at Westside, so the alert is real); the
+next 14 days of bills are pending. A month-to-date loss in the first days of a month (lease against a
+few days of sales) is real and expected; the verifier requires a positive month from the 8th.
 
 Profiles (`PREVIEW_DATASET_PROFILE`):
 
@@ -162,11 +176,19 @@ export PREVIEW_TARGET=local PREVIEW_API_URL="$API_URL" PREVIEW_SERVICE_KEY="$SER
 node scripts/preview/seed-client-preview.mjs      # first run; refuses if the demo already exists
 node scripts/preview/reset-client-preview.mjs     # keeps people, replaces operational data
 PREVIEW_TEARDOWN=1 node scripts/preview/reset-client-preview.mjs   # removes everything, seeds nothing
-node scripts/preview/verify-dataset.mjs           # 34 read-only checks (exit 1 on any failure)
-PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # 20 checks through the app
-# hosted: PREVIEW_TARGET=hosted, the project values from the secrets file (real personal owners),
-# and DQ_PREVIEW_CONFIRM for each operation
+node scripts/preview/verify-dataset.mjs           # read-only checks (exit 1 on any failure)
+PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # checks through the app
+# hosted: PREVIEW_TARGET=hosted, the project values from the secrets file (real personal owners,
+# optional PREVIEW_PERSONAL_OWNER_NAMES), and DQ_PREVIEW_CONFIRM for each operation
 ```
+
+**The smoke test never contaminates the demonstration.** Its sale is a real order (ledger, stock,
+kitchen), so it writes only when the database is local (`127.0.0.1`/`localhost`). Against the hosted
+preview it is read-only by default (pages, reads, isolation); the POS/KDS/stock/finance write checks
+run there only with `PREVIEW_SMOKE_WRITES=1`, and a **reset must follow** before anyone opens the
+preview. `verify-dataset.mjs` fails on the hosted preview while any `cp-smoke-…` order exists. Flagging
+the sale as a simulation would not help: the server records simulated sales in the ledger and stock
+too. Order of a hosted release: deploy → smoke (read-only) → reset → verify.
 
 - **Seed** writes through the same RPCs as the UI, signed in as the demo owner (organization by
   `create_test_restaurant`, stores, menu, stock, recipes, suppliers, expenses, purchases and receipts,
@@ -188,10 +210,14 @@ PREVIEW_APP_URL=http://127.0.0.1:8799 node scripts/preview/smoke-app.mjs   # 20 
   ledger cap, isolation through RLS (owner, Westside manager, Downtown kitchen, anonymous, no
   platform admin), and the people: the three demo accounts and exactly the declared personal owners,
   each an individual confirmed account, Owner of the demo organization only, joined through an
-  accepted Owner invitation, with no open invitation to anyone else.
+  accepted Owner invitation, with no open invitation to anyone else, and every member with a display
+  name. It also checks the demonstration itself: no smoke-test sale (hosted), every recipe above its
+  cost (food cost < 40% of the menu price), a positive result over the last 30 days and month to date
+  (from the 8th), and no future expense marked paid.
 - **Smoke test** calls the built Worker's server functions as the browser does (pages and headers,
   reads for every store, a POS sale, the kitchen moving it to delivered, the recipe consumption in
-  gal, the ledger read, store isolation) and prints the time and size of each call.
+  gal, the ledger read, store isolation) and prints the time and size of each call. The sale and its
+  follow-ups run only as described above.
 
 ### 5.5 Dataset functions (`scripts/preview/sql/client-preview-functions.sql`)
 
@@ -212,6 +238,9 @@ branding) — never a platform role, so the Control Center stays closed.
 
 - Their addresses never enter this public repository: they come from `PREVIEW_PERSONAL_OWNERS` in the
   operator's secrets file and are fixed in the hosted marker (§6). Logs show "personal owner 1/2".
+- Optional display names come from `PREVIEW_PERSONAL_OWNER_NAMES` in the same file (comma-separated,
+  same order as the addresses; 1–40 letters, spaces or `.'-`). The seed and reset fill a profile name
+  only while it is empty, so a name the person set is never overwritten; names are never logged.
 - Hosted preview: real addresses only. Local stack: stand-in `.test` addresses only — real people
   never enter a local stack (its target guard treats a database with real accounts as no longer
   disposable).

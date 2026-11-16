@@ -13,7 +13,7 @@
 //         * (1 + waste% / 100) * line quantity / servings
 // so that, executed in business-time order, no sale ever finds insufficient stock.
 
-export const DATASET_VERSION = 1;
+export const DATASET_VERSION = 2;
 
 // Volume profiles. The app reads the whole finance ledger in ONE PostgREST request
 // (fetchOperationalResources -> finance_entries, no paging), and PostgREST returns at most 1,000
@@ -28,25 +28,25 @@ export const DATASET_PROFILES = Object.freeze({
 export const ORG = Object.freeze({
   name: "Dinequora Demo Restaurant",
   companyName: "Dinequora Demo Restaurant LLC",
-  companyAddress: "100 Demo Plaza, Suite 400, Springfield, USA (fictional)",
+  companyAddress: "100 Main Street, Suite 400, Springfield",
   brandPrimary: "#b4532a",
   brandAccent: "#f2a43a",
   plan: "growth",
 });
 export const EMAIL_DOMAIN = "client-preview.dinequora.test";
 export const ACCOUNTS = Object.freeze([
-  { key: "owner", email: `owner@${EMAIL_DOMAIN}`, fullName: "Demo Owner", role: "owner" },
+  { key: "owner", email: `owner@${EMAIL_DOMAIN}`, fullName: "Alex Morgan", role: "owner" },
   {
     key: "manager",
     email: `manager.westside@${EMAIL_DOMAIN}`,
-    fullName: "Jamie Rivera (demo)",
+    fullName: "Jamie Rivera",
     role: "manager",
     stores: ["westside"],
   },
   {
     key: "kitchen",
     email: `kitchen.downtown@${EMAIL_DOMAIN}`,
-    fullName: "Sam Lee (demo)",
+    fullName: "Sam Lee",
     role: "staff",
     profile: "kitchen",
     stores: ["downtown"],
@@ -59,7 +59,7 @@ export const STORES = Object.freeze([
   {
     key: "downtown",
     name: "Downtown",
-    address: "245 Market Street, Springfield (fictional)",
+    address: "245 Market Street, Springfield",
     phone: "+1 555-0141",
     taxRatePpm: 70000,
     baseOrders: 30,
@@ -71,7 +71,7 @@ export const STORES = Object.freeze([
   {
     key: "westside",
     name: "Westside",
-    address: "1880 Westside Boulevard, Springfield (fictional)",
+    address: "1880 Westside Boulevard, Springfield",
     phone: "+1 555-0142",
     taxRatePpm: 70000,
     baseOrders: 22,
@@ -83,7 +83,7 @@ export const STORES = Object.freeze([
   {
     key: "airport",
     name: "Airport",
-    address: "Terminal B, Gate 12 Food Court, Springfield Intl. Airport (fictional)",
+    address: "Terminal B, Gate 12 Food Court, Springfield Intl. Airport",
     phone: "+1 555-0143",
     taxRatePpm: 77500,
     baseOrders: 38,
@@ -305,7 +305,7 @@ const STOCK_LIST = [
     name: "Fountain soda syrup",
     category: "beverages",
     unit: "gal",
-    costCents: 2200,
+    costCents: 1600,
     pack: 5,
     supplier: "beverage",
   },
@@ -314,7 +314,7 @@ const STOCK_LIST = [
     name: "Lemonade base",
     category: "beverages",
     unit: "gal",
-    costCents: 900,
+    costCents: 600,
     pack: 5,
     supplier: "beverage",
   },
@@ -332,7 +332,7 @@ const STOCK_LIST = [
     name: "Cold brew concentrate",
     category: "beverages",
     unit: "gal",
-    costCents: 2600,
+    costCents: 1500,
     pack: 2,
     supplier: "beverage",
   },
@@ -359,7 +359,7 @@ const STOCK_LIST = [
     name: "Vanilla ice cream",
     category: "dairy",
     unit: "gal",
-    costCents: 1400,
+    costCents: 1200,
     pack: 3,
     supplier: "produce",
   },
@@ -377,7 +377,7 @@ const STOCK_LIST = [
     name: "Apple pie slice",
     category: "bakery",
     unit: "units",
-    costCents: 140,
+    costCents: 100,
     pack: 16,
     supplier: "bakery",
   },
@@ -386,7 +386,7 @@ const STOCK_LIST = [
     name: "Cups 16 oz",
     category: "packaging",
     unit: "pack",
-    costCents: 1500,
+    costCents: 600,
     pack: 2,
     supplier: "beverage",
   },
@@ -405,10 +405,11 @@ export const STOCK = Object.freeze(
 );
 
 export const SUPPLIERS = Object.freeze([
-  { key: "meat", name: "Demo Meat & Poultry Supply", notes: "Fictional supplier (client preview)" },
-  { key: "produce", name: "Demo Fresh Produce Co.", notes: "Fictional supplier (client preview)" },
-  { key: "beverage", name: "Demo Beverage Partners", notes: "Fictional supplier (client preview)" },
-  { key: "bakery", name: "Demo Bakery Supply", notes: "Fictional supplier (client preview)" },
+  // Suppliers of the fictional town of Springfield (the workspace is labeled as demo data).
+  { key: "meat", name: "Springfield Meat & Poultry", notes: "" },
+  { key: "produce", name: "Springfield Fresh Produce", notes: "" },
+  { key: "beverage", name: "Springfield Beverage Co.", notes: "" },
+  { key: "bakery", name: "Springfield Bakery Supply", notes: "" },
 ]);
 
 // Products: price, prep time, sales weight, ingredients [sku, quantity, unit, waste%].
@@ -684,35 +685,32 @@ export const PRODUCTS = Object.freeze([
   },
 ]);
 
-// Monthly expenses per store (cents) and their schedule.
-const EXPENSES = Object.freeze({
-  downtown: {
-    rent: 650000,
-    payroll: 950000,
-    energy: 98000,
-    water: 26000,
-    internet: 18000,
-    marketing: 60000,
-  },
-  westside: {
-    rent: 520000,
-    payroll: 740000,
-    energy: 81000,
-    water: 21000,
-    internet: 18000,
-    marketing: 45000,
-  },
-  airport: {
-    rent: 980000,
-    payroll: 1200000,
-    energy: 112000,
-    water: 30000,
-    internet: 22000,
-    marketing: 30000,
-  },
-});
+// Operating expenses as a share of each store's planned monthly net sales (US restaurant
+// benchmarks: labor ~31% paid weekly + 3.5% benefits, occupancy 9%, utilities ~5%, maintenance and local
+// marketing). With the recipe food cost (~29%) this leaves a healthy, plausible operating margin
+// whatever the dataset volume. Each cost is dated the day it is incurred and that day is its
+// competency date, so the app recognizes it only once it has arrived (no future bill is anticipated).
+export const MONTHLY_EXPENSES = Object.freeze([
+  // [category, recurrence, share of monthly net sales, day of month, description]
+  ["rent", "fixed", 0.09, 1, "Store lease"],
+  ["internet", "fixed", 0.004, 5, "Internet and POS network"],
+  ["energy", "variable", 0.035, 10, "Electricity"],
+  ["water", "variable", 0.01, 12, "Water and sewer"],
+  ["benefits", "recurring", 0.035, 15, "Employee benefits"],
+  ["maintenance", "variable", 0.015, 18, "Equipment maintenance"],
+  ["marketing", "variable", 0.03, 20, "Local marketing"],
+]);
+/** Weekly payroll, paid on Fridays for the seven days that end that day (share of monthly sales). */
+export const WEEKLY_PAYROLL_SHARE = 0.31;
+/** Upcoming bills are planned this many days ahead (pending, not yet recognized). */
+export const EXPENSE_HORIZON_DAYS = 14;
 
 // ---------------------------------------------------------------------------------------- helpers
+/** "YYYY-MM" of the month after `month`. */
+function nextMonthKey(month) {
+  const [y, m] = month.split("-").map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
 const MASS = { g: 1, kg: 1000, lb: 453.59237, oz: 28.349523125 };
 const VOLUME = {
   ml: 1,
@@ -1011,7 +1009,7 @@ export function buildDataset({ now, profile = "ledger-safe", seed = 20261114 } =
       customerName,
       tableNumber: type === "dine_in" ? String(1 + Math.floor(r2() * 24)) : "",
       deliveryAddress:
-        type === "delivery" ? `${100 + Math.floor(r2() * 900)} Demo Avenue (fictional)` : "",
+        type === "delivery" ? `${100 + Math.floor(r2() * 900)} Maple Avenue, Springfield` : "",
       customerPhone:
         type === "delivery" ? `+1 555-01${String(Math.floor(r2() * 100)).padStart(2, "0")}` : "",
       discountCents,
@@ -1154,42 +1152,88 @@ export function buildDataset({ now, profile = "ledger-safe", seed = 20261114 } =
   }
   events.sort((a, b) => a.at - b.at || (a.kind === "receipt" ? -1 : 1));
 
-  // Expenses: previous and current month per store.
+  // Expenses: every cost incurred from the first day of history up to EXPENSE_HORIZON_DAYS ahead,
+  // sized from the store's own planned sales. Past ones are paid (one overdue electricity bill at
+  // Westside, so the alert is real); future ones are pending bills. A weekly payroll is included
+  // only when its whole week lies inside the history, so no wage covers days without sales.
   const expenses = [];
-  const months = [addDays(todayYmd, -32).slice(0, 7), todayYmd.slice(0, 7)];
-  for (const store of STORES) {
-    const e = EXPENSES[store.key];
-    for (const month of [...new Set(months)]) {
-      const items = [
-        ["rent", "fixed", e.rent, `${month}-01`, "Store lease"],
-        ["payroll", "recurring", Math.round(e.payroll / 2), `${month}-14`, "Payroll, first half"],
-        ["payroll", "recurring", Math.round(e.payroll / 2), `${month}-28`, "Payroll, second half"],
-        ["energy", "variable", e.energy, `${month}-10`, "Electricity"],
-        ["water", "variable", e.water, `${month}-12`, "Water and sewer"],
-        ["internet", "fixed", e.internet, `${month}-05`, "Internet and POS network"],
-        ["marketing", "variable", e.marketing, `${month}-20`, "Local marketing"],
-      ];
-      for (const [category, recurrence, amountCents, dueDate, description] of items) {
-        const past = dueDate < todayYmd;
-        const overdue =
-          past && store.key === "westside" && category === "energy" && month === months[1];
-        expenses.push({
-          store: store.key,
-          payload: {
+  const horizonYmd = addDays(todayYmd, EXPENSE_HORIZON_DAYS);
+  for (const store of stores) {
+    const netCents = store.sales.reduce((n, x) => n + x.subtotalCents - x.discountCents, 0);
+    const monthlyNetCents = (netCents / (days + 1)) * 30.4;
+    // Whole dollars, like real bills.
+    const dollars = (cents) => Math.max(100, Math.round(cents / 100) * 100);
+    const bills = [];
+    // Revenue and costs must cover the same days: the history starts mid-month and mid-week, so the
+    // part of the first month (and of the first payroll week) that falls inside the history is
+    // charged in proportion to its days, dated the first day of history and labeled "prorated".
+    const startDay = Number(startYmd.slice(8, 10));
+    const firstMonth = startYmd.slice(0, 7);
+    const monthDays = (m) =>
+      new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
+    for (let m = firstMonth; m <= horizonYmd.slice(0, 7); m = nextMonthKey(m))
+      for (const [category, recurrence, share, day, description] of MONTHLY_EXPENSES) {
+        const monthly = monthlyNetCents * share;
+        if (m === firstMonth && day < startDay) {
+          const covered = (monthDays(m) - startDay + 1) / monthDays(m);
+          bills.push([
             category,
             recurrence,
-            status: overdue ? "overdue" : past ? "paid" : "pending",
-            description: `${description} — ${store.name}`,
-            amountCents,
-            dueDate,
-            competencyDate: `${month}-01`,
-            responsiblePerson: "Demo Owner",
-            supplierName: "",
-            ...(past && !overdue ? { paidAt: dueDate } : {}),
-            isSimulation: false,
-          },
-        });
+            monthly * covered,
+            startYmd,
+            `${description} (prorated)`,
+          ]);
+        } else
+          bills.push([
+            category,
+            recurrence,
+            monthly,
+            `${m}-${String(day).padStart(2, "0")}`,
+            description,
+          ]);
       }
+    const weekly = (monthlyNetCents * WEEKLY_PAYROLL_SHARE * 7) / 30.4;
+    for (let d = startYmd; d <= horizonYmd; d = addDays(d, 1))
+      if (new Date(`${d}T12:00:00Z`).getUTCDay() === 5) {
+        // Paid on Friday for the seven days ending that day; only the days inside the history count.
+        const inside = Math.min(
+          7,
+          Math.round((Date.parse(d) - Date.parse(startYmd)) / 86_400_000) + 1,
+        );
+        bills.push([
+          "payroll",
+          "recurring",
+          (weekly * inside) / 7,
+          d,
+          inside < 7 ? "Weekly payroll (prorated)" : "Weekly payroll",
+        ]);
+      }
+    for (const [category, recurrence, rawCents, dueDate, description] of bills) {
+      if (dueDate < startYmd || dueDate > horizonYmd) continue;
+      const amountCents = dollars(rawCents);
+      const past = dueDate < todayYmd;
+      const overdue =
+        past &&
+        store.key === "westside" &&
+        category === "energy" &&
+        dueDate.slice(0, 7) === todayYmd.slice(0, 7);
+      expenses.push({
+        store: store.key,
+        payload: {
+          category,
+          recurrence,
+          status: overdue ? "overdue" : past ? "paid" : "pending",
+          description: `${description} — ${store.name}`,
+          amountCents,
+          dueDate,
+          // Recognized on the day it is incurred, never before (see isRecognizedInPeriod).
+          competencyDate: dueDate,
+          responsiblePerson: ACCOUNTS[0].fullName,
+          supplierName: "",
+          ...(past && !overdue ? { paidAt: dueDate } : {}),
+          isSimulation: false,
+        },
+      });
     }
   }
 

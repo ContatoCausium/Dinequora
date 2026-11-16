@@ -62,7 +62,9 @@
       "0": "Save a logo or brand colors first.",
       "2": "Add an address, opening hours and the sales tax rate to at least one store first.",
       "4": "Finish branding and store setup first."
-    }
+    },
+    "previewTitle": "Access by invitation",
+    "previewSubtitle": "This workspace is opened by invitation from its owner."
   },
   "common": {
     "cancel": "Cancel",
@@ -104,7 +106,7 @@
     "pendingHint": "Invitation links are not emailed — share them yourself.",
     "noPending": "No pending invitations.",
     "you": "You",
-    "unnamed": "Unnamed member",
+    "unnamed": "Member (name not set)",
     "expires": "Expires {{date}}",
     "expiredShort": "Expired",
     "revoke": "Withdraw",

@@ -60,3 +60,32 @@ export const sameOwners = (a, b) =>
 /** "personal owner 1/2" — the label used in every log line instead of the address. */
 export const personalLabel = (owners, email) =>
   `personal owner ${owners.indexOf(String(email).toLowerCase()) + 1}/${owners.length}`;
+
+const DISPLAY_NAME = /^[\p{L}][\p{L}\p{M} .'-]{0,39}$/u;
+
+/**
+ * Display names of the personal owners, from PREVIEW_PERSONAL_OWNER_NAMES in the operator's secrets
+ * file (comma-separated, in the same order as PREVIEW_PERSONAL_OWNERS). Optional: empty means no
+ * names. Returns a frozen { [lower-cased address]: name }. The seed only fills a profile name that is
+ * still empty, so a name the person set themselves is never overwritten. Logs and error messages
+ * never repeat a name or an address.
+ */
+export function parsePersonalOwnerNames(rawOwners, rawNames) {
+  const owners = String(rawOwners ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const names = String(rawNames ?? "")
+    .split(",")
+    .map((s) => s.trim().replace(/\s+/g, " "));
+  if (!names.some(Boolean)) return Object.freeze({});
+  if (names.length !== owners.length)
+    throw new PersonalOwnersError(
+      `${names.length} display name(s) for ${owners.length} personal owner(s)`,
+    );
+  names.forEach((n, i) => {
+    if (!DISPLAY_NAME.test(n))
+      throw new PersonalOwnersError(`display name #${i + 1} must be 1-40 letters, spaces or .'-`);
+  });
+  return Object.freeze(Object.fromEntries(owners.map((e, i) => [e, names[i]])));
+}

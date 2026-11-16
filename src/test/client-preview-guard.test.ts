@@ -462,3 +462,28 @@ describe("policy: seed and reset of the client preview", () => {
     expect(read("scripts/seeds/demo/seed-demo-orgs.sql")).toContain("dq_guard.attest(");
   });
 });
+
+describe("the smoke test never contaminates the hosted demonstration", () => {
+  const smoke = read("scripts/preview/smoke-app.mjs");
+  const verify = read("scripts/preview/verify-dataset.mjs");
+  it("writes (POS sale, KDS moves) only on a local database unless PREVIEW_SMOKE_WRITES=1", () => {
+    expect(smoke).toContain(
+      String.raw`const LOCAL_DB = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(String(creds.apiUrl ?? ""));`,
+    );
+    expect(smoke).toMatch(
+      /const WRITES = LOCAL_DB \|\| process\.env\.PREVIEW_SMOKE_WRITES === "1";/,
+    );
+    const guard = smoke.indexOf("if (WRITES) {");
+    expect(guard).toBeGreaterThan(-1);
+    for (const fn of ['"submitOperationalSale"', '"changeOperationalOrder"']) {
+      const at = smoke.indexOf(fn);
+      expect(at, fn).toBeGreaterThan(guard);
+      expect(smoke.lastIndexOf("if (WRITES) {", at), fn).toBe(guard);
+      expect(smoke.indexOf("} else console.log(", guard), fn).toBeGreaterThan(at);
+    }
+  });
+  it("the verifier fails a hosted preview that still holds a smoke-test sale", () => {
+    expect(verify).toMatch(/startsWith\("cp-smoke-"\)/);
+    expect(verify).toMatch(/target\.mode === "local" \|\| smokeOrders\.length === 0/);
+  });
+});

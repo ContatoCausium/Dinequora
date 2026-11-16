@@ -12,7 +12,11 @@
 //   PREVIEW_APP_URL=http://127.0.0.1:8799 | https://<name>.workers.dev | https://preview.dinequora.com
 //   PREVIEW_CREDS_FILE=<credentials written by the seed> PREVIEW_PUBLISHABLE_KEY=<publishable key>
 //   [PREVIEW_BUILD_DIR=.output] node scripts/preview/smoke-app.mjs
-// Writes only as the demo accounts, through the app (one sale per run, client id cp-smoke-<time>).
+// Writes only as the demo accounts, through the app (one sale per run, client id cp-smoke-<time>),
+// and only to a local database: a smoke sale is a real order, so against the hosted demo it would
+// show prospects a test sale. There the POS/KDS/stock/finance checks are skipped unless
+// PREVIEW_SMOKE_WRITES=1 is set, and the runbook then requires a reset before anyone opens the
+// preview (verify-dataset fails while any cp-smoke order exists).
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -38,6 +42,14 @@ if (creds.kind !== "dinequora-client-preview") {
   process.exit(3);
 }
 const KEY = process.env.PREVIEW_PUBLISHABLE_KEY;
+const LOCAL_DB = /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(String(creds.apiUrl ?? ""));
+const WRITES = LOCAL_DB || process.env.PREVIEW_SMOKE_WRITES === "1";
+if (!LOCAL_DB)
+  console.log(
+    WRITES
+      ? "hosted database, PREVIEW_SMOKE_WRITES=1: one test sale will be written; reset the preview before showing it"
+      : "hosted database: read-only run (POS/KDS/stock/finance write checks skipped)",
+  );
 
 // Server function ids from the build being tested.
 const serverDir = path.join(process.env.PREVIEW_BUILD_DIR ?? ".output", "server");
@@ -174,85 +186,91 @@ for (const store of ["downtown", "westside", "airport"]) {
 }
 
 // ---- POS sale through the app, then KDS, stock and finance --------------------------------------
-const downtownId = locs.find((l) => l.slug === slug.downtown).id;
-const lemonadeBefore = (
-  await owner.client
-    .from("inventory_items")
-    .select("id,quantity")
-    .eq("location_id", downtownId)
-    .eq("sku", "LEMONADE")
-    .single()
-).data;
-const clientOrderId = `cp-smoke-${Date.now()}`;
-const sale = await call(
-  "submitOperationalSale",
-  {
-    orgId: orgSlug,
-    locationId: slug.downtown,
-    clientOrderId,
-    orderType: "takeout",
-    customerName: "Smoke Test (demo)",
-    discountCents: 0,
-    taxRatePpm: 70000,
-    paymentMethod: "card",
-    isSimulation: false,
-    items: [
-      { productId: "prod-classic-burger", quantity: 1, modifiers: [] },
-      { productId: "prod-fries", quantity: 1, modifiers: [] },
-      { productId: "prod-lemonade", quantity: 1, modifiers: [] },
-    ],
-  },
-  owner.token,
-);
-const expectedSubtotal = 1350 + 450 + 395;
-const expectedTax = Math.round((expectedSubtotal * 70000) / 1_000_000);
-check(
-  "POS: sale recorded through submitOperationalSale with server prices and store tax",
-  sale.result?.totalCents === expectedSubtotal + expectedTax,
-  sale.error ?? JSON.stringify(sale.result),
-);
-const { data: order } = await owner.client
-  .from("orders")
-  .select("id,status,total_cents,tax_cents")
-  .eq("client_order_id", clientOrderId)
-  .single();
 const kitchen = await session("kitchen");
-const steps = [];
-for (const status of ["in_prep", "ready", "delivered"])
-  steps.push(
-    (await call("changeOperationalOrder", { id: order.id, status }, kitchen.token)).error ?? "ok",
+if (WRITES) {
+  const downtownId = locs.find((l) => l.slug === slug.downtown).id;
+  const lemonadeBefore = (
+    await owner.client
+      .from("inventory_items")
+      .select("id,quantity")
+      .eq("location_id", downtownId)
+      .eq("sku", "LEMONADE")
+      .single()
+  ).data;
+  const clientOrderId = `cp-smoke-${Date.now()}`;
+  const sale = await call(
+    "submitOperationalSale",
+    {
+      orgId: orgSlug,
+      locationId: slug.downtown,
+      clientOrderId,
+      orderType: "takeout",
+      customerName: "Smoke test",
+      discountCents: 0,
+      taxRatePpm: 70000,
+      paymentMethod: "card",
+      isSimulation: false,
+      items: [
+        { productId: "prod-classic-burger", quantity: 1, modifiers: [] },
+        { productId: "prod-fries", quantity: 1, modifiers: [] },
+        { productId: "prod-lemonade", quantity: 1, modifiers: [] },
+      ],
+    },
+    owner.token,
   );
-const { data: after } = await owner.client
-  .from("orders")
-  .select("status")
-  .eq("id", order.id)
-  .single();
-check(
-  "KDS: the kitchen account moved the ticket in_prep -> ready -> delivered",
-  after.status === "delivered" && steps.every((s) => s === "ok"),
-  steps.join(","),
-);
-const lemonadeAfter = (
-  await owner.client.from("inventory_items").select("quantity").eq("id", lemonadeBefore.id).single()
-).data;
-check(
-  "stock: the sale consumed 0.1 gal of lemonade base (recipe in gal)",
-  Math.abs(Number(lemonadeBefore.quantity) - Number(lemonadeAfter.quantity) - 0.1) < 1e-9,
-  `${lemonadeBefore.quantity} -> ${lemonadeAfter.quantity}`,
-);
-const res2 = await call(
-  "fetchOperationalResources",
-  { orgId: orgSlug, locationId: slug.downtown },
-  owner.token,
-);
-const rev = (res2.result?.finance ?? []).find(
-  (e) => e.order_id === order.id && e.kind === "revenue",
-);
-check(
-  "finance: the sale's revenue (total - tax) is in the ledger the screens read",
-  rev?.amount_cents === order.total_cents - order.tax_cents,
-  rev?.amount_cents,
-);
+  const expectedSubtotal = 1350 + 450 + 395;
+  const expectedTax = Math.round((expectedSubtotal * 70000) / 1_000_000);
+  check(
+    "POS: sale recorded through submitOperationalSale with server prices and store tax",
+    sale.result?.totalCents === expectedSubtotal + expectedTax,
+    sale.error ?? JSON.stringify(sale.result),
+  );
+  const { data: order } = await owner.client
+    .from("orders")
+    .select("id,status,total_cents,tax_cents")
+    .eq("client_order_id", clientOrderId)
+    .single();
+  const steps = [];
+  for (const status of ["in_prep", "ready", "delivered"])
+    steps.push(
+      (await call("changeOperationalOrder", { id: order.id, status }, kitchen.token)).error ?? "ok",
+    );
+  const { data: after } = await owner.client
+    .from("orders")
+    .select("status")
+    .eq("id", order.id)
+    .single();
+  check(
+    "KDS: the kitchen account moved the ticket in_prep -> ready -> delivered",
+    after.status === "delivered" && steps.every((s) => s === "ok"),
+    steps.join(","),
+  );
+  const lemonadeAfter = (
+    await owner.client
+      .from("inventory_items")
+      .select("quantity")
+      .eq("id", lemonadeBefore.id)
+      .single()
+  ).data;
+  check(
+    "stock: the sale consumed 0.1 gal of lemonade base (recipe in gal)",
+    Math.abs(Number(lemonadeBefore.quantity) - Number(lemonadeAfter.quantity) - 0.1) < 1e-9,
+    `${lemonadeBefore.quantity} -> ${lemonadeAfter.quantity}`,
+  );
+  const res2 = await call(
+    "fetchOperationalResources",
+    { orgId: orgSlug, locationId: slug.downtown },
+    owner.token,
+  );
+  const rev = (res2.result?.finance ?? []).find(
+    (e) => e.order_id === order.id && e.kind === "revenue",
+  );
+  check(
+    "finance: the sale's revenue (total - tax) is in the ledger the screens read",
+    rev?.amount_cents === order.total_cents - order.tax_cents,
+    rev?.amount_cents,
+  );
+} else console.log("skipped: POS/KDS/stock/finance write checks (read-only run)");
 
 const allRes = await call("fetchOperationalResources", { orgId: orgSlug }, owner.token);
 const { count: ledgerRows } = await owner.client

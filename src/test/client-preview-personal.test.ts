@@ -5,6 +5,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   isReservedTestEmail,
+  parsePersonalOwnerNames,
   parsePersonalOwners,
   personalLabel,
   PersonalOwnersError,
@@ -462,5 +463,51 @@ describe("policy: personal data and secrets", () => {
     expect(teardown.indexOf('"client_preview_purge",')).toBeLessThan(
       teardown.indexOf("export function seedClientPreview"),
     );
+  });
+});
+
+describe("personal owner display names (PREVIEW_PERSONAL_OWNER_NAMES)", () => {
+  const OWNERS = "first.owner@example.com, second.owner@example.com";
+  it("pairs names with addresses in the declared order, whatever the sorting of addresses", () => {
+    expect(parsePersonalOwnerNames("zed@example.com,amy@example.com", "Zed, Amy")).toEqual({
+      "zed@example.com": "Zed",
+      "amy@example.com": "Amy",
+    });
+    expect(parsePersonalOwnerNames(OWNERS, " Ana  Lúcia ,José")).toEqual({
+      "first.owner@example.com": "Ana Lúcia",
+      "second.owner@example.com": "José",
+    });
+  });
+  it("is optional: no names means an empty map", () => {
+    expect(parsePersonalOwnerNames(OWNERS, undefined)).toEqual({});
+    expect(parsePersonalOwnerNames(OWNERS, " , ")).toEqual({});
+  });
+  it("refuses a count mismatch or a name that is not a plain name, without repeating it", () => {
+    expect(() => parsePersonalOwnerNames(OWNERS, "Only")).toThrow(PersonalOwnersError);
+    // [names, the invalid one]
+    const cases: [string, string][] = [
+      ["<b>x</b>,Ok", "<b>x</b>"],
+      ["Ok,https://x.test", "https://x.test"],
+      ["Ok," + "a".repeat(41), "a".repeat(41)],
+    ];
+    for (const [names, invalid] of cases) {
+      let error: unknown;
+      try {
+        parsePersonalOwnerNames(OWNERS, names);
+      } catch (e) {
+        error = e;
+      }
+      expect(error, names).toBeInstanceOf(PersonalOwnersError);
+      expect((error as Error).message).not.toContain(invalid);
+    }
+  });
+  it("the seed fills only an empty profile name and never logs names or addresses", () => {
+    const seed = fs.readFileSync(
+      path.resolve(__dirname, "../../scripts/preview/seed-core.mjs"),
+      "utf8",
+    );
+    expect(seed).toMatch(/\.or\("full_name\.is\.null,full_name\.eq\."\)/);
+    expect(seed).not.toMatch(/log\([^)]*personalOwnerNames/);
+    expect(seed).not.toMatch(/log\([^)]*\bname\b[^)]*\)/);
   });
 });

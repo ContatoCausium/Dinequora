@@ -16,8 +16,9 @@ import { useWorkspace, useScopedLocations } from "@/components/app/workspace-con
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { StatTile } from "@/components/app/stat-tile";
 import { EmptyState, Skeleton, StateCard } from "@/components/app/states";
-import { DemoBadge } from "@/components/app/brand-mark";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
+import { isClientPreview } from "@/lib/deployment-profile";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -25,12 +26,12 @@ import { Input } from "@/components/ui/input";
 export const Route = createFileRoute("/_authenticated/_app/intelligence")({
   head: () => ({
     meta: [
-      { title: "Dinequora Intelligence · Dinequora" },
+      { title: "Insights · Dinequora" },
       {
         name: "description",
         content: "Revenue, food cost and stock signals calculated from recorded operations.",
       },
-      { property: "og:title", content: "Dinequora Intelligence · Dinequora" },
+      { property: "og:title", content: "Insights · Dinequora" },
       {
         property: "og:description",
         content: "Revenue, food cost and stock signals calculated from recorded operations.",
@@ -309,6 +310,8 @@ export function IntelligencePage() {
   const { t, i18n } = useTranslation("intelligence");
   const lng = i18n.language;
   const { org, locationId } = useWorkspace();
+  // Build-time profile: the client preview never shows the not-yet-connected WhatsApp integration.
+  const showWhatsApp = !isClientPreview();
   const scopedLocations = useScopedLocations();
   const [period, setPeriod] = useState<Period>("30");
   const periodDays = Number(period);
@@ -429,7 +432,6 @@ export function IntelligencePage() {
             <span className="eyebrow">
               {org.name} · {scopeLabel}
             </span>
-            {org.fictional && <DemoBadge label={t("demoBadge")} />}
           </span>
         }
         title={t("title")}
@@ -618,8 +620,15 @@ export function IntelligencePage() {
             )}
           </Panel>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="space-y-6 lg:col-span-2">
+          {/* The WhatsApp report card is a preview of an integration that is not connected yet, so
+              the client preview leaves it out instead of showing a simulation as a feature. */}
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-6",
+              showWhatsApp ? "lg:grid-cols-3" : "lg:grid-cols-2",
+            )}
+          >
+            <div className={cn(showWhatsApp ? "space-y-6 lg:col-span-2" : "contents")}>
               <Panel
                 title={t("insights.title")}
                 subtitle={t("insights.subtitle")}
@@ -721,11 +730,13 @@ export function IntelligencePage() {
               </Panel>
             </div>
 
-            <WhatsAppPreviewCard
-              summary={summary}
-              periodDays={periodDays}
-              scopeLabel={scopeLabel}
-            />
+            {showWhatsApp && (
+              <WhatsAppPreviewCard
+                summary={summary}
+                periodDays={periodDays}
+                scopeLabel={scopeLabel}
+              />
+            )}
           </div>
         </>
       )}

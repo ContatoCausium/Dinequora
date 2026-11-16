@@ -363,7 +363,12 @@ export const fetchOperationalResources = createServerFn({ method: "POST" })
     const [inventory, recipes, suppliers, purchases, movements, finance, expenses] =
       await Promise.all([
         c.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", s.org.id),
-        c.from("product_recipes").select("*,recipe_ingredients(*)").eq("org_id", s.org.id),
+        // The linked menu product (FK org_id, product_id) is the single source of the selling price
+        // and the product name; recipe metadata only keeps a legacy copy.
+        c
+          .from("product_recipes")
+          .select("*,recipe_ingredients(*),menu_products(name,price_cents)")
+          .eq("org_id", s.org.id),
         c.from("suppliers").select("*").eq("org_id", s.org.id),
         c.from("purchase_orders").select("*,purchase_order_items(*)").eq("org_id", s.org.id),
         c

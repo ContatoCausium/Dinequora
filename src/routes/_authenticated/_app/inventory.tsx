@@ -76,13 +76,11 @@ import {
   type RecipeUnit,
 } from "@/lib/recipes-service";
 import type { Supplier, PurchaseOrder, POStatus } from "@/lib/suppliers-purchases-service";
-import { DemoBadge } from "@/components/app/brand-mark";
 import { displayAmount, fmtDate, fmtMoneyCents, fmtPercent, fmtQuantity } from "@/lib/format";
 import {
   centsFromDollars,
   centsToDecimalString,
   multiplyQuantityCents,
-  centsFromNumberInput,
   sumCents,
 } from "@/lib/money";
 
@@ -145,7 +143,6 @@ type RecipeForm = {
   productName: string;
   servings: number;
   yieldUnit: string;
-  sellingPriceCents: number;
   prepInstructions: string;
   ingredients: RecipeIngredient[];
 };
@@ -246,7 +243,6 @@ export function InventoryPage() {
     productName: "",
     servings: 1,
     yieldUnit: "",
-    sellingPriceCents: 1200,
     prepInstructions: "",
     ingredients: [],
   });
@@ -409,7 +405,6 @@ export function InventoryPage() {
         productName: mode === "edit" ? recipe.productName : "",
         servings: recipe.servings,
         yieldUnit: recipe.yieldUnit,
-        sellingPriceCents: recipe.sellingPriceCents,
         prepInstructions: recipe.prepInstructions || "",
         ingredients: recipe.ingredients.map((i) =>
           mode === "edit" ? i : { ...i, id: `ri-${crypto.randomUUID()}` },
@@ -423,7 +418,6 @@ export function InventoryPage() {
         productName: "",
         servings: 1,
         yieldUnit: t("recipes.defaultYieldUnit"),
-        sellingPriceCents: 1400,
         prepInstructions: "",
         ingredients: first ? [newIngredient(first)] : [],
       });
@@ -462,7 +456,8 @@ export function InventoryPage() {
             yieldQuantity: recipeFormData.servings,
             yieldUnit: recipeFormData.yieldUnit,
             prepInstructions: recipeFormData.prepInstructions,
-            sellingPriceCents: recipeFormData.sellingPriceCents,
+            // The menu product's price is the single source; the copy kept in metadata follows it.
+            sellingPriceCents: product.priceCents,
             // Only what the recipe is made of. Cost snapshots are computed for display and never
             // sent: product_recipes.metadata is readable without inventory.costs (migration 0024).
             ingredients: recipeFormData.ingredients.map((i) => ({
@@ -1437,6 +1432,7 @@ export function InventoryPage() {
 
   const scopeHint = locationId === "all" ? t("allStores") : storeName(locationId);
   const selectedRecipeProduct = recipeFormData.productName;
+  const selectedRecipeMenuProduct = products.find((p) => p.name === selectedRecipeProduct.trim());
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -1444,7 +1440,6 @@ export function InventoryPage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            {org.fictional && <DemoBadge label={t("simulatedBadge")} />}
           </div>
         }
         title={t("title")}
@@ -1604,22 +1599,21 @@ export function InventoryPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="recipe-price">{t("recipeDialog.sellingPrice")}</Label>
+                {/* Read-only: the selling price is the menu product's price (single source). */}
                 <Input
                   id="recipe-price"
-                  type="number"
-                  step="0.50"
-                  min="0"
-                  value={centsToDecimalString(recipeFormData.sellingPriceCents)}
-                  onChange={(e) =>
-                    setRecipeFormData({
-                      ...recipeFormData,
-                      // <input type="number">: "." decimal, exact; an unreadable value keeps the price.
-                      sellingPriceCents:
-                        centsFromNumberInput(e.target.value || "0") ??
-                        recipeFormData.sellingPriceCents,
-                    })
+                  readOnly
+                  aria-describedby="recipe-price-hint"
+                  className="tabular bg-muted/50"
+                  value={
+                    selectedRecipeMenuProduct
+                      ? money(selectedRecipeMenuProduct.priceCents)
+                      : t("recipeDialog.sellingPriceNoProduct")
                   }
                 />
+                <p id="recipe-price-hint" className="text-xs text-muted-foreground">
+                  {t("recipeDialog.sellingPriceHint")}
+                </p>
               </div>
             </div>
 

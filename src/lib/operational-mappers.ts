@@ -88,18 +88,23 @@ export function mapResources(r: Resources) {
         subtotalCostCents: cost.subtotalCostCents,
       };
     });
-    const totals = computeRecipeTotals(ingredients, p.servings, metadata.sellingPriceCents);
+    // Single source of truth: the linked menu product's current price and name. The copy kept in
+    // recipe metadata is only a fallback for a recipe whose product the reader cannot see.
+    const product = p.menu_products ?? null;
+    const sellingPriceCents = product ? product.price_cents : metadata.sellingPriceCents;
+    const totals = computeRecipeTotals(ingredients, p.servings, sellingPriceCents);
     return {
       id: p.id,
       orgId: r.orgId,
       productId: p.product_id,
-      productName: metadata.productName,
+      productName: product?.name ?? metadata.productName,
+      priceFromMenu: product !== null,
       locationId: location(p.location_id),
       servings: p.servings,
       yieldQuantity: p.yield_quantity,
       yieldUnit: p.yield_unit,
       prepInstructions: p.instructions,
-      sellingPriceCents: metadata.sellingPriceCents,
+      sellingPriceCents,
       ingredients,
       ...totals,
       history: [],

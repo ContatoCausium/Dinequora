@@ -14,7 +14,7 @@
     "inventory": "Inventory",
     "employees": "Team & access",
     "finance": "Finance",
-    "intelligence": "Dinequora Intelligence",
+    "intelligence": "Insights",
     "whatsapp": "WhatsApp Center",
     "analytics": "Analytics",
     "controlCenter": "Control Center",
@@ -73,7 +73,10 @@
   "demo": {
     "badge": "Demo data",
     "fictional": "Fictional",
-    "disclaimer": "Presentation mode: every sales, order, inventory and alert figure on this dashboard is illustrative and does not represent this organization's results. Sales recorded at the POS, payments, inventory and finance remain real and are shown again when you leave presentation mode."
+    "disclaimer": "Presentation mode: every sales, order, inventory and alert figure on this dashboard is illustrative and does not represent this organization's results. Sales recorded at the POS, payments, inventory and finance remain real and are shown again when you leave presentation mode.",
+    "workspace": "Demo workspace · fictional data",
+    "workspaceShort": "Demo",
+    "workspaceHint": "A sample restaurant group with fictional data, for demonstration. It is not a real business."
   },
   "presentation": {
     "start": "Presentation mode",

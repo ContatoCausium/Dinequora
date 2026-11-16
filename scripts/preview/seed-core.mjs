@@ -412,7 +412,12 @@ async function run(
       email,
       password: oneTime,
       email_confirm: true,
-      user_metadata: { preferred_language: "en-US" },
+      user_metadata: {
+        preferred_language: "en-US",
+        ...(target.personalOwnerNames?.[email]
+          ? { full_name: target.personalOwnerNames[email] }
+          : {}),
+      },
     });
     if (error) throw new SeedError(`createUser ${label}: ${error.message}`);
     const token = await rpc(owner, "create_invitation", {
@@ -435,6 +440,23 @@ async function run(
       userId: data.user.id,
       state: "created, invited as Owner, accepted",
     });
+  }
+  // Display names from the operator's secrets file: filled only where the profile has none, so a
+  // name the person chose is never overwritten. Neither the name nor the address is logged.
+  for (const [i, email] of owners.entries()) {
+    const name = target.personalOwnerNames?.[email];
+    if (!name) continue;
+    const { data: named, error: nameError } = await svc
+      .from("profiles")
+      .update({ full_name: name })
+      .eq("id", personalState[i].userId)
+      .or("full_name.is.null,full_name.eq.")
+      .select("id");
+    if (nameError)
+      throw new SeedError(`display name of ${personalState[i].label}: ${nameError.message}`);
+    personalState[i].state += named.length
+      ? ", display name set"
+      : ", display name already present";
   }
   for (const p of personalState) log(`${p.label}: ${p.state}`);
   creds.personalOwners = personalState;
@@ -542,6 +564,8 @@ async function seedOperational({ owner, svc, orgId, org, loc, plan, log, concurr
           productId: p.id,
           servings: 1,
           yieldQuantity: 1,
+          // The app reads the price from the linked menu product; the copy in metadata follows it.
+          sellingPriceCents: p.priceCents,
           ingredients: p.recipe.map(([sku, quantity, unit, waste]) => ({
             inventoryItemId: itemId[store.key][sku],
             quantity,

@@ -25,7 +25,15 @@ import {
   exitOnTargetRefusal,
   resolvePreviewTarget,
 } from "./client-preview-target.mjs";
-import { EMAIL_DOMAIN, LEDGER_READ_CAP, ORG, PRODUCTS, STOCK, STORES } from "./dataset.mjs";
+import {
+  convertQuantity,
+  EMAIL_DOMAIN,
+  LEDGER_READ_CAP,
+  ORG,
+  PRODUCTS,
+  STOCK,
+  STORES,
+} from "./dataset.mjs";
 
 const OPERATION = "verify:client-preview";
 const target = await resolvePreviewTarget(process.env, OPERATION).catch(exitOnTargetRefusal);
@@ -137,7 +145,7 @@ check(
   ),
   items.length,
 );
-const recipes = await all(svc, "product_recipes", "id,location_id,product_id", (q) =>
+const recipes = await all(svc, "product_recipes", "id,location_id,product_id,servings", (q) =>
   q.eq("org_id", org.id),
 );
 const expectedRecipes = STORES.reduce(
@@ -365,6 +373,102 @@ check(
     open.every((o) => Date.now() - Date.parse(o.created_at) < 30 * 60_000 + 86_400_000),
   `${open.length} open (${[...new Set(open.map((o) => o.status))].join("/")})`,
 );
+// A smoke-test sale is a real order: it may exist on a local rehearsal stack, never in a preview
+// that prospects open (the hosted runbook resets after any smoke run that writes).
+const smokeOrders = orders.filter((o) => String(o.client_order_id ?? "").startsWith("cp-smoke-"));
+check(
+  "no smoke-test sales in the demonstration data",
+  target.mode === "local" || smokeOrders.length === 0,
+  `${smokeOrders.length} smoke order(s)${target.mode === "local" ? " (allowed on a local stack)" : ""}`,
+);
+
+// ---- recipe margins and the financial picture -------------------------------------------------
+// Recipes are priced at their menu product (single source); every one must leave a margin.
+const recipeLines = group(
+  await all(
+    svc,
+    "recipe_ingredients",
+    "id,recipe_id,inventory_item_id,quantity,unit,waste_percentage",
+    (q) => q.eq("org_id", org.id),
+  ),
+  "recipe_id",
+);
+const itemById = Object.fromEntries(items.map((i) => [i.id, i]));
+const priceOf = Object.fromEntries(products.map((p) => [p.id, p.price_cents]));
+const foodCost = recipes.map((rc) => {
+  const cost = (recipeLines.get(rc.id) ?? []).reduce((n, l) => {
+    const it = itemById[l.inventory_item_id];
+    const qty = convertQuantity(Number(l.quantity), l.unit, it.unit);
+    return n + qty * (1 + Number(l.waste_percentage ?? 0) / 100) * it.cost_cents;
+  }, 0);
+  return cost / Math.max(1, Number(rc.servings) || 1) / priceOf[rc.product_id];
+});
+check(
+  "recipes: every product sells above its recipe cost (food cost under 40% of the menu price)",
+  foodCost.length > 0 && foodCost.every((x) => x > 0 && x < 0.4),
+  `food cost ${(Math.min(...foodCost) * 100).toFixed(0)}-${(Math.max(...foodCost) * 100).toFixed(0)}%`,
+);
+
+// Same rule as the Finance screen: ledger by the store's local day, expenses by competency date,
+// both inside [since, today]; future and simulated expenses never count.
+const expenseRows = await all(svc, "finance_expenses", "id,location_id,payload,active", (q) =>
+  q.eq("org_id", org.id).eq("active", true),
+);
+const tzOf = Object.fromEntries(locations.map((l) => [l.id, l.timezone || "America/New_York"]));
+const localDay = (iso, tz) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso));
+const todayAt = (locationId) => localDay(new Date().toISOString(), tzOf[locationId]);
+const SIGN = { revenue: 1, reversal_revenue: -1, cogs: -1, reversal_cogs: 1 };
+const resultSince = (sinceOf) => {
+  let net = 0;
+  let sales = 0;
+  for (const l of locations) {
+    const today = todayAt(l.id);
+    const since = sinceOf(today);
+    for (const e of entries) {
+      if (e.location_id !== l.id || !(e.kind in SIGN)) continue;
+      const d = localDay(e.created_at, tzOf[l.id]);
+      if (d < since || d > today) continue;
+      net += SIGN[e.kind] * e.amount_cents;
+      if (e.kind === "revenue" || e.kind === "reversal_revenue")
+        sales += SIGN[e.kind] * e.amount_cents;
+    }
+    for (const x of expenseRows) {
+      const p = x.payload ?? {};
+      if (x.location_id !== l.id || p.isSimulation) continue;
+      const c = String(p.competencyDate ?? "");
+      if (c >= since && c <= today) net -= Number(p.amountCents) || 0;
+    }
+  }
+  return { net, margin: sales > 0 ? net / sales : 0 };
+};
+const minusDays = (ymd, n) => {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+const usd = (r) => `$${(r.net / 100).toFixed(2)} (${(r.margin * 100).toFixed(1)}% of net sales)`;
+const result30 = resultSince((today) => minusDays(today, 29));
+check(
+  "finance: the last 30 days close with a positive operating result",
+  result30.net > 0,
+  usd(result30),
+);
+// The first days of a month carry its rent and fixed bills against a few days of sales, so a
+// month-to-date loss is real and expected early in the month; from the 8th it must be positive.
+const mtd = resultSince((today) => `${today.slice(0, 7)}-01`);
+const dayOfMonth = Number(localDay(new Date().toISOString(), "America/New_York").slice(8, 10));
+check(
+  "finance: month to date is positive (checked from the 8th of the month)",
+  dayOfMonth < 8 || mtd.net > 0,
+  usd(mtd),
+);
+const paidAhead = expenseRows.filter(
+  (x) =>
+    String(x.payload?.competencyDate ?? "") > todayAt(x.location_id) &&
+    x.payload?.status === "paid",
+);
+check("expenses: nothing dated in the future is marked paid", !paidAhead.length, paidAhead.length);
 
 // ---- isolation through RLS --------------------------------------------------------------------
 const owner = await signIn("owner");
@@ -439,6 +543,20 @@ check(
   new Set(personalUsers.map((u) => u.id)).size === owners.length &&
     personalUsers.every((u) => u.email_confirmed_at) &&
     personalUsers.every((u) => !demoUsers.some((d) => d.id === u.id)),
+);
+// Every member has a display name, so Team never shows "name not set" (the personal owners' names
+// come from the operator's secrets file; neither names nor addresses are printed).
+const memberProfiles = await all(svc, "profiles", "id,full_name", (q) =>
+  q.in(
+    "id",
+    allMembers.filter((m) => m.org_id === org.id).map((m) => m.user_id),
+  ),
+);
+const unnamed = memberProfiles.filter((p) => !String(p.full_name ?? "").trim()).length;
+check(
+  "people: every member of the demo organization has a display name",
+  Object.keys(target.personalOwnerNames ?? {}).length === 0 || unnamed === 0,
+  `${memberProfiles.length - unnamed}/${memberProfiles.length} named${Object.keys(target.personalOwnerNames ?? {}).length ? "" : " (no personal display names declared)"}`,
 );
 const invitations = await all(
   svc,

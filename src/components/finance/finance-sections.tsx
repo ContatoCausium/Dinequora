@@ -28,6 +28,7 @@ import {
   SERIES,
   filterExpenses,
   groupExpenses,
+  pnlExpenseGroups,
   sortExpenses,
   type ExpenseFilters,
   type MonthPoint,
@@ -620,6 +621,16 @@ export function PnlPanel({
   const lng = i18n.language;
   const money = (c: number) => fmtMoneyCents(c, lng);
   const empty = revenueCents === 0 && cogsCents === 0 && summary.totalCents === 0;
+  const groups = pnlExpenseGroups(summary);
+  const categoryRows = (rows: typeof groups.personnel) =>
+    rows.map((c) => (
+      <StatementRow
+        key={c.category}
+        indent
+        label={<span className="pl-4">{t(`categories.${c.category}`)}</span>}
+        value={money(-c.cents)}
+      />
+    ));
   return (
     <Panel title={t("pnl.title")} subtitle={t("pnl.subtitle")}>
       {empty ? (
@@ -647,16 +658,11 @@ export function PnlPanel({
             value={money(grossProfitCents)}
           />
           <StatementRow label={t("pnl.expenses")} value={money(-summary.totalCents)} />
+          {/* Each category under its own parent, exactly once (personnel vs other operating). */}
           <StatementRow indent label={t("pnl.personnel")} value={money(-summary.personnelCents)} />
+          {categoryRows(groups.personnel)}
           <StatementRow indent label={t("pnl.operating")} value={money(-summary.operatingCents)} />
-          {summary.byCategory.map((c) => (
-            <StatementRow
-              key={c.category}
-              indent
-              label={<span className="pl-4">{t(`categories.${c.category}`)}</span>}
-              value={money(-c.cents)}
-            />
-          ))}
+          {categoryRows(groups.operating)}
           <StatementRow
             emphasis
             label={t("pnl.result")}

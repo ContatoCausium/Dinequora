@@ -14,7 +14,7 @@
     "inventory": "Estoque e Suprimentos",
     "employees": "Equipe e acessos",
     "finance": "Financeiro",
-    "intelligence": "Dinequora Intelligence",
+    "intelligence": "Insights",
     "whatsapp": "Central WhatsApp",
     "analytics": "Relatórios",
     "controlCenter": "Central de Controle",
@@ -73,7 +73,10 @@
   "demo": {
     "badge": "Dados de demonstração",
     "fictional": "Fictícia",
-    "disclaimer": "Modo apresentação: todos os valores de vendas, pedidos, estoque e alertas exibidos neste painel são ilustrativos e não representam resultados desta organização. As vendas registradas no PDV, os pagamentos, o estoque e o financeiro continuam reais e aparecem ao sair do modo apresentação."
+    "disclaimer": "Modo apresentação: todos os valores de vendas, pedidos, estoque e alertas exibidos neste painel são ilustrativos e não representam resultados desta organização. As vendas registradas no PDV, os pagamentos, o estoque e o financeiro continuam reais e aparecem ao sair do modo apresentação.",
+    "workspace": "Ambiente de demonstração · dados fictícios",
+    "workspaceShort": "Demo",
+    "workspaceHint": "Um grupo de restaurantes de exemplo, com dados fictícios, para demonstração. Não é um negócio real."
   },
   "presentation": {
     "start": "Modo apresentação",

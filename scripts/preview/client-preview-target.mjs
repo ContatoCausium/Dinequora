@@ -12,7 +12,11 @@
 // hand-built object can never stand in for a checked destination. Keys are never printed.
 import { assertDisposableApi, GuardRefusal } from "../guard/target-guard.mjs";
 import { assertClientPreviewApi, PREVIEW_OPERATIONS, PreviewRefusal } from "./preview-target.mjs";
-import { parsePersonalOwners, PersonalOwnersError } from "./personal-owners.mjs";
+import {
+  parsePersonalOwnerNames,
+  parsePersonalOwners,
+  PersonalOwnersError,
+} from "./personal-owners.mjs";
 
 const BRAND = Symbol("client-preview-target");
 
@@ -31,8 +35,13 @@ export async function resolvePreviewTarget(env, operation) {
   // The personal owners (at most two): real people on the hosted preview, where they must also equal
   // the list fixed in its marker; stand-in .test addresses on a local stack (never real people).
   let personalOwners;
+  let personalOwnerNames;
   try {
     personalOwners = parsePersonalOwners(env.PREVIEW_PERSONAL_OWNERS, { mode });
+    personalOwnerNames = parsePersonalOwnerNames(
+      env.PREVIEW_PERSONAL_OWNERS,
+      env.PREVIEW_PERSONAL_OWNER_NAMES,
+    );
   } catch (e) {
     throw new PreviewRefusal(
       e instanceof PersonalOwnersError ? e.message : "invalid personal owners",
@@ -61,6 +70,7 @@ export async function resolvePreviewTarget(env, operation) {
     serviceKey,
     publishableKey,
     personalOwners,
+    personalOwnerNames,
   });
 }
 

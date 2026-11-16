@@ -104,6 +104,8 @@
     "activeLocations": "Active locations / allowed",
     "billedPendingSync": "{{count}} — not synced yet: online payments aren’t connected",
     "planUpTo_one": "Up to {{total}} / mo with {{count}} location",
-    "planUpTo_other": "Up to {{total}} / mo with {{count}} locations"
+    "planUpTo_other": "Up to {{total}} / mo with {{count}} locations",
+    "previewManaged": "During the preview, billing for this workspace is arranged directly with your Dinequora contact. No card is stored or charged here.",
+    "renewsManaged": "Managed by Dinequora"
   }
 }

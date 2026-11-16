@@ -56,6 +56,8 @@ export interface ProductRecipe {
   totalCostCents: number;
   costPerServingCents: number;
   sellingPriceCents: number;
+  /** True when sellingPriceCents is the linked menu product's current price (single source). */
+  priceFromMenu?: boolean;
   estimatedMarginPercent: number;
   history: RecipeHistoryEntry[];
   updatedAt: string;

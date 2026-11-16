@@ -23,7 +23,8 @@ import { fetchOperationalResources } from "@/lib/operational.functions";
 import { mapResources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
 import { fetchAllOrders, OPEN_STATUSES, periodStart } from "@/lib/recorded-data";
-import { buildReport, dayKey, isRecordedSale } from "@/lib/report-metrics";
+import { buildReport, dayKey, expensesInPeriod, isRecordedSale } from "@/lib/report-metrics";
+import { recognizedExpenses } from "@/lib/period-metrics";
 import { prepStats } from "@/lib/kitchen-metrics";
 import { netSalesCents, type RecordedOrder } from "@/lib/recorded-data";
 import { displayAmount, fmtDateTime } from "@/lib/format";
@@ -89,14 +90,17 @@ export function RecordedOverview() {
       cogsCents: report.cogsCents,
       expensesCents: 0,
     });
-    // Month-to-date result: ledger since the 1st + expenses whose competency is this month.
+    // Month-to-date result: ledger from the 1st to today and the expenses recognized in the same
+    // days (competency date already arrived — a bill scheduled for later is never anticipated).
+    // Same rule as Finance, Reports and Insights.
     const monthStart = `${today.slice(0, 7)}-01`;
     const monthLedger = ledgerMetrics(
-      resources.finance.filter((e) => dayKey(e.created_at, timeZone) >= monthStart),
+      resources.finance.filter((e) => {
+        const d = dayKey(e.created_at, timeZone);
+        return d >= monthStart && d <= today;
+      }),
     );
-    const monthExpenses = mapped.expenses
-      .filter((e) => !e.isSimulation && e.competencyDate.slice(0, 7) === today.slice(0, 7))
-      .reduce((s, e) => s + e.amountCents, 0);
+    const monthExpenses = expensesInPeriod(mapped.expenses, monthStart, today);
     const month = financialResult({
       revenueCents: monthLedger.revenueCents,
       cogsCents: monthLedger.cogsCents,
@@ -109,7 +113,10 @@ export function RecordedOverview() {
       report,
       gross,
       month,
+      // Bills (due soon, overdue, paid) are obligations as of today; the cost breakdown below them
+      // uses the costs recognized this month, the same days as the month-to-date result.
       expenses: summarizeExpenses(mapped.expenses, today),
+      monthCosts: summarizeExpenses(recognizedExpenses(mapped.expenses, monthStart, today), today),
       low,
       kitchen: orders.filter((o) => OPEN_STATUSES.includes(o.status) && !o.isSimulated).length,
       receiving: mapped.purchases.filter(
@@ -407,14 +414,16 @@ export function RecordedOverview() {
                     danger={view.expenses.overdueCents > 0}
                   />
                   <MoneyRow label={t("home.finance.paid")} value={money(view.expenses.paidCents)} />
-                  <div className="border-t pt-2.5" />
+                  <p className="border-t pt-2.5 text-xs text-muted-foreground">
+                    {t("home.finance.monthCosts")}
+                  </p>
                   <MoneyRow
                     label={t("home.finance.personnel")}
-                    value={money(view.expenses.personnelCents)}
+                    value={money(view.monthCosts.personnelCents)}
                   />
                   <MoneyRow
                     label={t("home.finance.operating")}
-                    value={money(view.expenses.operatingCents)}
+                    value={money(view.monthCosts.operatingCents)}
                   />
                 </dl>
               </Panel>

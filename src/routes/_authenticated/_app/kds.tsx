@@ -30,6 +30,8 @@ import {
   getTicketUrgency,
   filterOrdersByStation,
   assignDefaultStation,
+  formatPlacedAt,
+  recentlyCompleted,
   simulateIncomingOrder,
 } from "@/lib/kds-service";
 import { supabase } from "@/integrations/supabase/client";
@@ -82,6 +84,8 @@ function playNewTicketChime() {
   }
 }
 
+type BoardColumn = "new" | "in_prep" | "ready" | "done";
+
 /** Waiting time in the active language: "12 min", "3h 05m", "2d". */
 function formatAge(minutes: number, t: TFunction<"kds">): string {
   if (minutes < 60) return t("age.minutes", { count: minutes });
@@ -107,6 +111,8 @@ export function KDSPage() {
     showcase ? listOrders(org.id, locationId, locationScope) : [],
   );
   const [stationFilter, setStationFilter] = useState<KitchenStation | "all">("all");
+  // Below the lg breakpoint (phones, portrait tablets) one column is shown at a time.
+  const [focusColumn, setFocusColumn] = useState<BoardColumn>("new");
   const [nowTick, setNowTick] = useState(Date.now());
   const [audioAlerts, setAudioAlerts] = useState(true);
   const [pendingOrders, setPendingOrders] = useState<ReadonlySet<string>>(() => new Set());
@@ -233,9 +239,9 @@ export function KDSPage() {
       new: active.filter((o) => o.status === "new" || o.status === "confirmed"),
       in_prep: active.filter((o) => o.status === "in_prep"),
       ready: active.filter((o) => o.status === "ready"),
-      delivered: active.filter((o) => o.status === "delivered").slice(0, 10),
+      delivered: recentlyCompleted(active, nowTick),
     };
-  }, [filteredOrders]);
+  }, [filteredOrders, nowTick]);
 
   const setPending = (setter: typeof setPendingOrders, id: string, on: boolean) =>
     setter((prev) => {
@@ -301,6 +307,8 @@ export function KDSPage() {
 
   const cardProps = (order: Order) => ({
     order,
+    // "Placed at" in the ticket's own store zone (same as Orders), not the device's zone.
+    timeZone: org.locations.find((l) => l.id === order.locationId)?.timezone,
     stationFilter,
     pending: pendingOrders.has(order.id),
     pendingItems,
@@ -308,7 +316,7 @@ export function KDSPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-4 lg:h-[calc(100vh-5.5rem)]">
+    <div className="mx-auto flex max-w-[1600px] flex-col gap-4 md:h-[calc(100dvh-5.5rem)]">
       {/* Top Controls Bar */}
       <div className="surface flex shrink-0 flex-wrap items-center justify-between gap-3 p-3">
         <div className="flex items-center gap-3">
@@ -380,9 +388,46 @@ export function KDSPage() {
         }
       />
 
-      {/* Kanban Board Layout */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-4 lg:overflow-hidden">
+      {/* Column switcher (phones and portrait tablets): one full-height column at a time, so the
+          board never turns into a long page; every column's count stays visible. */}
+      <div
+        role="tablist"
+        aria-label={t("columnsLabel")}
+        className="grid shrink-0 grid-cols-4 gap-1 rounded-md border bg-muted/40 p-0.5 lg:hidden"
+      >
+        {(
+          [
+            ["new", t("columns.new"), columns.new.length],
+            ["in_prep", t("columns.inPrep"), columns.in_prep.length],
+            ["ready", t("columns.ready"), columns.ready.length],
+            ["done", t("columns.doneShort"), columns.delivered.length],
+          ] as const
+        ).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={focusColumn === key}
+            aria-controls={`kds-col-${key}`}
+            onClick={() => setFocusColumn(key)}
+            className={cn(
+              "flex min-h-11 flex-col items-center justify-center rounded-[5px] px-1 text-xs font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-row sm:gap-1.5 sm:text-sm",
+              focusColumn === key
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span className="text-center">{label}</span>
+            <span className="tabular font-semibold">{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Kanban Board Layout: fits the screen from tablets up; each column scrolls on its own. */}
+      <div className="grid grid-cols-1 gap-4 md:min-h-0 md:flex-1 md:overflow-hidden lg:grid-cols-4">
         <KDSColumn
+          id="kds-col-new"
+          visible={focusColumn === "new"}
           title={t("columns.new")}
           count={columns.new.length}
           emptyMessage={t("empty.new")}
@@ -399,6 +444,8 @@ export function KDSPage() {
         </KDSColumn>
 
         <KDSColumn
+          id="kds-col-in_prep"
+          visible={focusColumn === "in_prep"}
           title={t("columns.inPrep")}
           count={columns.in_prep.length}
           emptyMessage={t("empty.inPrep")}
@@ -415,6 +462,8 @@ export function KDSPage() {
         </KDSColumn>
 
         <KDSColumn
+          id="kds-col-ready"
+          visible={focusColumn === "ready"}
           title={t("columns.ready")}
           count={columns.ready.length}
           emptyMessage={t("empty.ready")}
@@ -431,6 +480,8 @@ export function KDSPage() {
         </KDSColumn>
 
         <KDSColumn
+          id="kds-col-done"
+          visible={focusColumn === "done"}
           title={t("columns.done")}
           count={columns.delivered.length}
           emptyMessage={t("empty.done")}
@@ -452,25 +503,37 @@ export function KDSPage() {
 }
 
 function KDSColumn({
+  id,
+  visible,
   title,
   count,
   emptyMessage,
   children,
 }: {
+  id: string;
+  /** Shown below the lg breakpoint only when chosen in the column switcher; always from lg up. */
+  visible: boolean;
   title: string;
   count: number;
   emptyMessage: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="surface flex h-full flex-col overflow-hidden" aria-label={title}>
+    <section
+      id={id}
+      className={cn(
+        "surface h-full min-h-0 flex-col overflow-hidden lg:flex",
+        visible ? "flex" : "hidden",
+      )}
+      aria-label={title}
+    >
       <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2.5">
         <h2 className="text-sm font-semibold">{title}</h2>
         <Badge variant="neutral" className="tabular px-2 text-xs">
           {count}
         </Badge>
       </div>
-      <div className="flex flex-1 flex-col gap-2.5 p-2.5 scrollbar-thin lg:overflow-y-auto">
+      <div className="flex flex-1 flex-col gap-2.5 p-2.5 scrollbar-thin md:overflow-y-auto">
         {count === 0 ? (
           <div className="my-auto flex flex-col items-center justify-center p-6 text-center text-sm text-muted-foreground">
             <UtensilsCrossed className="mb-2 size-6 opacity-40" aria-hidden />
@@ -486,6 +549,7 @@ function KDSColumn({
 
 function KDSTicketCard({
   order,
+  timeZone,
   stationFilter,
   onAdvance,
   advanceLabel,
@@ -496,6 +560,8 @@ function KDSTicketCard({
   isCompleted = false,
 }: {
   order: Order;
+  /** IANA zone of the ticket's store; "Placed at" is shown in it. */
+  timeZone?: string | undefined;
   stationFilter: KitchenStation | "all";
   onAdvance: () => void;
   advanceLabel: string;
@@ -509,10 +575,7 @@ function KDSTicketCard({
   const elapsed = calculateElapsedMinutes(order.createdAt);
   const urgency = isCompleted ? "normal" : getTicketUrgency(order.createdAt);
   const age = formatAge(elapsed, t);
-  const placedAt = new Intl.DateTimeFormat(i18n.language, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(order.createdAt));
+  const placedAt = formatPlacedAt(order.createdAt, i18n.language, timeZone);
 
   const displayedItems = order.items.filter((item) => {
     if (stationFilter === "all") return true;
@@ -539,7 +602,10 @@ function KDSTicketCard({
             {(order.customer.tableNumber || order.customer.name) && (
               <>
                 <span aria-hidden>·</span>
-                <span className="max-w-[160px] truncate">
+                <span
+                  className="max-w-[160px] truncate"
+                  title={order.customer.tableNumber || order.customer.name}
+                >
                   {order.customer.tableNumber || order.customer.name}
                 </span>
               </>
@@ -595,7 +661,7 @@ function KDSTicketCard({
                 className="group flex min-h-11 w-full items-start justify-between gap-2 rounded-md px-1 py-2 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               >
                 <div className={cn("min-w-0", ready && "text-muted-foreground line-through")}>
-                  <p className="flex items-center gap-2 text-base font-semibold leading-tight">
+                  <p className="flex items-start gap-2 text-base font-semibold leading-tight">
                     <span
                       className={cn(
                         "tabular flex size-7 shrink-0 items-center justify-center rounded-md border text-sm",
@@ -606,7 +672,8 @@ function KDSTicketCard({
                     >
                       {ready ? <Check className="size-4" aria-hidden /> : item.quantity}
                     </span>
-                    <span className="truncate">
+                    {/* Full item name, wrapped: the kitchen must never read a cut-off name. */}
+                    <span className="min-w-0 break-words pt-1">
                       {ready && <span className="tabular">{item.quantity}× </span>}
                       {item.productName}
                     </span>

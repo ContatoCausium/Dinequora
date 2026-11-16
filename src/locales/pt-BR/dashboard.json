@@ -132,7 +132,7 @@
       "gross": "Lucro bruto",
       "grossHint": "Margem {{value}}",
       "month": "Resultado do mês até hoje",
-      "monthHint": "Lucro bruto desde o dia 1º − despesas com competência em {{month}}",
+      "monthHint": "Lucro bruto desde o dia 1º − despesas reconhecidas até hoje",
       "noSales": "Ainda sem vendas"
     },
     "sales": {
@@ -150,13 +150,14 @@
     },
     "finance": {
       "title": "Contas e custos",
-      "subtitle": "Despesas operacionais registradas",
+      "subtitle": "Contas na data de hoje · custos reconhecidos no mês",
       "dueSoon": "Vence em 7 dias",
       "overdue": "Vencidas",
       "paid": "Pagas",
       "personnel": "Pessoal (folha + benefícios)",
       "operating": "Outros custos operacionais",
-      "open": "Abrir financeiro"
+      "open": "Abrir financeiro",
+      "monthCosts": "Custos reconhecidos no mês até hoje"
     },
     "stock": {
       "title": "Estoque",

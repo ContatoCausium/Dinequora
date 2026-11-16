@@ -55,6 +55,7 @@ import { chooseLanguage } from "@/lib/profile-service";
 import { operationalAlerts } from "@/lib/demo-data";
 import { useWorkspace } from "./workspace-context";
 import { BrandMark, DemoBadge, OrgLogo } from "./brand-mark";
+import { isClientPreview } from "@/lib/deployment-profile";
 import { PresentationBanner, PresentationModeToggle } from "./presentation-mode";
 import { usePresentationMode } from "./use-presentation-mode";
 import { EmptyState, SuspendedState } from "./states";
@@ -194,30 +195,34 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
             })}
         </div>
       ))}
-      <div className="flex flex-col gap-0.5">
-        {!collapsed && <p className="eyebrow px-2 pb-1.5">{t("nav.comingNext")}</p>}
-        {UPCOMING.map(({ key, icon: Icon }) => (
-          <div
-            key={key}
-            aria-disabled
-            title={t("nav.notYetAvailable")}
-            className={cn(
-              "flex h-8 cursor-not-allowed items-center gap-2.5 rounded-md px-2 text-[13px] text-muted-foreground/75",
-              collapsed && "justify-center px-0",
-            )}
-          >
-            <span className="inline-flex size-6 shrink-0 items-center justify-center">
-              <Icon className="size-[15px] opacity-70" strokeWidth={1.75} />
-            </span>
-            {!collapsed && (
-              <>
-                <span className="flex-1 truncate">{t(`nav.${key}`)}</span>
-                <Lock className="size-3 opacity-50" />
-              </>
-            )}
-          </div>
-        ))}
-      </div>
+      {/* Roadmap items are not product: the client preview (shown to prospective customers) lists
+          only what exists. */}
+      {!isClientPreview() && (
+        <div className="flex flex-col gap-0.5">
+          {!collapsed && <p className="eyebrow px-2 pb-1.5">{t("nav.comingNext")}</p>}
+          {UPCOMING.map(({ key, icon: Icon }) => (
+            <div
+              key={key}
+              aria-disabled
+              title={t("nav.notYetAvailable")}
+              className={cn(
+                "flex h-8 cursor-not-allowed items-center gap-2.5 rounded-md px-2 text-[13px] text-muted-foreground/75",
+                collapsed && "justify-center px-0",
+              )}
+            >
+              <span className="inline-flex size-6 shrink-0 items-center justify-center">
+                <Icon className="size-[15px] opacity-70" strokeWidth={1.75} />
+              </span>
+              {!collapsed && (
+                <>
+                  <span className="flex-1 truncate">{t(`nav.${key}`)}</span>
+                  <Lock className="size-3 opacity-50" />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {isPlatformAdmin && (
         <div className="mt-auto flex flex-col gap-0.5 border-t pt-4">
           {!collapsed && <p className="eyebrow px-2 pb-1.5">{t("nav.platform")}</p>}
@@ -602,9 +607,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SidebarNav collapsed={collapsed} />
           <div className={cn("flex items-center gap-2 border-t p-3", collapsed && "flex-col")}>
             <BrandMark className="size-6 text-foreground" />
-            {!collapsed && (
-              <span className="flex-1 text-xs text-muted-foreground">{t("shell.poweredBy")}</span>
-            )}
+            {/* "Powered by" only makes sense under a customer's own brand (white label). */}
+            {!collapsed &&
+              (org.logoUrl ? (
+                <span className="flex-1 text-xs text-muted-foreground">{t("shell.poweredBy")}</span>
+              ) : (
+                <span className="flex-1" />
+              ))}
             <button
               onClick={() => setCollapsed((c) => !c)}
               className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/60"
@@ -640,6 +649,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               </kbd>
             </button>
             <div className="ml-auto flex items-center gap-1">
+              {/* One honest workspace-level indicator instead of a different badge on every page. */}
+              {org.fictional && (
+                <span title={t("demo.workspaceHint")} className="mr-1 inline-flex">
+                  <DemoBadge label={t("demo.workspace")} className="hidden sm:inline-flex" />
+                  <DemoBadge label={t("demo.workspaceShort")} className="sm:hidden" />
+                </span>
+              )}
               <button
                 onClick={() => setCmdOpen(true)}
                 className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted md:hidden"

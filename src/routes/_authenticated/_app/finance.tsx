@@ -14,11 +14,12 @@ import {
   summarizeExpenses,
   todayIso,
 } from "@/lib/expense-metrics";
+import { dayKey, recognizedExpenses } from "@/lib/period-metrics";
 import type { Expense } from "@/lib/finance-service";
 import type { Order } from "@/lib/orders-service";
 import { fmtMoneyCents, fmtPercent } from "@/lib/format";
 import { useWorkspace } from "@/components/app/workspace-context";
-import { PageHeader } from "@/components/app/page";
+import { PageHeader, Segmented } from "@/components/app/page";
 import { DemoBadge } from "@/components/app/brand-mark";
 import { OrdersTruncatedNotice, Skeleton, StateCard } from "@/components/app/states";
 import { StatTile } from "@/components/app/stat-tile";
@@ -48,9 +49,13 @@ import {
 import { ExpenseFormDialog } from "@/components/finance/expense-form-dialog";
 import {
   expensePayload,
+  FINANCE_PERIODS,
+  financePeriodStart,
   initialFormValues,
   type ExpenseFormValues,
+  type FinancePeriod,
   ledgerForLocation,
+  ledgerInPeriod,
   markPaidPayload,
   monthlyTrend,
   overdueBills,
@@ -105,6 +110,8 @@ export function FinancePage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersMeta, setOrdersMeta] = useState({ total: 0, truncated: false });
   const [tab, setTab] = useState<Tab>("overview");
+  const [period, setPeriod] = useState<FinancePeriod>("month");
+  const sinceDay = financePeriodStart(period, today);
 
   // Same paged loader as Reports (this used to be a single page of 200): the history up to the
   // browser cap, and the screen says so when older orders could not be included.
@@ -167,11 +174,22 @@ export function FinancePage() {
     () => ledgerForLocation(entries, stores, locationId),
     [entries, stores, locationId],
   );
-  const ledger = useMemo(() => ledgerMetrics(scopedEntries), [scopedEntries]);
-  const summary = useMemo(() => summarizeExpenses(expenses, today), [expenses, today]);
+  // Period figures: revenue/COGS of the days in the period and the expenses recognized in it
+  // (competency date inside the period and already arrived — never a future bill), the same rule
+  // as the Dashboard, Reports and Insights.
+  const ledger = useMemo(
+    () => ledgerMetrics(ledgerInPeriod(scopedEntries, sinceDay, today, timeZone)),
+    [scopedEntries, sinceDay, today, timeZone],
+  );
+  const summary = useMemo(
+    () => summarizeExpenses(recognizedExpenses(expenses, sinceDay, today), today),
+    [expenses, sinceDay, today],
+  );
+  // Bills to pay are a position of today, whatever the period: overdue and due in the next 7 days.
+  const obligations = useMemo(() => summarizeExpenses(expenses, today), [expenses, today]);
   const result = financialResult({ ...ledger, expensesCents: summary.totalCents });
   const trend = useMemo(
-    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7), timeZone),
+    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7), timeZone, today),
     [scopedEntries, expenses, today, timeZone],
   );
   const forecast = useMemo(() => cashOutForecast(expenses, 6, today), [expenses, today]);
@@ -181,8 +199,13 @@ export function FinancePage() {
       .revenueCents;
   }, [scopedEntries, today]);
   const perStore = useMemo(
-    () => storeResults(stores, entries, allExpenses),
-    [stores, entries, allExpenses],
+    () =>
+      storeResults(
+        stores,
+        ledgerInPeriod(entries, sinceDay, today, timeZone),
+        recognizedExpenses(allExpenses, sinceDay, today),
+      ),
+    [stores, entries, allExpenses, sinceDay, today, timeZone],
   );
   const overdue = useMemo(() => overdueBills(expenses, today), [expenses, today]);
   const upcoming = useMemo(() => upcomingBills(expenses, today, 14), [expenses, today]);
@@ -246,6 +269,8 @@ export function FinancePage() {
       return void toast.error(t("errors.amountPositive"));
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v.dueDate))
       return void toast.error(t("errors.dueDateRequired"));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.competencyDate))
+      return void toast.error(t("errors.competencyDateRequired"));
     // Updates must target the record's own store (the RPC rejects a different one).
     const storeId = editing ? editing.locationId : v.locationId;
     if (!storeId || storeId === "all" || !stores.some((s) => s.id === storeId))
@@ -265,10 +290,9 @@ export function FinancePage() {
       description,
       amountCents,
       dueDate: v.dueDate,
-      competencyDate:
-        editing && editing.dueDate === v.dueDate
-          ? editing.competencyDate
-          : `${v.dueDate.slice(0, 7)}-01`,
+      // The day the cost belongs to, as entered (defaults to the due date). Results recognize it
+      // only once this day has arrived — a bill scheduled for later is never anticipated.
+      competencyDate: v.competencyDate,
       responsiblePerson: v.responsiblePerson.trim(),
       supplierName: v.supplierName.trim() || undefined,
       paidAt,
@@ -345,18 +369,25 @@ export function FinancePage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            {org.fictional && <DemoBadge label={t("demoBadge")} />}
           </div>
         }
         title={t("title")}
         description={t("subtitle")}
         actions={
-          canManage && stores.length > 0 ? (
-            <Button size="sm" onClick={openNew} disabled={state !== "ready"}>
-              <Plus />
-              {t("newExpense")}
-            </Button>
-          ) : undefined
+          <>
+            <Segmented
+              label={t("periodLabel")}
+              value={period}
+              onChange={setPeriod}
+              options={FINANCE_PERIODS.map((p) => ({ value: p, label: t(`periods.${p}`) }))}
+            />
+            {canManage && stores.length > 0 && (
+              <Button size="sm" onClick={openNew} disabled={state !== "ready"}>
+                <Plus />
+                {t("newExpense")}
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -441,17 +472,17 @@ export function FinancePage() {
             />
             <StatTile
               label={t("kpi.dueSoon")}
-              value={money(summary.dueNext7DaysCents)}
-              tone={summary.dueNext7DaysCents > 0 ? "warning" : "neutral"}
-              hint={t("kpi.dueSoonHint", { count: summary.counts.pending })}
+              value={money(obligations.dueNext7DaysCents)}
+              tone={obligations.dueNext7DaysCents > 0 ? "warning" : "neutral"}
+              hint={t("kpi.dueSoonHint", { count: obligations.counts.pending })}
             />
             <StatTile
               label={t("kpi.overdue")}
-              value={money(summary.overdueCents)}
-              tone={summary.counts.overdue > 0 ? "negative" : "neutral"}
+              value={money(obligations.overdueCents)}
+              tone={obligations.counts.overdue > 0 ? "negative" : "neutral"}
               hint={
-                summary.counts.overdue > 0
-                  ? t("kpi.overdueHint", { count: summary.counts.overdue })
+                obligations.counts.overdue > 0
+                  ? t("kpi.overdueHint", { count: obligations.counts.overdue })
                   : t("kpi.overdueNone")
               }
             />
@@ -462,7 +493,9 @@ export function FinancePage() {
               hint={t("kpi.paidHint", { count: summary.counts.paid })}
             />
           </div>
-          <p className="-mt-3 text-xs text-muted-foreground">{t("period")}</p>
+          <p className="-mt-3 text-xs text-muted-foreground">
+            {t(`periodCaption.${period}`)} · {t("recognitionNote")}
+          </p>
 
           <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
             <div className="overflow-x-auto">
