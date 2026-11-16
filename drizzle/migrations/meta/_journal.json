@@ -211,6 +211,13 @@
       "when": 1794452221851,
       "tag": "0029_save_operational_menu_category_intent",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794826879812,
+      "tag": "0030_permission_profiles_table_privileges",
+      "breakpoints": true
     }
   ]
 }
