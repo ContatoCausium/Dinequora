@@ -286,3 +286,41 @@
     transparent 6px 12px
   );
 }
+
+/*
+ * Data tables (redesign phase 3): one header, density and row treatment for every table.
+ * Alignment is left to each column (numbers stay right-aligned); cell padding is uniform.
+ */
+@utility data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  & thead th {
+    height: 2.5rem;
+    padding-inline: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-muted-foreground);
+    background-color: color-mix(in oklab, var(--color-secondary) 70%, var(--color-card));
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+  }
+  & tbody td {
+    padding: 0.625rem 1rem;
+    font-size: 0.84375rem;
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+    vertical-align: middle;
+  }
+  & tbody tr:last-child td {
+    border-bottom-width: 0;
+  }
+  & tbody tr {
+    transition: background-color 120ms ease;
+  }
+  & tbody tr:hover {
+    background-color: color-mix(in oklab, var(--color-secondary) 55%, transparent);
+  }
+  & tbody tr[aria-selected="true"] {
+    background-color: var(--color-primary-soft);
+  }
+}

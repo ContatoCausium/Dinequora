@@ -354,7 +354,7 @@ function Admins() {
         {/* Matrix Section */}
         <Section title={t("admins.matrixTitle")} hint={t("admins.matrixSubtitle")}>
           <div className="overflow-x-auto p-0">
-            <table className="w-full text-left text-xs sm:text-sm">
+            <table className="data-table text-left">
               <thead className="border-b text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-semibold">{t("admins.actionCol")}</th>

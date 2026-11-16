@@ -309,7 +309,7 @@ function BrandingPage() {
           </Panel>
 
           <Panel title={t("contrast.title")} subtitle={t("contrast.subtitle")} bodyClassName="p-0">
-            <table className="w-full text-sm">
+            <table className="data-table">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="px-5 py-2 font-medium">{t("contrast.pair")}</th>

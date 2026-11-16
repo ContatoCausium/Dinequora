@@ -255,7 +255,7 @@ export function FinanceReports({
       </div>
 
       <div className="mt-4 max-h-[560px] overflow-auto rounded-md border">
-        <table className="w-full text-left text-xs">
+        <table className="data-table text-left">
           <thead className="sticky top-0 border-b bg-muted text-[11px] text-muted-foreground">
             <tr>
               <th className="p-3 font-medium">{t("reports.colDateOrKey")}</th>

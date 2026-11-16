@@ -163,7 +163,7 @@ function Organizations() {
         />
       ) : (
         <div className="surface min-w-0 max-w-full overflow-x-auto">
-          <table className="w-full min-w-[820px] whitespace-nowrap text-sm">
+          <table className="data-table min-w-[820px] whitespace-nowrap">
             <thead className="border-b text-left text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
               <tr>
                 {["name", "status", "plan", "stores", "owner", "trial", "created"].map((h) => (

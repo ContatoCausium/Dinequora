@@ -45,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { CheckCircle2, CircleX, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -154,6 +155,12 @@ function stockStatus(item: InventoryItem): "out" | "low" | "ok" {
   return "ok";
 }
 const STATUS_VARIANT = { out: "danger", low: "warning", ok: "success" } as const;
+/** Stock status icon (status is never conveyed by color alone). */
+const STATUS_ICON = { out: CircleX, low: TriangleAlert, ok: CheckCircle2 } as const;
+function StockStatusIcon({ status }: { status: keyof typeof STATUS_ICON }) {
+  const Icon = STATUS_ICON[status];
+  return <Icon aria-hidden />;
+}
 
 function newIngredient(item: InventoryItem): RecipeIngredient {
   return {
@@ -750,6 +757,7 @@ export function InventoryPage() {
             {meta && <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>}
           </div>
           <Badge variant={STATUS_VARIANT[status]} className="shrink-0">
+            <StockStatusIcon status={status} />
             {t(`status.${status}`)}
           </Badge>
         </div>
@@ -794,7 +802,7 @@ export function InventoryPage() {
   const itemTable = (list: InventoryItem[]) => (
     // `relative` keeps the absolutely positioned sr-only header inside the scroll box on phones.
     <div className="surface relative overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="data-table text-left">
         <thead>
           <tr className="border-b text-xs text-muted-foreground">
             <th className="px-4 py-2.5 font-medium">{t("items.columns.item")}</th>
@@ -831,6 +839,7 @@ export function InventoryPage() {
                 </td>
                 <td className="px-3 py-2.5">
                   <Badge variant={STATUS_VARIANT[status]} className="whitespace-nowrap">
+                    <StockStatusIcon status={status} />
                     {t(`status.${status}`)}
                   </Badge>
                 </td>
@@ -1025,7 +1034,7 @@ export function InventoryPage() {
         />
       ) : (
         <div className="max-h-[640px] overflow-auto">
-          <table className="w-full text-left text-sm">
+          <table className="data-table text-left">
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b text-xs text-muted-foreground">
                 <th className="px-5 py-2 font-medium">{t("movements.date")}</th>

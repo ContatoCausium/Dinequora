@@ -81,7 +81,7 @@ export function MembersTab({
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="data-table min-w-[640px]">
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th scope="col" className="px-5 py-2.5 font-medium">

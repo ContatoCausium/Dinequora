@@ -109,5 +109,13 @@
     "noModuleBody": "Your permissions in this organization do not include this area. Ask the owner if you need it.",
     "backHome": "Back to overview",
     "denied": "You do not have permission for this action."
+  },
+  "table": {
+    "pagination": "Table pages",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "pageOf": "Page {{page}} of {{count}}",
+    "previous": "Previous page",
+    "next": "Next page",
+    "sortBy": "Sort by {{column}}"
   }
 }

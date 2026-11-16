@@ -310,7 +310,7 @@ function ControlPlansPage() {
             className="overflow-hidden"
           >
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="data-table text-left">
                 <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
                   <tr>
                     <th className="p-3.5 font-medium">{t("plansPage.features")}</th>
@@ -362,7 +362,7 @@ function ControlPlansPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="data-table text-left">
                   <thead className="border-b bg-muted/40 text-muted-foreground">
                     <tr>
                       <th className="p-3 font-medium">{t("plansPage.when")}</th>

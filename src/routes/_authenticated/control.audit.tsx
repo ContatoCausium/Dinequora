@@ -163,7 +163,7 @@ function Audit() {
         <EmptyState icon={<History className="size-5" />} title={t("audit.empty")} />
       ) : (
         <div className="surface min-w-0 max-w-full overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
+          <table className="data-table min-w-[680px]">
             <thead className="border-b text-left text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
               <tr>
                 {["when", "action", "org", "reason"].map((h) => (

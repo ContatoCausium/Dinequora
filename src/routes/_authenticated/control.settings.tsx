@@ -180,7 +180,7 @@ function Settings() {
             <p className="p-5 text-sm text-muted-foreground">{t("settings.noPlans")}</p>
           ) : (
             <div className="min-w-0 max-w-full overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+              <table className="data-table min-w-[620px]">
                 <thead className="border-b text-left text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                   <tr>
                     {["plan", "price", "stores", "trialStores", "trialDays"].map((h) => (

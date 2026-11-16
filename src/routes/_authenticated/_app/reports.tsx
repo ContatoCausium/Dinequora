@@ -292,7 +292,7 @@ function ReportsPage() {
               {report.products.length === 0 ? (
                 <p className="px-5 pb-5 text-sm text-muted-foreground">{t("products.empty")}</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className="data-table">
                   <thead className="text-left text-xs text-muted-foreground">
                     <tr className="border-y">
                       <th className="px-5 py-2 font-medium">{t("products.product")}</th>

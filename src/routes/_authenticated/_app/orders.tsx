@@ -10,6 +10,9 @@ import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { StatTile } from "@/components/app/stat-tile";
 import { EmptyState, StateCard, Skeleton } from "@/components/app/states";
 import { Badge } from "@/components/ui/badge";
+import { Pager, SortableTh } from "@/components/app/data-table";
+import { useSort } from "@/lib/use-sort";
+import { OrderStatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,15 +63,6 @@ const STATUSES: OrderStatus[] = ["new", "confirmed", "in_prep", "ready", "delive
 const CHANNELS = ["dine_in", "takeout", "delivery"] as const;
 const PAGE_SIZE = 20;
 
-const statusVariant = (s: OrderStatus) =>
-  s === "delivered"
-    ? "success"
-    : s === "cancelled"
-      ? "danger"
-      : s === "ready"
-        ? "warning"
-        : ("neutral" as const);
-
 function OrdersPage() {
   const { t, i18n } = useTranslation("orders");
   const lng = i18n.language;
@@ -114,9 +108,24 @@ function OrdersPage() {
     };
   }, [orders]);
 
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Column sorting reorders the filtered orders on screen only (default: loaded order, newest first).
+  const { sorted, sort, toggle } = useSort(filtered, {
+    order: (o) => o.orderNumber,
+    time: (o) => Date.parse(o.createdAt),
+    store: (o) => storeName(o.locationId),
+    channel: (o) => t(`types.${o.type}`),
+    customer: (o) => o.customer.tableNumber || o.customer.name,
+    items: (o) => o.items.reduce((sum, i) => sum + i.quantity, 0),
+    total: (o) => o.totalCents,
+    status: (o) => STATUSES.indexOf(o.status),
+  });
+  const toggleSort = (key: Parameters<typeof toggle>[0]) => {
+    toggle(key);
+    setPage(1);
+  };
+  const pages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const current = Math.min(page, pages);
-  const rows = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  const rows = sorted.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const selected = orders.find((o) => o.id === selectedId) ?? null;
   const hasFilters = status !== "all" || channel !== "all" || search.trim() !== "";
   const resetPage =
@@ -283,24 +292,99 @@ function OrdersPage() {
               />
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-sm">
-                    <thead className="sticky top-0 bg-card text-left text-xs text-muted-foreground">
-                      <tr className="border-b">
-                        <th className="px-4 py-2.5 font-medium">{t("page.col.order")}</th>
-                        <th className="px-4 py-2.5 font-medium">{t("page.col.time")}</th>
+                {/* Phone: one card per order (no sideways scrolling); tablet/desktop: sortable table. */}
+                <ul className="divide-y md:hidden">
+                  {rows.map((o) => (
+                    <li key={o.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(o.id)}
+                        className="flex w-full flex-col gap-1.5 px-4 py-3 text-left transition-colors hover:bg-secondary/60 focus-visible:bg-secondary/60 focus-visible:outline-none"
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[13px] font-medium">{o.orderNumber}</span>
+                          <OrderStatusBadge status={o.status} label={t(`statuses.${o.status}`)} />
+                        </span>
+                        <span className="flex items-center justify-between gap-2 text-[13px] text-muted-foreground">
+                          <span className="min-w-0 truncate">
+                            {fmtDateTime(o.createdAt, lng, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              timeZone: tzOf(o.locationId),
+                            })}
+                            {" · "}
+                            {t(`types.${o.type}`)}
+                            {" · "}
+                            {o.customer.tableNumber
+                              ? t("detail.table", { table: o.customer.tableNumber })
+                              : o.customer.name}
+                          </span>
+                          <span className="tabular shrink-0 font-medium text-foreground">
+                            {fmtMoneyCents(o.totalCents, lng)}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="data-table min-w-[760px] text-left">
+                    <thead>
+                      <tr>
+                        <SortableTh
+                          label={t("page.col.order")}
+                          sortKey="order"
+                          sort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label={t("page.col.time")}
+                          sortKey="time"
+                          sort={sort}
+                          onSort={toggleSort}
+                        />
                         {locationId === "all" && (
-                          <th className="px-4 py-2.5 font-medium">{t("page.col.store")}</th>
+                          <SortableTh
+                            label={t("page.col.store")}
+                            sortKey="store"
+                            sort={sort}
+                            onSort={toggleSort}
+                          />
                         )}
-                        <th className="px-4 py-2.5 font-medium">{t("page.col.channel")}</th>
-                        <th className="px-4 py-2.5 font-medium">{t("page.col.customer")}</th>
-                        <th className="px-4 py-2.5 text-right font-medium">
-                          {t("page.col.items")}
-                        </th>
-                        <th className="px-4 py-2.5 text-right font-medium">
-                          {t("page.col.total")}
-                        </th>
-                        <th className="px-4 py-2.5 font-medium">{t("page.col.status")}</th>
+                        <SortableTh
+                          label={t("page.col.channel")}
+                          sortKey="channel"
+                          sort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label={t("page.col.customer")}
+                          sortKey="customer"
+                          sort={sort}
+                          onSort={toggleSort}
+                        />
+                        <SortableTh
+                          label={t("page.col.items")}
+                          sortKey="items"
+                          sort={sort}
+                          onSort={toggleSort}
+                          align="right"
+                        />
+                        <SortableTh
+                          label={t("page.col.total")}
+                          sortKey="total"
+                          sort={sort}
+                          onSort={toggleSort}
+                          align="right"
+                        />
+                        <SortableTh
+                          label={t("page.col.status")}
+                          sortKey="status"
+                          sort={sort}
+                          onSort={toggleSort}
+                        />
                       </tr>
                     </thead>
                     <tbody>
@@ -308,13 +392,14 @@ function OrdersPage() {
                         <tr
                           key={o.id}
                           tabIndex={0}
+                          aria-selected={o.id === selectedId}
                           onClick={() => setSelectedId(o.id)}
                           onKeyDown={(e) =>
                             (e.key === "Enter" || e.key === " ") && setSelectedId(o.id)
                           }
-                          className="cursor-pointer border-b last:border-0 hover:bg-muted/50 focus-visible:bg-muted/50"
+                          className="cursor-pointer focus-visible:bg-secondary focus-visible:outline-none"
                         >
-                          <td className="px-4 py-2.5 font-mono text-[13px] font-medium">
+                          <td className="font-mono text-[13px] font-medium">
                             {o.orderNumber}
                             {o.isSimulated && (
                               <Badge variant="warning" className="ml-2 align-middle">
@@ -322,7 +407,7 @@ function OrdersPage() {
                               </Badge>
                             )}
                           </td>
-                          <td className="tabular whitespace-nowrap px-4 py-2.5 text-muted-foreground">
+                          <td className="tabular whitespace-nowrap text-muted-foreground">
                             {fmtDateTime(o.createdAt, lng, {
                               month: "short",
                               day: "numeric",
@@ -332,60 +417,35 @@ function OrdersPage() {
                             })}
                           </td>
                           {locationId === "all" && (
-                            <td className="whitespace-nowrap px-4 py-2.5">
-                              {storeName(o.locationId)}
-                            </td>
+                            <td className="whitespace-nowrap">{storeName(o.locationId)}</td>
                           )}
-                          <td className="whitespace-nowrap px-4 py-2.5">{t(`types.${o.type}`)}</td>
-                          <td className="max-w-[200px] truncate px-4 py-2.5">
+                          <td className="whitespace-nowrap">{t(`types.${o.type}`)}</td>
+                          <td className="max-w-[220px] truncate">
                             {o.customer.tableNumber
                               ? t("detail.table", { table: o.customer.tableNumber })
                               : o.customer.name}
                           </td>
-                          <td className="tabular px-4 py-2.5 text-right">
+                          <td className="tabular text-right">
                             {o.items.reduce((s, i) => s + i.quantity, 0)}
                           </td>
-                          <td className="tabular px-4 py-2.5 text-right font-medium">
+                          <td className="tabular text-right font-medium">
                             {fmtMoneyCents(o.totalCents, lng)}
                           </td>
-                          <td className="px-4 py-2.5">
-                            <Badge variant={statusVariant(o.status)}>
-                              {t(`statuses.${o.status}`)}
-                            </Badge>
+                          <td>
+                            <OrderStatusBadge status={o.status} label={t(`statuses.${o.status}`)} />
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
-                  <span>
-                    {t("page.showing", {
-                      from: (current - 1) * PAGE_SIZE + 1,
-                      to: Math.min(current * PAGE_SIZE, filtered.length),
-                      total: filtered.length,
-                    })}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span>{t("page.pageOf", { page: current, pages })}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={current <= 1}
-                      onClick={() => setPage(current - 1)}
-                    >
-                      {t("page.prev")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={current >= pages}
-                      onClick={() => setPage(current + 1)}
-                    >
-                      {t("page.next")}
-                    </Button>
-                  </div>
-                </div>
+                <Pager
+                  page={current}
+                  pageCount={pages}
+                  pageSize={PAGE_SIZE}
+                  total={filtered.length}
+                  onPage={setPage}
+                />
               </>
             )}
           </Panel>
@@ -489,7 +549,7 @@ function OrderSheet({
                 <SheetTitle className="font-mono">
                   {t("detail.title", { number: order.orderNumber })}
                 </SheetTitle>
-                <Badge variant={statusVariant(order.status)}>{t(`statuses.${order.status}`)}</Badge>
+                <OrderStatusBadge status={order.status} label={t(`statuses.${order.status}`)} />
               </div>
               <SheetDescription>
                 {[

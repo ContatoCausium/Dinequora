@@ -109,5 +109,13 @@
     "noModuleBody": "Suas permissões nesta organização não incluem esta área. Peça ao proprietário se precisar dela.",
     "backHome": "Voltar para a visão geral",
     "denied": "Você não tem permissão para esta ação."
+  },
+  "table": {
+    "pagination": "Páginas da tabela",
+    "range": "{{from}}–{{to}} de {{total}}",
+    "pageOf": "Página {{page}} de {{count}}",
+    "previous": "Página anterior",
+    "next": "Próxima página",
+    "sortBy": "Ordenar por {{column}}"
   }
 }

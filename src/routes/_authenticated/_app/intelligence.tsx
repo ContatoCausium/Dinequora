@@ -689,7 +689,7 @@ export function IntelligencePage() {
                   />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="data-table">
                       <thead>
                         <tr className="border-b text-left text-xs text-muted-foreground">
                           <th scope="col" className="pb-2 font-medium">
