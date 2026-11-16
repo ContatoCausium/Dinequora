@@ -255,8 +255,18 @@ async function run(
     const found = byEmail.get(a.email);
     let userId;
     if (found) {
-      const { error } = await svc.auth.admin.updateUserById(found.id, { password });
+      // A kept demo account (reserved .test domain only, never a personal owner) gets a new password
+      // and the dataset's display name, so a reset also brings renamed demo people up to date.
+      const { error } = await svc.auth.admin.updateUserById(found.id, {
+        password,
+        user_metadata: { ...(found.user_metadata ?? {}), full_name: a.fullName },
+      });
       if (error) throw new SeedError(`updateUser ${a.key}: ${error.message}`);
+      const { error: nameError } = await svc
+        .from("profiles")
+        .update({ full_name: a.fullName })
+        .eq("id", found.id);
+      if (nameError) throw new SeedError(`display name ${a.key}: ${nameError.message}`);
       userId = found.id;
     } else {
       const { data, error } = await svc.auth.admin.createUser({

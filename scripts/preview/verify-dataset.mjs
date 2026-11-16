@@ -26,6 +26,7 @@ import {
   resolvePreviewTarget,
 } from "./client-preview-target.mjs";
 import {
+  ACCOUNTS,
   convertQuantity,
   EMAIL_DOMAIN,
   LEDGER_READ_CAP,
@@ -553,10 +554,17 @@ const memberProfiles = await all(svc, "profiles", "id,full_name", (q) =>
   ),
 );
 const unnamed = memberProfiles.filter((p) => !String(p.full_name ?? "").trim()).length;
+// The demo accounts (.test) carry exactly the dataset's names (no stale "(demo)" names after a reset).
+const nameOf = Object.fromEntries(memberProfiles.map((p) => [p.id, String(p.full_name ?? "")]));
+const demoNameOk = ACCOUNTS.filter((a) => {
+  const u = demoUsers.find((d) => d.email.toLowerCase() === a.email);
+  return u && nameOf[u.id] === a.fullName;
+}).length;
 check(
-  "people: every member of the demo organization has a display name",
-  Object.keys(target.personalOwnerNames ?? {}).length === 0 || unnamed === 0,
-  `${memberProfiles.length - unnamed}/${memberProfiles.length} named${Object.keys(target.personalOwnerNames ?? {}).length ? "" : " (no personal display names declared)"}`,
+  "people: every member has a display name; demo accounts carry the dataset names",
+  (Object.keys(target.personalOwnerNames ?? {}).length === 0 || unnamed === 0) &&
+    demoNameOk === ACCOUNTS.length,
+  `${memberProfiles.length - unnamed}/${memberProfiles.length} named; demo names ${demoNameOk}/${ACCOUNTS.length}${Object.keys(target.personalOwnerNames ?? {}).length ? "" : " (no personal display names declared)"}`,
 );
 const invitations = await all(
   svc,

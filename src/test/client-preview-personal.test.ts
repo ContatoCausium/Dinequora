@@ -511,3 +511,25 @@ describe("personal owner display names (PREVIEW_PERSONAL_OWNER_NAMES)", () => {
     expect(seed).not.toMatch(/log\([^)]*\bname\b[^)]*\)/);
   });
 });
+
+describe("reset brings demo display names up to date, never touches personal owners' names", () => {
+  const seed = fs.readFileSync(
+    path.resolve(__dirname, "../../scripts/preview/seed-core.mjs"),
+    "utf8",
+  );
+  it("kept demo accounts (reserved .test domain) get the dataset name with their new password", () => {
+    expect(seed).toMatch(/const byEmail = new Map\(audit\.demo\.map/);
+    expect(seed).toMatch(
+      /user_metadata: \{ \.\.\.\(found\.user_metadata \?\? \{\}\), full_name: a\.fullName \}/,
+    );
+    expect(seed).toMatch(/\.update\(\{ full_name: a\.fullName \}\)\s*\.eq\("id", found\.id\)/);
+    expect(seed).toMatch(
+      /const isDemoAccount = \(u\) => \(u\.email \?\? ""\)\.toLowerCase\(\)\.endsWith\(`@\$\{EMAIL_DOMAIN\}`\)/,
+    );
+  });
+  it("a personal owner's name is only filled while empty", () => {
+    const personal = seed.slice(seed.indexOf("for (const [i, email] of owners.entries())"));
+    expect(personal).toMatch(/\.or\("full_name\.is\.null,full_name\.eq\."\)/);
+    expect(seed.match(/\.update\(\{ full_name: /g)).toHaveLength(2);
+  });
+});
