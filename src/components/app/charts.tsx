@@ -62,73 +62,193 @@ export function RankedBars({
   );
 }
 
-/** Column chart over time (one series). Hover/focus a column to read its exact value. */
+/** Rounds a maximum up to 1, 2, 2.5 or 5 × 10ⁿ so the axis reads in round numbers. */
+function niceCeil(v: number): number {
+  if (!(v > 0)) return 1;
+  const exp = 10 ** Math.floor(Math.log10(v));
+  const f = v / exp;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * exp;
+}
+
+/**
+ * Column chart over time: one value axis, recessive grid, optional previous-period columns in the
+ * neutral comparison gray (chart-6) to the left of each current column. Hover a slot to read both
+ * values; the same numbers are in an accessible table.
+ */
 export function ColumnSeries({
   points,
   format,
+  formatAxis,
   caption,
-  height = 180,
+  height = 200,
+  previous,
 }: {
   points: { key: string; label: string; value: number }[];
   format: (v: number) => string;
+  /** Compact axis labels ("$1.2K"); defaults to `format`. */
+  formatAxis?: (v: number) => string;
   caption: string;
   height?: number;
+  previous?:
+    | {
+        values: number[];
+        labels: string[];
+        currentLabel: string;
+        previousLabel: string;
+        /** Column header for the previous values in the accessible table. */
+        tableLabel: string;
+      }
+    | undefined;
 }) {
-  const [active, setActive] = useState<string | null>(null);
-  const max = Math.max(0, ...points.map((p) => p.value));
+  const [active, setActive] = useState<number | null>(null);
+  const prev = previous && previous.values.length === points.length ? previous : undefined;
+  const top = niceCeil(Math.max(0, ...points.map((p) => p.value), ...(prev?.values ?? [])));
+  const ticks = [top, top / 2, 0];
   const step = Math.max(1, Math.ceil(points.length / 8)); // ≤ 8 axis labels
+  const axis = formatAxis ?? format;
+  const pct = (v: number) => `${Math.max(0, (v / top) * 100)}%`;
+  const n = points.length;
   return (
     <figure>
-      <div className="relative" style={{ height }}>
-        {/* recessive baseline + midline */}
-        <div className="absolute inset-x-0 bottom-0 border-t" />
-        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-border/60" />
-        <div className="absolute inset-0 flex items-end gap-[2px]" aria-hidden>
-          {points.map((p) => {
-            const h = max > 0 ? (p.value / max) * 100 : 0;
-            const isActive = active === p.key;
-            return (
-              <button
-                type="button"
-                key={p.key}
-                tabIndex={-1}
-                onMouseEnter={() => setActive(p.key)}
-                onMouseLeave={() => setActive(null)}
-                className="group relative flex h-full flex-1 items-end"
-              >
-                <span
-                  className={cn(
-                    "w-full rounded-t-[4px] bg-chart-1 transition-opacity",
-                    active && !isActive && "opacity-40",
-                    p.value > 0 ? "min-h-[2px]" : "",
-                  )}
-                  style={{ height: `${h}%` }}
-                />
-                {isActive && (
-                  <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-xs shadow-pop">
-                    <span className="text-muted-foreground">{p.label}</span>{" "}
-                    <span className="tabular font-medium">{format(p.value)}</span>
-                  </span>
-                )}
-              </button>
-            );
-          })}
+      {prev && (
+        <ul className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <li className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="size-2.5 rounded-[3px] bg-chart-1" />
+            {prev.currentLabel}
+          </li>
+          <li className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="size-2.5 rounded-[3px] bg-chart-6" />
+            {prev.previousLabel}
+          </li>
+        </ul>
+      )}
+      <div className="flex gap-2" aria-hidden>
+        <div className="relative w-12 shrink-0" style={{ height }}>
+          {ticks.map((v) => (
+            <span
+              key={v}
+              className="tabular absolute right-0 -translate-y-1/2 whitespace-nowrap text-[11px] text-muted-foreground"
+              style={{ top: `${(1 - v / top) * 100}%` }}
+            >
+              {axis(v)}
+            </span>
+          ))}
         </div>
-      </div>
-      <div className="mt-2 flex gap-[2px] text-[11px] text-muted-foreground" aria-hidden>
-        {points.map((p, i) => (
-          <span key={p.key} className="flex-1 truncate text-center">
-            {i % step === 0 ? p.label : ""}
-          </span>
-        ))}
+        <div className="min-w-0 flex-1">
+          <div className="relative" style={{ height }}>
+            <div className="absolute inset-x-0 top-0 border-t border-dashed border-border/70" />
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-border/70" />
+            <div className="absolute inset-x-0 bottom-0 border-t border-border" />
+            <div className="absolute inset-0 flex items-end gap-[3px]">
+              {points.map((p, i) => {
+                const isActive = active === i;
+                const dim = active != null && !isActive;
+                const align =
+                  i < n / 4 ? "left-0" : i >= (n * 3) / 4 ? "right-0" : "left-1/2 -translate-x-1/2";
+                const pv = prev?.values[i];
+                return (
+                  <div
+                    key={p.key}
+                    onMouseEnter={() => setActive(i)}
+                    onMouseLeave={() => setActive(null)}
+                    className={cn(
+                      "relative flex h-full flex-1 items-end justify-center gap-[2px] rounded-t-[4px] transition-colors",
+                      isActive && "bg-muted/60",
+                    )}
+                  >
+                    {prev && (
+                      <span
+                        className={cn(
+                          "w-full max-w-[14px] rounded-t-[3px] bg-chart-6 transition-opacity",
+                          dim && "opacity-40",
+                          (pv ?? 0) > 0 && "min-h-[2px]",
+                        )}
+                        style={{ height: pct(pv ?? 0) }}
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "w-full rounded-t-[4px] bg-chart-1 transition-opacity",
+                        prev ? "max-w-[14px]" : "max-w-[32px]",
+                        dim && "opacity-40",
+                        p.value > 0 && "min-h-[2px]",
+                      )}
+                      style={{ height: pct(p.value) }}
+                    />
+                    {isActive && (
+                      <div
+                        className={cn(
+                          "pointer-events-none absolute bottom-full z-10 mb-1.5 min-w-40 rounded-lg border bg-popover px-3 py-2 text-xs shadow-pop",
+                          align,
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                            <span className="size-2 rounded-[2px] bg-chart-1" />
+                            {p.label}
+                          </span>
+                          <span className="tabular font-semibold text-foreground">
+                            {format(p.value)}
+                          </span>
+                        </div>
+                        {prev && pv != null && (
+                          <div className="mt-1 flex items-center justify-between gap-4">
+                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                              <span className="size-2 rounded-[2px] bg-chart-6" />
+                              {prev.labels[i]}
+                            </span>
+                            <span className="tabular font-medium text-foreground">
+                              {format(pv)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mt-2 flex gap-[3px] text-[11px] text-muted-foreground">
+            {points.map((p, i) => (
+              <span
+                key={p.key}
+                className={cn(
+                  // flex centering keeps an overflowing label centered on its column
+                  "flex min-w-0 flex-1 justify-center whitespace-nowrap",
+                  step > 1 && i === 0 && "justify-start",
+                  step > 1 && i > 0 && i + step >= n && "justify-end",
+                  // phones: every other label, so dates never collide
+                  (i / step) % 2 === 1 && "max-sm:invisible",
+                )}
+              >
+                {i % step === 0 ? p.label : ""}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
       <table className="sr-only">
         <caption>{caption}</caption>
+        {prev && (
+          <thead>
+            <tr>
+              <td />
+              <th scope="col">{prev.currentLabel}</th>
+              <th scope="col">{prev.tableLabel}</th>
+            </tr>
+          </thead>
+        )}
         <tbody>
-          {points.map((p) => (
+          {points.map((p, i) => (
             <tr key={p.key}>
               <th scope="row">{p.label}</th>
               <td>{format(p.value)}</td>
+              {prev && (
+                <td>
+                  {prev.labels[i]}: {format(prev.values[i] ?? 0)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

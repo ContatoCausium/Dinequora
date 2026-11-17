@@ -17,6 +17,8 @@ import { buildReport, dayKey, expensesInPeriod } from "@/lib/report-metrics";
 import { financialResult, todayIso } from "@/lib/expense-metrics";
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { kpiDelta } from "@/lib/period-compare";
+import { usePreviousPeriodReport } from "@/lib/use-previous-period";
 import { centsToDecimalString } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/reports")({
@@ -85,6 +87,26 @@ function ReportsPage() {
       }),
     };
   }, [query.data, since, days, timeZone]);
+
+  // Previous-period comparison: a separate read-only query, so the numbers above never change.
+  const { t: tc } = useTranslation();
+  const previousQuery = usePreviousPeriodReport({
+    orgId: org.id,
+    locationId,
+    period,
+    timeZone,
+    ledger: query.data?.resources.finance,
+    enabled: role !== "staff" && !!query.data,
+  });
+  const prev = previousQuery.data ?? null;
+  const delta = (current: number, previous: number | undefined) =>
+    previousQuery.isPending
+      ? undefined
+      : kpiDelta(current, previous, {
+          lng,
+          caption: tc(`compare.vs.${period}`),
+          unavailable: tc(`compare.none.${period}`),
+        });
 
   if (role === "staff") {
     return (
@@ -169,11 +191,14 @@ function ReportsPage() {
             <StatTile
               label={t("kpi.netSales")}
               value={money(report.revenueCents)}
+              delta={delta(report.revenueCents, prev?.revenueCents)}
               hint={t("kpi.netSalesHint")}
+              trend={report.daily.map((d) => d.cents)}
             />
             <StatTile
               label={t("kpi.orders")}
               value={fmtNumber(report.orderCount, lng)}
+              delta={delta(report.orderCount, prev?.orderCount)}
               hint={`${t("kpi.avgTicket")}: ${money(report.avgTicketCents)}`}
             />
             <StatTile
@@ -211,11 +236,23 @@ function ReportsPage() {
                 <ColumnSeries
                   caption={t("daily.title")}
                   format={money}
+                  formatAxis={(c) => fmtMoneyCents(c, lng, { compact: true })}
                   points={report.daily.map((d) => ({
                     key: d.day,
                     label: dayLabel(d.day),
                     value: d.cents,
                   }))}
+                  previous={
+                    prev && prev.daysWithSales > 0
+                      ? {
+                          values: prev.daily.map((d) => d.cents),
+                          labels: prev.daily.map((d) => dayLabel(d.day)),
+                          currentLabel: tc("compare.thisPeriod"),
+                          previousLabel: tc("compare.previousPeriod"),
+                          tableLabel: tc("compare.previousPeriod"),
+                        }
+                      : undefined
+                  }
                 />
                 {report.daysWithSales === 1 && (
                   <p className="mt-3 text-xs text-muted-foreground">{t("daily.singleDay")}</p>

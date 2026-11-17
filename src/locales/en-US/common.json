@@ -117,5 +117,21 @@
     "previous": "Previous page",
     "next": "Next page",
     "sortBy": "Sort by {{column}}"
+  },
+  "compare": {
+    "vs": {
+      "today": "vs yesterday, same time",
+      "7d": "vs previous 7 days",
+      "30d": "vs previous 30 days",
+      "90d": "vs previous 90 days"
+    },
+    "thisPeriod": "This period",
+    "previousPeriod": "Previous period",
+    "none": {
+      "today": "No sales yesterday to compare",
+      "7d": "No sales in the previous 7 days to compare",
+      "30d": "No sales in the previous 30 days to compare",
+      "90d": "No sales in the previous 90 days to compare"
+    }
   }
 }

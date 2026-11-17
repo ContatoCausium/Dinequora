@@ -31,6 +31,8 @@ import { displayAmount, fmtDateTime } from "@/lib/format";
 import { financialResult, summarizeExpenses, todayIso } from "@/lib/expense-metrics";
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent, fmtQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { kpiDelta } from "@/lib/period-compare";
+import { usePreviousPeriodReport } from "@/lib/use-previous-period";
 import { averageCents, multiplyQuantityCents, sumCents } from "@/lib/money";
 
 type Period = "today" | "7d" | "30d";
@@ -125,6 +127,27 @@ export function RecordedOverview() {
       ...roleViews(orders, mapped, user.id, timeZone),
     };
   }, [query.data, since, period, timeZone, user.id]);
+
+  // Previous-period comparison: a separate read-only query, so the numbers above never change.
+  const { t: tc } = useTranslation();
+  const previousQuery = usePreviousPeriodReport({
+    orgId: org.id,
+    locationId,
+    period,
+    timeZone,
+    ledger: query.data?.resources.finance,
+    enabled: seeSales && !!query.data,
+  });
+  const prev = previousQuery.data ?? null;
+  const delta = (current: number, previous: number | undefined, goodWhen?: "up" | "none") =>
+    previousQuery.isPending
+      ? undefined
+      : kpiDelta(current, previous, {
+          lng,
+          caption: tc(`compare.vs.${period}`),
+          unavailable: tc(`compare.none.${period}`),
+          ...(goodWhen ? { goodWhen } : {}),
+        });
 
   const money = (c: number) => fmtMoneyCents(c, lng);
   const storeName = (slug: string) => org.locations.find((l) => l.id === slug)?.name ?? slug;
@@ -266,24 +289,28 @@ export function RecordedOverview() {
               <div
                 className={cn(
                   "grid grid-cols-2 gap-4",
-                  canSeeFinance ? "lg:grid-cols-5" : "lg:grid-cols-3",
+                  canSeeFinance ? "md:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-3",
                 )}
               >
                 <StatTile
                   label={t("home.kpi.netSales")}
                   value={money(view.report.revenueCents)}
+                  delta={delta(view.report.revenueCents, prev?.revenueCents)}
                   hint={
                     view.report.revenueCents ? t("home.kpi.netSalesHint") : t("home.kpi.noSales")
                   }
+                  trend={period === "today" ? undefined : view.report.daily.map((d) => d.cents)}
                 />
                 <StatTile
                   label={t("home.kpi.orders")}
                   value={fmtNumber(view.report.orderCount, lng)}
+                  delta={delta(view.report.orderCount, prev?.orderCount)}
                   hint={t("home.kpi.avgTicket", { value: money(view.report.avgTicketCents) })}
                 />
                 <StatTile
                   label={t("home.kpi.cogs")}
                   value={money(view.report.cogsCents)}
+                  delta={delta(view.report.cogsCents, prev?.cogsCents, "none")}
                   hint={
                     view.gross.cogsRate == null
                       ? t("home.kpi.noSales")
@@ -295,6 +322,10 @@ export function RecordedOverview() {
                     <StatTile
                       label={t("home.kpi.gross")}
                       value={money(view.gross.grossProfitCents)}
+                      delta={delta(
+                        view.gross.grossProfitCents,
+                        prev ? prev.revenueCents - prev.cogsCents : undefined,
+                      )}
                       hint={
                         view.gross.grossMargin == null
                           ? t("home.kpi.noSales")
@@ -304,6 +335,7 @@ export function RecordedOverview() {
                       }
                     />
                     <StatTile
+                      className="col-span-2 xl:col-span-1"
                       label={t("home.kpi.month")}
                       value={money(view.month.resultCents)}
                       hint={t("home.kpi.monthHint", { month: monthName })}
@@ -328,11 +360,25 @@ export function RecordedOverview() {
                       <ColumnSeries
                         caption={t("home.sales.title")}
                         format={money}
+                        formatAxis={(c) => fmtMoneyCents(c, lng, { compact: true })}
                         points={view.report.daily.map((d) => ({
                           key: d.day,
                           label: fmtDate(d.day, lng, { day: "numeric", month: "short" }),
                           value: d.cents,
                         }))}
+                        previous={
+                          prev && prev.daysWithSales > 0
+                            ? {
+                                values: prev.daily.map((d) => d.cents),
+                                labels: prev.daily.map((d) =>
+                                  fmtDate(d.day, lng, { day: "numeric", month: "short" }),
+                                ),
+                                currentLabel: tc("compare.thisPeriod"),
+                                previousLabel: tc("compare.previousPeriod"),
+                                tableLabel: tc("compare.previousPeriod"),
+                              }
+                            : undefined
+                        }
                       />
                       {view.report.daysWithSales === 1 && (
                         <p className="mt-3 text-xs text-muted-foreground">

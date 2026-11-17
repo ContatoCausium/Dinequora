@@ -90,7 +90,7 @@ const SERIES = {
   light: ["#3f6fb5", "#1a9a8a", "#b47c0c", "#9b4f96"],
   dark: ["#6a7fdc", "#13a58a", "#c08a1a", "#b168a8"],
 } as const;
-const PREVIOUS_PERIOD = { light: "#a9a39e", dark: "#76706c" } as const;
+const PREVIOUS_PERIOD = { light: "#8a847f", dark: "#76706c" } as const; // ≥ 3:1 on the card (WCAG 1.4.11)
 
 /** OKLab ΔE ×100 between two hex colors (the metric of the data-viz palette validator). */
 export function deltaE(a: string, b: string): number {

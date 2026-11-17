@@ -56,6 +56,8 @@ describe("contrast holds for the default brand and for tenant brands", () => {
         for (const c of contrastReport(t)) expect(c.ratio, c.key).toBeGreaterThanOrEqual(c.target);
         // Control borders (inputs, selects, checkboxes) reach 3:1 (WCAG 1.4.11).
         expect(contrast(t.input, t.card)).toBeGreaterThanOrEqual(3);
+        // The previous-period series (comparison columns) is a meaningful graphic: 3:1 on the card.
+        expect(contrast(t.chart6, t.card)).toBeGreaterThanOrEqual(3);
         // Status inks are readable on the card surface.
         for (const s of [t.semanticSuccess, t.semanticDanger, t.semanticInfo])
           expect(contrast(s, t.card)).toBeGreaterThanOrEqual(mode === "light" ? 4.5 : 3);
