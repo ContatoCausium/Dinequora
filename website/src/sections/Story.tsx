@@ -152,7 +152,7 @@ function ChapterStage({
 /** True on screens ≥1024px (Tailwind `lg`). Defaults to wide where matchMedia is unavailable. */
 function useWide() {
   const query = "(min-width: 1024px)";
-  const get = () => (typeof window.matchMedia === "function" ? window.matchMedia(query).matches : true);
+  const get = () => (typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : true);
   const [wide, setWide] = useState(get);
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;

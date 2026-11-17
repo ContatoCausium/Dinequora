@@ -68,6 +68,29 @@ export function segment(p: number, from: number, to: number) {
   return Math.min(1, Math.max(0, (p - from) / (to - from)));
 }
 
+/**
+ * Resolves on the visitor's first sign of engagement (scroll, wheel, touch, key or pointer), or at
+ * once if the page opened already scrolled. Until then no film frame is downloaded, so opening the
+ * page costs only the poster images.
+ */
+let engaged: Promise<void> | null = null;
+function whenEngaged(): Promise<void> {
+  if (engaged) return engaged;
+  engaged = new Promise<void>((resolve) => {
+    if (window.scrollY > 0) {
+      resolve();
+      return;
+    }
+    const events = ["scroll", "wheel", "touchstart", "keydown", "pointerdown"] as const;
+    const go = () => {
+      events.forEach((e) => window.removeEventListener(e, go));
+      resolve();
+    };
+    events.forEach((e) => window.addEventListener(e, go, { passive: true, once: true }));
+  });
+  return engaged;
+}
+
 /** Canvas that draws the frame matching `progress`, loading frames progressively once the scene is near. */
 function FrameCanvas({ frames, progress, className }: { frames: FrameSet; progress: number; className?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -78,16 +101,25 @@ function FrameCanvas({ frames, progress, className }: { frames: FrameSet; progre
   const raf = useRef(0);
   const [near, setNear] = useState(false);
 
-  // Start loading when the scene is within ~1.5 screens.
+  // Start loading once the visitor is scrolling and the scene is within ~1.5 screens.
   useEffect(() => {
     const el = canvas.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
-      setNear(true);
-      return;
-    }
-    const io = new IntersectionObserver(([e]) => e?.isIntersecting && setNear(true), { rootMargin: "150% 0px" });
-    io.observe(el);
-    return () => io.disconnect();
+    if (!el) return;
+    let io: IntersectionObserver | null = null;
+    let alive = true;
+    void whenEngaged().then(() => {
+      if (!alive) return;
+      if (typeof IntersectionObserver === "undefined") {
+        setNear(true);
+        return;
+      }
+      io = new IntersectionObserver(([e]) => e?.isIntersecting && setNear(true), { rootMargin: "150% 0px" });
+      io.observe(el);
+    });
+    return () => {
+      alive = false;
+      io?.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -137,7 +169,7 @@ function FrameCanvas({ frames, progress, className }: { frames: FrameSet; progre
       draw(Math.round(current.current), true);
     };
 
-    load(0);
+    if (near) load(0);
     let timer = 0;
     if (near) {
       // Coarse-to-fine passes so the whole film is roughly available early.
@@ -190,6 +222,7 @@ export function FilmScene({
   id,
   frames,
   poster,
+  priority = false,
   height,
   label,
   className,
@@ -199,6 +232,8 @@ export function FilmScene({
   frames: FrameSet;
   /** First frame, shown before the canvas paints and as the reduced-data fallback. */
   poster: string;
+  /** The opening scene: its poster is part of the first screen. */
+  priority?: boolean;
   height: number;
   label?: string;
   className?: string;
@@ -214,7 +249,18 @@ export function FilmScene({
       style={{ height: `${height}svh` } as CSSProperties}
     >
       <div className="sticky top-0 h-svh overflow-hidden bg-navy-950">
-        <img src={poster} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={poster}
+          srcSet={`${frames.dir}/m/001.webp 960w, ${frames.dir}/d/001.webp 1600w`}
+          sizes="100vw"
+          alt=""
+          aria-hidden
+          width={1600}
+          height={900}
+          decoding="async"
+          {...(priority ? { fetchPriority: "high" as const } : { loading: "lazy" as const })}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <FrameCanvas frames={frames} progress={progress} />
         {children(progress)}
       </div>
