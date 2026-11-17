@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Bell,
@@ -50,6 +50,13 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { cn } from "@/lib/utils";
+import {
+  FocusModeContext,
+  enterFullscreen,
+  exitFullscreen,
+  isOperationalRoute,
+  type FocusMode,
+} from "@/lib/focus-mode";
 import { LANGUAGES, type LanguageCode } from "@/lib/i18n";
 import { chooseLanguage } from "@/lib/profile-service";
 import { operationalAlerts } from "@/lib/demo-data";
@@ -585,6 +592,48 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [cmdOpen, setCmdOpen] = useState(false);
   const isActive = useActive();
 
+  // Focus mode (POS, kitchen): the chrome steps aside; leaving the screen always restores it.
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const operational = isOperationalRoute(path);
+  const [focusOn, setFocusOn] = useState(false);
+  const focusActive = operational && focusOn;
+  const wentFullscreen = useRef(false);
+  const focus = useMemo<FocusMode>(() => {
+    const exit = () => {
+      setFocusOn(false);
+      if (wentFullscreen.current) {
+        wentFullscreen.current = false;
+        void exitFullscreen();
+      }
+    };
+    return {
+      available: operational,
+      active: focusActive,
+      exit,
+      toggle: () => {
+        if (focusActive) return exit();
+        setFocusOn(true);
+        void enterFullscreen().then(() => {
+          wentFullscreen.current = !!document.fullscreenElement;
+        });
+      },
+    };
+  }, [operational, focusActive]);
+  useEffect(() => {
+    if (!operational && focusOn) focus.exit();
+  }, [operational, focusOn, focus]);
+  useEffect(() => {
+    // Leaving the browser's full screen (Esc, system gesture) also leaves focus mode.
+    const onChange = () => {
+      if (!document.fullscreenElement && wentFullscreen.current) {
+        wentFullscreen.current = false;
+        setFocusOn(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -597,146 +646,162 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <TooltipProvider delayDuration={200}>
-      <div className="flex min-h-screen bg-background">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2"
-        >
-          {t("a11y.skipToContent")}
-        </a>
-        {/* Desktop sidebar */}
-        <aside
-          className={cn(
-            "sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 lg:flex",
-            collapsed ? "w-[68px]" : "w-64",
-          )}
-        >
-          <div
-            className={cn("flex h-14 items-center border-b px-3", collapsed && "justify-center")}
+    <FocusModeContext.Provider value={focus}>
+      <TooltipProvider delayDuration={200}>
+        <div className={cn("flex min-h-screen bg-background", operational && "touch-ui")}>
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2"
           >
-            <OrgSwitcher compact={collapsed} />
-          </div>
-          <SidebarNav collapsed={collapsed} />
-          <div className={cn("flex items-center gap-2 border-t p-3", collapsed && "flex-col")}>
-            <BrandMark className="size-6 text-foreground" />
-            {/* "Powered by" only makes sense under a customer's own brand (white label). */}
-            {!collapsed &&
-              (org.logoUrl ? (
-                <span className="flex-1 text-xs text-muted-foreground">{t("shell.poweredBy")}</span>
-              ) : (
-                <span className="flex-1" />
-              ))}
-            <button
-              onClick={() => setCollapsed((c) => !c)}
-              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
-              aria-label={collapsed ? t("a11y.expandSidebar") : t("a11y.collapseSidebar")}
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="size-4" />
-              ) : (
-                <PanelLeftClose className="size-4" />
-              )}
-            </button>
-          </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-6">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-secondary lg:hidden"
-              aria-label={t("a11y.openMenu")}
-            >
-              <Menu className="size-5" strokeWidth={1.75} />
-            </button>
-            <LocationSelector className="max-w-[220px] sm:max-w-xs" />
-            <button
-              onClick={() => setCmdOpen(true)}
-              className="ml-2 hidden h-9 w-64 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:border-input md:inline-flex"
-            >
-              <Search className="size-4" strokeWidth={1.75} />
-              <span className="flex-1 text-left">{t("shell.search")}</span>
-              <ShortcutHint />
-            </button>
-            <div className="ml-auto flex items-center gap-1">
-              {/* One honest workspace-level indicator instead of a different badge on every page. */}
-              {org.fictional && (
-                <span title={t("demo.workspaceHint")} className="mr-1 inline-flex">
-                  <DemoBadge label={t("demo.workspace")} className="hidden sm:inline-flex" />
-                  <DemoBadge label={t("demo.workspaceShort")} className="sm:hidden" />
-                </span>
-              )}
-              <button
-                onClick={() => setCmdOpen(true)}
-                className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary md:hidden"
-                aria-label={t("shell.search")}
-              >
-                <Search className="size-4" strokeWidth={1.75} />
-              </button>
-              <PresentationModeToggle />
-              <LanguageQuick />
-              <Notifications />
-              <PreferencesMenu />
-            </div>
-          </header>
-
-          <main
-            id="main"
-            className="min-w-0 flex-1 overflow-x-clip px-4 pb-28 pt-6 md:px-6 lg:px-8 lg:pb-12"
-          >
-            {orgStatus === "suspended" ? (
-              <SuspendedState reason={suspendedReason} />
-            ) : (
-              <>
-                <PresentationBanner />
-                <OnboardingProgress />
-                {children}
-              </>
-            )}
-          </main>
-        </div>
-
-        {/* Mobile drawer */}
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="flex w-72 flex-col gap-0 bg-sidebar p-0">
-            <SheetTitle className="sr-only">{t("a11y.mainNav")}</SheetTitle>
-            <div className="border-b p-3 pr-10">
-              <OrgSwitcher />
-            </div>
-            <SidebarNav onNavigate={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
-
-        {/* Mobile bottom nav */}
-        <nav
-          className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
-          aria-label={t("a11y.mobileNav")}
-        >
-          {NAV.slice(0, 3).map(({ to, key, icon: Icon }) => (
-            <Link
-              key={to}
-              to={to}
+            {t("a11y.skipToContent")}
+          </a>
+          {/* Desktop sidebar */}
+          {!focusActive && (
+            <aside
               className={cn(
-                "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium",
-                isActive(to) ? "text-primary" : "text-muted-foreground",
+                "sticky top-0 hidden h-screen shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 lg:flex",
+                collapsed ? "w-[68px]" : "w-64",
               )}
             >
-              <Icon className="size-5" strokeWidth={1.75} />
-              {t(`nav.${key}`)}
-            </Link>
-          ))}
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground"
-          >
-            <MoreHorizontal className="size-5" strokeWidth={1.75} />
-            {t("nav.more")}
-          </button>
-        </nav>
+              <div
+                className={cn(
+                  "flex h-14 items-center border-b px-3",
+                  collapsed && "justify-center",
+                )}
+              >
+                <OrgSwitcher compact={collapsed} />
+              </div>
+              <SidebarNav collapsed={collapsed} />
+              <div className={cn("flex items-center gap-2 border-t p-3", collapsed && "flex-col")}>
+                <BrandMark className="size-6 text-foreground" />
+                {/* "Powered by" only makes sense under a customer's own brand (white label). */}
+                {!collapsed &&
+                  (org.logoUrl ? (
+                    <span className="flex-1 text-xs text-muted-foreground">
+                      {t("shell.poweredBy")}
+                    </span>
+                  ) : (
+                    <span className="flex-1" />
+                  ))}
+                <button
+                  onClick={() => setCollapsed((c) => !c)}
+                  className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+                  aria-label={collapsed ? t("a11y.expandSidebar") : t("a11y.collapseSidebar")}
+                >
+                  {collapsed ? (
+                    <PanelLeftOpen className="size-4" />
+                  ) : (
+                    <PanelLeftClose className="size-4" />
+                  )}
+                </button>
+              </div>
+            </aside>
+          )}
 
-        <CommandPalette open={cmdOpen} setOpen={setCmdOpen} />
-      </div>
-    </TooltipProvider>
+          <div className="flex min-w-0 flex-1 flex-col">
+            {!focusActive && (
+              <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-6">
+                <button
+                  onClick={() => setMobileOpen(true)}
+                  className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-secondary lg:hidden"
+                  aria-label={t("a11y.openMenu")}
+                >
+                  <Menu className="size-5" strokeWidth={1.75} />
+                </button>
+                <LocationSelector className="max-w-[220px] sm:max-w-xs" />
+                <button
+                  onClick={() => setCmdOpen(true)}
+                  className="ml-2 hidden h-9 w-64 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:border-input md:inline-flex"
+                >
+                  <Search className="size-4" strokeWidth={1.75} />
+                  <span className="flex-1 text-left">{t("shell.search")}</span>
+                  <ShortcutHint />
+                </button>
+                <div className="ml-auto flex items-center gap-1">
+                  {/* One honest workspace-level indicator instead of a different badge on every page. */}
+                  {org.fictional && (
+                    <span title={t("demo.workspaceHint")} className="mr-1 inline-flex">
+                      <DemoBadge label={t("demo.workspace")} className="hidden sm:inline-flex" />
+                      <DemoBadge label={t("demo.workspaceShort")} className="sm:hidden" />
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setCmdOpen(true)}
+                    className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary md:hidden"
+                    aria-label={t("shell.search")}
+                  >
+                    <Search className="size-4" strokeWidth={1.75} />
+                  </button>
+                  <PresentationModeToggle />
+                  <LanguageQuick />
+                  <Notifications />
+                  <PreferencesMenu />
+                </div>
+              </header>
+            )}
+
+            <main
+              id="main"
+              className={cn(
+                "min-w-0 flex-1 overflow-x-clip",
+                focusActive ? "p-3 md:p-4" : "px-4 pb-28 pt-6 md:px-6 lg:px-8 lg:pb-12",
+              )}
+            >
+              {orgStatus === "suspended" ? (
+                <SuspendedState reason={suspendedReason} />
+              ) : (
+                <>
+                  <PresentationBanner />
+                  {!focusActive && <OnboardingProgress />}
+                  {children}
+                </>
+              )}
+            </main>
+          </div>
+
+          {/* Mobile drawer */}
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetContent side="left" className="flex w-72 flex-col gap-0 bg-sidebar p-0">
+              <SheetTitle className="sr-only">{t("a11y.mainNav")}</SheetTitle>
+              <div className="border-b p-3 pr-10">
+                <OrgSwitcher />
+              </div>
+              <SidebarNav onNavigate={() => setMobileOpen(false)} />
+            </SheetContent>
+          </Sheet>
+
+          {/* Mobile bottom nav */}
+          {!focusActive && (
+            <nav
+              className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+              aria-label={t("a11y.mobileNav")}
+            >
+              {NAV.slice(0, 3).map(({ to, key, icon: Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className={cn(
+                    "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                    isActive(to) ? "text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  <Icon className="size-5" strokeWidth={1.75} />
+                  {t(`nav.${key}`)}
+                </Link>
+              ))}
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground"
+              >
+                <MoreHorizontal className="size-5" strokeWidth={1.75} />
+                {t("nav.more")}
+              </button>
+            </nav>
+          )}
+
+          <CommandPalette open={cmdOpen} setOpen={setCmdOpen} />
+        </div>
+      </TooltipProvider>
+    </FocusModeContext.Provider>
   );
 }

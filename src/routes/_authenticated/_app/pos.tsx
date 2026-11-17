@@ -20,7 +20,12 @@ import {
   AlertTriangle,
   Check,
   Store,
+  Utensils,
+  Bike,
 } from "lucide-react";
+import { FocusModeButton } from "@/components/app/focus-mode-button";
+import { useFocusMode } from "@/lib/focus-mode";
+import { categoryColorMap, initials } from "@/lib/category-colors";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { DemoBadge, OrgLogo } from "@/components/app/brand-mark";
@@ -99,6 +104,12 @@ export const Route = createFileRoute("/_authenticated/_app/pos")({
 });
 
 const ORDER_TYPES: OrderType[] = ["dine_in", "takeout", "delivery"];
+const ORDER_TYPE_ICON: Partial<Record<OrderType, typeof Store>> = {
+  dine_in: Utensils,
+  takeout: ShoppingBag,
+  delivery: Bike,
+};
+
 const PAYMENT_METHODS: { id: POSPaymentMethod; icon: typeof Banknote }[] = [
   { id: "cash", icon: Banknote },
   { id: "card", icon: CreditCard },
@@ -252,12 +263,17 @@ function POSStoreGate({ state }: { state: Exclude<PosStoreState, { kind: "ready"
                 variant="outline"
                 onClick={() => setLocationId(s.id)}
                 aria-label={t("store.sellAt", { name: s.name })}
-                className="h-auto w-full flex-col items-start gap-0.5 px-4 py-3 text-left"
+                className="h-auto min-h-16 w-full items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left"
               >
-                <span className="font-medium">{s.name}</span>
-                {s.address && (
-                  <span className="text-xs font-normal text-muted-foreground">{s.address}</span>
-                )}
+                <Store className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[15px] font-semibold">{s.name}</span>
+                  {s.address && (
+                    <span className="break-words text-xs font-normal text-muted-foreground">
+                      {s.address}
+                    </span>
+                  )}
+                </span>
               </Button>
             </li>
           ))}
@@ -416,6 +432,25 @@ function POSRegister({
   const displayCashier = session.cashierName || t("ticket.cashierFallback");
   const ticketCount = session.cart.reduce((n, item) => n + item.quantity, 0);
 
+  // Immediate feedback for each tap: the tile badge, the ticket line and a polite announcement.
+  const focus = useFocusMode();
+  const [lastAdded, setLastAdded] = useState<{
+    productId: string;
+    name: string;
+    nonce: number;
+  } | null>(null);
+  const markAdded = (item: MenuItem) =>
+    setLastAdded({ productId: item.id, name: item.name, nonce: Date.now() });
+  const qtyInTicket = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const line of session.cart)
+      m.set(line.productId, (m.get(line.productId) ?? 0) + line.quantity);
+    return m;
+  }, [session.cart]);
+  // Category identity color (decorative; the category name is always written next to it).
+  const colors = useMemo(() => categoryColorMap(menuCategories, lng), [menuCategories, lng]);
+  const categoryColor = (id: string) => colors.get(id) ?? "var(--border)";
+
   const handleOpenItem = (item: MenuItem) => {
     if (item.modifierGroups && item.modifierGroups.length > 0) {
       setModModalItem(item);
@@ -424,7 +459,7 @@ function POSRegister({
     } else {
       const updated = addItemToCart(session, item, [], 1);
       setSession(updated);
-      toast.success(t("toast.added", { name: item.name }));
+      markAdded(item);
     }
   };
 
@@ -469,7 +504,7 @@ function POSRegister({
     );
     setSession(updated);
     setModModalItem(null);
-    toast.success(t("toast.added", { name: modModalItem.name }));
+    markAdded(modModalItem);
   };
 
   const handleQuantity = (cartItemId: string, delta: number) => {
@@ -631,13 +666,23 @@ function POSRegister({
   const filtersActive = search.trim() !== "" || selectedCat !== "all";
 
   return (
-    <div className="flex flex-col gap-4 pb-16 lg:h-[calc(100vh-5rem)] lg:flex-row lg:overflow-hidden lg:pb-0">
+    <div
+      className={cn(
+        "flex flex-col gap-3 pb-28 lg:flex-row lg:overflow-hidden lg:pb-0",
+        focus.active ? "lg:h-[calc(100dvh-2rem)]" : "lg:h-[calc(100vh-5rem)]",
+      )}
+    >
+      {/* Screen readers hear what each tap did; sighted staff see the tile badge and the line. */}
+      <p className="sr-only" aria-live="polite">
+        {lastAdded ? t("addedAnnounce", { name: lastAdded.name, count: ticketCount }) : ""}
+      </p>
+
       {/* Main Catalog View */}
       <section className="surface flex min-h-[60vh] flex-1 flex-col overflow-hidden lg:min-h-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
-          <div className="relative min-w-[200px] max-w-sm flex-1">
+        <div className="flex flex-wrap items-center gap-2 border-b p-3">
+          <div className="relative min-w-[200px] flex-1">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
               aria-hidden
             />
             <Input
@@ -646,63 +691,77 @@ function POSRegister({
               placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-11 pl-9"
+              className="h-12 pl-11 text-base md:text-[15px]"
             />
           </div>
-          <div className="flex min-w-0 items-center gap-2">
-            {session.suspendedSessions.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                <span className="eyebrow hidden text-muted-foreground sm:inline">
-                  {t("held.label")}
-                </span>
-                {session.suspendedSessions.map((s) => {
-                  const name = s.customerName || t("held.untitled");
-                  return (
-                    <Button
-                      key={s.id}
-                      variant="outline"
-                      onClick={() => handleResume(s.id)}
-                      aria-label={t("held.resumeAria", { name })}
-                      className="h-11 shrink-0 px-3 text-xs"
-                    >
-                      <PlayCircle aria-hidden /> {name}
-                    </Button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {session.suspendedSessions.length > 0 && (
+            <div className="flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto scrollbar-none">
+              <span className="eyebrow hidden shrink-0 text-muted-foreground sm:inline">
+                {t("held.label")}
+              </span>
+              {session.suspendedSessions.map((s) => {
+                const name = s.customerName || t("held.untitled");
+                return (
+                  <Button
+                    key={s.id}
+                    variant="outline"
+                    onClick={() => handleResume(s.id)}
+                    aria-label={t("held.resumeAria", { name })}
+                    className="h-12 shrink-0 px-3"
+                  >
+                    <PlayCircle aria-hidden /> {name}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+          <FocusModeButton />
         </div>
 
-        {/* Category chips */}
+        {/* Category pills: big targets, one row that scrolls sideways. */}
         {categories.length > 0 && (
           <div
             role="radiogroup"
             aria-label={t("categoriesLabel")}
-            className="flex gap-2 overflow-x-auto border-b p-2 scrollbar-none"
+            className="flex gap-2 overflow-x-auto border-b px-3 py-2.5 scrollbar-none"
           >
-            {[{ id: "all", name: t("allCategories") }, ...categories].map((c) => (
-              <Button
-                key={c.id}
-                role="radio"
-                aria-checked={selectedCat === c.id}
-                variant={selectedCat === c.id ? "secondary" : "ghost"}
-                onClick={() => setSelectedCat(c.id)}
-                className={cn(
-                  "h-11 shrink-0 px-4 text-sm",
-                  selectedCat === c.id
-                    ? "border border-foreground/15 font-semibold text-foreground"
-                    : "text-muted-foreground",
-                )}
-              >
-                {c.name}
-              </Button>
-            ))}
+            {[{ id: "all", name: t("allCategories") }, ...categories].map((c) => {
+              const on = selectedCat === c.id;
+              const count =
+                c.id === "all"
+                  ? menuItems.length
+                  : menuItems.filter((m) => m.category === c.id).length;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setSelectedCat(c.id)}
+                  className={cn(
+                    "inline-flex h-12 shrink-0 items-center gap-2 rounded-full border px-4 text-[15px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:active:scale-[0.97]",
+                    on
+                      ? "border-primary bg-primary-soft text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-input hover:text-foreground",
+                  )}
+                >
+                  {c.id !== "all" && (
+                    <span
+                      aria-hidden
+                      className="size-2.5 rounded-full"
+                      style={{ background: categoryColor(c.id) }}
+                    />
+                  )}
+                  {c.name}
+                  <span className="tabular text-xs text-muted-foreground">{count}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
         {/* Items Grid */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-3 md:p-4">
           {menuState === "loading" ? (
             <div
               className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"
@@ -710,7 +769,7 @@ function POSRegister({
               aria-label={t("menu.loading")}
             >
               {Array.from({ length: 8 }, (_, i) => (
-                <Skeleton key={i} className="h-24 rounded-lg" />
+                <Skeleton key={i} className="h-28 rounded-xl" />
               ))}
             </div>
           ) : menuState === "error" ? (
@@ -750,68 +809,105 @@ function POSRegister({
               }
             />
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              {filteredItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleOpenItem(item)}
-                  aria-label={t("addItemAria", { name: item.name, price: money(item.priceCents) })}
-                  className="group flex flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors hover:border-primary/50 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
-                >
-                  {menuHasImages &&
-                    (item.imageUrl ? (
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        loading="lazy"
-                        decoding="async"
-                        className="aspect-[4/3] w-full border-b bg-muted object-cover"
-                      />
-                    ) : (
-                      <div
-                        className="flex aspect-[4/3] w-full items-center justify-center border-b bg-muted"
-                        aria-hidden
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {filteredItems.map((item) => {
+                const inTicket = qtyInTicket.get(item.id) ?? 0;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleOpenItem(item)}
+                    aria-label={t("addItemAria", {
+                      name: item.name,
+                      price: money(item.priceCents),
+                    })}
+                    className={cn(
+                      "group relative flex min-h-[8.5rem] flex-col overflow-hidden rounded-xl border bg-card text-left shadow-xs transition-[border-color,box-shadow,transform] duration-150 hover:border-primary/40 hover:shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:active:scale-[0.97]",
+                      inTicket > 0 && "border-primary/50",
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-0 left-0 w-1"
+                      style={{ background: categoryColor(item.category) }}
+                    />
+                    {menuHasImages &&
+                      (item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="aspect-[4/3] w-full border-b bg-muted object-cover"
+                        />
+                      ) : (
+                        <span
+                          className="flex aspect-[4/3] w-full items-center justify-center border-b bg-muted text-2xl font-semibold text-muted-foreground"
+                          aria-hidden
+                        >
+                          {initials(item.name)}
+                        </span>
+                      ))}
+                    <span className="flex flex-1 flex-col gap-1 p-3 pl-4">
+                      {/* Full name: wraps instead of being cut. */}
+                      <span
+                        className={cn(
+                          "break-words text-[15px] font-semibold leading-snug text-foreground",
+                          inTicket > 0 && "pr-8",
+                        )}
                       >
-                        <UtensilsCrossed className="size-6 text-muted-foreground/50" />
-                      </div>
-                    ))}
-                  <div className="flex flex-1 flex-col justify-between gap-2 p-3">
-                    <div>
-                      <p className="line-clamp-2 text-sm font-medium leading-snug">{item.name}</p>
-                      {item.description && (
-                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="tabular text-sm font-semibold">
-                        {money(item.priceCents)}
+                        {item.name}
                       </span>
-                      <Plus
-                        className="size-4 text-muted-foreground group-hover:text-primary"
+                      {item.description && (
+                        <span className="line-clamp-1 text-xs text-muted-foreground max-sm:hidden">
+                          {item.description}
+                        </span>
+                      )}
+                      <span className="mt-auto flex items-center justify-between gap-2 pt-1.5">
+                        <span className="tabular text-base font-bold text-foreground">
+                          {money(item.priceCents)}
+                        </span>
+                        <span
+                          aria-hidden
+                          className="flex size-8 items-center justify-center rounded-full bg-secondary text-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground"
+                        >
+                          <Plus className="size-4" />
+                        </span>
+                      </span>
+                    </span>
+                    {inTicket > 0 && (
+                      <span
+                        key={`${inTicket}-${lastAdded?.nonce ?? 0}`}
                         aria-hidden
-                      />
-                    </div>
-                  </div>
-                </button>
-              ))}
+                        className="tabular absolute right-2 top-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-2 text-sm font-bold text-primary-foreground shadow-raised motion-safe:animate-pop"
+                      >
+                        {inTicket}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </section>
 
-      {/* Right Cart Sidebar */}
+      {/* Ticket: always in view from tablets up. */}
       <aside
         id="pos-ticket"
-        className="surface flex w-full shrink-0 scroll-mt-4 flex-col overflow-hidden lg:w-96"
+        className="surface flex w-full shrink-0 scroll-mt-4 flex-col overflow-hidden lg:w-[380px] xl:w-[420px]"
       >
-        {/* Header Order Settings */}
         <div className="flex flex-col gap-2 border-b p-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[15px] font-semibold">{t("ticket.title")}</h2>
-            <span className="truncate text-xs text-muted-foreground">
+            <h2 className="flex items-center gap-2 text-base font-semibold">
+              {t("ticket.title")}
+              {ticketCount > 0 && (
+                <span className="tabular rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
+                  {ticketCount}
+                </span>
+              )}
+            </h2>
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
               {t("ticket.attendant", { name: displayCashier })}
             </span>
           </div>
@@ -821,12 +917,12 @@ function POSRegister({
             data-testid="pos-store"
           >
             <Store className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="truncate">{t("ticket.store", { name: store.name })}</span>
+            <span className="min-w-0 break-words">{t("ticket.store", { name: store.name })}</span>
           </p>
           {mismatch && (
             <p
               role="status"
-              className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-foreground"
+              className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-foreground"
             >
               {t("store.mismatch", {
                 name: store.name,
@@ -837,77 +933,101 @@ function POSRegister({
           <div
             role="radiogroup"
             aria-label={t("ticket.orderTypeLabel")}
-            className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-1"
+            className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/50 p-1"
           >
-            {ORDER_TYPES.map((tType) => (
-              <button
-                key={tType}
-                type="button"
-                role="radio"
-                aria-checked={session.orderType === tType}
-                onClick={() => setSession(setOrderType(session, tType))}
-                className={cn(
-                  "h-11 rounded-[5px] px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  session.orderType === tType
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t(`orderType.${tType}`)}
-              </button>
-            ))}
+            {ORDER_TYPES.map((tType) => {
+              const TypeIcon = ORDER_TYPE_ICON[tType] ?? Utensils;
+              return (
+                <button
+                  key={tType}
+                  type="button"
+                  role="radio"
+                  aria-checked={session.orderType === tType}
+                  onClick={() => setSession(setOrderType(session, tType))}
+                  className={cn(
+                    "flex h-11 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    session.orderType === tType
+                      ? "raised bg-card text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <TypeIcon className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">{t(`orderType.${tType}`)}</span>
+                </button>
+              );
+            })}
           </div>
           <Input
             aria-label={t("ticket.customerLabel")}
             placeholder={t("ticket.customerPlaceholder")}
             value={session.customerName ?? ""}
             onChange={(e) => setSession(setCustomerInfo(session, e.target.value))}
-            className="h-11 text-sm"
+            className="h-11 text-base md:text-sm"
           />
         </div>
 
-        {/* Cart Item List */}
+        {/* Cart lines */}
         <div className="flex flex-1 flex-col divide-y overflow-y-auto px-3">
           {session.cart.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-2 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium leading-snug">{item.productName}</p>
-                {item.modifiers.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {item.modifiers.map((m) => m.optionName).join(", ")}
+            <div key={item.id} className="relative py-2.5">
+              {lastAdded?.productId === item.productId && (
+                <span
+                  key={lastAdded.nonce}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-[-0.75rem] inset-y-0 motion-safe:animate-flash"
+                />
+              )}
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-[15px] font-semibold leading-snug">
+                    {item.productName}
                   </p>
-                )}
-                {item.notes && (
-                  <p className="text-xs italic text-muted-foreground">&ldquo;{item.notes}&rdquo;</p>
-                )}
-                <p className="tabular mt-0.5 text-sm font-semibold">{money(item.subtotalCents)}</p>
+                  {item.modifiers.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {item.modifiers.map((m) => m.optionName).join(" · ")}
+                    </p>
+                  )}
+                  {item.notes && (
+                    <p className="text-xs italic text-muted-foreground">
+                      &ldquo;{item.notes}&rdquo;
+                    </p>
+                  )}
+                </div>
+                <p className="tabular shrink-0 text-[15px] font-semibold">
+                  {money(item.subtotalCents)}
+                </p>
               </div>
-              <div className="flex shrink-0 items-center">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="size-11"
-                  aria-label={t("ticket.decreaseAria", { name: item.productName })}
-                  onClick={() => handleQuantity(item.id, -1)}
-                >
-                  <Minus aria-hidden />
-                </Button>
-                <span className="tabular w-8 text-center text-sm font-semibold" aria-live="polite">
-                  {item.quantity}
-                </span>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="size-11"
-                  aria-label={t("ticket.increaseAria", { name: item.productName })}
-                  onClick={() => handleQuantity(item.id, 1)}
-                >
-                  <Plus aria-hidden />
-                </Button>
+              <div className="relative mt-2 flex items-center justify-between">
+                <div className="flex items-center rounded-lg border bg-card shadow-xs">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-11 rounded-r-none"
+                    aria-label={t("ticket.decreaseAria", { name: item.productName })}
+                    onClick={() => handleQuantity(item.id, -1)}
+                  >
+                    <Minus aria-hidden />
+                  </Button>
+                  <span
+                    className="tabular w-9 text-center text-[15px] font-bold"
+                    aria-live="polite"
+                  >
+                    {item.quantity}
+                  </span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-11 rounded-l-none"
+                    aria-label={t("ticket.increaseAria", { name: item.productName })}
+                    onClick={() => handleQuantity(item.id, 1)}
+                  >
+                    <Plus aria-hidden />
+                  </Button>
+                </div>
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="ml-1 size-11 text-muted-foreground hover:text-destructive"
+                  className="size-11 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   aria-label={t("ticket.removeAria", { name: item.productName })}
                   onClick={() => setSession(removeItemFromCart(session, item.id))}
                 >
@@ -917,15 +1037,17 @@ function POSRegister({
             </div>
           ))}
           {session.cart.length === 0 && (
-            <div className="my-auto flex flex-col items-center justify-center p-8 text-center text-sm text-muted-foreground">
-              <ShoppingBag className="mb-2 size-8 opacity-40" aria-hidden />
-              <p>{t("ticket.empty")}</p>
+            <div className="my-auto flex flex-col items-center justify-center gap-1 p-8 text-center">
+              <span className="mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
+                <ShoppingBag className="size-5 text-muted-foreground" aria-hidden />
+              </span>
+              <p className="text-sm font-medium">{t("ticket.empty")}</p>
             </div>
           )}
         </div>
 
-        {/* Totals & Actions Footer */}
-        <div className="flex flex-col gap-3 border-t p-3">
+        {/* Totals & actions */}
+        <div className="flex flex-col gap-3 border-t bg-muted/20 p-3">
           <dl className="flex flex-col gap-1 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <dt>{t("totals.subtotal")}</dt>
@@ -941,9 +1063,11 @@ function POSRegister({
               <dt>{t("totals.tax", { rate: taxRateLabel })}</dt>
               <dd className="tabular">{money(session.taxCents)}</dd>
             </div>
-            <div className="mt-1 flex justify-between border-t pt-2 text-lg font-semibold text-foreground">
-              <dt>{t("totals.total")}</dt>
-              <dd className="tabular">{money(session.totalCents)}</dd>
+            <div className="mt-1 flex items-baseline justify-between border-t pt-2 text-foreground">
+              <dt className="text-base font-semibold">{t("totals.total")}</dt>
+              <dd className="tabular text-2xl font-bold tracking-tight">
+                {money(session.totalCents)}
+              </dd>
             </div>
           </dl>
           {blocked && (
@@ -981,7 +1105,7 @@ function POSRegister({
               variant="outline"
               onClick={() => setDiscountModalOpen(true)}
               disabled={session.cart.length === 0 || !can("pos.discount")}
-              className="h-11 px-2 text-xs"
+              className="h-12 px-2"
             >
               <Tag aria-hidden /> {t("actions.discount")}
             </Button>
@@ -989,7 +1113,7 @@ function POSRegister({
               variant="outline"
               onClick={handleSuspend}
               disabled={session.cart.length === 0}
-              className="h-11 px-2 text-xs"
+              className="h-12 px-2"
             >
               <PlayCircle aria-hidden /> {t("actions.hold")}
             </Button>
@@ -997,14 +1121,14 @@ function POSRegister({
               variant="outline"
               onClick={() => setClearConfirmOpen(true)}
               disabled={session.cart.length === 0}
-              className="h-11 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="h-12 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
               <XCircle aria-hidden /> {t("actions.clear")}
             </Button>
           </div>
 
           <Button
-            className="tabular h-12 w-full text-base font-semibold"
+            className="tabular h-14 w-full text-lg font-semibold"
             onClick={handleStartCheckout}
             disabled={session.cart.length === 0 || submittingSale || !taxConfigured || !!blocked}
             aria-busy={submittingSale}
@@ -1057,7 +1181,7 @@ function POSRegister({
                               aria-pressed={isOn}
                               onClick={() => toggleModifier(g.id, opt, max)}
                               className={cn(
-                                "flex min-h-11 items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                "flex min-h-12 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                                 isOn
                                   ? "border-primary bg-primary-soft font-medium text-foreground"
                                   : "hover:bg-accent",
@@ -1232,24 +1356,28 @@ function POSRegister({
       </Dialog>
 
       {/* Phones and tablets: the ticket sits below the menu, so keep its summary in reach */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t bg-card/95 px-4 py-2 backdrop-blur lg:hidden">
+      <div
+        className={cn(
+          "fixed inset-x-0 z-20 border-t bg-card/95 px-4 py-2.5 shadow-raised backdrop-blur lg:hidden",
+          focus.active ? "bottom-0" : "bottom-[calc(4rem+env(safe-area-inset-bottom))]",
+        )}
+      >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <p className="tabular min-w-0 truncate text-sm font-medium" aria-live="polite">
+          <p className="tabular min-w-0 text-[15px] font-semibold" aria-live="polite">
             {ticketCount > 0
               ? t("ticket.mobileSummary", { count: ticketCount, total: money(session.totalCents) })
               : t("ticket.mobileEmpty")}
           </p>
           <Button
-            size="sm"
             variant={ticketCount > 0 ? "default" : "outline"}
-            className="h-10 shrink-0"
+            className="h-12 shrink-0 px-4"
             onClick={() =>
               document
                 .getElementById("pos-ticket")
                 ?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
           >
-            <ShoppingBag className="mr-1.5 size-4" aria-hidden />
+            <ShoppingBag aria-hidden />
             {t("ticket.view")}
           </Button>
         </div>

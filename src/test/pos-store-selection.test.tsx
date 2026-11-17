@@ -392,3 +392,26 @@ describe("organization switch", () => {
     expect(localStorage.getItem("servora.pos.suspended.org-1")).toBeNull();
   });
 });
+
+describe("register feedback (redesign phase 5)", () => {
+  it("each tap shows on the tile and is announced, without a toast per item", async () => {
+    setWorkspace("owner", [store("downtown")], "downtown");
+    render(<POSPage />);
+    await addBurger();
+    await addBurger();
+    const tile = screen.getByRole("button", { name: /^Add Classic Burger,/ });
+    // Quantity on the ticket, shown on the product tile.
+    expect(tile).toHaveTextContent("2");
+    expect(screen.getByText("Classic Burger added. 2 items on the ticket.")).toBeInTheDocument();
+    expect(toast.success).not.toHaveBeenCalled();
+    // The ticket count and the charge button follow.
+    expect(chargeButton()).toBeEnabled();
+  });
+
+  it("offers focus mode only through the shell (no shell, no button)", async () => {
+    setWorkspace("owner", [store("downtown")], "downtown");
+    render(<POSPage />);
+    await screen.findByRole("button", { name: /^Add Classic Burger,/ });
+    expect(screen.queryByRole("button", { name: "Full screen" })).toBeNull();
+  });
+});

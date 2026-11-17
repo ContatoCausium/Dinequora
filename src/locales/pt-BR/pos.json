@@ -159,5 +159,6 @@
     "blockedNotAuthorized": "Você não tem mais acesso a {{name}}, por isso esta comanda não pode ser cobrada. Limpe-a para continuar.",
     "heldOnOrgChange": "A comanda aberta foi colocada em espera em {{org}}.",
     "holdFailed": "Esta comanda não pode ficar em espera para esta loja."
-  }
+  },
+  "addedAnnounce": "{{name}} adicionado. {{count}} itens no pedido."
 }

@@ -133,5 +133,9 @@
       "30d": "Sem vendas nos 30 dias anteriores para comparar",
       "90d": "Sem vendas nos 90 dias anteriores para comparar"
     }
+  },
+  "focus": {
+    "enter": "Tela cheia",
+    "exit": "Sair da tela cheia"
   }
 }

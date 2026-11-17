@@ -77,7 +77,7 @@ describe("no roadmap or white-label leftovers in the preview", () => {
   });
 
   it("'Powered by Dinequora' only appears under a customer's own logo", () => {
-    expect(shell).toMatch(/org\.logoUrl \? \(\s*<span[^>]*>\{t\("shell\.poweredBy"\)\}/);
+    expect(shell).toMatch(/org\.logoUrl \? \(\s*<span[^>]*>\s*\{t\("shell\.poweredBy"\)\}/);
   });
 });
 

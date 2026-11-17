@@ -64,7 +64,8 @@
     "placedAt": "Placed at {{time}}",
     "note": "Note: {{text}}",
     "itemReadyAria": "{{name}}: ready. Tap to mark as not ready.",
-    "itemPendingAria": "{{name}}: not ready. Tap to mark as ready."
+    "itemPendingAria": "{{name}}: not ready. Tap to mark as ready.",
+    "table": "Table {{table}}"
   },
   "toast": {
     "moved": "Ticket {{number}} moved to {{status}}",
@@ -79,5 +80,21 @@
     "station_one": "{{count}} of the tickets on the board belongs to the selected station.",
     "station_other": "{{count}} of the tickets on the board belong to the selected station."
   },
-  "columnsLabel": "Board column"
+  "columnsLabel": "Board column",
+  "recall": {
+    "button": "Completed",
+    "description": "Tickets fulfilled in the last 2 hours. Reopen one to send it back to the line."
+  },
+  "textSize": {
+    "label": "Ticket text size",
+    "standard": "Standard text",
+    "large": "Large text"
+  },
+  "board": {
+    "open_one": "{{count}} open ticket",
+    "open_other": "{{count}} open tickets",
+    "late_one": "{{count}} late",
+    "late_other": "{{count}} late",
+    "fresh": "New"
+  }
 }

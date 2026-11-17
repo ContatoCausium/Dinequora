@@ -408,9 +408,13 @@ export function RecordedOverview() {
           <div
             className={cn(
               "grid gap-6",
-              ["hidden", "lg:grid-cols-1", "lg:grid-cols-2", "lg:grid-cols-3"][
-                [seeSales, seeExpenses, seeStock].filter(Boolean).length
-              ],
+              // Three panels share a row only when each gets enough width (no cut names at 1180).
+              [
+                "hidden",
+                "lg:grid-cols-1",
+                "lg:grid-cols-2",
+                "md:grid-cols-2 min-[1320px]:grid-cols-3",
+              ][[seeSales, seeExpenses, seeStock].filter(Boolean).length],
             )}
           >
             {seeSales && (
@@ -429,8 +433,8 @@ export function RecordedOverview() {
                     {view.report.products.slice(0, 5).map((p, i) => (
                       <li key={p.name} className="flex items-baseline gap-3">
                         <span className="tabular w-4 text-xs text-muted-foreground">{i + 1}</span>
-                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                        <span className="tabular text-xs text-muted-foreground">
+                        <span className="min-w-0 flex-1 break-words">{p.name}</span>
+                        <span className="tabular shrink-0 text-xs text-muted-foreground">
                           {t("home.products.units", { count: p.qty })}
                         </span>
                         <span className="tabular w-24 text-right font-medium">
@@ -478,6 +482,10 @@ export function RecordedOverview() {
             {seeStock && (
               <Panel
                 title={t("home.stock.title")}
+                className={cn(
+                  [seeSales, seeExpenses, seeStock].every(Boolean) &&
+                    "md:col-span-2 min-[1320px]:col-span-1",
+                )}
                 action={<PanelLink to="/inventory" label={t("home.stock.openInventory")} />}
               >
                 {view.low.length === 0 ? (
@@ -488,7 +496,7 @@ export function RecordedOverview() {
                   <ul className="space-y-2.5 text-sm">
                     {view.low.slice(0, 5).map((i) => (
                       <li key={i.id} className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 truncate">
+                        <span className="min-w-0 break-words">
                           {i.name}
                           {locationId === "all" && (
                             <span className="ml-1.5 text-xs text-muted-foreground">
@@ -577,7 +585,7 @@ function PanelLink({
   return (
     <Link
       to={to}
-      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+      className="-my-1 inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {label} <ArrowRight className="size-3.5" />
     </Link>

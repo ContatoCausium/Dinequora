@@ -133,5 +133,9 @@
       "30d": "No sales in the previous 30 days to compare",
       "90d": "No sales in the previous 90 days to compare"
     }
+  },
+  "focus": {
+    "enter": "Full screen",
+    "exit": "Exit full screen"
   }
 }

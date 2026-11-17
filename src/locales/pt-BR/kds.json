@@ -64,7 +64,8 @@
     "placedAt": "Feito às {{time}}",
     "note": "Obs.: {{text}}",
     "itemReadyAria": "{{name}}: pronto. Toque para marcar como não pronto.",
-    "itemPendingAria": "{{name}}: não pronto. Toque para marcar como pronto."
+    "itemPendingAria": "{{name}}: não pronto. Toque para marcar como pronto.",
+    "table": "Mesa {{table}}"
   },
   "toast": {
     "moved": "Comanda {{number}} movida para {{status}}",
@@ -79,5 +80,21 @@
     "station_one": "{{count}} dos tickets no quadro é da estação selecionada.",
     "station_other": "{{count}} dos tickets no quadro são da estação selecionada."
   },
-  "columnsLabel": "Coluna do quadro"
+  "columnsLabel": "Coluna do quadro",
+  "recall": {
+    "button": "Concluídos",
+    "description": "Pedidos entregues nas últimas 2 horas. Reabra um para devolvê-lo à linha."
+  },
+  "textSize": {
+    "label": "Tamanho do texto dos pedidos",
+    "standard": "Texto padrão",
+    "large": "Texto grande"
+  },
+  "board": {
+    "open_one": "{{count}} pedido aberto",
+    "open_other": "{{count}} pedidos abertos",
+    "late_one": "{{count}} atrasado",
+    "late_other": "{{count}} atrasados",
+    "fresh": "Novo"
+  }
 }

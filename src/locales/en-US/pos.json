@@ -159,5 +159,6 @@
     "blockedNotAuthorized": "You no longer have access to {{name}}, so this ticket can’t be charged. Clear it to continue.",
     "heldOnOrgChange": "The open ticket was put on hold in {{org}}.",
     "holdFailed": "This ticket can’t be held for this store."
-  }
+  },
+  "addedAnnounce": "{{name}} added. {{count}} items on the ticket."
 }
