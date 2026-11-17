@@ -210,6 +210,7 @@ export function WhatsAppPreviewCard({
 
         <TabsContent value="preview" className="mt-4 space-y-4">
           <Segmented<PreviewTemplate>
+            fill
             label={t("whatsapp.templateLabel")}
             value={template}
             onChange={setTemplate}

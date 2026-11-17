@@ -69,17 +69,26 @@ export function Segmented<T extends string>({
   onChange,
   options,
   label,
+  fill = false,
 }: {
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string }[];
   label: string;
+  /**
+   * Full width for narrow panels: each option grows with its label and never wraps (an ellipsis is
+   * the last resort), so a label can't spill out of the control.
+   */
+  fill?: boolean;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex h-9 items-center gap-0.5 rounded-lg border bg-secondary p-[3px]"
+      className={cn(
+        "h-9 items-center gap-0.5 rounded-lg border bg-secondary p-[3px]",
+        fill ? "flex w-full" : "inline-flex",
+      )}
     >
       {options.map((o) => (
         <button
@@ -87,8 +96,10 @@ export function Segmented<T extends string>({
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
+          title={fill ? o.label : undefined}
           className={cn(
             "h-full rounded-md px-3 text-[13px] font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            fill && "min-w-0 flex-auto truncate whitespace-nowrap px-2.5 text-xs",
             value === o.value
               ? "raised text-foreground"
               : "text-muted-foreground hover:text-foreground",

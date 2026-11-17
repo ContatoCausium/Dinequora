@@ -168,6 +168,16 @@ describe("loading and error states", () => {
     expect(screen.queryByText("Classic Burger")).toBeNull();
     expect(screen.getByText("Old Brownie")).toBeInTheDocument();
   });
+
+  it("keeps the delete action, repeated on every row, quiet until hover or focus (stage C)", async () => {
+    await renderMenu();
+    const del = screen.getByRole("button", { name: "Remove Classic Burger from the menu" });
+    const classes = del.className.split(/\s+/);
+    expect(classes).toContain("text-muted-foreground");
+    expect(classes).toContain("hover:text-destructive");
+    expect(classes).toContain("focus-visible:text-destructive");
+    expect(classes).not.toContain("text-destructive");
+  });
 });
 
 describe("owner: category lifecycle", () => {

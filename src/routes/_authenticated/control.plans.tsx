@@ -319,7 +319,13 @@ function ControlPlansPage() {
             hint={t("plansPage.comparisonHint")}
             className="overflow-hidden"
           >
-            <div className="overflow-x-auto">
+            {/* Scrolls sideways on phones: a named, focusable region so keyboards can scroll it. */}
+            <div
+              role="region"
+              tabIndex={0}
+              aria-label={t("plansPage.comparison")}
+              className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
               <table className="data-table text-left">
                 <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
                   <tr>
@@ -371,7 +377,12 @@ function ControlPlansPage() {
                 {t("plansPage.historyEmpty")}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                role="region"
+                tabIndex={0}
+                aria-label={t("plansPage.history")}
+                className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
                 <table className="data-table text-left">
                   <thead className="border-b bg-muted/40 text-muted-foreground">
                     <tr>

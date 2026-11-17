@@ -75,7 +75,8 @@ function BillingPage() {
     d ? fmtDate(d, lng, { month: "short", day: "numeric", year: "numeric" }) : "—";
 
   return (
-    <div className="mx-auto max-w-[1100px]">
+    // Same container as every other app page, so the title never shifts when switching screens.
+    <div className="mx-auto max-w-[1440px]">
       <PageHeader
         eyebrow={<span className="eyebrow">{t("billing.eyebrow")}</span>}
         title={t("billing.title")}

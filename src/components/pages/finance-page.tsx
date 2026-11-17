@@ -496,7 +496,8 @@ export function FinancePage() {
                 <TrendPanel className="lg:col-span-2" trend={trend} />
                 <CategoryBreakdownPanel summary={summary} />
               </div>
-              <div className="grid gap-6 lg:grid-cols-2">
+              {/* Each list keeps its own height: one overdue bill is not stretched next to twelve. */}
+              <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
                 <BillListPanel
                   title={t("bills.overdueTitle")}
                   subtitle={t("bills.overdueSubtitle")}

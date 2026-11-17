@@ -217,6 +217,20 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* WCAG 2.4.11: an element brought into view by keyboard focus never lands under the sticky
+       header (56 px). */
+    scroll-padding-top: 4.5rem;
+  }
+  @media (max-width: 1023px) {
+    html {
+      /* …nor under the phone/tablet bottom bar (64 px + safe area). */
+      scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+    /* Toasts sit above the bottom bar instead of covering it (Sonner's offset variables). */
+    [data-sonner-toaster][data-y-position="bottom"] {
+      --offset-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+      --mobile-offset-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+    }
   }
   body {
     background-color: var(--color-background);

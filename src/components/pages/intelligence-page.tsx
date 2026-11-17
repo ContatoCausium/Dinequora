@@ -491,7 +491,8 @@ export function IntelligencePage() {
                 label={t("kpi.lowStock")}
                 value={fmtNumber(summary.lowStockItemCount, lng)}
                 hint={t("kpi.tracked", { count: summary.dataBreakdown.inventoryCount })}
-                tone={summary.lowStockItemCount > 0 ? "negative" : "positive"}
+                // Low stock is a warning everywhere (Overview, Inventory, sidebar), not an error.
+                tone={summary.lowStockItemCount > 0 ? "warning" : "positive"}
               />
             </div>
             <p className="flex items-start gap-2 text-xs text-muted-foreground">

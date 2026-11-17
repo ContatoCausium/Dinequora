@@ -1140,7 +1140,12 @@ export function InventoryPage() {
                 <p className="mb-1 font-medium text-muted-foreground">
                   {t("recipes.ingredientsTitle", { count: rec.ingredients.length })}
                 </p>
-                <ul className="max-h-36 divide-y overflow-y-auto rounded-md border">
+                {/* Scrolls inside the card: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
+                <ul
+                  tabIndex={0}
+                  aria-label={t("recipes.ingredientsTitle", { count: rec.ingredients.length })}
+                  className="max-h-36 divide-y overflow-y-auto rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   {rec.ingredients.map((ing) => (
                     <li
                       key={ing.id}
@@ -1299,7 +1304,12 @@ export function InventoryPage() {
                 <p className="mb-1 font-medium text-muted-foreground">
                   {t("purchases.itemsTitle", { count: po.items.length })}
                 </p>
-                <ul className="max-h-32 divide-y overflow-y-auto rounded-md border">
+                {/* Scrolls inside the card: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
+                <ul
+                  tabIndex={0}
+                  aria-label={t("purchases.itemsTitle", { count: po.items.length })}
+                  className="max-h-32 divide-y overflow-y-auto rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   {po.items.map((it) => (
                     <li key={it.id} className="px-2 py-1.5">
                       <div className="flex items-center justify-between gap-2">

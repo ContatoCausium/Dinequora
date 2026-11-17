@@ -859,7 +859,9 @@ export function MenuPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-10 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      // Quiet at rest (it repeats on every row); turns destructive on hover/focus. The
+                      // confirmation dialog is unchanged.
+                      className="size-10 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:text-destructive"
                       aria-label={t("item.deleteLabel", { name: item.name })}
                       title={t("item.delete")}
                       disabled={working}

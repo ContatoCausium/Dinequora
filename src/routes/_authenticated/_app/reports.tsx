@@ -308,7 +308,7 @@ function ReportsPage() {
             </Panel>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start">
             <Panel
               title={t("products.title")}
               subtitle={t("products.subtitle")}
