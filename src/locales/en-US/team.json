@@ -258,7 +258,8 @@
       "activity": "Activity log",
       "locations": "Stores",
       "branding": "Branding",
-      "billing": "Billing"
+      "billing": "Billing",
+      "resolve_pending": "Resolve pending sales"
     }
   },
   "profiles": {
@@ -385,7 +386,9 @@
         "item_ready": "Order item marked ready"
       },
       "pos": {
-        "finalized": "Sale completed"
+        "finalized": "Sale completed",
+        "pending_sale_resolved": "Pending sale closed as not recorded",
+        "pending_sale_recovered": "Pending sale recovered (already recorded)"
       },
       "inventory": {
         "moved": "Stock movement recorded",

@@ -1212,6 +1212,58 @@ export type Database = {
         };
         Relationships: [];
       };
+      pos_sale_key_voids: {
+        Row: {
+          actor_id: string;
+          amount_cents: number | null;
+          attempts: number | null;
+          client_order_id: string;
+          created_at: string;
+          last_attempt_at: string | null;
+          location_id: string;
+          org_id: string;
+          reason: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id: string;
+          amount_cents?: number | null;
+          attempts?: number | null;
+          client_order_id: string;
+          created_at?: string;
+          last_attempt_at?: string | null;
+          location_id: string;
+          org_id: string;
+          reason: string;
+        };
+        Update: {
+          actor_id?: string;
+          amount_cents?: number | null;
+          attempts?: number | null;
+          client_order_id?: string;
+          created_at?: string;
+          last_attempt_at?: string | null;
+          location_id?: string;
+          org_id?: string;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pos_sale_key_voids_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pos_sale_key_voids_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       product_recipes: {
         Row: {
           id: string;
@@ -2129,6 +2181,18 @@ export type Database = {
         Returns: string;
       };
       remove_member: { Args: { _member_id: string }; Returns: undefined };
+      resolve_pending_pos_sale: {
+        Args: {
+          _amount_cents?: number;
+          _attempts?: number;
+          _client_order_id: string;
+          _last_attempt_at?: string;
+          _location_id: string;
+          _org_id: string;
+          _reason: string;
+        };
+        Returns: Json;
+      };
       revoke_invitation: { Args: { _id: string }; Returns: undefined };
       role_ceiling: { Args: { _role: Database["public"]["Enums"]["org_role"] }; Returns: string[] };
       role_default_permissions: {

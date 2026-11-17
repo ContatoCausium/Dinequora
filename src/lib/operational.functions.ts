@@ -254,6 +254,65 @@ export const findSaleByClientOrderId = createServerFn({ method: "POST" })
     });
   });
 
+/**
+ * Manual resolution of a pending POS sale (migration 0032, permission orders.resolve_pending).
+ * The database takes the SAME advisory lock as the sale, looks the order up by its key and:
+ *   - "recorded": the sale exists — nothing is closed; its details are returned for the receipt;
+ *   - "resolved" / "already_resolved": no sale exists under the lock — the key is closed for good
+ *     (create_pos_sale_v2 refuses it) and the operation is audited.
+ * Any error (timeout, network, permission) is thrown: the register keeps the sale pending.
+ */
+export const resolvePendingSale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      clientOrderId: z.string().min(1).max(160),
+      reason: z.string().trim().min(10).max(500),
+      amountCents: z.number().int().min(0).optional(),
+      attempts: z.number().int().min(0).optional(),
+      lastAttemptAt: z.string().datetime({ offset: true }).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    if (!s.location) throw new Error("location_required");
+    const { data: res, error } = await context.supabase.rpc("resolve_pending_pos_sale", {
+      _org_id: s.org.id,
+      _location_id: s.location.id,
+      _client_order_id: data.clientOrderId,
+      _reason: data.reason,
+      ...(data.amountCents === undefined ? {} : { _amount_cents: data.amountCents }),
+      ...(data.attempts === undefined ? {} : { _attempts: data.attempts }),
+      ...(data.lastAttemptAt === undefined ? {} : { _last_attempt_at: data.lastAttemptAt }),
+    });
+    if (error || !res)
+      throw await refused(
+        context.supabase,
+        error,
+        s.org.id,
+        "pos.resolve_pending",
+        s.location.id,
+        "resolve_failed",
+      );
+    const status = (res as { status?: string }).status;
+    if (status === "recorded") {
+      const found = await lookupSaleByKey(context.supabase, {
+        orgId: s.org.id,
+        locationId: s.location.id,
+        clientOrderId: data.clientOrderId,
+      });
+      return { status: "recorded" as const, order: found };
+    }
+    if (status === "resolved" || status === "already_resolved")
+      return {
+        status,
+        resolvedAt: String((res as { resolved_at?: string }).resolved_at ?? ""),
+      };
+    throw new Error("resolve_failed");
+  });
+
 export const fetchOperationalOrders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(

@@ -17,7 +17,18 @@ export async function lookupSaleByKey(
     .eq("client_order_id", input.clientOrderId.trim())
     .maybeSingle();
   if (error) throw new Error("sale_lookup_failed");
-  if (!order) return { status: "not_found" as const };
+  if (!order) {
+    // A key closed by an authorized person (resolve_pending_pos_sale, 0032) can never record a sale.
+    const { data: voided, error: ve } = await client
+      .from("pos_sale_key_voids")
+      .select("created_at")
+      .eq("org_id", input.orgId)
+      .eq("client_order_id", input.clientOrderId.trim())
+      .maybeSingle();
+    if (ve) throw new Error("sale_lookup_failed");
+    if (voided) return { status: "resolved" as const, resolvedAt: voided.created_at };
+    return { status: "not_found" as const };
+  }
   const { data: payments, error: pe } = await client
     .from("payments")
     .select("id,method")

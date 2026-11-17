@@ -46,6 +46,11 @@
 #      archive, update x archive, update x reactivate, reactivate x reactivate, archive x product
 #      activation): no overwrite, no implicit re-activation, the audit trail holds exactly the
 #      committed operations (own isolated organization, removed at the end)
+#   5g. 0032 concurrency: a POS sale and the manual resolution of a pending sale in two PostgreSQL
+#      sessions, both orders, with COMMIT and ROLLBACK: the same advisory lock serializes them; a
+#      recorded sale is recovered (nothing closed), a closed key refuses any later sale
+#      (sale_key_voided), the audit trail holds exactly the committed closures (own isolated
+#      organization, removed at the end)
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -190,6 +195,10 @@ echo "::endgroup::"
 
 echo "::group::5f. category intents concurrency (0029, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/menu_category_intent_race.mjs | tee "$ARTIFACTS/menu-category-intent-race.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5g. pending POS sale resolution concurrency (0032, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/pos_pending_resolution_race.mjs | tee "$ARTIFACTS/pos-pending-resolution-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

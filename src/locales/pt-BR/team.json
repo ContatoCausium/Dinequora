@@ -258,7 +258,8 @@
       "activity": "Histórico de atividades",
       "locations": "Unidades",
       "branding": "Marca",
-      "billing": "Cobrança"
+      "billing": "Cobrança",
+      "resolve_pending": "Resolver vendas pendentes"
     }
   },
   "profiles": {
@@ -385,7 +386,9 @@
         "item_ready": "Item do pedido marcado como pronto"
       },
       "pos": {
-        "finalized": "Venda concluída"
+        "finalized": "Venda concluída",
+        "pending_sale_resolved": "Venda pendente encerrada como não registrada",
+        "pending_sale_recovered": "Venda pendente recuperada (já registrada)"
       },
       "inventory": {
         "moved": "Movimentação de estoque registrada",

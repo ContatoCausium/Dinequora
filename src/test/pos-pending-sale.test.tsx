@@ -11,6 +11,7 @@ import { classifyAttempt, listPendingSales, pendingStorageKey } from "@/lib/pos-
 const api = vi.hoisted(() => ({
   fetchOperationalMenu: vi.fn(),
   findSaleByClientOrderId: vi.fn(),
+  resolvePendingSale: vi.fn(),
 }));
 const persistence = vi.hoisted(() => ({
   persistFinalizedPOSSaleAtomic: vi.fn(),
@@ -44,8 +45,8 @@ const store: Location = {
   demoScale: 1,
 } as Location;
 
-function setWorkspace() {
-  const perms = new Set<Permission>(roleDefaults("staff"));
+function setWorkspace(extra: Permission[] = []) {
+  const perms = new Set<Permission>([...roleDefaults("staff"), ...extra]);
   workspace.current = {
     role: "staff",
     can: (p: Permission) => perms.has(p),
@@ -124,6 +125,7 @@ beforeEach(async () => {
   setWorkspace();
   api.fetchOperationalMenu.mockReset().mockResolvedValue(MENU);
   api.findSaleByClientOrderId.mockReset().mockResolvedValue({ status: "not_found" });
+  api.resolvePendingSale.mockReset();
   persistence.persistFinalizedPOSSaleAtomic.mockReset().mockResolvedValue(confirmed);
   for (const f of [toast.success, toast.error, toast.info]) f.mockReset();
 });
@@ -349,5 +351,156 @@ describe("POS sale outbox", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Record payment \$/ }));
     const dialog = await screen.findByRole("dialog", { name: /^Record payment ·/ });
     expect(dialog).toHaveTextContent("it does not charge cards or wallets");
+  });
+});
+
+describe("manual resolution of a pending sale (0032)", () => {
+  /** Leaves the register with one pending sale whose outcome is unknown ("not found yet"). */
+  async function pendingSale() {
+    persistence.persistFinalizedPOSSaleAtomic.mockRejectedValueOnce(networkError());
+    render(<POSPage />);
+    await addBurger();
+    await charge();
+    await pendingDialog();
+    await waitFor(() => expect(api.findSaleByClientOrderId).toHaveBeenCalledTimes(1));
+    await screen.findByText(/No recorded sale was found with this code yet/);
+    return keysSent()[0]!;
+  }
+  const RESOLVER: Permission[] = ["orders.resolve_pending" as Permission];
+  const reasonBox = () => screen.getByLabelText("Justification (required)");
+  const confirmBox = () => screen.getByRole("checkbox", { name: /was not received for this sale/ });
+  const submit = () => screen.getByRole("button", { name: "Close sale as not recorded" });
+
+  it("without the permission: no way to close it, only an explanation", async () => {
+    await pendingSale();
+    expect(screen.queryByRole("button", { name: /Close this sale manually/ })).toBeNull();
+    expect(
+      screen.getByText(/Only an owner, an organization admin or a manager allowed/),
+    ).toBeInTheDocument();
+    expect(api.resolvePendingSale).not.toHaveBeenCalled();
+  });
+
+  it("checks the key first, then requires a justification and an explicit confirmation; resolved → pending removed, ticket unlocked with a NEW key", async () => {
+    setWorkspace(RESOLVER);
+    const key = await pendingSale();
+    api.resolvePendingSale.mockResolvedValue({
+      status: "resolved",
+      resolvedAt: "2026-11-17T12:00:00Z",
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Close this sale manually/ }));
+    await screen.findByRole("dialog", { name: /Close this sale as NOT recorded/ });
+    expect(api.findSaleByClientOrderId).toHaveBeenCalledTimes(2); // checked again before offering it
+    expect(screen.getByText(key)).toBeInTheDocument(); // full code shown
+    expect(submit()).toBeDisabled();
+    fireEvent.change(reasonBox(), { target: { value: "short" } });
+    fireEvent.click(confirmBox());
+    expect(submit()).toBeDisabled(); // justification too short
+    fireEvent.change(reasonBox(), {
+      target: { value: "Customer left; drawer counted, no cash taken" },
+    });
+    expect(submit()).not.toBeDisabled();
+    fireEvent.click(submit());
+    await waitFor(() => expect(api.resolvePendingSale).toHaveBeenCalledTimes(1));
+    expect(api.resolvePendingSale.mock.calls[0]![0].data).toMatchObject({
+      orgId: "org-1",
+      locationId: "downtown",
+      clientOrderId: key,
+      reason: "Customer left; drawer counted, no cash taken",
+      amountCents: expect.any(Number),
+      attempts: 1,
+    });
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(
+        expect.stringMatching(/closed as not recorded and logged/),
+      ),
+    );
+    expect(listPendingSales("org-1")).toEqual([]);
+    expect(screen.queryByRole("dialog", { name: /Sale not confirmed yet/ })).toBeNull();
+    // the ticket is back, unlocked; charging it again is a new sale with a new key
+    persistence.persistFinalizedPOSSaleAtomic.mockResolvedValue(confirmed);
+    await charge();
+    await waitFor(() => expect(keysSent()).toHaveLength(2));
+    expect(keysSent()[1]).not.toBe(key);
+  });
+
+  it("the database found the sale: nothing is closed, its receipt is shown", async () => {
+    setWorkspace(RESOLVER);
+    await pendingSale();
+    api.resolvePendingSale.mockResolvedValue({ status: "recorded", order: found });
+    fireEvent.click(screen.getByRole("button", { name: /Close this sale manually/ }));
+    await screen.findByRole("dialog", { name: /Close this sale as NOT recorded/ });
+    fireEvent.change(reasonBox(), { target: { value: "Cashier says the customer paid in cash" } });
+    fireEvent.click(confirmBox());
+    fireEvent.click(submit());
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Sale recorded · Order #A1"));
+    expect(listPendingSales("org-1")).toEqual([]);
+  });
+
+  it("timeout or error while closing: the sale stays pending, nothing changes", async () => {
+    setWorkspace(RESOLVER);
+    await pendingSale();
+    api.resolvePendingSale.mockRejectedValue(new DOMException("timed out", "TimeoutError"));
+    fireEvent.click(screen.getByRole("button", { name: /Close this sale manually/ }));
+    await screen.findByRole("dialog", { name: /Close this sale as NOT recorded/ });
+    fireEvent.change(reasonBox(), {
+      target: { value: "Customer left; drawer counted, no cash taken" },
+    });
+    fireEvent.click(confirmBox());
+    fireEvent.click(submit());
+    expect(
+      await screen.findByText("The sale could not be closed (no answer or an error).", {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+    expect(listPendingSales("org-1")).toHaveLength(1);
+  });
+
+  it("if the key cannot be checked, closing is not offered at all", async () => {
+    setWorkspace(RESOLVER);
+    await pendingSale();
+    api.findSaleByClientOrderId.mockRejectedValue(networkError());
+    fireEvent.click(screen.getByRole("button", { name: /Close this sale manually/ }));
+    expect(await screen.findByText(/couldn't reach Dinequora to check/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /Close this sale as NOT recorded/ })).toBeNull();
+    expect(api.resolvePendingSale).not.toHaveBeenCalled();
+    expect(listPendingSales("org-1")).toHaveLength(1);
+  });
+
+  it("closed by someone else: a resend is refused (sale_key_voided) and the register unlocks", async () => {
+    await pendingSale();
+    persistence.persistFinalizedPOSSaleAtomic.mockRejectedValueOnce(new Error("sale_key_voided"));
+    fireEvent.click(screen.getByRole("button", { name: "Send again safely" }));
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(
+        expect.stringMatching(/closed as not recorded by an authorized person/),
+      ),
+    );
+    expect(listPendingSales("org-1")).toEqual([]);
+  });
+
+  it("after a reload, a key closed meanwhile removes the pending sale and brings the ticket back unlocked", async () => {
+    const first = await (async () => {
+      persistence.persistFinalizedPOSSaleAtomic.mockRejectedValueOnce(networkError());
+      const view = render(<POSPage />);
+      await addBurger();
+      await charge();
+      await pendingDialog();
+      return view;
+    })();
+    first.unmount();
+    api.findSaleByClientOrderId
+      .mockReset()
+      .mockResolvedValue({ status: "resolved", resolvedAt: "x" });
+    render(<POSPage />);
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(
+        expect.stringMatching(/closed as not recorded by an authorized person/),
+      ),
+    );
+    expect(listPendingSales("org-1")).toEqual([]);
+    expect(
+      await screen.findByRole("button", { name: /^Remove Classic Burger/ }),
+    ).toBeInTheDocument();
+    expect(persistence.persistFinalizedPOSSaleAtomic).toHaveBeenCalledTimes(1);
   });
 });
