@@ -541,7 +541,8 @@ const stamp = Date.now();
     }),
   );
   const { data: kp } = await c.rpc("my_permissions", { _org_id: ORG });
-  // 44 catalog permissions (0020) minus branding, billing and suppliers.edit.
+  // 45 catalog permissions (0032) minus branding, billing, suppliers.edit and orders.resolve_pending
+  // (managers hold it only by explicit grant).
   check(
     "manager sanity: own permissions loaded",
     Array.isArray(kp) && kp.length === 41 && kp.includes("inventory.costs"),
