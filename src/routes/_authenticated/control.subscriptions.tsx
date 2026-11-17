@@ -62,6 +62,10 @@ interface AuditLogEntry {
   date: string;
 }
 
+/**
+ * Placeholder LIST prices used only for estimates on this page (labelled as such in the UI). They
+ * are not the billing catalog and are never charged; unchanged in wave 0 (no price changes).
+ */
 const PLAN_PRICES: Record<PlanId, { monthly: number; annual: number }> = {
   starter: { monthly: 29, annual: 290 },
   growth: { monthly: 79, annual: 790 },
@@ -157,6 +161,13 @@ function SubscriptionsControlRoute() {
         await updateOrganization(actionTarget.id, { status: "suspended" }, reason);
       } else if (selectedAction === "reactivate" || selectedAction === "renew") {
         await updateOrganization(actionTarget.id, { status: "active" }, reason);
+      } else {
+        // No write exists for this action without a billing provider (e.g. grace period): say so,
+        // never "applied and recorded" (wave 0).
+        toast.info(t("subsPage.nothingApplied"));
+        setActionTarget(null);
+        setSelectedAction(null);
+        return;
       }
 
       const newLog: AuditLogEntry = {

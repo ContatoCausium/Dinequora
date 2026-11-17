@@ -185,17 +185,21 @@ function ControlPlansPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <header className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
             {t("plansPage.title")}
           </h1>
-          <p className="text-sm text-muted-foreground">{t("plansPage.subtitle")}</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("plansPage.subtitle")}</p>
         </div>
-        <Tag tone="warning" className="w-fit">
-          <ShieldAlert className="mr-1 size-3.5" />
-          {t("plansPage.simBanner")}
-        </Tag>
+        {/* Wave 0: plan edits are a local preview only — say so where the actions are. */}
+        <div
+          role="note"
+          className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground"
+        >
+          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+          <p>{t("plansPage.simBanner")}</p>
+        </div>
       </header>
 
       {loading ? (
