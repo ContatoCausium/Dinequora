@@ -1705,6 +1705,7 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: string };
+      accessible_location_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       active_store_count: { Args: { _org_id: string }; Returns: number };
       admin_assign_owner: {
         Args: { _email: string; _org_id: string; _verification_note: string };
@@ -2015,6 +2016,15 @@ export type Database = {
       is_org_member: { Args: { _org_id: string }; Returns: boolean };
       is_org_owner: { Args: { _org_id: string }; Returns: boolean };
       is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      ledger_day_totals: {
+        Args: {
+          _days?: number;
+          _location_ids?: string[];
+          _org_id: string;
+          _same_time_yesterday?: boolean;
+        };
+        Returns: Json;
+      };
       location_in_org: { Args: { _location_id: string; _org_id: string }; Returns: boolean };
       log_access_denied: {
         Args: { _action: string; _detail?: string; _location_id?: string; _org_id: string };

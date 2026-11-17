@@ -8,6 +8,7 @@ import { orderListQuery } from "./orders-query";
 import { toMenuReadModel } from "./menu-read-model";
 import { readNavCounts } from "./nav-counts";
 import { lookupSaleByKey } from "./pos-sale-lookup";
+import { readLedgerSummaryAggregated } from "./ledger-aggregate";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -421,10 +422,11 @@ function ledgerStores(s: Awaited<ReturnType<typeof scope>>) {
 }
 
 /**
- * Financial ledger summary (wave 0): day totals per store and kind for the last `days` local days
- * of each store (null = whole history), read COMPLETELY with keyset pagination (ledger-reader.ts)
- * or explicitly marked incomplete. Replaces the unpaged ledger read that PostgREST cut at 1,000
- * rows. RLS still decides what the caller may read (finance_read: finance/dashboard/reports).
+ * Financial ledger summary: day totals per store and kind for the last `days` local days of each
+ * store (null = whole history). M2: aggregated by the database in one snapshot
+ * (ledger_day_totals, migration 0031, SECURITY INVOKER). Where that function does not exist yet,
+ * the wave-0 paged reader (ledger-reader.ts) reads every row or marks the result incomplete. RLS
+ * still decides what the caller may read (finance_read: finance/dashboard/reports).
  */
 export const fetchLedgerSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -438,13 +440,16 @@ export const fetchLedgerSummary = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const s = await scope(context.supabase, data.orgId, data.locationId);
+    const input = {
+      orgId: s.org.id,
+      stores: ledgerStores(s),
+      days: data.days,
+      sameTimeYesterday: data.sameTimeYesterday,
+    };
+    const aggregated = await readLedgerSummaryAggregated(context.supabase, input);
+    if (aggregated) return aggregated;
     try {
-      return await readLedgerSummary(context.supabase as unknown as LedgerClient, {
-        orgId: s.org.id,
-        stores: ledgerStores(s),
-        days: data.days,
-        sameTimeYesterday: data.sameTimeYesterday,
-      });
+      return await readLedgerSummary(context.supabase as unknown as LedgerClient, input);
     } catch (e) {
       if (e instanceof LedgerReadError) throw new Error("ledger_read_failed");
       throw e;
