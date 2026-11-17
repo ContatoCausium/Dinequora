@@ -458,7 +458,7 @@
       "billing": "Projeção de faturamento e MRR",
       "billingHint": "Preços de catálogo; provedor de cobrança não conectado",
       "sales": "Métricas de vendas dos restaurantes",
-      "salesHint": "Alimentadas por modelos estatísticos de demonstração"
+      "salesHint": "Calculadas a partir dos pedidos e do livro-caixa registrados de cada restaurante. Valores ilustrativos só aparecem enquanto o modo apresentação está ligado em um navegador e nunca são gravados."
     }
   },
   "demo": {

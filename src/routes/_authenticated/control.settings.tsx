@@ -223,9 +223,9 @@ function Settings() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Section title={t("settings.monitoringTitle")} hint={t("settings.monitoringHint")}>
             <div className="grid gap-3 p-5 text-sm">
-              <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
                 <div className="flex items-center gap-2.5">
-                  <Activity className="size-4 text-success" />
+                  <Activity className="size-4 shrink-0 text-success" />
                   <div>
                     <p className="font-medium">{t("settings.metricsList.ping")}</p>
                     <p className="text-xs text-muted-foreground">
@@ -237,9 +237,9 @@ function Settings() {
                 </div>
                 <Tag tone="neutral">{t("settings.metricClassification.real")}</Tag>
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
                 <div className="flex items-center gap-2.5">
-                  <Eye className="size-4 text-muted-foreground" />
+                  <Eye className="size-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="font-medium">{t("settings.metricsList.billing")}</p>
                     <p className="text-xs text-muted-foreground">
@@ -249,9 +249,9 @@ function Settings() {
                 </div>
                 <Tag tone="warning">{t("settings.metricClassification.simulated")}</Tag>
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
                 <div className="flex items-center gap-2.5">
-                  <Eye className="size-4 text-muted-foreground" />
+                  <Eye className="size-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="font-medium">{t("settings.metricsList.sales")}</p>
                     <p className="text-xs text-muted-foreground">
@@ -259,7 +259,7 @@ function Settings() {
                     </p>
                   </div>
                 </div>
-                <Tag tone="warning">{t("settings.metricClassification.simulated")}</Tag>
+                <Tag tone="neutral">{t("settings.metricClassification.real")}</Tag>
               </div>
             </div>
           </Section>

@@ -60,7 +60,7 @@ export function Tag({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded border px-1.5 text-[10px] font-medium leading-4",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded border px-1.5 text-[10px] font-medium leading-4",
         tone === "warning"
           ? "border-warning/40 text-warning"
           : tone === "danger"

@@ -458,7 +458,7 @@
       "billing": "Billing and MRR projection",
       "billingHint": "Catalog prices; billing provider not connected",
       "sales": "Restaurant sales metrics",
-      "salesHint": "Fed by demonstration statistical models"
+      "salesHint": "Calculated from each restaurant’s recorded orders and ledger. Illustrative figures appear only while presentation mode is turned on in a browser, and are never stored."
     }
   },
   "demo": {
