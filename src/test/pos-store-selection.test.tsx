@@ -12,7 +12,10 @@ import type { Location } from "@/lib/tenants";
  * (create_pos_sale_v2 -> assert_operational_scope -> can_operate_location) are covered by
  * scripts/security/reconstructed_operations.sql and the permission matrix.
  */
-const api = vi.hoisted(() => ({ fetchOperationalMenu: vi.fn() }));
+const api = vi.hoisted(() => ({
+  fetchOperationalMenu: vi.fn(),
+  findSaleByClientOrderId: vi.fn(),
+}));
 const persistence = vi.hoisted(() => ({
   persistFinalizedPOSSaleAtomic: vi.fn(),
   cancelOrderWithReversal: vi.fn(),
@@ -26,6 +29,7 @@ vi.mock("sonner", () => ({ toast }));
 vi.mock("@/components/app/workspace-context", () => ({ useWorkspace: () => workspace.current }));
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: unknown) => options,
+  useNavigate: () => vi.fn(),
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => (
     <a href={to}>{children}</a>
   ),

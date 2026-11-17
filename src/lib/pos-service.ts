@@ -31,6 +31,12 @@ export interface POSSession {
   changeDueCents?: number;
   suspendedSessions: SuspendedSale[];
   completedAt?: string;
+  /**
+   * Idempotency key of this ticket's sale (pos-outbox), assigned on the first send and kept until
+   * the sale is confirmed: every resend of the ticket — even after edits — uses it, so the
+   * database records at most one order for the ticket.
+   */
+  saleKey?: string | undefined;
 }
 
 export interface SuspendedSale {

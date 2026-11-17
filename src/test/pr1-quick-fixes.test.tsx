@@ -127,7 +127,8 @@ describe("POS receipt from the server confirmation", () => {
   it("the POS no longer derives the receipt label from the organization type", () => {
     const pos = fs.readFileSync(path.join(SRC, "components/pages/pos-page.tsx"), "utf8");
     expect(pos).not.toMatch(/isSimulation:\s*org\.fictional/);
-    expect(pos).toContain("confirmedReceipt(paid, persistRes)");
+    // Wave 0: the receipt is built from the server confirmation of the pending sale.
+    expect(pos).toContain("confirmedReceipt(p.session, confirmed)");
   });
 });
 

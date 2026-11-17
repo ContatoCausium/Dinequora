@@ -137,7 +137,11 @@
   "errors": {
     "tax_rate_changed": "The store's sales-tax rate changed while this ticket was open. The ticket was recalculated with the current rate; review the total and charge again.",
     "tax_rate_not_configured": "Sales tax is not configured for this store. An owner or store manager must set it before selling.",
-    "store_unavailable": "This store can no longer record sales: it was deactivated or your access changed. Nothing was charged."
+    "store_unavailable": "This store can no longer record sales: it was deactivated or your access changed. Nothing was charged.",
+    "insufficient_stock": "Not enough stock to sell this ticket: an ingredient of one of its items is below what the recipe needs. Nothing was recorded. Receive or adjust the stock in Inventory, or remove the item.",
+    "insufficient_stock_link": "Open Inventory",
+    "invalid_ticket": "This ticket can't be recorded as it is ({{code}}). Nothing was recorded. Review the items and try again.",
+    "order_cancelled": "This ticket had already been recorded and then cancelled. Nothing new was recorded; start a new ticket to sell again."
   },
   "store": {
     "chooseTitle": "Choose the store for this register",
@@ -160,5 +164,23 @@
     "heldOnOrgChange": "The open ticket was put on hold in {{org}}.",
     "holdFailed": "This ticket can’t be held for this store."
   },
-  "addedAnnounce": "{{name}} added. {{count}} items on the ticket."
+  "addedAnnounce": "{{name}} added. {{count}} items on the ticket.",
+  "pending": {
+    "title": "Sale not confirmed yet",
+    "body": "The connection failed before Dinequora could confirm this sale of {{amount}}. Don't take payment again: the sale may already be recorded.",
+    "safety": "Checking and sending again use the same sale code, so this sale can never be recorded twice.",
+    "code": "Sale code {{code}} · attempt {{attempts}}",
+    "verify": "Check again",
+    "verifying": "Checking…",
+    "resend": "Send again safely",
+    "resending": "Sending…",
+    "notFoundYet": "No recorded sale was found with this code yet. It may still be on its way — check again in a moment, or send it again safely.",
+    "verifyFailed": "We couldn't reach Dinequora to check. The sale stays pending; try again when the connection is back.",
+    "accessChanged": "Your access to this store changed, so the sale can't be checked from here. It stays pending; ask a manager to look for it in Orders.",
+    "foundUnpaid": "The order exists but its payment is not recorded yet. Send it again safely to finish it.",
+    "storageUnavailable": "This browser can't keep a safe copy of the sale (private mode or full storage), so it was not sent. Free up storage or use a normal window.",
+    "resolvedElsewhere": "This sale was resolved in another tab.",
+    "conflictRecorded": "This ticket had already been recorded (order {{number}}) before it was changed. The recorded version is shown; review it before taking any other payment.",
+    "live": "Sale pending confirmation"
+  }
 }

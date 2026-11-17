@@ -137,7 +137,11 @@
   "errors": {
     "tax_rate_changed": "A alíquota de imposto da loja mudou enquanto esta comanda estava aberta. A comanda foi recalculada com a alíquota atual; confira o total e cobre novamente.",
     "tax_rate_not_configured": "O imposto sobre vendas desta loja não está configurado. Um proprietário ou gerente da loja precisa defini-lo antes de vender.",
-    "store_unavailable": "Esta loja não pode mais registrar vendas: ela foi desativada ou seu acesso mudou. Nada foi cobrado."
+    "store_unavailable": "Esta loja não pode mais registrar vendas: ela foi desativada ou seu acesso mudou. Nada foi cobrado.",
+    "insufficient_stock": "Estoque insuficiente para vender esta comanda: um ingrediente de um dos itens está abaixo do que a receita exige. Nada foi registrado. Receba ou ajuste o estoque em Estoque, ou remova o item.",
+    "insufficient_stock_link": "Abrir Estoque",
+    "invalid_ticket": "Esta comanda não pode ser registrada como está ({{code}}). Nada foi registrado. Revise os itens e tente novamente.",
+    "order_cancelled": "Esta comanda já tinha sido registrada e depois cancelada. Nada novo foi registrado; abra uma nova comanda para vender de novo."
   },
   "store": {
     "chooseTitle": "Escolha a loja deste caixa",
@@ -160,5 +164,23 @@
     "heldOnOrgChange": "A comanda aberta foi colocada em espera em {{org}}.",
     "holdFailed": "Esta comanda não pode ficar em espera para esta loja."
   },
-  "addedAnnounce": "{{name}} adicionado. {{count}} itens no pedido."
+  "addedAnnounce": "{{name}} adicionado. {{count}} itens no pedido.",
+  "pending": {
+    "title": "Venda ainda não confirmada",
+    "body": "A conexão falhou antes de o Dinequora confirmar esta venda de {{amount}}. Não receba o pagamento de novo: a venda pode já estar registrada.",
+    "safety": "Verificar e enviar de novo usam o mesmo código de venda, então esta venda nunca será registrada duas vezes.",
+    "code": "Código da venda {{code}} · tentativa {{attempts}}",
+    "verify": "Verificar de novo",
+    "verifying": "Verificando…",
+    "resend": "Enviar de novo com segurança",
+    "resending": "Enviando…",
+    "notFoundYet": "Ainda não foi encontrada uma venda registrada com este código. Ela pode estar a caminho — verifique de novo em instantes ou envie de novo com segurança.",
+    "verifyFailed": "Não conseguimos falar com o Dinequora para verificar. A venda continua pendente; tente de novo quando a conexão voltar.",
+    "accessChanged": "Seu acesso a esta loja mudou, então a venda não pode ser verificada daqui. Ela continua pendente; peça a um gerente para procurá-la em Pedidos.",
+    "foundUnpaid": "O pedido existe, mas o pagamento ainda não está registrado. Envie de novo com segurança para concluí-lo.",
+    "storageUnavailable": "Este navegador não consegue guardar uma cópia segura da venda (modo privado ou armazenamento cheio), então ela não foi enviada. Libere espaço ou use uma janela normal.",
+    "resolvedElsewhere": "Esta venda foi resolvida em outra aba.",
+    "conflictRecorded": "Esta comanda já tinha sido registrada (pedido {{number}}) antes de ser alterada. A versão registrada é exibida; confira antes de receber qualquer outro pagamento.",
+    "live": "Venda aguardando confirmação"
+  }
 }

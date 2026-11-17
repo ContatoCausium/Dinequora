@@ -92,37 +92,42 @@ export interface ConfirmedSale {
   taxCents?: number;
   totalCents?: number;
   isSimulation?: boolean;
+  /** False when the sale was recorded but its details could not be read back (wave 0). */
+  readback?: boolean;
   error?: string;
 }
 
+/**
+ * Sends a finalized POS sale. `clientOrderId` is the ticket's idempotency key (pos-outbox): the
+ * same key always yields at most one order. Network failures and timeouts are THROWN (the outcome
+ * is unknown and must be reconciled by key); business refusals are returned as `error`.
+ */
 export async function persistFinalizedPOSSaleAtomic(
   session: POSSession,
-  clientOrderId?: string,
+  clientOrderId: string,
+  signal?: AbortSignal,
 ): Promise<ConfirmedSale> {
   if (session.cart.length === 0) {
     return { success: false, error: "O carrinho está vazio." };
   }
   // A store without a configured rate cannot sell: the server would refuse with the same code.
   if (session.taxRatePpm === null) return { success: false, error: "tax_rate_not_configured" };
-  try {
-    return await submitOperationalSale({
-      data: {
-        orgId: session.orgId,
-        locationId: session.locationId,
-        clientOrderId: clientOrderId ?? `pos-tx-${session.id}`,
-        orderType: session.orderType,
-        customerName: session.customerName ?? "Walk-in",
-        discountCents: session.discountCents,
-        // The exact rate the ticket displayed (ppm): confirmation only, never the rate charged.
-        taxRatePpm: session.taxRatePpm,
-        items: saleItems(session.cart),
-        paymentMethod: session.paymentMethod ?? "cash",
-        isSimulation: false,
-      },
-    });
-  } catch (e) {
-    return { success: false, error: message(e) };
-  }
+  return await submitOperationalSale({
+    ...(signal ? { signal } : {}),
+    data: {
+      orgId: session.orgId,
+      locationId: session.locationId,
+      clientOrderId,
+      orderType: session.orderType,
+      customerName: session.customerName ?? "Walk-in",
+      discountCents: session.discountCents,
+      // The exact rate the ticket displayed (ppm): confirmation only, never the rate charged.
+      taxRatePpm: session.taxRatePpm,
+      items: saleItems(session.cart),
+      paymentMethod: session.paymentMethod ?? "cash",
+      isSimulation: false,
+    },
+  });
 }
 
 export async function persistOrderStatusTransition(

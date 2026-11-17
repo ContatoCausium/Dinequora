@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -53,6 +53,17 @@ import {
   cancelOrderWithReversal,
 } from "@/lib/orders-persistence-service";
 import { confirmedReceipt } from "@/lib/pos-receipt";
+import { findSaleByClientOrderId } from "@/lib/operational.functions";
+import {
+  classifyAttempt,
+  clearPendingSale,
+  listPendingSales,
+  newSaleKey,
+  pendingStorageKey,
+  savePendingSale,
+  SALE_TIMEOUT_MS,
+  type PendingSale,
+} from "@/lib/pos-outbox";
 import { canSellAt, resolvePosStore, type PosStoreState } from "@/lib/pos-store";
 import type { Location } from "@/lib/tenants";
 import { type OrderType } from "@/lib/orders-service";
@@ -280,6 +291,7 @@ function POSRegister({
   const lng = i18n.language;
   const money = (cents: number) => fmtMoneyCents(cents, lng);
   const { org, user, role, can, refresh } = useWorkspace();
+  const navigate = useNavigate();
   // Owners are org-wide; managers/staff are limited to their authorized stores.
   const locationScope = role === "owner" ? undefined : org.locations.map((l) => l.id);
   // The store of this register (POSPage remounts the register for another store).
@@ -326,6 +338,19 @@ function POSRegister({
   const [cancelReason, setCancelReason] = useState("");
   const [cancellingSale, setCancellingSale] = useState(false);
   const [submittingSale, setSubmittingSale] = useState(false);
+  // Wave 0 — a sale whose outcome is not confirmed yet (lost response, timeout, reload). It is
+  // persisted before sending (pos-outbox) and blocks the register until verified by its key.
+  const [pending, setPending] = useState<PendingSale | null>(() => {
+    try {
+      return listPendingSales(org.id).find((p) => p.locationId === activeLocId) ?? null;
+    } catch {
+      return null;
+    }
+  });
+  const [pendingBusy, setPendingBusy] = useState<"verifying" | "resending" | null>(null);
+  const [pendingNote, setPendingNote] = useState<string | null>(null);
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
 
   // A profile name change only relabels the open ticket; it never discards it.
   useEffect(() => {
@@ -338,7 +363,8 @@ function POSRegister({
     checkoutOpen ||
     submittingSale ||
     receiptSession !== null ||
-    cancellingSale;
+    cancellingSale ||
+    pending !== null;
   useEffect(() => {
     onBusyChange(busy, store);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -544,60 +570,276 @@ function POSRegister({
   const tenderedCents = parseAmountCents(tenderedInput || "0");
   const cashShort = payMethod === "cash" && tenderedCents < session.totalCents;
 
+  /** The sale is recorded: receipt, new ticket, outbox entry removed. */
+  const finishRecorded = (
+    p: PendingSale,
+    confirmed: {
+      orderId: string;
+      orderNumber?: string | null | undefined;
+      subtotalCents?: number | undefined;
+      taxCents?: number | undefined;
+      totalCents?: number | undefined;
+      isSimulation?: boolean | undefined;
+    },
+  ) => {
+    clearPendingSale(org.id, p.key);
+    setPending(null);
+    setPendingNote(null);
+    const orderNumber = displayOrderNumber(confirmed.orderNumber ?? undefined, confirmed.orderId);
+    setReceiptSession({
+      ...confirmedReceipt(p.session, confirmed),
+      persistedOrderId: confirmed.orderId,
+      orderNumber,
+    });
+    setCheckoutOpen(false);
+    // Only reset the ticket once the server confirmed the sale.
+    setSession((cur) => (cur.saleKey === p.key || cur.id === p.session.id ? newSession() : cur));
+    toast.success(t("toast.saleRecorded", { number: orderNumber }));
+    return orderNumber;
+  };
+
+  /**
+   * Looks the sale up by its key. "found" resolves it; "not found" or a failed lookup NEVER mean
+   * the sale does not exist: it stays pending.
+   */
+  const verifyPending = async (p: PendingSale): Promise<"found" | "pending"> => {
+    setPendingBusy("verifying");
+    try {
+      const found = await findSaleByClientOrderId({
+        data: { orgId: p.orgId, locationId: p.locationId, clientOrderId: p.key },
+        signal: AbortSignal.timeout(SALE_TIMEOUT_MS),
+      });
+      if (found.status === "found" && found.orderStatus === "cancelled") {
+        clearPendingSale(org.id, p.key);
+        setPending(null);
+        setPendingNote(null);
+        setSession((cur) => (cur.saleKey === p.key ? { ...cur, saleKey: undefined } : cur));
+        toast.error(t("toast.saleFailed"), { description: t("errors.order_cancelled") });
+        return "found";
+      }
+      if (found.status === "found" && found.paid) {
+        finishRecorded(p, found);
+        return "found";
+      }
+      setPendingNote(found.status === "found" ? "foundUnpaid" : "notFoundYet");
+      return "pending";
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      setPendingNote(
+        STORE_REFUSALS.has(code) || code === "permission_denied" ? "accessChanged" : "verifyFailed",
+      );
+      return "pending";
+    } finally {
+      setPendingBusy(null);
+    }
+  };
+
+  /** Readable message for a definitive refusal (nothing was recorded). */
+  const refusalDetail = (code: string) => {
+    if (STORE_REFUSALS.has(code) || code === "permission_denied")
+      return t("errors.store_unavailable");
+    if (code === "tax_rate_changed" || code === "tax_rate_not_configured")
+      return t(`errors.${code}`);
+    if (code === "insufficient_stock") return t("errors.insufficient_stock");
+    return t("errors.invalid_ticket", { code });
+  };
+
+  /**
+   * Sends (or resends) a pending sale with its own key and exact payload. The entry is persisted
+   * BEFORE the request; if the browser cannot persist it, nothing is sent.
+   */
+  const sendPending = async (base: PendingSale) => {
+    const p: PendingSale = {
+      ...base,
+      attempts: base.attempts + 1,
+      lastAttemptAt: new Date().toISOString(),
+      state: "sending",
+    };
+    if (!savePendingSale(p)) {
+      toast.error(t("toast.saleFailed"), { description: t("pending.storageUnavailable") });
+      return;
+    }
+    let result: Awaited<ReturnType<typeof persistFinalizedPOSSaleAtomic>> | null = null;
+    let error: unknown = null;
+    try {
+      result = await persistFinalizedPOSSaleAtomic(
+        p.session,
+        p.key,
+        AbortSignal.timeout(SALE_TIMEOUT_MS),
+      );
+    } catch (err) {
+      error = err;
+    }
+    let outcome = classifyAttempt(result, error);
+    // An access refusal is definitive only on the key's FIRST attempt: no earlier request with this
+    // key exists (a previous unknown outcome would have kept the sale pending), so nothing was
+    // recorded. On a resend it may follow a sale recorded before access changed: stays pending.
+    if (outcome.kind === "unknown" && outcome.reason === "access" && p.attempts === 1)
+      outcome = { kind: "refused", code: outcome.code ?? "forbidden" };
+    if (outcome.kind === "recorded") {
+      if (!outcome.details) {
+        // Recorded, but its details could not be read back: fetch them by key (best effort).
+        setPending(p);
+        if ((await verifyPending(p)) === "found") return;
+      }
+      finishRecorded(p, { ...(result ?? {}), orderId: outcome.orderId });
+      return;
+    }
+    if (outcome.kind === "refused") {
+      // Definitive: no order exists under this key. The ticket keeps its key (see POSSession).
+      clearPendingSale(org.id, p.key);
+      setPending(null);
+      setPendingNote(null);
+      captureError(error ?? new Error(outcome.code), {
+        event: "pos.sale_failed",
+        critical: false,
+        storeId: activeLocId,
+      });
+      if (
+        outcome.code === "tax_rate_changed" ||
+        outcome.code === "tax_rate_not_configured" ||
+        STORE_REFUSALS.has(outcome.code) ||
+        outcome.code === "permission_denied"
+      ) {
+        refresh();
+        setCheckoutOpen(false);
+      }
+      toast.error(t("toast.saleFailed"), {
+        description: refusalDetail(outcome.code),
+        ...(outcome.code === "insufficient_stock"
+          ? {
+              action: {
+                label: t("errors.insufficient_stock_link"),
+                onClick: () => void navigate({ to: "/inventory" }),
+              },
+            }
+          : {}),
+      });
+      return;
+    }
+    if (outcome.kind === "cancelled") {
+      clearPendingSale(org.id, p.key);
+      setPending(null);
+      setSession((cur) => (cur.saleKey === p.key ? { ...cur, saleKey: undefined } : cur));
+      toast.error(t("toast.saleFailed"), { description: t("errors.order_cancelled") });
+      return;
+    }
+    // Conflict (the key already holds a recorded version of this ticket) or unknown outcome: the
+    // sale stays pending and is verified by its key right away.
+    captureError(error ?? new Error(outcome.kind), {
+      event: "pos.sale_unconfirmed",
+      critical: outcome.kind === "unknown" && outcome.reason !== "access",
+      storeId: activeLocId,
+    });
+    const unknown: PendingSale = {
+      ...p,
+      state: "unknown",
+      lastError:
+        outcome.kind === "unknown" ? (outcome.code ?? outcome.reason) : "idempotency_conflict",
+    };
+    savePendingSale(unknown);
+    setCheckoutOpen(false);
+    setPending(unknown);
+    if (outcome.kind === "unknown" && outcome.reason === "access") {
+      // The store refused this caller: reload the workspace so the register shows it.
+      refresh();
+    }
+    const resolved = await verifyPending(unknown);
+    if (resolved === "found" && outcome.kind === "conflict")
+      toast.info(t("pending.conflictRecorded"));
+  };
+
   const handleCompleteSale = async () => {
     // The store is re-validated by the server inside the sale transaction (access, active status,
     // organization); this only avoids sending a sale the workspace already knows cannot be recorded.
-    if (submittingSale || blocked) return;
-    const paid = simulatePayment(session, payMethod, tenderedCents);
+    if (submittingSale || blocked || pending) return;
+    const key = session.saleKey ?? newSaleKey();
+    const paid = simulatePayment({ ...session, saleKey: key }, payMethod, tenderedCents);
     if (payMethod === "cash" && tenderedCents < paid.totalCents) {
       toast.error(t("checkout.insufficient"));
       return;
     }
+    setSession((cur) => ({ ...cur, saleKey: key }));
     setSubmittingSale(true);
     try {
-      const idemKey = `pos-tx-${session.id || Date.now()}`;
-      const persistRes = await persistFinalizedPOSSaleAtomic(paid, idemKey);
-      if (!persistRes.success || !persistRes.orderId) {
-        throw new Error(persistRes.error || "sale_not_confirmed");
-      }
-
-      const orderNumber = displayOrderNumber(persistRes.orderNumber, persistRes.orderId);
-      setReceiptSession({
-        ...confirmedReceipt(paid, persistRes),
-        persistedOrderId: persistRes.orderId,
-        orderNumber,
+      await sendPending({
+        orgId: org.id,
+        locationId: activeLocId,
+        key,
+        session: paid,
+        createdAt: new Date().toISOString(),
+        attempts: 0,
+        lastAttemptAt: new Date().toISOString(),
+        state: "sending",
       });
-      setCheckoutOpen(false);
-      // Only reset active cart once server confirmed sale ID
-      setSession(newSession());
-      toast.success(t("toast.saleRecorded", { number: orderNumber }));
-    } catch (err) {
-      captureError(err, {
-        event: "pos.sale_failed",
-        critical: !isExpectedBusinessError(err),
-        storeId: activeLocId,
-      });
-      const code = err instanceof Error ? err.message : "";
-      // The store's rate changed (or was removed) since this ticket was prepared: reload the
-      // workspace so the ticket is recalculated with the current rate, and say why.
-      // The store was deactivated or the caller lost access to it since the workspace loaded: reload
-      // it, so the register shows that the store can no longer sell. Nothing was charged.
-      const storeRefused = STORE_REFUSALS.has(code);
-      if (code === "tax_rate_changed" || code === "tax_rate_not_configured" || storeRefused) {
-        refresh();
-        setCheckoutOpen(false);
-      }
-      const detail = storeRefused
-        ? t("errors.store_unavailable")
-        : (readableDetail(err) ??
-          (code === "tax_rate_changed" || code === "tax_rate_not_configured"
-            ? t(`errors.${code}`)
-            : undefined));
-      toast.error(t("toast.saleFailed"), detail ? { description: detail } : undefined);
     } finally {
       setSubmittingSale(false);
     }
   };
+
+  const handleResendPending = async () => {
+    const p = pendingRef.current;
+    if (!p || pendingBusy || submittingSale) return;
+    setPendingBusy("resending");
+    try {
+      await sendPending(p);
+    } finally {
+      setPendingBusy(null);
+    }
+  };
+
+  const handleVerifyPending = () => {
+    const p = pendingRef.current;
+    if (!p || pendingBusy || submittingSale) return;
+    void verifyPending(p);
+  };
+
+  // A pending sale found on load (reload, crash, closed tab) is verified once by its key.
+  useEffect(() => {
+    const p = pendingRef.current;
+    if (p) void verifyPending(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Another tab may resolve this pending sale: follow the shared outbox. If the entry disappeared,
+  // look it up by key (a recorded sale clears the ticket here too; otherwise the register unlocks).
+  useEffect(() => {
+    let storageKey: string;
+    try {
+      storageKey = pendingStorageKey(org.id);
+    } catch {
+      return;
+    }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== storageKey) return;
+      const current = pendingRef.current;
+      if (!current) return;
+      if (listPendingSales(org.id).some((x) => x.key === current.key)) return;
+      void findSaleByClientOrderId({
+        data: { orgId: current.orgId, locationId: current.locationId, clientOrderId: current.key },
+        signal: AbortSignal.timeout(SALE_TIMEOUT_MS),
+      }).then(
+        (found) => {
+          if (found.status === "found" && found.paid) {
+            setPending(null);
+            setPendingNote(null);
+            setSession((cur) => (cur.saleKey === current.key ? newSession() : cur));
+            toast.info(t("pending.resolvedElsewhere"));
+          } else if (found.status === "not_found") {
+            // Refused in the other tab: unlock here; the ticket keeps its key.
+            setPending(null);
+            setPendingNote(null);
+            toast.info(t("pending.resolvedElsewhere"));
+          }
+        },
+        // Could not check: keep it pending here (and in the shared outbox again).
+        () => void savePendingSale(current),
+      );
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [org.id]);
 
   const handleCancelPersistedSale = async () => {
     if (!receiptSession?.persistedOrderId || cancellingSale) return;
@@ -1212,9 +1454,74 @@ function POSRegister({
         </DialogContent>
       </Dialog>
 
+      {/* Pending sale (wave 0): outcome unknown — the register stays on it until it is resolved
+          by its key. It cannot be dismissed: verifying and resending are the only safe actions. */}
+      <Dialog open={pending !== null} onOpenChange={() => undefined}>
+        <DialogContent
+          className="max-w-md [&>button:last-child]:hidden"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          aria-describedby="pos-pending-body"
+        >
+          {pending && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-1.5">
+                  <AlertTriangle className="size-4 text-warning" aria-hidden />
+                  {t("pending.title")}
+                </DialogTitle>
+                <DialogDescription id="pos-pending-body">
+                  {t("pending.body", { amount: money(pending.session.totalCents) })}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 text-sm">
+                <p className="text-muted-foreground">{t("pending.safety")}</p>
+                <p className="tabular text-xs text-muted-foreground">
+                  {t("pending.code", {
+                    code: pending.key.slice(-8).toUpperCase(),
+                    attempts: pending.attempts,
+                  })}
+                </p>
+                <p role="status" aria-live="polite" className="min-h-5 text-foreground">
+                  {pendingBusy === "verifying"
+                    ? t("pending.verifying")
+                    : pendingBusy === "resending"
+                      ? t("pending.resending")
+                      : pendingNote
+                        ? t(`pending.${pendingNote}`)
+                        : null}
+                </p>
+              </div>
+              <DialogFooter className="flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  disabled={pendingBusy !== null || submittingSale}
+                  aria-busy={pendingBusy === "verifying"}
+                  onClick={handleVerifyPending}
+                >
+                  {pendingBusy === "verifying" && <Loader2 className="animate-spin" aria-hidden />}
+                  {t("pending.verify")}
+                </Button>
+                <Button
+                  className="h-11"
+                  disabled={pendingBusy !== null || submittingSale}
+                  aria-busy={pendingBusy === "resending"}
+                  onClick={() => void handleResendPending()}
+                >
+                  {pendingBusy === "resending" && <Loader2 className="animate-spin" aria-hidden />}
+                  {t("pending.resend")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Checkout Dialog */}
       <Dialog
-        open={checkoutOpen}
+        open={checkoutOpen && pending === null}
         onOpenChange={(open) => {
           if (!submittingSale) setCheckoutOpen(open);
         }}

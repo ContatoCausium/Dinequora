@@ -7,6 +7,7 @@ import { menuItemSchema, recipePayloadSchema, saleInputSchema } from "./operatio
 import { orderListQuery } from "./orders-query";
 import { toMenuReadModel } from "./menu-read-model";
 import { readNavCounts } from "./nav-counts";
+import { lookupSaleByKey } from "./pos-sale-lookup";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -196,13 +197,25 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       );
     const { data: order, error } = await context.supabase
       .from("orders")
-      .select("order_number,total_cents,tax_cents,subtotal_cents,is_simulation")
+      .select("order_number,total_cents,tax_cents,subtotal_cents,is_simulation,status")
       .eq("id", result.data)
       .eq("org_id", s.org.id)
       .eq("location_id", s.location.id)
       .single();
-    if (error || !order) throw new Error("sale_readback_failed");
+    // The sale IS recorded (the RPC committed and returned its id): a failed read-back must never
+    // be reported as a failed sale, or the operator would charge again (wave 0). The receipt
+    // details are then fetched by the client through findSaleByClientOrderId.
+    if (error || !order)
+      return {
+        success: true,
+        orderId: result.data,
+        readback: false as const,
+      };
+    // A resend of a ticket whose sale was recorded and later cancelled returns that order's id:
+    // it must not be shown as a new recorded sale.
+    if (order.status === "cancelled") throw new Error("order_cancelled");
     return {
+      readback: true as const,
       success: true,
       orderId: result.data,
       orderNumber: order.order_number,
@@ -212,6 +225,32 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       // What was actually recorded: the receipt must describe the stored order, not the org type.
       isSimulation: order.is_simulation,
     };
+  });
+
+/**
+ * Looks up a POS sale by the idempotency key the register sent (wave 0). Used to reconcile a sale
+ * whose response was lost (timeout, network failure, reload): "found" is definitive; "not_found"
+ * only means no sale with this key is visible NOW (the original request may still be on its way),
+ * so the client keeps the sale pending and may resend it with the SAME key — the database returns
+ * the existing order instead of creating a second one. RLS applies (the caller's own access).
+ */
+export const findSaleByClientOrderId = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      clientOrderId: z.string().min(1).max(160),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    if (!s.location) throw new Error("location_required");
+    return lookupSaleByKey(context.supabase, {
+      orgId: s.org.id,
+      locationId: s.location.id,
+      clientOrderId: data.clientOrderId,
+    });
   });
 
 export const fetchOperationalOrders = createServerFn({ method: "POST" })

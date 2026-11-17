@@ -283,6 +283,7 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
     const { persistFinalizedPOSSaleAtomic } = await import("@/lib/orders-persistence-service");
     const res = await persistFinalizedPOSSaleAtomic(
       getPOSSession("test-org", "test-loc", "Cashier"),
+      "pos-key-empty",
     );
     expect(res.success).toBe(false);
     expect(res.error).toBe("O carrinho está vazio.");
@@ -300,7 +301,7 @@ describe("Sales, Inventory and Finance Consistency Suite", () => {
       "loc-acceptance-1",
       "Cashier",
     );
-    const result = await persistFinalizedPOSSaleAtomic(mockSessionWithoutItems);
+    const result = await persistFinalizedPOSSaleAtomic(mockSessionWithoutItems, "pos-key-empty-2");
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
   });
