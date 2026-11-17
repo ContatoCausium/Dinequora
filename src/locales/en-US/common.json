@@ -110,7 +110,10 @@
     "notFoundBody": "This page does not exist or has moved.",
     "home": "Go home",
     "controlDenied": "The Control Center is only available to platform administrators.",
-    "ordersTruncated": "These figures include the {{shown}} most recent orders out of {{total}}. Older orders are not included yet."
+    "ordersTruncated": "These figures include the {{shown}} most recent orders out of {{total}}. Older orders are not included yet.",
+    "ledgerIncomplete": "Partial figures: the financial ledger could not be read completely ({{reason}}). Totals below are NOT complete — refresh to try again.",
+    "ledgerIncompleteRowCap": "too many records for one read",
+    "ledgerIncompleteChanged": "records kept changing during the read"
   },
   "access": {
     "noModuleTitle": "You do not have access to this module",

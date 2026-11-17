@@ -110,7 +110,10 @@
     "notFoundBody": "Esta página não existe ou foi movida.",
     "home": "Ir para o início",
     "controlDenied": "A Central de Controle está disponível apenas para administradores da plataforma.",
-    "ordersTruncated": "Estes números incluem os {{shown}} pedidos mais recentes de um total de {{total}}. Pedidos mais antigos ainda não estão incluídos."
+    "ordersTruncated": "Estes números incluem os {{shown}} pedidos mais recentes de um total de {{total}}. Pedidos mais antigos ainda não estão incluídos.",
+    "ledgerIncomplete": "Números parciais: o livro financeiro não pôde ser lido por completo ({{reason}}). Os totais abaixo NÃO estão completos — atualize para tentar de novo.",
+    "ledgerIncompleteRowCap": "registros demais para uma leitura",
+    "ledgerIncompleteChanged": "os registros mudaram durante a leitura"
   },
   "access": {
     "noModuleTitle": "Você não tem acesso a este módulo",

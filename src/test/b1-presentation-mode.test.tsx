@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { summaryFromRows } from "@/lib/ledger-reader";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -16,6 +17,8 @@ import type { Location } from "@/lib/tenants";
 const api = vi.hoisted(() => ({
   fetchOperationalOrders: vi.fn(),
   fetchOperationalResources: vi.fn(),
+  // Wave 0: the complete ledger summary (read-only).
+  fetchLedgerSummary: vi.fn(),
   // Writes: none of these may ever be called by the screens under test.
   submitOperationalSale: vi.fn(),
   changeOperationalOrder: vi.fn(),
@@ -233,9 +236,15 @@ function serve(opts: { sales: boolean; openTicket?: boolean }) {
     suppliers: [],
     purchases: [],
     movements: [],
-    finance: opts.sales ? [ledgerRow("revenue", 3100), ledgerRow("cogs", 520)] : [],
     expenses: [],
   });
+  const ledger = opts.sales ? [ledgerRow("revenue", 3100), ledgerRow("cogs", 520)] : [];
+  api.fetchLedgerSummary.mockImplementation(async ({ data }: { data: { days: number | null } }) =>
+    summaryFromRows(ledger, {
+      stores: [{ id: STORE.dbId, timeZone: STORE.timezone }],
+      days: data.days,
+    }),
+  );
 }
 
 const withQuery = (ui: ReactNode) =>

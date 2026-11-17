@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +26,9 @@ import {
   type StoreResult,
 } from "./finance-model";
 import { FormSelect } from "@/components/ui/form-select";
+import { LedgerIncompleteNotice } from "@/components/app/states";
+import { fetchLedgerRows } from "@/lib/operational.functions";
+import { localDay } from "@/lib/store-time";
 
 type DataType = "all" | "realized" | "projected" | "simulated";
 
@@ -45,8 +48,10 @@ interface FinanceReportsProps {
   currentLocationId: string;
   /** Every readable expense, with the effective status (pending past due ⇒ overdue). */
   expenses: Expense[];
-  /** Every readable ledger row (finance_entries). */
-  entries: LedgerEntry[];
+  /** Organization id: the ledger rows of the export are read on demand (fetchLedgerRows). */
+  orgId: string;
+  /** Day buckets of the complete ledger summary (monthly trend). */
+  trendEntries: LedgerEntry[];
   orders: Array<{
     id: string;
     totalCents: number;
@@ -59,20 +64,23 @@ interface FinanceReportsProps {
   }>;
   stores: StoreResult[];
   currentMonth: string;
-  /** Store zone used to place each sale in its local month. */
-  timeZone?: string | undefined;
 }
+
+type RowsState =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; rows: LedgerEntry[]; complete: boolean; reason?: string | undefined };
 
 export function FinanceReports({
   restaurantName,
   locations,
   currentLocationId,
   expenses,
-  entries,
+  orgId,
+  trendEntries,
   orders,
   stores,
   currentMonth,
-  timeZone,
 }: FinanceReportsProps) {
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
@@ -80,6 +88,34 @@ export function FinanceReports({
   const [reportType, setReportType] = useState<FinancialReportType>("cash_flow");
   const [selectedLocation, setSelectedLocation] = useState<string>(currentLocationId || "all");
   const [selectedDataType, setSelectedDataType] = useState<DataType>("all");
+  // Individual ledger rows (revenue and cash-flow listings) are read only when the reports tab is
+  // open, completely (keyset pagination) or flagged incomplete — never a silent first page.
+  const [rowsState, setRowsState] = useState<RowsState>({ status: "loading" });
+  useEffect(() => {
+    let active = true;
+    setRowsState({ status: "loading" });
+    fetchLedgerRows({ data: { orgId } })
+      .then((res) => {
+        if (!active) return;
+        const zoneOf = new Map(locations.map((l) => [l.dbId, l.timezone]));
+        setRowsState({
+          status: "ready",
+          complete: res.complete,
+          reason: res.reason,
+          rows: res.rows.map((row) => {
+            const zone = zoneOf.get(row.location_id);
+            return { ...row, local_day: zone ? localDay(row.created_at, zone) : undefined };
+          }),
+        });
+      })
+      .catch(() => {
+        if (active) setRowsState({ status: "error" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [orgId, locations]);
+  const entries = useMemo(() => (rowsState.status === "ready" ? rowsState.rows : []), [rowsState]);
 
   const locationName =
     selectedLocation === "all"
@@ -114,6 +150,7 @@ export function FinanceReports({
       ledger: scopedEntries.map((e) => ({
         id: e.id,
         createdAt: e.created_at,
+        localDay: e.local_day,
         kind: e.kind,
         amountCents: e.amount_cents,
         locationName: slugByDbId.get(e.location_id)?.name ?? locationName,
@@ -122,7 +159,11 @@ export function FinanceReports({
         selectedLocation === "all"
           ? stores
           : stores.filter((s) => s.locationId === selectedLocation),
-      monthlyTrend: monthlyTrend(scopedEntries, scopedExpenses, currentMonth, timeZone),
+      monthlyTrend: monthlyTrend(
+        ledgerForLocation(trendEntries, locations, selectedLocation),
+        scopedExpenses,
+        currentMonth,
+      ),
       storeName,
       formatters,
     });
@@ -134,14 +175,19 @@ export function FinanceReports({
     locationName,
     expenses,
     entries,
+    trendEntries,
     orders,
     stores,
     locations,
     currentMonth,
-    timeZone,
     lng,
     t,
   ]);
+
+  // Revenue and cash-flow listings are built from individual ledger rows: until every row is read
+  // (or if the read failed) they are not shown nor exported as if they were complete.
+  const needsRows = reportType === "revenue" || reportType === "cash_flow";
+  const rowsBlocked = needsRows && rowsState.status !== "ready";
 
   const handleExportCsv = () => {
     const csv = exportReportToCsv(report);
@@ -171,21 +217,39 @@ export function FinanceReports({
       subtitle={t("reports.subtitle")}
       action={
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={handleExportCsv}>
+          <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={rowsBlocked}>
             <Download />
             {t("reports.exportCsv")}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExportXmlSpreadsheet}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportXmlSpreadsheet}
+            disabled={rowsBlocked}
+          >
             <FileSpreadsheet />
             {t("reports.exportExcel")}
           </Button>
-          <Button size="sm" variant="outline" onClick={handlePrintPdf}>
+          <Button size="sm" variant="outline" onClick={handlePrintPdf} disabled={rowsBlocked}>
             <Printer />
             {t("reports.exportPdf")}
           </Button>
         </div>
       }
     >
+      {needsRows && rowsState.status === "ready" && (
+        <div className="mb-4">
+          <LedgerIncompleteNotice summary={rowsState} />
+        </div>
+      )}
+      {rowsBlocked && (
+        <p
+          role={rowsState.status === "error" ? "alert" : "status"}
+          className="mb-4 text-xs text-muted-foreground"
+        >
+          {rowsState.status === "error" ? t("reports.rowsError") : t("reports.rowsLoading")}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div className="flex flex-wrap items-center gap-2">
           <FormSelect
@@ -254,7 +318,13 @@ export function FinanceReports({
         />
       </div>
 
-      <div className="mt-4 max-h-[560px] overflow-auto rounded-md border">
+      {/* Scrolls inside the panel: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
+      <div
+        role="region"
+        tabIndex={0}
+        aria-label={t("reports.title")}
+        className="mt-4 max-h-[560px] overflow-auto rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <table className="data-table text-left">
           <thead className="sticky top-0 border-b bg-muted text-[11px] text-muted-foreground">
             <tr>

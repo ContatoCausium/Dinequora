@@ -147,3 +147,29 @@ export function OrdersTruncatedNotice({
     </div>
   );
 }
+
+/**
+ * Shown whenever the financial ledger summary is incomplete (wave 0): the figures on screen are
+ * partial and must never be read as complete totals.
+ */
+export function LedgerIncompleteNotice({
+  summary,
+}: {
+  summary: { complete: boolean; reason?: string | undefined } | null | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!summary || summary.complete) return null;
+  const reason =
+    summary.reason === "row_cap"
+      ? t("states.ledgerIncompleteRowCap")
+      : t("states.ledgerIncompleteChanged");
+  return (
+    <div
+      role="alert"
+      className="surface flex items-center gap-2 border-warning/40 px-4 py-2.5 text-xs text-foreground"
+    >
+      <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+      <span>{t("states.ledgerIncomplete", { reason })}</span>
+    </div>
+  );
+}

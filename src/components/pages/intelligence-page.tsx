@@ -3,8 +3,16 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AlertTriangle, ChevronRight, ClipboardList, ShieldCheck, Store } from "lucide-react";
-import { fetchOperationalResources } from "@/lib/operational.functions";
-import { ledgerMetrics, recordedIntelligence } from "@/lib/operational-metrics";
+import { fetchLedgerSummary, fetchOperationalResources } from "@/lib/operational.functions";
+import { rawExpensesInWindows, recordedIntelligence } from "@/lib/operational-metrics";
+import type { LedgerSummary } from "@/lib/ledger-reader";
+import { PERIOD, readSpanDays, type PeriodSpec } from "@/lib/financial-period";
+import {
+  periodFigures,
+  previousFigures,
+  scopeSummary,
+  storeWindows,
+} from "@/lib/financial-summary";
 import type { Resources } from "@/lib/operational-mappers";
 import {
   classifyQueryTopic,
@@ -15,7 +23,7 @@ import { fmtDateTime, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format"
 import { useWorkspace, useScopedLocations } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { StatTile } from "@/components/app/stat-tile";
-import { EmptyState, Skeleton, StateCard } from "@/components/app/states";
+import { EmptyState, LedgerIncompleteNotice, Skeleton, StateCard } from "@/components/app/states";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
 import { isClientPreview } from "@/lib/deployment-profile";
 import { cn } from "@/lib/utils";
@@ -29,7 +37,6 @@ type InsightLevel = "high" | "medium" | "low";
 
 /** Reference food-cost band used only to classify the recorded rate (ratio, not a target we invent). */
 const CMV_REFERENCE = { min: 0.28, max: 0.32 } as const;
-const DAY_MS = 86400000;
 
 const EMPTY_SUMMARY: IntelligenceSummary = {
   grossRevenueCents: 0,
@@ -86,21 +93,26 @@ function scopeResources(resources: Resources, id: string): Resources | null {
     recipes: only(resources.recipes),
     purchases: only(resources.purchases),
     movements: only(resources.movements),
-    finance: only(resources.finance),
     expenses: only(resources.expenses),
   };
 }
 
-/** Revenue recorded in the equal-length period immediately before the current one. */
-function previousRevenueCents(resources: Resources, periodDays: number) {
-  const now = Date.now();
-  const end = now - periodDays * DAY_MS;
-  const start = now - 2 * periodDays * DAY_MS;
-  const entries = resources.finance.filter((e) => {
-    const at = Date.parse(e.created_at);
-    return at >= start && at < end;
-  });
-  return ledgerMetrics(entries).revenueCents;
+/**
+ * Insights figures of a scope: revenue/COGS from the complete ledger summary of those stores and
+ * the expenses recognized in each store's same local days (the selectors of every other screen).
+ */
+function scopeIntelligence(
+  resources: Resources,
+  ledger: LedgerSummary,
+  spec: PeriodSpec,
+  storeDbIds: string[] | null,
+) {
+  const scopedLedger = scopeSummary(ledger, storeDbIds);
+  return recordedIntelligence(
+    resources,
+    periodFigures(scopedLedger, spec),
+    rawExpensesInWindows(resources.expenses, storeWindows(scopedLedger, spec)),
+  );
 }
 
 const ratio = (pct: number) => pct / 100;
@@ -297,6 +309,8 @@ export function IntelligencePage() {
   const periodDays = Number(period);
   const [filter, setFilter] = useState<InsightFilter>("all");
   const [resources, setResources] = useState<Resources | null>(null);
+  const [ledger, setLedger] = useState<LedgerSummary | null>(null);
+  const spec = useMemo(() => PERIOD.days(periodDays), [periodDays]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -316,39 +330,62 @@ export function IntelligencePage() {
     };
   }, [org.id, reloadKey]);
 
+  // The complete ledger read for the period and the comparison period before it.
+  useEffect(() => {
+    let active = true;
+    setLedger(null);
+    fetchLedgerSummary({ data: { orgId: org.id, days: readSpanDays(spec, true) } })
+      .then((l) => {
+        if (active) setLedger(l);
+      })
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [org.id, spec, reloadKey]);
+
   const isAll = locationId === "all";
   const scopeLabel = isAll ? t("allStores") : (scopedLocations[0]?.name ?? t("allStores"));
 
-  // Same rule as Reports and the Overview: the selected store's zone, or the first store's for "all".
-  const scopeTimeZone = scopedLocations[0]?.timezone ?? undefined;
+  // Store database ids of the scope (null = every store the member can read).
+  const scopeDbIds = useMemo(
+    () => (isAll ? null : scopedLocations.flatMap((l) => (l.dbId ? [l.dbId] : []))),
+    [isAll, scopedLocations],
+  );
   const scoped = useMemo(
     () => (resources ? scopeResources(resources, locationId) : null),
     [resources, locationId],
   );
   const summary = useMemo(
-    () => (scoped ? recordedIntelligence(scoped, periodDays, scopeTimeZone) : EMPTY_SUMMARY),
-    [scoped, periodDays, scopeTimeZone],
+    () => (scoped && ledger ? scopeIntelligence(scoped, ledger, spec, scopeDbIds) : EMPTY_SUMMARY),
+    [scoped, ledger, spec, scopeDbIds],
   );
+  // No comparison from a partial read.
   const previousRevenue = useMemo(
-    () => (scoped ? previousRevenueCents(scoped, periodDays) : 0),
-    [scoped, periodDays],
+    () =>
+      ledger && ledger.complete
+        ? (previousFigures(scopeSummary(ledger, scopeDbIds), spec)?.revenueCents ?? 0)
+        : 0,
+    [ledger, scopeDbIds, spec],
   );
 
   const stores = useMemo<StoreRow[]>(() => {
-    if (!resources) return [];
+    if (!resources || !ledger) return [];
     return scopedLocations.flatMap((loc) => {
       const r = scopeResources(resources, loc.id);
-      return r
+      return r && loc.dbId
         ? [
             {
               id: loc.id,
               name: loc.name,
-              summary: recordedIntelligence(r, periodDays, loc.timezone ?? undefined),
+              summary: scopeIntelligence(r, ledger, spec, [loc.dbId]),
             },
           ]
         : [];
     });
-  }, [resources, scopedLocations, periodDays]);
+  }, [resources, ledger, scopedLocations, spec]);
 
   const insights = useMemo(
     () => buildInsights(summary, stores, isAll, periodDays, t, lng),
@@ -363,7 +400,7 @@ export function IntelligencePage() {
   const ask = useCallback(
     (query: string, topic?: AgentQueryTopic) => {
       const q = query.trim();
-      if (!q || !resources) return;
+      if (!q || !resources || !ledger) return;
       setAnswer(
         answerQuery(q, topic ?? classifyQueryTopic(q), {
           summary,
@@ -375,7 +412,7 @@ export function IntelligencePage() {
         }),
       );
     },
-    [resources, summary, scoped, stores, periodDays, t, lng],
+    [resources, ledger, summary, scoped, stores, periodDays, t, lng],
   );
   // Answers are a snapshot of the selected scope/period; clear them when either changes.
   useEffect(() => {
@@ -443,7 +480,7 @@ export function IntelligencePage() {
             }
           />
         </div>
-      ) : !resources ? (
+      ) : !resources || !ledger ? (
         <div className="space-y-6" aria-busy="true">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             {[0, 1, 2, 3, 4].map((i) => (
@@ -454,6 +491,7 @@ export function IntelligencePage() {
         </div>
       ) : (
         <>
+          <LedgerIncompleteNotice summary={ledger} />
           <section className="space-y-3">
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
               <StatTile

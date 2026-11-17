@@ -17,15 +17,26 @@ import { useScopedLocations, useWorkspace } from "./workspace-context";
 import { PageHeader, Panel, Segmented } from "./page";
 import { StatTile } from "./stat-tile";
 import { MetricCard } from "./metric-card";
-import { Skeleton, StateCard } from "./states";
+import { LedgerIncompleteNotice, Skeleton, StateCard } from "./states";
 import { ColumnSeries, RankedBars } from "./charts";
 import { Button } from "@/components/ui/button";
-import { fetchOperationalResources } from "@/lib/operational.functions";
+import { fetchLedgerSummary, fetchOperationalResources } from "@/lib/operational.functions";
 import { mapResources } from "@/lib/operational-mappers";
-import { ledgerMetrics } from "@/lib/operational-metrics";
-import { fetchAllOrders, OPEN_STATUSES, periodStart } from "@/lib/recorded-data";
-import { buildReport, dayKey, expensesInPeriod, isRecordedSale } from "@/lib/report-metrics";
-import { recognizedExpenses } from "@/lib/period-metrics";
+import { fetchAllOrders, OPEN_STATUSES } from "@/lib/recorded-data";
+import {
+  buildPreviousReport,
+  buildReport,
+  dayKey,
+  isRecordedSale,
+  ordersReadSince,
+} from "@/lib/report-metrics";
+import { PERIOD, readSpanDays, type PeriodSpec } from "@/lib/financial-period";
+import {
+  periodFigures,
+  recognizedInStoreWindows,
+  storeWindows,
+  summaryToday,
+} from "@/lib/financial-summary";
 import { prepStats } from "@/lib/kitchen-metrics";
 import { netSalesCents, type RecordedOrder } from "@/lib/recorded-data";
 import { displayAmount, fmtDateTime } from "@/lib/format";
@@ -33,12 +44,15 @@ import { financialResult, summarizeExpenses, todayIso } from "@/lib/expense-metr
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent, fmtQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { kpiDelta } from "@/lib/period-compare";
-import { usePreviousPeriodReport } from "@/lib/use-previous-period";
 import { completedDayStats } from "@/lib/series-stats";
 import { averageCents, multiplyQuantityCents, sumCents } from "@/lib/money";
 
 type Period = "today" | "7d" | "30d";
-const DAYS: Record<Period, number> = { today: 1, "7d": 7, "30d": 30 };
+const SPEC: Record<Period, PeriodSpec> = {
+  today: PERIOD.today,
+  "7d": PERIOD.days(7),
+  "30d": PERIOD.days(30),
+};
 
 /** Executive overview for real (non-demo) organizations — every figure is read from the backend. */
 export function RecordedOverview() {
@@ -47,7 +61,7 @@ export function RecordedOverview() {
   const { org, locationId, user, role, can, canAny } = useWorkspace();
   const scopedStores = useScopedLocations();
   const [period, setPeriod] = useState<Period>("7d");
-  const since = periodStart(period);
+  const spec = SPEC[period];
   // Every block is gated by the member's permissions (RLS already limits the rows returned).
   const seeFinancials = canAny(["dashboard.financials", "finance.view"]);
   const seeSales = canAny(["dashboard.financials", "reports.view"]);
@@ -66,29 +80,38 @@ export function RecordedOverview() {
     locationId === "all"
       ? org.locations[0]?.timezone
       : org.locations.find((l) => l.id === locationId)?.timezone;
+  const reportStores = useMemo(
+    () =>
+      scopedStores.map((l) => ({
+        slug: l.id,
+        dbId: l.dbId,
+        timeZone: l.timezone || "America/New_York",
+      })),
+    [scopedStores],
+  );
 
   const query = useQuery({
     queryKey: ["overview", org.id, locationId, period],
     queryFn: async () => {
-      const [orders, resources] = await Promise.all([
-        fetchAllOrders(org.id, locationId, since),
+      // One complete ledger read covers the period, its comparison and the month to date.
+      const days = Math.max(readSpanDays(spec, true) ?? 31, 31);
+      const [orders, resources, ledger] = await Promise.all([
+        fetchAllOrders(org.id, locationId, ordersReadSince(reportStores, spec)),
         fetchOperationalResources({ data: { orgId: org.id, locationId } }),
+        fetchLedgerSummary({
+          data: { orgId: org.id, locationId, days, sameTimeYesterday: spec.kind === "today" },
+        }),
       ]);
-      return { orders: orders.orders, resources, mapped: mapResources(resources) };
+      return { orders: orders.orders, resources, ledger, mapped: mapResources(resources) };
     },
   });
 
   const view = useMemo(() => {
     if (!query.data) return null;
-    const { orders, resources, mapped } = query.data;
-    const today = todayIso();
-    const report = buildReport({
-      orders,
-      ledger: resources.finance,
-      since,
-      days: DAYS[period],
-      timeZone,
-    });
+    const { orders, ledger, mapped } = query.data;
+    const today = summaryToday(ledger, todayIso());
+    const report = buildReport({ orders, summary: ledger, spec, stores: reportStores });
+    const previous = buildPreviousReport(ledger, spec);
     const gross = financialResult({
       revenueCents: report.revenueCents,
       cogsCents: report.cogsCents,
@@ -97,14 +120,15 @@ export function RecordedOverview() {
     // Month-to-date result: ledger from the 1st to today and the expenses recognized in the same
     // days (competency date already arrived — a bill scheduled for later is never anticipated).
     // Same rule as Finance, Reports and Insights.
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const monthLedger = ledgerMetrics(
-      resources.finance.filter((e) => {
-        const d = dayKey(e.created_at, timeZone);
-        return d >= monthStart && d <= today;
-      }),
-    );
-    const monthExpenses = expensesInPeriod(mapped.expenses, monthStart, today);
+    // Each store's own month (its local days), the same selectors as Finance.
+    const monthLedger = periodFigures(ledger, PERIOD.month);
+    const monthWindows = storeWindows(ledger, PERIOD.month);
+    const dbIdOf = new Map(reportStores.map((st) => [st.slug, st.dbId]));
+    const monthRecognized = recognizedInStoreWindows(mapped.expenses, (e) => {
+      const id = dbIdOf.get(e.locationId);
+      return id ? monthWindows.get(id) : null;
+    });
+    const monthExpenses = monthRecognized.reduce((sum, e) => sum + e.amountCents, 0);
     const month = financialResult({
       revenueCents: monthLedger.revenueCents,
       cogsCents: monthLedger.cogsCents,
@@ -115,12 +139,15 @@ export function RecordedOverview() {
       .sort((a, b) => a.quantity / (a.minQuantity || 1) - b.quantity / (b.minQuantity || 1));
     return {
       report,
+      previous,
+      ledger,
+      today,
       gross,
       month,
       // Bills (due soon, overdue, paid) are obligations as of today; the cost breakdown below them
       // uses the costs recognized this month, the same days as the month-to-date result.
       expenses: summarizeExpenses(mapped.expenses, today),
-      monthCosts: summarizeExpenses(recognizedExpenses(mapped.expenses, monthStart, today), today),
+      monthCosts: summarizeExpenses(monthRecognized, today),
       low,
       kitchen: orders.filter((o) => OPEN_STATUSES.includes(o.status) && !o.isSimulated).length,
       receiving: mapped.purchases.filter(
@@ -128,21 +155,14 @@ export function RecordedOverview() {
       ).length,
       ...roleViews(orders, mapped, user.id, timeZone),
     };
-  }, [query.data, since, period, timeZone, user.id]);
+  }, [query.data, spec, reportStores, timeZone, user.id]);
 
-  // Previous-period comparison: a separate read-only query, so the numbers above never change.
+  // Previous-period comparison from the same complete ledger read (no second query); none when
+  // the read was partial, so a partial period is never compared as if complete.
   const { t: tc } = useTranslation();
-  const previousQuery = usePreviousPeriodReport({
-    orgId: org.id,
-    locationId,
-    period,
-    timeZone,
-    ledger: query.data?.resources.finance,
-    enabled: seeSales && !!query.data,
-  });
-  const prev = previousQuery.data ?? null;
+  const prev = view && view.ledger.complete ? view.previous : null;
   const delta = (current: number, previous: number | undefined, goodWhen?: "up" | "none") =>
-    previousQuery.isPending
+    !view
       ? undefined
       : kpiDelta(current, previous, {
           lng,
@@ -156,11 +176,11 @@ export function RecordedOverview() {
   // Highest / lowest / average of the same daily series the chart draws (no extra query), over
   // completed days only: today is still in progress in the store's time zone.
   const dayStats =
-    view && period !== "today"
-      ? completedDayStats(view.report.daily, dayKey(new Date().toISOString(), timeZone))
-      : null;
+    view && period !== "today" ? completedDayStats(view.report.daily, view.today) : null;
   const storeName = (slug: string) => org.locations.find((l) => l.id === slug)?.name ?? slug;
-  const monthName = fmtDate(`${todayIso().slice(0, 7)}-01`, lng, { month: "long" });
+  const monthName = fmtDate(`${(view?.today ?? todayIso()).slice(0, 7)}-01`, lng, {
+    month: "long",
+  });
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -232,6 +252,7 @@ export function RecordedOverview() {
         </div>
       ) : (
         <>
+          {(seeFinancials || seeSales) && <LedgerIncompleteNotice summary={view.ledger} />}
           <AttentionStrip
             items={[
               seeExpenses &&

@@ -4,21 +4,28 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, FileBarChart, RefreshCw, ShieldAlert } from "lucide-react";
 
-import { useWorkspace } from "@/components/app/workspace-context";
+import { useScopedLocations, useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { StatTile } from "@/components/app/stat-tile";
-import { EmptyState, OrdersTruncatedNotice, Skeleton, StateCard } from "@/components/app/states";
+import {
+  EmptyState,
+  LedgerIncompleteNotice,
+  OrdersTruncatedNotice,
+  Skeleton,
+  StateCard,
+} from "@/components/app/states";
 import { ColumnSeries, RankedBars, downloadCsv } from "@/components/app/charts";
 import { Button } from "@/components/ui/button";
-import { fetchOperationalResources } from "@/lib/operational.functions";
+import { fetchLedgerSummary, fetchOperationalResources } from "@/lib/operational.functions";
 import { mapResources } from "@/lib/operational-mappers";
-import { fetchAllOrders, periodStart } from "@/lib/recorded-data";
-import { buildReport, dayKey, expensesInPeriod } from "@/lib/report-metrics";
-import { financialResult, todayIso } from "@/lib/expense-metrics";
+import { fetchAllOrders } from "@/lib/recorded-data";
+import { buildPreviousReport, buildReport, ordersReadSince } from "@/lib/report-metrics";
+import { PERIOD, readSpanDays } from "@/lib/financial-period";
+import { recognizedInStoreWindows, storeWindows } from "@/lib/financial-summary";
+import { financialResult } from "@/lib/expense-metrics";
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { kpiDelta } from "@/lib/period-compare";
-import { usePreviousPeriodReport } from "@/lib/use-previous-period";
 import { centsToDecimalString } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/_app/reports")({
@@ -38,45 +45,55 @@ function ReportsPage() {
   const { t: tOrders } = useTranslation("orders");
   const lng = i18n.language;
   const { org, locationId, role } = useWorkspace();
+  const scopedStores = useScopedLocations();
   const [period, setPeriod] = useState<Period>("30d");
-  const since = periodStart(period);
-  const days = Number(period.replace("d", ""));
-  const timeZone =
-    locationId === "all"
-      ? org.locations[0]?.timezone
-      : org.locations.find((l) => l.id === locationId)?.timezone;
+  // Each store's own last N local days (same selectors as Overview, Finance and Insights).
+  const spec = useMemo(() => PERIOD.days(Number(period.replace("d", ""))), [period]);
+  const reportStores = useMemo(
+    () =>
+      scopedStores.map((l) => ({
+        slug: l.id,
+        dbId: l.dbId,
+        timeZone: l.timezone || "America/New_York",
+      })),
+    [scopedStores],
+  );
 
   const query = useQuery({
     queryKey: ["reports", org.id, locationId, period],
     enabled: role !== "staff",
     queryFn: async () => {
-      const [orders, resources] = await Promise.all([
-        fetchAllOrders(org.id, locationId, since),
+      // One complete ledger read covers the period and the comparison period before it.
+      const [orders, resources, ledger] = await Promise.all([
+        fetchAllOrders(org.id, locationId, ordersReadSince(reportStores, spec)),
         fetchOperationalResources({ data: { orgId: org.id, locationId } }),
+        fetchLedgerSummary({ data: { orgId: org.id, locationId, days: readSpanDays(spec, true) } }),
       ]);
       return {
         orders: orders.orders,
         ordersTotal: orders.total,
         ordersTruncated: orders.truncated,
         resources,
+        ledger,
       };
     },
   });
 
   const report = useMemo(() => {
     if (!query.data) return null;
+    const { ledger } = query.data;
     const r = buildReport({
       orders: query.data.orders,
-      ledger: query.data.resources.finance,
-      since,
-      days,
-      timeZone,
+      summary: ledger,
+      spec,
+      stores: reportStores,
     });
-    const expenses = expensesInPeriod(
-      mapResources(query.data.resources).expenses,
-      dayKey(since, timeZone),
-      todayIso(),
-    );
+    const windows = storeWindows(ledger, spec);
+    const dbIdOf = new Map(reportStores.map((st) => [st.slug, st.dbId]));
+    const expenses = recognizedInStoreWindows(mapResources(query.data.resources).expenses, (e) => {
+      const id = dbIdOf.get(e.locationId);
+      return id ? windows.get(id) : null;
+    }).reduce((sum, e) => sum + e.amountCents, 0);
     return {
       ...r,
       expensesCents: expenses,
@@ -86,21 +103,15 @@ function ReportsPage() {
         expensesCents: expenses,
       }),
     };
-  }, [query.data, since, days, timeZone]);
+  }, [query.data, spec, reportStores]);
 
-  // Previous-period comparison: a separate read-only query, so the numbers above never change.
+  // Previous-period comparison from the same complete ledger read (no second query); none when
+  // the read was partial.
   const { t: tc } = useTranslation();
-  const previousQuery = usePreviousPeriodReport({
-    orgId: org.id,
-    locationId,
-    period,
-    timeZone,
-    ledger: query.data?.resources.finance,
-    enabled: role !== "staff" && !!query.data,
-  });
-  const prev = previousQuery.data ?? null;
+  const prev =
+    query.data && query.data.ledger.complete ? buildPreviousReport(query.data.ledger, spec) : null;
   const delta = (current: number, previous: number | undefined) =>
-    previousQuery.isPending
+    !query.data
       ? undefined
       : kpiDelta(current, previous, {
           lng,
@@ -178,6 +189,11 @@ function ReportsPage() {
         </div>
       ) : (
         <>
+          {query.data && !query.data.ledger.complete && (
+            <div className="mb-4">
+              <LedgerIncompleteNotice summary={query.data.ledger} />
+            </div>
+          )}
           {query.data?.ordersTruncated && (
             <div className="mb-4">
               <OrdersTruncatedNotice

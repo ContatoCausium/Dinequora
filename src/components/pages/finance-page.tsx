@@ -3,24 +3,43 @@ import { useTranslation } from "react-i18next";
 import { CircleAlert, Plus, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import { fetchOperationalResources, saveOperationalRecord } from "@/lib/operational.functions";
+import {
+  fetchLedgerSummary,
+  fetchOperationalResources,
+  saveOperationalRecord,
+} from "@/lib/operational.functions";
 import { fetchAllOrders } from "@/lib/recorded-data";
-import { mapResources, type Resources } from "@/lib/operational-mappers";
-import { ledgerMetrics } from "@/lib/operational-metrics";
+import { mapResources } from "@/lib/operational-mappers";
+import type { LedgerSummary } from "@/lib/ledger-reader";
+import { PERIOD, type PeriodSpec } from "@/lib/financial-period";
+import {
+  bucketRows,
+  bucketsInPeriod,
+  periodFigures,
+  recognizedInStoreWindows,
+  scopeSummary,
+  storeWindows,
+  summaryRows,
+  summaryToday,
+} from "@/lib/financial-summary";
 import {
   cashOutForecast,
   financialResult,
   summarizeExpenses,
   todayIso,
 } from "@/lib/expense-metrics";
-import { dayKey, recognizedExpenses } from "@/lib/period-metrics";
 import type { Expense } from "@/lib/finance-service";
 import type { Order } from "@/lib/orders-service";
 import { fmtMoneyCents, fmtPercent } from "@/lib/format";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Segmented } from "@/components/app/page";
 import { DemoBadge } from "@/components/app/brand-mark";
-import { OrdersTruncatedNotice, Skeleton, StateCard } from "@/components/app/states";
+import {
+  LedgerIncompleteNotice,
+  OrdersTruncatedNotice,
+  Skeleton,
+  StateCard,
+} from "@/components/app/states";
 import { StatTile } from "@/components/app/stat-tile";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,12 +68,9 @@ import { ExpenseFormDialog } from "@/components/finance/expense-form-dialog";
 import {
   expensePayload,
   FINANCE_PERIODS,
-  financePeriodStart,
   initialFormValues,
   type ExpenseFormValues,
   type FinancePeriod,
-  ledgerForLocation,
-  ledgerInPeriod,
   markPaidPayload,
   monthlyTrend,
   overdueBills,
@@ -67,15 +83,18 @@ import {
 type LoadState = "loading" | "ready" | "error";
 type Tab = "overview" | "expenses" | "pnl" | "cashflow" | "stores" | "reports";
 
+/** Finance periods as the shared period spec (same days as Overview, Reports and Insights). */
+const FINANCE_SPEC: Record<FinancePeriod, PeriodSpec> = {
+  month: PERIOD.month,
+  "30d": PERIOD.days(30),
+  "90d": PERIOD.days(90),
+  all: PERIOD.all,
+};
+
 export function FinancePage() {
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
   const { org, locationId, user, can, canAny } = useWorkspace();
-  // Same rule as Reports and the Overview: the selected store zone, or the first store zone for "all".
-  const timeZone =
-    (locationId === "all"
-      ? org.locations[0]?.timezone
-      : org.locations.find((l) => l.id === locationId)?.timezone) ?? undefined;
   // Owners and managers manage expenses; RLS/RPCs still enforce store scope on the server.
   const canManage = canAny(["expenses.create", "expenses.edit", "expenses.pay", "expenses.delete"]);
   const stores = org.locations;
@@ -88,23 +107,25 @@ export function FinancePage() {
 
   const [state, setState] = useState<LoadState>("loading");
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
-  const [entries, setEntries] = useState<Resources["finance"]>([]);
+  const [ledgerSummary, setLedgerSummary] = useState<LedgerSummary | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersMeta, setOrdersMeta] = useState({ total: 0, truncated: false });
   const [tab, setTab] = useState<Tab>("overview");
   const [period, setPeriod] = useState<FinancePeriod>("month");
-  const sinceDay = financePeriodStart(period, today);
+  const spec = FINANCE_SPEC[period];
 
   // Same paged loader as Reports (this used to be a single page of 200): the history up to the
   // browser cap, and the screen says so when older orders could not be included.
   const load = useCallback(async () => {
-    const [r, o] = await Promise.all([
+    // The whole ledger history (trend and "all time"), read completely or flagged incomplete.
+    const [r, o, l] = await Promise.all([
       fetchOperationalResources({ data: { orgId: org.id } }),
       fetchAllOrders(org.id, "all"),
+      fetchLedgerSummary({ data: { orgId: org.id, days: null } }),
     ]);
     return {
       expenses: mapResources(r).expenses,
-      entries: r.finance,
+      ledger: l,
       orders: o.orders,
       ordersMeta: { total: o.total, truncated: o.truncated },
     };
@@ -114,7 +135,7 @@ export function FinancePage() {
     try {
       const d = await load();
       setAllExpenses(d.expenses);
-      setEntries(d.entries);
+      setLedgerSummary(d.ledger);
       setOrders(d.orders);
       setOrdersMeta(d.ordersMeta);
       setState("ready");
@@ -127,13 +148,13 @@ export function FinancePage() {
     let active = true;
     setState("loading");
     setAllExpenses([]);
-    setEntries([]);
+    setLedgerSummary(null);
     setOrders([]);
     load()
       .then((d) => {
         if (!active) return;
         setAllExpenses(d.expenses);
-        setEntries(d.entries);
+        setLedgerSummary(d.ledger);
         setOrders(d.orders);
         setOrdersMeta(d.ordersMeta);
         setState("ready");
@@ -152,42 +173,61 @@ export function FinancePage() {
       locationId === "all" ? allExpenses : allExpenses.filter((e) => e.locationId === locationId),
     [allExpenses, locationId],
   );
-  const scopedEntries = useMemo(
-    () => ledgerForLocation(entries, stores, locationId),
-    [entries, stores, locationId],
+  // Store database id of a store slug (ledger rows and windows are keyed by database id).
+  const dbIdOf = useCallback((slug: string) => stores.find((l) => l.id === slug)?.dbId, [stores]);
+  const scoped = useMemo(() => {
+    if (!ledgerSummary) return null;
+    if (locationId === "all") return ledgerSummary;
+    const id = dbIdOf(locationId);
+    return scopeSummary(ledgerSummary, id ? [id] : []);
+  }, [ledgerSummary, locationId, dbIdOf]);
+  // The stores' own local today (falls back to the browser day before the ledger loads).
+  const storeToday = scoped ? summaryToday(scoped, today) : today;
+  // Period figures: revenue/COGS of each store's local days in the period and the expenses
+  // recognized in that store's same days (competency date inside the period and already arrived —
+  // never a future bill): the same selectors as the Dashboard, Reports and Insights.
+  const windows = useMemo(
+    () => (ledgerSummary ? storeWindows(ledgerSummary, spec) : new Map()),
+    [ledgerSummary, spec],
   );
-  // Period figures: revenue/COGS of the days in the period and the expenses recognized in it
-  // (competency date inside the period and already arrived — never a future bill), the same rule
-  // as the Dashboard, Reports and Insights.
+  const inPeriod = useCallback(
+    (list: readonly Expense[]) =>
+      recognizedInStoreWindows(list, (e) => {
+        const id = dbIdOf(e.locationId);
+        return id ? windows.get(id) : null;
+      }),
+    [windows, dbIdOf],
+  );
   const ledger = useMemo(
-    () => ledgerMetrics(ledgerInPeriod(scopedEntries, sinceDay, today, timeZone)),
-    [scopedEntries, sinceDay, today, timeZone],
+    () => (scoped ? periodFigures(scoped, spec) : { revenueCents: 0, cogsCents: 0 }),
+    [scoped, spec],
   );
   const summary = useMemo(
-    () => summarizeExpenses(recognizedExpenses(expenses, sinceDay, today), today),
-    [expenses, sinceDay, today],
+    () => summarizeExpenses(inPeriod(expenses), today),
+    [expenses, inPeriod, today],
   );
   // Bills to pay are a position of today, whatever the period: overdue and due in the next 7 days.
   const obligations = useMemo(() => summarizeExpenses(expenses, today), [expenses, today]);
   const result = financialResult({ ...ledger, expensesCents: summary.totalCents });
+  // Month buckets from the same complete summary (each store's local day), never raw rows.
+  const trendRows = useMemo(() => (scoped ? summaryRows(scoped) : []), [scoped]);
   const trend = useMemo(
-    () => monthlyTrend(scopedEntries, expenses, today.slice(0, 7), timeZone, today),
-    [scopedEntries, expenses, today, timeZone],
+    () => monthlyTrend(trendRows, expenses, storeToday.slice(0, 7), undefined, storeToday),
+    [trendRows, expenses, storeToday],
   );
   const forecast = useMemo(() => cashOutForecast(expenses, 6, today), [expenses, today]);
-  const last28RevenueCents = useMemo(() => {
-    const from = Date.parse(today + "T00:00:00") - 27 * 86400000;
-    return ledgerMetrics(scopedEntries.filter((e) => Date.parse(e.created_at) >= from))
-      .revenueCents;
-  }, [scopedEntries, today]);
+  const last28RevenueCents = useMemo(
+    () => (scoped ? periodFigures(scoped, PERIOD.days(28)).revenueCents : 0),
+    [scoped],
+  );
   const perStore = useMemo(
     () =>
       storeResults(
         stores,
-        ledgerInPeriod(entries, sinceDay, today, timeZone),
-        recognizedExpenses(allExpenses, sinceDay, today),
+        ledgerSummary ? bucketRows(bucketsInPeriod(ledgerSummary, spec)) : [],
+        inPeriod(allExpenses),
       ),
-    [stores, entries, allExpenses, sinceDay, today, timeZone],
+    [stores, ledgerSummary, spec, allExpenses, inPeriod],
   );
   const overdue = useMemo(() => overdueBills(expenses, today), [expenses, today]);
   const upcoming = useMemo(() => upcomingBills(expenses, today, 14), [expenses, today]);
@@ -416,6 +456,7 @@ export function FinancePage() {
 
       {state === "ready" && (
         <>
+          <LedgerIncompleteNotice summary={ledgerSummary} />
           {(simulatedSalesCents > 0 || simulatedExpenseCount > 0) && (
             <div className="surface demo-stripe flex flex-wrap items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground">
               <DemoBadge label={t("simulation.badge")} />
@@ -564,11 +605,11 @@ export function FinancePage() {
                 locations={stores}
                 currentLocationId={locationId}
                 expenses={reportExpenses}
-                entries={entries}
+                orgId={org.id}
+                trendEntries={trendRows}
                 orders={orders}
                 stores={perStore}
-                currentMonth={today.slice(0, 7)}
-                timeZone={timeZone}
+                currentMonth={storeToday.slice(0, 7)}
               />
             </TabsContent>
           </Tabs>

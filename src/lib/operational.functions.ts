@@ -7,6 +7,12 @@ import { menuItemSchema, recipePayloadSchema, saleInputSchema } from "./operatio
 import { orderListQuery } from "./orders-query";
 import { toMenuReadModel } from "./menu-read-model";
 import { readNavCounts } from "./nav-counts";
+import {
+  LedgerReadError,
+  readLedgerRows,
+  readLedgerSummary,
+  type LedgerClient,
+} from "./ledger-reader";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
 async function scope(client: SupabaseClient<Database>, orgId: string, locationId?: string) {
@@ -18,7 +24,7 @@ async function scope(client: SupabaseClient<Database>, orgId: string, locationId
   if (error || !org) throw new Error("forbidden");
   const { data: locations, error: le } = await client
     .from("locations")
-    .select("id,slug")
+    .select("id,slug,timezone")
     .eq("org_id", org.id);
   if (le) throw new Error("forbidden");
   const location =
@@ -367,36 +373,92 @@ export const fetchNavCounts = createServerFn({ method: "POST" })
     return readNavCounts(context.supabase, { orgId: s.org.id, locationId: s.location?.id });
   });
 
+/** Stores of the request scope with their zones (database ids), for the ledger reader. */
+function ledgerStores(s: Awaited<ReturnType<typeof scope>>) {
+  return (s.location ? [s.location] : s.locations).map((l) => ({
+    id: l.id,
+    timeZone: l.timezone || "America/New_York",
+  }));
+}
+
+/**
+ * Financial ledger summary (wave 0): day totals per store and kind for the last `days` local days
+ * of each store (null = whole history), read COMPLETELY with keyset pagination (ledger-reader.ts)
+ * or explicitly marked incomplete. Replaces the unpaged ledger read that PostgREST cut at 1,000
+ * rows. RLS still decides what the caller may read (finance_read: finance/dashboard/reports).
+ */
+export const fetchLedgerSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().optional(),
+      days: z.number().int().min(1).max(3700).nullable(),
+      sameTimeYesterday: z.boolean().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    try {
+      return await readLedgerSummary(context.supabase as unknown as LedgerClient, {
+        orgId: s.org.id,
+        stores: ledgerStores(s),
+        days: data.days,
+        sameTimeYesterday: data.sameTimeYesterday,
+      });
+    } catch (e) {
+      if (e instanceof LedgerReadError) throw new Error("ledger_read_failed");
+      throw e;
+    }
+  });
+
+/**
+ * Every ledger row (whole history) for the Finance export, read completely with keyset pagination
+ * or marked incomplete when the export ceiling (50,000 rows) is reached.
+ */
+export const fetchLedgerRows = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ orgId: z.string().min(1), locationId: z.string().optional() }))
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    try {
+      return await readLedgerRows(context.supabase as unknown as LedgerClient, {
+        orgId: s.org.id,
+        stores: ledgerStores(s),
+      });
+    } catch (e) {
+      if (e instanceof LedgerReadError) throw new Error("ledger_read_failed");
+      throw e;
+    }
+  });
+
 export const fetchOperationalResources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ orgId: z.string().min(1), locationId: z.string().optional() }))
   .handler(async ({ data, context }) => {
     const s = await scope(context.supabase, data.orgId, data.locationId);
     const c = context.supabase;
-    // RLS scopes each query, including organization-wide reads by managers.
-    const [inventory, recipes, suppliers, purchases, movements, finance, expenses] =
-      await Promise.all([
-        c.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", s.org.id),
-        // The linked menu product (FK org_id, product_id) is the single source of the selling price
-        // and the product name; recipe metadata only keeps a legacy copy.
-        c
-          .from("product_recipes")
-          .select("*,recipe_ingredients(*),menu_products(name,price_cents)")
-          .eq("org_id", s.org.id),
-        c.from("suppliers").select("*").eq("org_id", s.org.id),
-        c.from("purchase_orders").select("*,purchase_order_items(*)").eq("org_id", s.org.id),
-        c
-          .from("inventory_movements")
-          .select(MOVEMENT_COLUMNS)
-          .eq("org_id", s.org.id)
-          .order("created_at", { ascending: false })
-          .limit(200),
-        c.from("finance_entries").select("*").eq("org_id", s.org.id),
-        c.from("finance_expenses").select("*").eq("org_id", s.org.id).eq("active", true),
-      ]);
-    if (
-      [inventory, recipes, suppliers, purchases, movements, finance, expenses].some((r) => r.error)
-    )
+    // RLS scopes each query, including organization-wide reads by managers. The financial ledger
+    // is NOT read here any more (wave 0): fetchLedgerSummary/fetchLedgerRows read it completely.
+    const [inventory, recipes, suppliers, purchases, movements, expenses] = await Promise.all([
+      c.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", s.org.id),
+      // The linked menu product (FK org_id, product_id) is the single source of the selling price
+      // and the product name; recipe metadata only keeps a legacy copy.
+      c
+        .from("product_recipes")
+        .select("*,recipe_ingredients(*),menu_products(name,price_cents)")
+        .eq("org_id", s.org.id),
+      c.from("suppliers").select("*").eq("org_id", s.org.id),
+      c.from("purchase_orders").select("*,purchase_order_items(*)").eq("org_id", s.org.id),
+      c
+        .from("inventory_movements")
+        .select(MOVEMENT_COLUMNS)
+        .eq("org_id", s.org.id)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      c.from("finance_expenses").select("*").eq("org_id", s.org.id).eq("active", true),
+    ]);
+    if ([inventory, recipes, suppliers, purchases, movements, expenses].some((r) => r.error))
       throw new Error("resources_read_failed");
     // Costs are not readable through the table (migration 0020); they come only from the gated
     // function. Without inventory.costs the answer is "not visible" (null), never a fake zero.
@@ -420,7 +482,6 @@ export const fetchOperationalResources = createServerFn({ method: "POST" })
       suppliers: suppliers.data ?? [],
       purchases: filter(purchases.data ?? []),
       movements: filter(movements.data ?? []),
-      finance: filter(finance.data ?? []),
       expenses: filter(expenses.data ?? []),
     };
   });

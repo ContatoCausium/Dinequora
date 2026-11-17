@@ -1,13 +1,13 @@
-import { ledgerMetrics } from "./operational-metrics";
-import { dayKey } from "./period-metrics";
+import { averageCents } from "./money";
+import { displayAmount } from "./format";
+import type { LedgerSummary } from "./ledger-reader";
+import { periodWindow, type DayWindow, type PeriodSpec } from "./financial-period";
+import { dailyRevenue, figuresByStore, periodFigures, previousFigures } from "./financial-summary";
+import { localDay, shiftDay, startOfLocalDay } from "./store-time";
 
 // Shared period helpers live in period-metrics; re-exported here for existing imports.
 export { dayKey, expensesInPeriod } from "./period-metrics";
 import { netSalesCents, type RecordedOrder } from "./recorded-data";
-import { averageCents } from "./money";
-import { displayAmount } from "./format";
-
-type LedgerEntry = Parameters<typeof ledgerMetrics>[0][number];
 
 /**
  * An order counts as a sale when it has a (non-reversed) payment and was not cancelled or simulated.
@@ -17,38 +17,68 @@ type LedgerEntry = Parameters<typeof ledgerMetrics>[0][number];
 export const isRecordedSale = (o: Pick<RecordedOrder, "status" | "isSimulated" | "paid">) =>
   o.paid && o.status !== "cancelled" && !o.isSimulated;
 
+/** A store of the report scope: UI slug, database id and IANA zone. */
+export interface ReportStore {
+  slug: string;
+  dbId: string | undefined;
+  timeZone: string;
+}
+
+/**
+ * The earliest instant any store's period starts (local midnight of its first day), to read the
+ * orders that the period's product and channel breakdowns need.
+ */
+export function ordersReadSince(
+  stores: readonly Pick<ReportStore, "timeZone">[],
+  spec: PeriodSpec,
+  now = new Date(),
+): string {
+  const starts = stores.map((st) => {
+    const w = periodWindow(spec, localDay(now, st.timeZone));
+    return startOfLocalDay(w.sinceDay ?? "1970-01-01", st.timeZone).getTime();
+  });
+  return new Date(starts.length ? Math.min(...starts) : now.getTime()).toISOString();
+}
+
+export type ReportFigures = ReturnType<typeof buildReport>;
+
+/**
+ * The period report of the Overview and Reports (wave 0). Revenue, COGS, the number of sales, the
+ * average ticket, the daily series and the per-store split come from the COMPLETE ledger summary,
+ * per store in its own local days — so the KPI, the chart and the store table always add up to
+ * the same figure, and match Finance and Insights for the same period. The channel and product
+ * breakdowns need order details: they use the paid orders of the same store-local days.
+ */
 export function buildReport(input: {
   orders: readonly RecordedOrder[];
-  ledger: readonly LedgerEntry[];
-  since: string;
-  days: number;
-  timeZone?: string | undefined;
-  now?: Date;
+  /** Ledger summary already scoped to the report's stores. */
+  summary: LedgerSummary;
+  spec: PeriodSpec;
+  stores: readonly ReportStore[];
 }) {
-  const sinceMs = Date.parse(input.since);
-  const sales = input.orders.filter((o) => isRecordedSale(o) && Date.parse(o.createdAt) >= sinceMs);
-  const ledger = ledgerMetrics(
-    input.ledger.filter((e) => Date.parse(e.created_at) >= sinceMs) as LedgerEntry[],
-  );
-
-  const daily = new Map<string, number>();
-  const now = input.now ?? new Date();
-  for (let i = input.days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    daily.set(dayKey(d.toISOString(), input.timeZone), 0);
+  const { summary, spec } = input;
+  const ledger = periodFigures(summary, spec);
+  const todayOf = new Map(summary.stores.map((st) => [st.locationId, st.today]));
+  const windowOf = new Map<string, DayWindow>();
+  const zoneOf = new Map<string, string>();
+  for (const st of input.stores) {
+    const today = st.dbId ? todayOf.get(st.dbId) : undefined;
+    if (!today) continue;
+    windowOf.set(st.slug, periodWindow(spec, today));
+    zoneOf.set(st.slug, st.timeZone);
   }
-  const byStore = new Map<string, { cents: number; orders: number }>();
+  const sales = input.orders.filter((o) => {
+    if (!isRecordedSale(o)) return false;
+    const w = windowOf.get(o.locationId);
+    const zone = zoneOf.get(o.locationId);
+    if (!w || !zone) return false;
+    const day = localDay(o.createdAt, zone);
+    return (w.sinceDay === null || day >= w.sinceDay) && day <= w.untilDay;
+  });
   const byChannel = new Map<string, { cents: number; orders: number }>();
   const products = new Map<string, { name: string; qty: number; cents: number }>();
-  let orderNet = 0;
   for (const o of sales) {
     const net = netSalesCents(o);
-    orderNet += net;
-    const k = dayKey(o.createdAt, input.timeZone);
-    if (daily.has(k)) daily.set(k, daily.get(k)! + net);
-    const s = byStore.get(o.locationId) ?? { cents: 0, orders: 0 };
-    byStore.set(o.locationId, { cents: s.cents + net, orders: s.orders + 1 });
     const c = byChannel.get(o.type) ?? { cents: 0, orders: 0 };
     byChannel.set(o.type, { cents: c.cents + net, orders: c.orders + 1 });
     for (const it of o.items) {
@@ -60,19 +90,53 @@ export function buildReport(input: {
       });
     }
   }
+  const slugOf = new Map(input.stores.map((st) => [st.dbId, st.slug]));
+  const byStore = [...figuresByStore(summary, spec)].map(([dbId, f]) => ({
+    locationId: slugOf.get(dbId) ?? dbId,
+    cents: f.revenueCents,
+    orders: f.sales,
+  }));
+  const daily = dailyRevenue(summary, spec);
   const sortDesc = <T extends { cents: number }>(a: T, b: T) => b.cents - a.cents;
   return {
     revenueCents: ledger.revenueCents,
     cogsCents: ledger.cogsCents,
-    orderCount: sales.length,
+    orderCount: ledger.sales,
     avgTicketCents: displayAmount(
-      () => averageCents(orderNet, sales.length),
+      () => averageCents(ledger.revenueCents, ledger.sales),
       "money.report_average",
     ),
-    daily: [...daily].map(([day, cents]) => ({ day, cents })),
-    daysWithSales: [...daily.values()].filter((v) => v > 0).length,
-    byStore: [...byStore].map(([locationId, v]) => ({ locationId, ...v })).sort(sortDesc),
+    daily,
+    daysWithSales: daily.filter((d) => d.cents > 0).length,
+    byStore: byStore.filter((s) => s.cents !== 0 || s.orders !== 0).sort(sortDesc),
     byChannel: [...byChannel].map(([channel, v]) => ({ channel, ...v })).sort(sortDesc),
     products: [...products.values()].sort(sortDesc),
+    /** False when the ledger read was incomplete: the figures are partial. */
+    complete: summary.complete,
+  };
+}
+
+/**
+ * The comparison period from the SAME summary (no second read): "today" → yesterday up to the
+ * same local time; "N days" → the N days before. Null when the period has no comparison.
+ */
+export function buildPreviousReport(summary: LedgerSummary, spec: PeriodSpec) {
+  const f = previousFigures(summary, spec);
+  if (!f) return null;
+  const daily =
+    spec.kind === "today"
+      ? [
+          {
+            day: shiftDay(summary.stores.map((s) => s.today).sort()[0] ?? "", -1),
+            cents: f.revenueCents,
+          },
+        ]
+      : dailyRevenue(summary, spec, "previous");
+  return {
+    revenueCents: f.revenueCents,
+    cogsCents: f.cogsCents,
+    orderCount: f.sales,
+    daily,
+    daysWithSales: daily.filter((d) => d.cents > 0).length,
   };
 }

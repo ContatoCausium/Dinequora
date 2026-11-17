@@ -311,7 +311,9 @@
       "colStatus": "Status",
       "colNotes": "Observações",
       "sheetName": "Relatório financeiro"
-    }
+    },
+    "rowsLoading": "Carregando todos os lançamentos do livro para este relatório…",
+    "rowsError": "Não foi possível carregar os lançamentos do livro, então este relatório não pode ser exibido nem exportado. Tente novamente mais tarde."
   },
   "periodLabel": "Período",
   "periods": {

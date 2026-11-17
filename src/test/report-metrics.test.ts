@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildReport, expensesInPeriod, isRecordedSale } from "@/lib/report-metrics";
+import {
+  buildPreviousReport,
+  buildReport,
+  expensesInPeriod,
+  isRecordedSale,
+} from "@/lib/report-metrics";
+import { summaryFromRows, type LedgerRow } from "@/lib/ledger-reader";
+import { PERIOD } from "@/lib/financial-period";
 import type { RecordedOrder } from "@/lib/recorded-data";
 
 const order = (
@@ -58,15 +65,35 @@ describe("report metrics", () => {
     expect(orders.filter(isRecordedSale).map((o) => o.id)).toEqual(["1", "2", "6"]);
   });
 
+  // The ledger rows the POS wrote for those orders (net of tax), per store database id.
+  const stores = [
+    { slug: "store-a", dbId: "db-a", timeZone: "UTC" },
+    { slug: "store-b", dbId: "db-b", timeZone: "UTC" },
+  ];
+  const row = (id: string, kind: string, cents: number, at: string, loc = "db-a"): LedgerRow => ({
+    id,
+    kind,
+    amount_cents: cents,
+    created_at: at,
+    location_id: loc,
+    order_id: null,
+  });
+  const ledgerRows = [
+    row("r1", "revenue", 2000, "2026-11-08T13:00:00Z"),
+    row("r2", "revenue", 2000, "2026-11-07T13:00:00Z", "db-b"),
+    // order 3: sold and cancelled the same day — revenue and its reversal
+    row("r3", "revenue", 2000, "2026-11-08T12:00:00Z"),
+    row("x3", "reversal_revenue", 2000, "2026-11-08T13:00:00Z"),
+    row("r6", "revenue", 2000, "2026-10-01T13:00:00Z"),
+  ];
+  const summary = summaryFromRows(ledgerRows, {
+    stores: stores.map((st) => ({ id: st.dbId, timeZone: st.timeZone })),
+    days: 14,
+    now,
+  });
+
   it("aggregates the period by day, store, channel and product", () => {
-    const r = buildReport({
-      orders,
-      ledger: [],
-      since: "2026-11-02T00:00:00Z",
-      days: 7,
-      timeZone: "UTC",
-      now,
-    });
+    const r = buildReport({ orders, summary, spec: PERIOD.days(7), stores });
     expect(r.orderCount).toBe(2);
     expect(r.avgTicketCents).toBe(2000); // net of tax
     expect(r.daily).toHaveLength(7);
@@ -75,6 +102,18 @@ describe("report metrics", () => {
     expect(r.byStore.map((s) => s.locationId).sort()).toEqual(["store-a", "store-b"]);
     expect(r.byChannel.find((c) => c.channel === "delivery")?.orders).toBe(1);
     expect(r.products).toEqual([{ name: "Burger", qty: 4, cents: 4000 }]);
+    // KPI, chart and store table add up to the same ledger revenue.
+    expect(r.revenueCents).toBe(4000);
+    expect(r.daily.reduce((sum, d) => sum + d.cents, 0)).toBe(r.revenueCents);
+    expect(r.byStore.reduce((sum, st) => sum + st.cents, 0)).toBe(r.revenueCents);
+    expect(r.complete).toBe(true);
+  });
+
+  it("compares with the 7 days before from the same summary", () => {
+    const p = buildPreviousReport(summary, PERIOD.days(7));
+    expect(p?.revenueCents).toBe(0);
+    expect(p?.daily).toHaveLength(7);
+    expect(buildPreviousReport(summary, PERIOD.month)).toBeNull();
   });
 
   it("includes only expenses whose competency date is inside the period", () => {

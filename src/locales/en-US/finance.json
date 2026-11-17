@@ -311,7 +311,9 @@
       "colStatus": "Status",
       "colNotes": "Notes",
       "sheetName": "Financial report"
-    }
+    },
+    "rowsLoading": "Loading every ledger entry for this report…",
+    "rowsError": "The ledger entries could not be loaded, so this report cannot be shown or exported. Try again later."
   },
   "periodLabel": "Period",
   "periods": {

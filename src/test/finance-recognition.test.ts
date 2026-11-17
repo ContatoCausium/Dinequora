@@ -165,9 +165,10 @@ describe("expense form", () => {
 describe("the Overview never anticipates costs either", () => {
   it("its cost breakdown uses the costs recognized this month, like the month-to-date result", () => {
     const src = readFileSync(resolve(__dirname, "../components/app/recorded-overview.tsx"), "utf8");
-    expect(src).toMatch(
-      /monthCosts: summarizeExpenses\(recognizedExpenses\(mapped\.expenses, monthStart, today\), today\)/,
-    );
+    // Wave 0: one recognized set (each store's own month) feeds both the result and the breakdown.
+    expect(src).toMatch(/const monthRecognized = recognizedInStoreWindows\(mapped\.expenses,/);
+    expect(src).toMatch(/monthCosts: summarizeExpenses\(monthRecognized, today\)/);
+    expect(src).toMatch(/const monthExpenses = monthRecognized\.reduce\(/);
     expect(src).toContain("view.monthCosts.personnelCents");
     expect(src).toContain("view.monthCosts.operatingCents");
     expect(src).not.toContain("view.expenses.personnelCents");

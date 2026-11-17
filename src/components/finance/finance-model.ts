@@ -11,7 +11,6 @@ import {
   type ExpenseRecurrence,
   type ExpenseStatus,
 } from "@/lib/finance-service";
-import type { Resources } from "@/lib/operational-mappers";
 import { ledgerMetrics } from "@/lib/operational-metrics";
 import { dayKey } from "@/lib/period-metrics";
 import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
@@ -21,8 +20,31 @@ import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
  * revenue/COGS from `finance_entries` (via the shared `ledgerMetrics`), expenses from
  * `finance_expenses`. Purchases (stock acquisition) never enter here as expenses.
  */
-export type LedgerEntry = Resources["finance"][number];
-export type StoreRef = { id: string; name: string; dbId?: string | undefined };
+/**
+ * A ledger row as the Finance helpers need it: a raw finance_entries row (export) or a day bucket of
+ * the complete ledger summary (financial-summary.summaryRows), whose `local_day` is already the
+ * store's own calendar day (wave 0).
+ */
+export interface LedgerEntry {
+  id: string;
+  kind: string;
+  amount_cents: number;
+  created_at: string;
+  location_id: string;
+  order_id: string | null;
+  local_day?: string | undefined;
+}
+
+/** Local day of a ledger row: the bucket's own store day, or the instant in the given zone. */
+export function entryDay(e: LedgerEntry, timeZone?: string): string {
+  return e.local_day ?? dayKey(e.created_at, timeZone);
+}
+export type StoreRef = {
+  id: string;
+  name: string;
+  dbId?: string | undefined;
+  timezone?: string | undefined;
+};
 
 /** Ledger rows belonging to one store slug (or all when `locationId` is "all"). */
 export function ledgerForLocation(
@@ -69,7 +91,7 @@ export function monthlyTrend(
   const ledgerByMonth = new Map<string, LedgerEntry[]>();
   for (const e of entries) {
     // Without a store zone keep the previous UTC month, so callers that pass none are unchanged.
-    const m = dayKey(e.created_at, timeZone ?? "UTC").slice(0, 7);
+    const m = (e.local_day ?? dayKey(e.created_at, timeZone ?? "UTC")).slice(0, 7);
     if (m > currentMonth) continue;
     const list = ledgerByMonth.get(m) ?? [];
     list.push(e);
@@ -128,7 +150,7 @@ export function ledgerInPeriod(
   timeZone?: string,
 ): LedgerEntry[] {
   return entries.filter((e) => {
-    const d = dayKey(e.created_at, timeZone);
+    const d = entryDay(e, timeZone);
     return (sinceDay === null || d >= sinceDay) && d <= today;
   });
 }
