@@ -169,6 +169,7 @@ const GUARDED = [
   "receive_operational_purchase",
   "record_operational_movement",
   "remove_member",
+  "resolve_pending_pos_sale",
   "revoke_invitation",
   "save_operational_menu",
   "save_operational_record",
