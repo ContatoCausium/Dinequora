@@ -38,10 +38,36 @@ A política nova aplica as mesmas regras uma única vez por consulta:
 | `can_access_location(location_id)` | `location_id in (select accessible_location_ids())`, com exatamente o mesmo predicado (owner, ou acesso explícito à loja) |
 | `org_id in (select orgs_with_any_permission(finance.view, dashboard.financials, reports.view))` | igual |
 
-**Equivalência provada:** para 9 perfis de usuário em 3 organizações (owner, manager com uma loja,
-caixa, cozinha, estoque, financeiro, platform admin, owner de outro tenant, não membro), o conjunto
-de linhas visível pela política nova é **idêntico** ao da expressão anterior
-(`src/test/integration/ledger-aggregate.db.test.ts`).
+**Equivalência provada** em `src/test/integration/finance-rls-equivalence.db.test.ts`, com duas
+organizações (4 e 2 lojas) e 13 identidades. Para cada uma, três conjuntos de lançamentos são
+idênticos: a regra pretendida, escrita no teste e independente das duas políticas; a política
+anterior, avaliada com a identidade; e o que a identidade lê pela RLS nova.
+
+Identidades cobertas:
+- owner;
+- manager com 1 loja, com todas, e com `finance.view`, `dashboard.financials` e `reports.view`
+  revogadas;
+- staff sem permissão financeira, e staff com `finance.view`, `reports.view` ou
+  `dashboard.financials`;
+- staff com permissão financeira mas sem loja;
+- membro das duas organizações;
+- owner do outro tenant;
+- platform admin;
+- não membro.
+
+Testes negativos:
+- nenhuma linha de loja não acessível ou de outra organização, nem por leitura direta, nem por
+  `ledger_day_totals` com IDs de loja forçados (inclusive lojas de outro tenant sob o ID da própria
+  organização);
+- nem o owner consegue INSERT, UPDATE ou DELETE direto no ledger.
+
+Também verificados:
+- `accessible_location_ids()` = `can_access_location()` para todas as identidades e lojas;
+- o helper é `SECURITY DEFINER`, `STABLE`, com `search_path=public` e execução só para
+  `authenticated` (sem `anon`, sem `PUBLIC`);
+- `ledger_day_totals` é `SECURITY INVOKER`.
+
+O teste anterior (9 perfis reais do tenant QA, em `ledger-aggregate.db.test.ts`) continua valendo.
 
 ## Desempenho (stack local descartável, 1.000.000 de lançamentos, 4 lojas, RLS ativa)
 
@@ -65,6 +91,12 @@ Evidências completas em `C:\dev\Servora-backups\dinequora-m2-pending-design-202
 O app primeiro, porque funciona com e sem a função. Depois a migration. Em qualquer ordem o
 resultado está correto.
 
+**Aplique com `lock_timeout` curto** (por exemplo `PGOPTIONS='-c lock_timeout=5s'`), num horário de
+pouco movimento, e repita se o tempo esgotar. Motivo: o `ALTER POLICY` precisa de um lock exclusivo
+em `finance_entries`. No ensaio com 1.000.000 de linhas, ele esperou 56,6 s na fila atrás de uma
+leitura que ainda usava a política antiga (lenta), e durante a espera também segurou novas leituras.
+Com `lock_timeout` curto, ele desiste em vez de enfileirar.
+
 ## Rollback
 
 Uma migration **nova**, nesta ordem e **nunca** com `DROP ... CASCADE`. O `CASCADE` removeria
@@ -75,11 +107,23 @@ observado num ensaio no stack descartável.
 2. `drop function ledger_day_totals(uuid, uuid[], integer, boolean)`;
 3. `drop function accessible_location_ids()`.
 
-O app detecta a função ausente e volta ao leitor paginado. Essa ordem foi ensaiada no stack
-descartável (`dq-m2-1`): política restaurada, funções removidas e reaplicação limpa.
+O app detecta a função ausente e volta ao leitor paginado.
+
+**Ensaiado** no stack descartável (`dq-m2-1`), com leitores concorrentes (owner, RLS ativa)
+durante todo o processo:
+- **sem volume:** 842 leituras diretas sem erro e sem contagem divergente; a função respondeu
+  "não existe" só durante a janela de rollback, e zero outros erros;
+- **com 1.000.000 de lançamentos:** rollback em 89 ms; o checksum de todas as linhas do ledger, de
+  lojas, membros e acessos foi idêntico antes, durante e depois (**a migration é aditiva**, não
+  altera dados); zero erros de leitura.
+
+Script: `tools/rehearse-0031.mjs`, em
+`C:\dev\Servora-backups\dinequora-m2-pending-design-20261117\`.
 
 ## Testes
 
+- `src/test/integration/finance-rls-equivalence.db.test.ts` (`QA_M2_DB=1`): equivalência da
+  política, testes negativos e atributos de segurança dos helpers (acima).
 - `src/test/integration/ledger-aggregate.db.test.ts` (`QA_M2_DB=1`, stack descartável):
   - SQL = função = leitor paginado de 999 a 100.000 linhas, e função = SQL com 1.000.000;
   - DST (início e fim) em 4 fusos;
