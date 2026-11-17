@@ -24,7 +24,15 @@
     "reports": "Relatórios",
     "groupOperations": "Operação",
     "groupManagement": "Gestão",
-    "groupAccount": "Conta"
+    "groupAccount": "Conta",
+    "counts": {
+      "openOrders_one": "{{formatted}} pedido aberto",
+      "openOrders_other": "{{formatted}} pedidos abertos",
+      "lateTickets_one": "{{formatted}} pedido atrasado na cozinha",
+      "lateTickets_other": "{{formatted}} pedidos atrasados na cozinha",
+      "lowStock_one": "{{formatted}} item com estoque baixo",
+      "lowStock_other": "{{formatted}} itens com estoque baixo"
+    }
   },
   "a11y": {
     "mainNav": "Navegação principal",

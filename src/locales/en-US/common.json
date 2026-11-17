@@ -24,7 +24,15 @@
     "reports": "Reports",
     "groupOperations": "Operations",
     "groupManagement": "Management",
-    "groupAccount": "Account"
+    "groupAccount": "Account",
+    "counts": {
+      "openOrders_one": "{{formatted}} open order",
+      "openOrders_other": "{{formatted}} open orders",
+      "lateTickets_one": "{{formatted}} late kitchen ticket",
+      "lateTickets_other": "{{formatted}} late kitchen tickets",
+      "lowStock_one": "{{formatted}} item low on stock",
+      "lowStock_other": "{{formatted}} items low on stock"
+    }
   },
   "a11y": {
     "mainNav": "Main navigation",

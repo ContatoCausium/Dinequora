@@ -33,7 +33,13 @@ import {
   FileBarChart,
   ServerCog,
   CreditCard,
+  Clock3,
+  TriangleAlert,
 } from "lucide-react";
+import { fmtNumber } from "@/lib/format";
+import type { NavCountKey, NavCounts } from "@/lib/nav-counts";
+import { useNavCounts } from "./use-nav-counts";
+import { foldForSearch } from "@/lib/search-text";
 import { useNavigate } from "@tanstack/react-router";
 import { auth } from "@/lib/auth";
 import { clearTemporaryDeviceData, countHeldTicketsOnDevice } from "@/lib/session-cleanup";
@@ -146,10 +152,98 @@ function useActive() {
   return (to: string) => (to === "/" ? path === "/" : path.startsWith(to));
 }
 
-function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+/** The counter each module shows in the navigation (redesign stage B). */
+const COUNTER_FOR: Partial<Record<NavTo, NavCountKey>> = {
+  "/orders": "openOrders",
+  "/kds": "lateTickets",
+  "/inventory": "lowStock",
+};
+/** Late tickets and low stock ask for attention; open orders are workload (neutral). */
+const COUNTER_IS_ALERT: Record<NavCountKey, boolean> = {
+  openOrders: false,
+  lateTickets: true,
+  lowStock: true,
+};
+const COUNTER_ICON: Partial<Record<NavCountKey, typeof Store>> = {
+  lateTickets: Clock3,
+  lowStock: TriangleAlert,
+};
+
+interface NavBadgeModel {
+  key: NavCountKey;
+  value: number;
+  /** "99+" above 99; the exact number is always in `label`. */
+  text: string;
+  /** Spoken/tooltip text: "15 open orders". */
+  label: string;
+  alert: boolean;
+}
+
+/** Badge for a module, or null when there is nothing real to show (no permission, no data, 0). */
+function useNavBadge(counts: NavCounts) {
+  const { t, i18n } = useTranslation();
+  return (to: NavTo): NavBadgeModel | null => {
+    const key = COUNTER_FOR[to];
+    if (!key) return null;
+    const value = counts[key];
+    if (value == null || value <= 0) return null;
+    return {
+      key,
+      value,
+      text: value > 99 ? "99+" : fmtNumber(value, i18n.language),
+      label: t(`nav.counts.${key}`, { count: value, formatted: fmtNumber(value, i18n.language) }),
+      alert: COUNTER_IS_ALERT[key],
+    };
+  };
+}
+
+/** Visible count pill (decorative: the link's accessible name carries the full sentence). */
+function CountBadge({ badge, className }: { badge: NavBadgeModel; className?: string }) {
+  const Icon = COUNTER_ICON[badge.key];
+  return (
+    <span
+      aria-hidden
+      data-nav-count={badge.key}
+      className={cn(
+        "tabular inline-flex h-5 min-w-5 shrink-0 items-center justify-center gap-0.5 rounded-full border bg-card px-1.5 text-[11px] font-semibold leading-none",
+        badge.alert ? "border-warning/50 text-warning" : "border-border text-foreground",
+        className,
+      )}
+    >
+      {Icon && <Icon className="size-3" />}
+      {badge.text}
+    </span>
+  );
+}
+
+/** Rail / bottom-bar marker: a dot on the icon (shape + position, not color alone). */
+function CountDot({ badge, className }: { badge: NavBadgeModel; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      data-nav-count={badge.key}
+      className={cn(
+        "absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-sidebar",
+        badge.alert ? "bg-warning" : "bg-muted-foreground",
+        className,
+      )}
+    />
+  );
+}
+
+function SidebarNav({
+  collapsed,
+  onNavigate,
+  counts,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+  counts: NavCounts;
+}) {
   const { t } = useTranslation();
   const isActive = useActive();
   const { isPlatformAdmin, canAny } = useWorkspace();
+  const badgeFor = useNavBadge(counts);
   const visible = (to: string) => {
     const req = requiredFor(to);
     return !req || canAny(req);
@@ -166,12 +260,16 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
             .filter((item) => visible(item.to))
             .map(({ to, key, icon: Icon }) => {
               const active = isActive(to);
+              const label = t(`nav.${key}`);
+              const badge = badgeFor(to);
               const link = (
                 <Link
                   key={to}
                   to={to}
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
+                  // The rail shows only icons: the name (and the count) must still be announced.
+                  aria-label={collapsed ? (badge ? `${label}, ${badge.label}` : label) : undefined}
                   className={cn(
                     "group relative flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium transition-colors",
                     active
@@ -182,19 +280,28 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
                 >
                   <span
                     className={cn(
-                      "inline-flex size-6 shrink-0 items-center justify-center transition-colors",
+                      "relative inline-flex size-6 shrink-0 items-center justify-center transition-colors",
                       active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
                     )}
                   >
                     <Icon className="size-[18px]" />
+                    {collapsed && badge && <CountDot badge={badge} />}
                   </span>
-                  {!collapsed && <span className="truncate">{t(`nav.${key}`)}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
+                  {!collapsed && badge && (
+                    <>
+                      <CountBadge badge={badge} />
+                      <span className="sr-only">, {badge.label}</span>
+                    </>
+                  )}
                 </Link>
               );
               return collapsed ? (
                 <Tooltip key={to}>
                   <TooltipTrigger asChild>{link}</TooltipTrigger>
-                  <TooltipContent side="right">{t(`nav.${key}`)}</TooltipContent>
+                  <TooltipContent side="right">
+                    {badge ? `${label} · ${badge.label}` : label}
+                  </TooltipContent>
                 </Tooltip>
               ) : (
                 link
@@ -236,6 +343,7 @@ function SidebarNav({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate
           <Link
             to="/control"
             onClick={onNavigate}
+            aria-label={collapsed ? t("nav.controlCenter") : undefined}
             className={cn(
               "flex h-9 items-center gap-2.5 rounded-md px-2 text-[13.5px] font-medium text-sidebar-foreground/80 hover:bg-secondary hover:text-foreground",
               collapsed && "justify-center px-0",
@@ -553,7 +661,12 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
             const req = requiredFor(n.to);
             return !req || canAny(req);
           }).map((n) => (
-            <CommandItem key={n.to} asChild onSelect={() => setOpen(false)}>
+            <CommandItem
+              key={n.to}
+              asChild
+              keywords={[foldForSearch(t(`nav.${n.key}`))]}
+              onSelect={() => setOpen(false)}
+            >
               <Link to={n.to} onClick={() => setOpen(false)}>
                 <n.icon className="size-4" />
                 {t(`nav.${n.key}`)}
@@ -565,6 +678,7 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
           {org.locations.map((l) => (
             <CommandItem
               key={l.id}
+              keywords={[foldForSearch(l.name)]}
               onSelect={() => {
                 setLocationId(l.id);
                 setOpen(false);
@@ -595,7 +709,7 @@ function ShortcutHint() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
-  const { orgStatus, suspendedReason, org } = useWorkspace();
+  const { orgStatus, suspendedReason, org, canAny } = useWorkspace();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -606,6 +720,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const operational = isOperationalRoute(path);
   const [focusOn, setFocusOn] = useState(false);
   const focusActive = operational && focusOn;
+  // Sidebar counters (stage B): one query for the whole shell, paused while focus mode hides the
+  // navigation (the POS and the kitchen board keep their own live data).
+  const counts = useNavCounts(!focusActive);
+  const badgeFor = useNavBadge(counts);
+  // Phone bar: the first three modules this member may open (same rule as the sidebar and the
+  // route guard), so it never offers a link the member cannot use.
+  const barItems = NAV.filter((n) => {
+    const req = requiredFor(n.to);
+    return !req || canAny(req);
+  }).slice(0, 3);
+  // Counters whose module is not on the phone bar: flagged on "More" so they are never out of sight.
+  const moreAlerts = (["/orders", "/kds", "/inventory"] as const)
+    .filter((to) => !barItems.some((n) => n.to === to))
+    .map((to) => badgeFor(to))
+    .filter((b): b is NavBadgeModel => b !== null);
+  // The dot takes the alert color when any of them asks for attention.
+  const moreDot = moreAlerts.find((b) => b.alert) ?? moreAlerts[0];
   const wentFullscreen = useRef(false);
   const focus = useMemo<FocusMode>(() => {
     const exit = () => {
@@ -680,7 +811,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <OrgSwitcher compact={collapsed} />
               </div>
-              <SidebarNav collapsed={collapsed} />
+              <SidebarNav collapsed={collapsed} counts={counts} />
               <div className={cn("flex items-center gap-2 border-t p-3", collapsed && "flex-col")}>
                 <BrandMark className="size-6 text-foreground" />
                 {/* "Powered by" only makes sense under a customer's own brand (white label). */}
@@ -775,7 +906,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="border-b p-3 pr-10">
                 <OrgSwitcher />
               </div>
-              <SidebarNav onNavigate={() => setMobileOpen(false)} />
+              <SidebarNav onNavigate={() => setMobileOpen(false)} counts={counts} />
             </SheetContent>
           </Sheet>
 
@@ -785,24 +916,44 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
               aria-label={t("a11y.mobileNav")}
             >
-              {NAV.slice(0, 3).map(({ to, key, icon: Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className={cn(
-                    "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium",
-                    isActive(to) ? "text-primary" : "text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-5" strokeWidth={1.75} />
-                  {t(`nav.${key}`)}
-                </Link>
-              ))}
+              {barItems.map(({ to, key, icon: Icon }) => {
+                const badge = badgeFor(to);
+                return (
+                  <Link
+                    key={to}
+                    to={to}
+                    className={cn(
+                      "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                      isActive(to) ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    <span className="relative">
+                      <Icon className="size-5" strokeWidth={1.75} />
+                      {badge && (
+                        <CountBadge
+                          badge={badge}
+                          className="absolute -right-3.5 -top-2 h-4 min-w-4 px-1 text-[10px]"
+                        />
+                      )}
+                    </span>
+                    {t(`nav.${key}`)}
+                    {badge && <span className="sr-only">, {badge.label}</span>}
+                  </Link>
+                );
+              })}
               <button
                 onClick={() => setMobileOpen(true)}
+                aria-label={
+                  moreAlerts.length
+                    ? [t("nav.more"), ...moreAlerts.map((b) => b.label)].join(", ")
+                    : undefined
+                }
                 className="flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground"
               >
-                <MoreHorizontal className="size-5" strokeWidth={1.75} />
+                <span className="relative">
+                  <MoreHorizontal className="size-5" strokeWidth={1.75} />
+                  {moreDot && <CountDot badge={moreDot} className="ring-card" />}
+                </span>
                 {t("nav.more")}
               </button>
             </nav>

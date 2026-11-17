@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { menuItemSchema, recipePayloadSchema, saleInputSchema } from "./operational-contracts";
 import { orderListQuery } from "./orders-query";
 import { toMenuReadModel } from "./menu-read-model";
+import { readNavCounts } from "./nav-counts";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
 async function scope(client: SupabaseClient<Database>, orgId: string, locationId?: string) {
@@ -352,6 +353,19 @@ const INVENTORY_COLUMNS =
   "id,org_id,location_id,client_id,name,category,sku,unit,quantity,min_quantity,supplier,expiration_date,active,updated_at";
 const MOVEMENT_COLUMNS =
   "id,org_id,location_id,inventory_item_id,order_id,delta,kind,client_event_id,reverses_id,reason,actor_id,created_at";
+
+/**
+ * Sidebar counters (open orders, late kitchen tickets, low stock) in one small request, so the
+ * 30 s refresh never pulls the full operational resources. Permission checks, RLS and the counting
+ * rules live in nav-counts.ts. An unknown store is rejected by scope(), like every other read.
+ */
+export const fetchNavCounts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ orgId: z.string().min(1), locationId: z.string().optional() }))
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    return readNavCounts(context.supabase, { orgId: s.org.id, locationId: s.location?.id });
+  });
 
 export const fetchOperationalResources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

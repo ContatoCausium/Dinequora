@@ -1,14 +1,8 @@
 import { Order, KitchenStation, OrderStatus, saveOrder } from "./orders-service";
+import { DEFAULT_THRESHOLDS, type KDSThresholds } from "./kds-thresholds";
 
-export interface KDSThresholds {
-  warningMinutes: number;
-  delayedMinutes: number;
-}
-
-export const DEFAULT_THRESHOLDS: KDSThresholds = {
-  warningMinutes: 10,
-  delayedMinutes: 20,
-};
+// Thresholds live in a dependency-free module so the server (sidebar counters) uses the same values.
+export { DEFAULT_THRESHOLDS, type KDSThresholds };
 
 export function calculateElapsedMinutes(createdAtIso: string, now: Date = new Date()): number {
   const created = new Date(createdAtIso).getTime();
