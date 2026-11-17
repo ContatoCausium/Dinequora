@@ -104,7 +104,7 @@ function Organizations() {
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("orgsPage.subtitle")}</p>
       </header>
 
-      <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,160px))]">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,150px)_minmax(0,150px)_minmax(0,220px)]">
         <label className="relative">
           <span className="sr-only">{t("orgsPage.search")}</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -187,7 +187,8 @@ function Organizations() {
                   >
                     <td className="px-4 py-2.5">
                       <button
-                        className="font-medium hover:underline"
+                        type="button"
+                        className="-my-1 inline-flex min-h-6 items-center rounded py-1 text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={(e) => {
                           e.stopPropagation();
                           set({ org: o.id });
@@ -223,7 +224,7 @@ function Organizations() {
                         </span>
                       </div>
                     </td>
-                    <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
+                    <td className="max-w-[240px] break-all px-4 py-2.5 text-muted-foreground">
                       {o.owner_email ?? (
                         <Tag tone={o.is_demo ? "neutral" : "warning"}>{t("orgs.noOwner")}</Tag>
                       )}
@@ -433,7 +434,7 @@ function OrgDetail({
                   key={a.id}
                   className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
                 >
-                  <span className="truncate">
+                  <span className="min-w-0 break-words">
                     {t(`actions.${a.action}`, { defaultValue: a.action })}
                   </span>
                   <time className="tabular shrink-0 text-xs text-muted-foreground">
@@ -459,9 +460,7 @@ function Item({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium" title={value}>
-        {value}
-      </dd>
+      <dd className="mt-0.5 break-words font-medium">{value}</dd>
     </div>
   );
 }

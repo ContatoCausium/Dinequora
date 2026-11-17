@@ -144,7 +144,7 @@ function ControlLayout() {
             >
               <Icon className="size-4" strokeWidth={1.75} />
               {t(`nav.${key}`)}
-              <span className="ml-auto text-[10px] uppercase tracking-wide">
+              <span className="ml-auto whitespace-nowrap text-[10px] uppercase tracking-wide">
                 {t("nav.comingNext", { ns: "common" })}
               </span>
             </span>
@@ -177,11 +177,17 @@ function ControlLayout() {
         <Outlet />
         <div className="mt-10 flex flex-wrap items-center gap-3 border-t pt-4 text-xs text-muted-foreground md:hidden">
           {hasWorkspace && (
-            <Link to="/" className="font-medium hover:text-foreground">
+            <Link
+              to="/"
+              className="inline-flex min-h-6 items-center font-medium hover:text-foreground"
+            >
               {t("back")}
             </Link>
           )}
-          <button onClick={signOut} className="font-medium hover:text-foreground">
+          <button
+            onClick={signOut}
+            className="inline-flex min-h-6 items-center font-medium hover:text-foreground"
+          >
             {t("signOut")}
           </button>
           <span className="ml-auto truncate">{user.email}</span>

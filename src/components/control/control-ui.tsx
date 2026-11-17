@@ -126,7 +126,7 @@ export function Metric({
       >
         {value}
       </dd>
-      {note && <p className="mt-2 text-xs text-muted-foreground">{note}</p>}
+      {note && <dd className="mt-2 text-xs text-muted-foreground">{note}</dd>}
     </div>
   );
 }

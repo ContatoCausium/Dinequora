@@ -179,7 +179,9 @@
       "viewRestaurantPrivateData": "Access orders, sales and private tenant cash register",
       "manageRestaurantMembers": "Manage restaurant staff and store members",
       "manageRestaurantLocations": "Create and manage restaurant stores"
-    }
+    },
+    "clearSearch": "Clear search",
+    "roleFilter": "Filter by role"
   },
   "roles": {
     "platform_admin": "Platform administrator",
@@ -216,7 +218,20 @@
     "platform.bootstrap_admin": "First platform admin assigned",
     "organization.test_classified": "Classified as test organization",
     "organization.brand_updated": "Branding updated",
-    "organization.onboarding_progress": "Onboarding progress saved"
+    "organization.onboarding_progress": "Onboarding progress saved",
+    "expense.saved": "Expense saved",
+    "inventory.moved": "Stock moved",
+    "inventory.saved": "Inventory item saved",
+    "location.tax_rate_updated": "Store sales tax updated",
+    "menu.saved": "Menu saved",
+    "orders.cancelled": "Order cancelled",
+    "orders.created": "Order created",
+    "orders.status_changed": "Order status changed",
+    "pos.finalized": "Sale recorded at the POS",
+    "purchase.received": "Purchase order received",
+    "purchase.saved": "Purchase order saved",
+    "recipe.saved": "Recipe saved",
+    "supplier.saved": "Supplier saved"
   },
   "errors": {
     "forbidden": "You don't have permission to do that.",
@@ -423,7 +438,9 @@
       "status": "Auth Infrastructure Status",
       "statusOk": "Fully operational with no real blocker detected on authentication provider.",
       "rls": "Multi-tenant isolation enforced via Postgres Row Level Security policies.",
-      "tokens": "Session tokens and expiration cycle managed natively."
+      "tokens": "Session tokens and expiration cycle managed natively.",
+      "rlsTitle": "Row Level Security (RLS)",
+      "tokensTitle": "Sessions and tokens"
     },
     "metricClassification": {
       "real": "Live Metric",
@@ -433,7 +450,16 @@
     "adminsLink": "Grant or revoke platform roles.",
     "auditLink": "Review every sensitive change.",
     "authorizationNote": "Connecting payments, email or other external services always requires your explicit authorization.",
-    "noPlans": "No plans available."
+    "noPlans": "No plans available.",
+    "metricsList": {
+      "ping": "API & database (ping)",
+      "pingValue": "{{ms}} ms average response",
+      "loading": "Loading…",
+      "billing": "Billing and MRR projection",
+      "billingHint": "Catalog prices; billing provider not connected",
+      "sales": "Restaurant sales metrics",
+      "salesHint": "Fed by demonstration statistical models"
+    }
   },
   "demo": {
     "subtitle": "Preview branding, onboarding and location workflows with synthetic data.",
@@ -470,6 +496,62 @@
     "logoErr": {
       "type": "Use PNG, JPG, SVG or WebP.",
       "size": "Logo must be 2 MB or smaller."
+    }
+  },
+  "subsPage": {
+    "subtitle": "Billing per organization, estimated metrics and administrative actions that always require a written reason.",
+    "notConnectedTitle": "Billing provider not connected.",
+    "notConnectedBody": "Nothing is charged or changed at an external provider. Every action and figure here is simulated and recorded in the internal audit log.",
+    "mrr": "Estimated MRR",
+    "mrrHint": "Estimate · from list prices of active plans",
+    "arr": "Projected ARR",
+    "arrHint": "Estimate · MRR × 12, no billing provider",
+    "churn": "Churn rate",
+    "churnHint": "Simulated · share of suspended accounts",
+    "trialConversion": "Trial conversion",
+    "trialConversionHint_one": "Estimate · {{count}} organization in trial",
+    "trialConversionHint_other": "Estimate · {{count}} organizations in trial",
+    "search": "Search customer or email",
+    "statusFilter": "Filter by status",
+    "planFilter": "Filter by plan",
+    "allStatuses": "All statuses",
+    "allPlans": "All plans",
+    "colOrg": "Organization",
+    "colPlan": "Plan & price",
+    "colStores": "Active stores",
+    "colRenewal": "Renewal",
+    "colStatus": "Status",
+    "colActions": "Administrative actions",
+    "empty": "No subscriptions match the selected filters.",
+    "noOwner": "No owner",
+    "price": "{{monthly}}/mo · {{annual}}/yr",
+    "storesOf": "{{used}} of {{limit}}",
+    "trialUntil": "Trial until {{date}}",
+    "monthly": "Monthly · renews on the 1st",
+    "changePlan": "Change plan",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "reasonRequired": "A reason of at least 5 characters is required.",
+    "saved": "Action applied and recorded in the audit log.",
+    "failed": "The action could not be applied.",
+    "sessionTitle": "Actions in this session",
+    "sessionBody": "Changes made since this page was opened.",
+    "dialog": {
+      "upgrade": "Change subscription plan",
+      "downgrade": "Change subscription plan",
+      "cancel": "Cancel",
+      "reactivate": "Reactivate subscription",
+      "renew": "Renew subscription",
+      "simulate_failed": "Simulate failed payment",
+      "simulate_grace": "Simulate grace period",
+      "description": "Direct action on {{name}}. Every action requires a reason, recorded in the audit log.",
+      "newPlan": "New plan",
+      "planOption": "{{plan}} ({{price}}/mo)",
+      "reason": "Reason",
+      "reasonPlaceholder": "Why is this change being made?",
+      "reasonHint": "At least 5 characters. Recorded permanently in the platform log.",
+      "note": "No card is charged: the billing provider is not connected. This action only updates access and status inside Dinequora.",
+      "confirm": "Confirm action"
     }
   }
 }

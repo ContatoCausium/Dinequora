@@ -37,6 +37,15 @@ import {
   togglePlanActive,
 } from "@/lib/admin-service";
 import { fmtCurrency, fmtDate } from "@/lib/format";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/control/plans")({
@@ -416,126 +425,120 @@ function ControlPlansPage() {
       )}
 
       {/* Modal de Edição com Validação e Simulação */}
-      {editingPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-xl border bg-card p-6 shadow-xl">
-            <h3 className="text-lg font-bold tracking-tight">
-              {t("plansPage.editTitle", { name: editingPlan.name })}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t("plansPage.editDescription")}</p>
+      <Dialog open={!!editingPlan} onOpenChange={(open) => !open && setEditingPlan(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          {editingPlan && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t("plansPage.editTitle", { name: editingPlan.name })}</DialogTitle>
+                <DialogDescription>{t("plansPage.editDescription")}</DialogDescription>
+              </DialogHeader>
 
-            <div className="my-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-xs font-medium">
-                  {t("plansPage.priceMonthly")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.priceMonthlyUsd ?? 0}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, priceMonthlyUsd: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-                <label className="text-xs font-medium">
-                  {t("plansPage.priceAnnual")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.priceAnnualUsd ?? 0}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, priceAnnualUsd: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-xs font-medium">
-                  {t("plansPage.maxLocations")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.maxLocations ?? 1}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, maxLocations: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-                <label className="text-xs font-medium">
-                  {t("plansPage.maxEmployees")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.maxEmployees ?? 10}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, maxEmployees: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <label className="block text-xs font-medium">
-                {t("plansPage.description")}
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={editForm.description ?? ""}
-                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                />
-              </label>
-
-              {/* Simulação de Impacto */}
-              <div className="rounded-lg border bg-muted/30 p-3 text-xs">
-                <p className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <Sparkles className="size-3.5 text-primary" />
-                  {t("plansPage.impact")}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {t("plansPage.impactHint")}
-                </p>
-                <div className="mt-2 flex gap-4 text-muted-foreground">
-                  <span>
-                    {t("plansPage.affectedOrgs")}: <strong>{impact?.affectedOrgs ?? 0}</strong>
-                  </span>
-                  <span>
-                    {t("plansPage.affectedLocations")}:{" "}
-                    <strong>{impact?.affectedLocations ?? 0}</strong>
-                  </span>
+              <div className="my-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs font-medium">
+                    {t("plansPage.priceMonthly")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.priceMonthlyUsd ?? 0}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, priceMonthlyUsd: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs font-medium">
+                    {t("plansPage.priceAnnual")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.priceAnnualUsd ?? 0}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, priceAnnualUsd: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs font-medium">
+                    {t("plansPage.maxLocations")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.maxLocations ?? 1}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, maxLocations: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs font-medium">
+                    {t("plansPage.maxEmployees")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.maxEmployees ?? 10}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, maxEmployees: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <label className="block text-xs font-medium">
+                  {t("plansPage.description")}
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={editForm.description ?? ""}
+                    onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                  />
+                </label>
+
+                {/* Simulação de Impacto */}
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+                  <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <Sparkles className="size-3.5 text-primary" />
+                    {t("plansPage.impact")}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {t("plansPage.impactHint")}
+                  </p>
+                  <div className="mt-2 flex gap-4 text-muted-foreground">
+                    <span>
+                      {t("plansPage.affectedOrgs")}: <strong>{impact?.affectedOrgs ?? 0}</strong>
+                    </span>
+                    <span>
+                      {t("plansPage.affectedLocations")}:{" "}
+                      <strong>{impact?.affectedLocations ?? 0}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Justificativa Obrigatória */}
+                <label className="block text-xs font-medium text-foreground">
+                  {t("plansPage.reasonLabel")}
+                  <textarea
+                    rows={2}
+                    required
+                    className={cn(inputCls, "h-auto py-1.5")}
+                    placeholder={t("plansPage.reasonPlaceholder")}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                </label>
               </div>
 
-              {/* Justificativa Obrigatória */}
-              <label className="block text-xs font-medium text-foreground">
-                {t("plansPage.reasonLabel")}
-                <textarea
-                  rows={2}
-                  required
-                  className={cn(inputCls, "h-auto py-1.5")}
-                  placeholder={t("plansPage.reasonPlaceholder")}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t pt-4">
-              <button
-                onClick={() => setEditingPlan(null)}
-                className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-              >
-                {t("plansPage.cancel")}
-              </button>
-              <button
-                onClick={() => void handleSaveDraft()}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-              >
-                {t("plansPage.saveDraft")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingPlan(null)}>
+                  {t("plansPage.cancel")}
+                </Button>
+                <Button onClick={() => void handleSaveDraft()}>{t("plansPage.saveDraft")}</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

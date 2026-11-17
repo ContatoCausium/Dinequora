@@ -245,7 +245,7 @@ function Overview() {
               action={
                 <Link
                   to="/control/organizations"
-                  className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                  className="-my-1 inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded py-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {t("overview.viewAll")}
                   <ArrowUpRight className="size-3" />
@@ -299,7 +299,7 @@ function Overview() {
               action={
                 <Link
                   to="/control/audit"
-                  className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                  className="-my-1 inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded py-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {t("overview.viewAll")}
                   <ArrowUpRight className="size-3" />

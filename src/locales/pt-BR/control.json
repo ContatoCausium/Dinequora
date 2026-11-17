@@ -179,7 +179,9 @@
       "viewRestaurantPrivateData": "Acessar pedidos, vendas e caixa privado do restaurante",
       "manageRestaurantMembers": "Gerenciar funcionários e membros da loja",
       "manageRestaurantLocations": "Criar e gerenciar lojas do restaurante"
-    }
+    },
+    "clearSearch": "Limpar busca",
+    "roleFilter": "Filtrar por papel"
   },
   "roles": {
     "platform_admin": "Administrador da plataforma",
@@ -216,7 +218,20 @@
     "platform.bootstrap_admin": "Primeiro admin da plataforma definido",
     "organization.test_classified": "Classificada como organização de teste",
     "organization.brand_updated": "Identidade visual atualizada",
-    "organization.onboarding_progress": "Progresso da configuração salvo"
+    "organization.onboarding_progress": "Progresso da configuração salvo",
+    "expense.saved": "Despesa salva",
+    "inventory.moved": "Estoque movimentado",
+    "inventory.saved": "Item de estoque salvo",
+    "location.tax_rate_updated": "Imposto da loja atualizado",
+    "menu.saved": "Cardápio salvo",
+    "orders.cancelled": "Pedido cancelado",
+    "orders.created": "Pedido criado",
+    "orders.status_changed": "Status do pedido alterado",
+    "pos.finalized": "Venda registrada no PDV",
+    "purchase.received": "Pedido de compra recebido",
+    "purchase.saved": "Pedido de compra salvo",
+    "recipe.saved": "Receita salva",
+    "supplier.saved": "Fornecedor salvo"
   },
   "errors": {
     "forbidden": "Você não tem permissão para isso.",
@@ -423,7 +438,9 @@
       "status": "Status da Infraestrutura de Autenticação",
       "statusOk": "Operacional sem bloqueios impeditivos detectados no provedor de autenticação.",
       "rls": "Isolamento multi-tenant garantido por Row Level Security no Postgres.",
-      "tokens": "Ciclo de vida de tokens de sessão e expiração gerenciados nativamente."
+      "tokens": "Ciclo de vida de tokens de sessão e expiração gerenciados nativamente.",
+      "rlsTitle": "Row Level Security (RLS)",
+      "tokensTitle": "Sessões e tokens"
     },
     "metricClassification": {
       "real": "Métrica Real",
@@ -433,7 +450,16 @@
     "adminsLink": "Conceder ou revogar funções da plataforma.",
     "auditLink": "Revisar cada alteração sensível.",
     "authorizationNote": "Conectar pagamentos, e-mail ou outros serviços externos sempre exige sua autorização explícita.",
-    "noPlans": "Nenhum plano disponível."
+    "noPlans": "Nenhum plano disponível.",
+    "metricsList": {
+      "ping": "API e banco de dados (ping)",
+      "pingValue": "{{ms}} ms de resposta média",
+      "loading": "Carregando…",
+      "billing": "Projeção de faturamento e MRR",
+      "billingHint": "Preços de catálogo; provedor de cobrança não conectado",
+      "sales": "Métricas de vendas dos restaurantes",
+      "salesHint": "Alimentadas por modelos estatísticos de demonstração"
+    }
   },
   "demo": {
     "subtitle": "Pré-visualize marca, configuração e fluxos de unidades com dados sintéticos.",
@@ -470,6 +496,62 @@
     "logoErr": {
       "type": "Use PNG, JPG, SVG ou WebP.",
       "size": "O logo deve ter até 2 MB."
+    }
+  },
+  "subsPage": {
+    "subtitle": "Faturamento por organização, métricas estimadas e ações administrativas que sempre exigem justificativa.",
+    "notConnectedTitle": "Provedor de cobrança não conectado.",
+    "notConnectedBody": "Nada é cobrado ou alterado em provedores externos. Todas as ações e números aqui são simulados e registrados na auditoria interna.",
+    "mrr": "MRR estimado",
+    "mrrHint": "Estimativa · preços de lista dos planos ativos",
+    "arr": "ARR projetado",
+    "arrHint": "Estimativa · MRR × 12, sem provedor de cobrança",
+    "churn": "Taxa de churn",
+    "churnHint": "Simulado · proporção de contas suspensas",
+    "trialConversion": "Conversão de trial",
+    "trialConversionHint_one": "Estimativa · {{count}} organização em trial",
+    "trialConversionHint_other": "Estimativa · {{count}} organizações em trial",
+    "search": "Buscar cliente ou e-mail",
+    "statusFilter": "Filtrar por status",
+    "planFilter": "Filtrar por plano",
+    "allStatuses": "Todos os status",
+    "allPlans": "Todos os planos",
+    "colOrg": "Organização",
+    "colPlan": "Plano e valor",
+    "colStores": "Lojas ativas",
+    "colRenewal": "Renovação",
+    "colStatus": "Status",
+    "colActions": "Ações administrativas",
+    "empty": "Nenhuma assinatura corresponde aos filtros selecionados.",
+    "noOwner": "Sem proprietário",
+    "price": "{{monthly}}/mês · {{annual}}/ano",
+    "storesOf": "{{used}} de {{limit}}",
+    "trialUntil": "Trial até {{date}}",
+    "monthly": "Mensal · renova no dia 1",
+    "changePlan": "Alterar plano",
+    "suspend": "Suspender",
+    "reactivate": "Reativar",
+    "reasonRequired": "Informe uma justificativa com pelo menos 5 caracteres.",
+    "saved": "Ação aplicada e registrada na auditoria.",
+    "failed": "Não foi possível aplicar a ação.",
+    "sessionTitle": "Ações nesta sessão",
+    "sessionBody": "Alterações feitas desde que esta página foi aberta.",
+    "dialog": {
+      "upgrade": "Alterar plano da assinatura",
+      "downgrade": "Alterar plano da assinatura",
+      "cancel": "Cancelar",
+      "reactivate": "Reativar assinatura",
+      "renew": "Renovar assinatura",
+      "simulate_failed": "Simular falha de pagamento",
+      "simulate_grace": "Simular período de carência",
+      "description": "Ação direta em {{name}}. Toda ação exige justificativa, registrada na auditoria.",
+      "newPlan": "Novo plano",
+      "planOption": "{{plan}} ({{price}}/mês)",
+      "reason": "Justificativa",
+      "reasonPlaceholder": "Por que esta alteração está sendo feita?",
+      "reasonHint": "Pelo menos 5 caracteres. Fica registrada permanentemente no log da plataforma.",
+      "note": "Nenhum cartão é cobrado: o provedor de cobrança não está conectado. Esta ação só atualiza acesso e status dentro do Dinequora.",
+      "confirm": "Confirmar ação"
     }
   }
 }

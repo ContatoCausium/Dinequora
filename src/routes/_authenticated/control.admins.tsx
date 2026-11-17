@@ -276,17 +276,20 @@ function Admins() {
                 />
                 {search && (
                   <button
+                    type="button"
                     onClick={() => setSearch("")}
-                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    aria-label={t("admins.clearSearch")}
+                    className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <X className="size-4" />
+                    <X className="size-4" aria-hidden />
                   </button>
                 )}
               </div>
               <FormSelect
+                aria-label={t("admins.roleFilter")}
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value as "all" | PlatformRole)}
-                className="h-9 rounded-md border bg-card px-3 text-sm"
+                className="min-w-40"
               >
                 <option value="all">{t("admins.allRoles")}</option>
                 <option value="platform_admin">{t("roles.platform_admin")}</option>
@@ -347,7 +350,12 @@ function Admins() {
 
         {/* Matrix Section */}
         <Section title={t("admins.matrixTitle")} hint={t("admins.matrixSubtitle")}>
-          <div className="overflow-x-auto p-0">
+          <div
+            className="overflow-x-auto p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            tabIndex={0}
+            role="region"
+            aria-label={t("admins.matrixTitle")}
+          >
             <table className="data-table text-left">
               <thead className="border-b text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                 <tr>

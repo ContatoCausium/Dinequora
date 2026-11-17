@@ -179,7 +179,12 @@ function Settings() {
           ) : plans.length === 0 ? (
             <p className="p-5 text-sm text-muted-foreground">{t("settings.noPlans")}</p>
           ) : (
-            <div className="min-w-0 max-w-full overflow-x-auto">
+            <div
+              className="min-w-0 max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              tabIndex={0}
+              role="region"
+              aria-label={t("nav.plans")}
+            >
               <table className="data-table min-w-[620px]">
                 <thead className="border-b text-left text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                   <tr>
@@ -222,9 +227,11 @@ function Settings() {
                 <div className="flex items-center gap-2.5">
                   <Activity className="size-4 text-success" />
                   <div>
-                    <p className="font-medium">API & Banco de Dados (Ping)</p>
+                    <p className="font-medium">{t("settings.metricsList.ping")}</p>
                     <p className="text-xs text-muted-foreground">
-                      {ping ? `${ping.ms} ms de resposta média` : "Carregando..."}
+                      {ping
+                        ? t("settings.metricsList.pingValue", { ms: ping.ms })
+                        : t("settings.metricsList.loading")}
                     </p>
                   </div>
                 </div>
@@ -234,9 +241,9 @@ function Settings() {
                 <div className="flex items-center gap-2.5">
                   <Eye className="size-4 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">Projeção de Faturamento e MRR</p>
+                    <p className="font-medium">{t("settings.metricsList.billing")}</p>
                     <p className="text-xs text-muted-foreground">
-                      Preços de catálogo com Stripe desconectado
+                      {t("settings.metricsList.billingHint")}
                     </p>
                   </div>
                 </div>
@@ -246,9 +253,9 @@ function Settings() {
                 <div className="flex items-center gap-2.5">
                   <Eye className="size-4 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">Métricas de Vendas dos Restaurantes</p>
+                    <p className="font-medium">{t("settings.metricsList.sales")}</p>
                     <p className="text-xs text-muted-foreground">
-                      Alimentadas por modelos estatísticos de demonstração
+                      {t("settings.metricsList.salesHint")}
                     </p>
                   </div>
                 </div>
@@ -271,14 +278,14 @@ function Settings() {
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
                 <div>
-                  <p className="font-medium">Row Level Security (RLS)</p>
+                  <p className="font-medium">{t("settings.authAudit.rlsTitle")}</p>
                   <p className="text-xs text-muted-foreground">{t("settings.authAudit.rls")}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
                 <div>
-                  <p className="font-medium">Sessões e Tokens</p>
+                  <p className="font-medium">{t("settings.authAudit.tokensTitle")}</p>
                   <p className="text-xs text-muted-foreground">{t("settings.authAudit.tokens")}</p>
                 </div>
               </div>

@@ -171,7 +171,7 @@ function Onboarding() {
           {t("onboarding.invitedBody", { email: user.email })}
         </p>
         <Button
-          variant="ghost"
+          variant="outline"
           onClick={async () => {
             await auth.signOut();
             await navigate({ to: "/auth", replace: true });

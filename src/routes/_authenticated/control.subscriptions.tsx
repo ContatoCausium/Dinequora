@@ -9,12 +9,10 @@ import {
   UserCheck,
   RefreshCw,
   ArrowUpRight,
-  ArrowDownRight,
   Ban,
   ShieldAlert,
   CheckCircle2,
   Clock,
-  Building2,
   CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,15 +23,6 @@ import { AppPending } from "@/components/app/states";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -42,14 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormSelect } from "@/components/ui/form-select";
+import { StatTile } from "@/components/app/stat-tile";
+import { Pager } from "@/components/app/data-table";
+import { fmtCurrency, fmtDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { updateOrganization, type OrgInsight, type PlanId } from "@/lib/admin-service";
 
 export const Route = createFileRoute("/_authenticated/control/subscriptions")({
@@ -82,7 +69,8 @@ const PLAN_PRICES: Record<PlanId, { monthly: number; annual: number }> = {
 };
 
 function SubscriptionsControlRoute() {
-  const { t } = useTranslation("control");
+  const { t, i18n } = useTranslation("control");
+  const lng = i18n.language;
   const { data, error, reload } = useControlData();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -157,12 +145,7 @@ function SubscriptionsControlRoute() {
   const handleExecuteAction = async () => {
     if (!actionTarget || !selectedAction) return;
     if (reason.trim().length < 5) {
-      toast.error(
-        t(
-          "errors.reason_required",
-          "A justificativa detalhada é obrigatória (mínimo 5 caracteres).",
-        ),
-      );
+      toast.error(t("subsPage.reasonRequired"));
       return;
     }
 
@@ -186,12 +169,15 @@ function SubscriptionsControlRoute() {
       };
       setLocalAudit((prev) => [newLog, ...prev]);
 
-      toast.success(t("saved", "Ação administrativa executada e auditada com sucesso."));
+      toast.success(t("subsPage.saved"));
       setActionTarget(null);
       setSelectedAction(null);
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao executar ação");
+      toast.error(
+        t("subsPage.failed"),
+        err instanceof Error ? { description: err.message } : undefined,
+      );
     } finally {
       setSaving(false);
     }
@@ -199,112 +185,59 @@ function SubscriptionsControlRoute() {
 
   return (
     <div className="space-y-6">
-      {/* Stripe Disconnected Notice */}
-      <div className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-foreground">
-        <AlertTriangle className="size-5 shrink-0" />
-        <div className="text-xs leading-relaxed md:text-sm">
-          <strong>Stripe desconectado:</strong> Nenhuma cobrança real é faturada ou alterada em
-          provedores externos. Todas as ações e números são simulados em ambiente controlado com
-          auditoria interna.
-        </div>
-      </div>
+      <header>
+        <h1 className="text-[26px] font-semibold tracking-[-0.02em]">{t("nav.subscriptions")}</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("subsPage.subtitle")}</p>
+      </header>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          Assinaturas e Faturamento
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Visão geral de faturamento por organização, métricas estimadas e controles administrativos
-          com justificativa obrigatória.
+      {/* Billing provider not connected: nothing here charges a card. */}
+      <div
+        role="note"
+        className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-foreground"
+      >
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+        <p>
+          <strong className="font-semibold">{t("subsPage.notConnectedTitle")}</strong>{" "}
+          {t("subsPage.notConnectedBody")}
         </p>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              MRR Estimado
-            </CardTitle>
-            <DollarSign className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold">${metrics.mrr.toLocaleString("en-US")}</div>
-              <Badge variant="outline" className="text-[10px]">
-                Estimativa
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Projeção com base nos planos ativos
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              ARR Projetado
-            </CardTitle>
-            <TrendingUp className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold">${metrics.arr.toLocaleString("en-US")}</div>
-              <Badge variant="outline" className="text-[10px]">
-                Estimativa
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Anualização teórica sem Stripe</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Taxa de Churn
-            </CardTitle>
-            <Ban className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold">{metrics.churnRate}%</div>
-              <Badge variant="secondary" className="text-[10px]">
-                Simulado
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Baseado em contas suspensas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Conversão de Trial
-            </CardTitle>
-            <UserCheck className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <div className="text-2xl font-bold">{metrics.trialConversion}%</div>
-              <Badge variant="secondary" className="text-[10px]">
-                Estimado
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {metrics.trialCount} em trial atualmente
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatTile
+          label={t("subsPage.mrr")}
+          value={fmtCurrency(metrics.mrr, lng)}
+          hint={t("subsPage.mrrHint")}
+          icon={<DollarSign />}
+        />
+        <StatTile
+          label={t("subsPage.arr")}
+          value={fmtCurrency(metrics.arr, lng)}
+          hint={t("subsPage.arrHint")}
+          icon={<TrendingUp />}
+        />
+        <StatTile
+          label={t("subsPage.churn")}
+          value={`${metrics.churnRate}%`}
+          hint={t("subsPage.churnHint")}
+          icon={<Ban />}
+        />
+        <StatTile
+          label={t("subsPage.trialConversion")}
+          value={`${metrics.trialConversion}%`}
+          hint={t("subsPage.trialConversionHint", { count: metrics.trialCount })}
+          icon={<UserCheck />}
+        />
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <label className="relative w-full sm:max-w-sm">
+          <span className="sr-only">{t("subsPage.search")}</span>
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
           <Input
-            placeholder="Buscar cliente ou email..."
+            placeholder={t("subsPage.search")}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -312,142 +245,131 @@ function SubscriptionsControlRoute() {
             }}
             className="pl-9"
           />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
+        </label>
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <FormSelect
+            aria-label={t("subsPage.statusFilter")}
             value={statusFilter}
-            onValueChange={(v) => {
-              setStatusFilter(v);
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
               setPage(1);
             }}
+            className="min-w-40"
           >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Status</SelectItem>
-              <SelectItem value="active">Ativas</SelectItem>
-              <SelectItem value="trial">Em Trial</SelectItem>
-              <SelectItem value="suspended">Suspensas</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
+            <option value="all">{t("subsPage.allStatuses")}</option>
+            <option value="active">{t("status.active")}</option>
+            <option value="trial">{t("status.trial")}</option>
+            <option value="suspended">{t("status.suspended")}</option>
+          </FormSelect>
+          <FormSelect
+            aria-label={t("subsPage.planFilter")}
             value={planFilter}
-            onValueChange={(v) => {
-              setPlanFilter(v);
+            onChange={(e) => {
+              setPlanFilter(e.target.value);
               setPage(1);
             }}
+            className="min-w-40"
           >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Plano" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos Planos</SelectItem>
-              <SelectItem value="starter">Starter</SelectItem>
-              <SelectItem value="growth">Growth</SelectItem>
-              <SelectItem value="enterprise">Enterprise</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="all">{t("subsPage.allPlans")}</option>
+            <option value="starter">{t("plans.starter")}</option>
+            <option value="growth">{t("plans.growth")}</option>
+            <option value="enterprise">{t("plans.enterprise")}</option>
+          </FormSelect>
         </div>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Organização / Cliente</TableHead>
-                <TableHead>Plano & Valor</TableHead>
-                <TableHead>Lojas Ativas</TableHead>
-                <TableHead>Renovação / Ciclo</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações Administrativas</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+      <div className="surface overflow-hidden">
+        <div
+          className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          tabIndex={0}
+          role="region"
+          aria-label={t("nav.subscriptions")}
+        >
+          <table className={cn("data-table text-left", paginated.length > 0 && "min-w-[760px]")}>
+            <thead>
+              <tr>
+                <th scope="col">{t("subsPage.colOrg")}</th>
+                <th scope="col">{t("subsPage.colPlan")}</th>
+                <th scope="col">{t("subsPage.colStores")}</th>
+                <th scope="col">{t("subsPage.colRenewal")}</th>
+                <th scope="col">{t("subsPage.colStatus")}</th>
+                <th scope="col" className="text-right">
+                  <span className="sr-only">{t("subsPage.colActions")}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
               {paginated.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                    Nenhuma assinatura encontrada para os filtros selecionados.
-                  </TableCell>
-                </TableRow>
+                <tr>
+                  <td colSpan={6}>
+                    <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+                      <CreditCard className="size-5" aria-hidden />
+                      {t("subsPage.empty")}
+                    </div>
+                  </td>
+                </tr>
               ) : (
                 paginated.map((org) => {
                   const planInfo = PLAN_PRICES[org.plan as PlanId] ?? { monthly: 0, annual: 0 };
                   const storeMultiplier = Math.max(1, org.active_store_count || 1);
                   const totalMonthly = planInfo.monthly * storeMultiplier;
-
+                  const status = STATUS_STYLE[org.status as keyof typeof STATUS_STYLE];
                   return (
-                    <TableRow key={org.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">{org.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {org.owner_email ?? "Sem proprietário"}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="capitalize font-medium">{org.plan}</span>
-                          <span className="text-xs text-muted-foreground">
-                            ${totalMonthly}/mês (${planInfo.annual * storeMultiplier}/ano)
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {org.active_store_count} de {org.store_limit}
+                    <tr key={org.id}>
+                      <td>
+                        <p className="font-medium text-foreground">{org.name}</p>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {org.owner_email ?? t("subsPage.noOwner")}
+                        </p>
+                      </td>
+                      <td>
+                        <p className="font-medium">{t(`plans.${org.plan}`, org.plan)}</p>
+                        <p className="tabular text-xs text-muted-foreground">
+                          {t("subsPage.price", {
+                            monthly: fmtCurrency(totalMonthly, lng),
+                            annual: fmtCurrency(planInfo.annual * storeMultiplier, lng),
+                          })}
+                        </p>
+                      </td>
+                      <td className="tabular">
+                        {t("subsPage.storesOf", {
+                          used: org.active_store_count,
+                          limit: org.store_limit,
+                        })}
+                      </td>
+                      <td>
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock className="size-3.5" aria-hidden />
+                          {org.trial_ends_at
+                            ? t("subsPage.trialUntil", {
+                                date: fmtDate(org.trial_ends_at.slice(0, 10), lng),
+                              })
+                            : t("subsPage.monthly")}
+                        </span>
+                      </td>
+                      <td>
+                        <Badge variant={status?.variant ?? "neutral"}>
+                          {status ? <status.icon aria-hidden /> : null}
+                          {t(`status.${org.status}`, org.status)}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <Clock className="size-3.5" />
-                          {org.trial_ends_at ? (
-                            <span>
-                              Trial até {new Date(org.trial_ends_at).toLocaleDateString()}
-                            </span>
-                          ) : (
-                            <span>Mensal (renovação dia 1)</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            org.status === "active"
-                              ? "default"
-                              : org.status === "trial"
-                                ? "secondary"
-                                : "destructive"
-                          }
-                          className="capitalize"
-                        >
-                          {org.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
+                      </td>
+                      <td>
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleOpenAction(org, "upgrade")}
-                            title="Upgrade / Downgrade"
                           >
-                            <ArrowUpRight className="size-3.5 mr-1" /> Alterar
+                            <ArrowUpRight aria-hidden /> {t("subsPage.changePlan")}
                           </Button>
                           {org.status === "active" && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-destructive hover:bg-destructive/10"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => handleOpenAction(org, "cancel")}
-                              title="Cancelar / Suspender"
                             >
-                              <Ban className="size-3.5 mr-1" /> Suspender
+                              <Ban aria-hidden /> {t("subsPage.suspend")}
                             </Button>
                           )}
                           {org.status === "suspended" && (
@@ -456,153 +378,133 @@ function SubscriptionsControlRoute() {
                               size="sm"
                               className="text-success hover:bg-success/10"
                               onClick={() => handleOpenAction(org, "reactivate")}
-                              title="Reativar"
                             >
-                              <RefreshCw className="size-3.5 mr-1" /> Reativar
+                              <RefreshCw aria-hidden /> {t("subsPage.reactivate")}
                             </Button>
                           )}
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   );
                 })
               )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            Página {page} de {totalPages} ({filtered.length} total)
-          </span>
-          <div className="flex gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Próxima
-            </Button>
-          </div>
+            </tbody>
+          </table>
         </div>
-      )}
+        <Pager
+          page={page}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPage={setPage}
+        />
+      </div>
 
-      {/* Action Dialog */}
       <Dialog open={!!actionTarget} onOpenChange={(open) => !open && setActionTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {selectedAction === "upgrade" && "Alterar Plano da Assinatura"}
-              {selectedAction === "cancel" && "Suspender / Cancelar Assinatura"}
-              {selectedAction === "reactivate" && "Reativar Assinatura"}
-              {selectedAction === "renew" && "Renovar Assinatura"}
+              {selectedAction ? t(`subsPage.dialog.${selectedAction}`, "") : ""}
             </DialogTitle>
             <DialogDescription>
-              Ação direta para a organização <strong>{actionTarget?.name}</strong>. Todas as ações
-              exigem justificativa registrada na auditoria.
+              {t("subsPage.dialog.description", { name: actionTarget?.name ?? "" })}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             {(selectedAction === "upgrade" || selectedAction === "downgrade") && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold">Novo Plano</label>
-                <Select value={targetPlan} onValueChange={(v) => setTargetPlan(v as PlanId)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o plano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="starter">Starter ($29/mês)</SelectItem>
-                    <SelectItem value="growth">Growth ($79/mês)</SelectItem>
-                    <SelectItem value="enterprise">Enterprise ($199/mês)</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="subs-plan" className="text-sm font-medium">
+                  {t("subsPage.dialog.newPlan")}
+                </label>
+                <FormSelect
+                  id="subs-plan"
+                  value={targetPlan}
+                  onChange={(e) => setTargetPlan(e.target.value as PlanId)}
+                  className="w-full"
+                >
+                  {(["starter", "growth", "enterprise"] as const).map((p) => (
+                    <option key={p} value={p}>
+                      {t("subsPage.dialog.planOption", {
+                        plan: t(`plans.${p}`),
+                        price: fmtCurrency(PLAN_PRICES[p].monthly, lng),
+                      })}
+                    </option>
+                  ))}
+                </FormSelect>
               </div>
             )}
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-foreground">
-                Justificativa Obrigatória <span className="text-destructive">*</span>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="subs-reason" className="text-sm font-medium">
+                {t("subsPage.dialog.reason")} <span className="text-destructive">*</span>
               </label>
               <Textarea
+                id="subs-reason"
                 rows={3}
-                placeholder="Descreva o motivo desta ação administrativa para auditoria..."
+                placeholder={t("subsPage.dialog.reasonPlaceholder")}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
+                aria-describedby="subs-reason-hint"
               />
-              <p className="text-[11px] text-muted-foreground">
-                Mínimo de 5 caracteres. Ficará registrado permanentemente no log da plataforma.
+              <p id="subs-reason-hint" className="text-xs text-muted-foreground">
+                {t("subsPage.dialog.reasonHint")}
               </p>
             </div>
 
-            <div className="rounded-md bg-muted p-2.5 text-xs text-muted-foreground">
-              <strong>Nota:</strong> Como o Stripe está desconectado, não há cobrança em cartão.
-              Esta ação atualiza permissões e status internamente.
-            </div>
+            <p className="rounded-md bg-muted p-2.5 text-xs text-muted-foreground">
+              {t("subsPage.dialog.note")}
+            </p>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setActionTarget(null)} disabled={saving}>
-              Cancelar
+              {t("subsPage.dialog.cancel")}
             </Button>
             <Button
               variant={selectedAction === "cancel" ? "destructive" : "default"}
               onClick={handleExecuteAction}
               disabled={saving || reason.trim().length < 5}
+              loading={saving}
             >
-              {saving ? "Processando..." : "Confirmar Ação"}
+              {t("subsPage.dialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Audit History Snapshot */}
       {localAudit.length > 0 && (
-        <Card className="border-dashed">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <ShieldAlert className="size-4 text-primary" />
-              Ações Administrativas Recentes nesta Sessão
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Histórico de alterações realizadas sem recarregar a tela.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {localAudit.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-start justify-between border-b pb-2 text-xs"
-                >
-                  <div>
-                    <span className="font-semibold">{log.orgName}:</span>{" "}
-                    <span className="uppercase text-[10px] font-mono bg-muted px-1 rounded">
-                      {log.action}
-                    </span>{" "}
-                    - {log.reason}
-                  </div>
-                  <span className="text-muted-foreground text-[10px]">
-                    {new Date(log.date).toLocaleTimeString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section className="surface p-5">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold">
+            <ShieldAlert className="size-4 text-primary" aria-hidden />
+            {t("subsPage.sessionTitle")}
+          </h2>
+          <p className="mt-0.5 text-[12.5px] text-muted-foreground">{t("subsPage.sessionBody")}</p>
+          <ul className="mt-3 divide-y text-sm">
+            {localAudit.map((log) => (
+              <li key={log.id} className="flex items-start justify-between gap-3 py-2">
+                <span className="min-w-0 break-words">
+                  <span className="font-medium">{log.orgName}</span>
+                  <Badge variant="neutral" className="mx-1.5">
+                    {t(`subsPage.dialog.${log.action}`, log.action)}
+                  </Badge>
+                  {log.reason}
+                </span>
+                <span className="tabular shrink-0 text-xs text-muted-foreground">
+                  {new Date(log.date).toLocaleTimeString(lng)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
 }
+
+/** Subscription status vocabulary (same as the rest of the product: icon + label). */
+const STATUS_STYLE = {
+  active: { variant: "success", icon: CheckCircle2 },
+  trial: { variant: "info", icon: Clock },
+  suspended: { variant: "danger", icon: Ban },
+} as const;

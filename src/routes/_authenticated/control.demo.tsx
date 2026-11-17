@@ -274,7 +274,7 @@ function DemoStudio() {
               </ol>
               <button
                 onClick={() => setStep(0)}
-                className="mt-3 text-xs font-medium text-primary hover:underline"
+                className="mt-3 inline-flex min-h-6 items-center rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {t("demo.restart")}
               </button>

@@ -292,6 +292,8 @@
  * Alignment is left to each column (numbers stay right-aligned); cell padding is uniform.
  */
 @utility data-table {
+  /* Contains sr-only cells (absolutely positioned) so they never widen the page. */
+  position: relative;
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
