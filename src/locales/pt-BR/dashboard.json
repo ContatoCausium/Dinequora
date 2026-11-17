@@ -141,6 +141,15 @@
       "singleDay": "Todas as vendas até agora estão em um único dia — a tendência aparece conforme novos dias forem registrados.",
       "stores": "Por loja"
     },
+    "hero": {
+      "highest": "Máximo diário",
+      "lowest": "Mínimo diário",
+      "average": "Média diária",
+      "days_one": "{{count}} dia",
+      "days_other": "{{count}} dias",
+      "statsNote": "Somente dias encerrados — hoje ainda está em andamento.",
+      "todayNote": "O gráfico dia a dia aparece nas visões de 7 e 30 dias."
+    },
     "products": {
       "title": "Mais vendidos",
       "empty": "Nenhum produto vendido neste período.",

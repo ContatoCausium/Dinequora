@@ -62,11 +62,20 @@ export function StatTile({
   );
 }
 
-function DeltaLine({ delta }: { delta: KpiDelta }) {
+/**
+ * Comparison with the previous period: direction icon + signed percent + caption (never color
+ * alone). Shared by StatTile and MetricCard so both read the same way.
+ */
+export function DeltaLine({ delta, className }: { delta: KpiDelta; className?: string }) {
   const Icon =
     delta.direction === "up" ? ArrowUpRight : delta.direction === "down" ? ArrowDownRight : Minus;
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] leading-snug">
+    <div
+      className={cn(
+        "flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] leading-snug",
+        className,
+      )}
+    >
       {delta.direction ? (
         <>
           <span

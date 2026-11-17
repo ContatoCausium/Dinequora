@@ -16,6 +16,7 @@ import {
 import { useScopedLocations, useWorkspace } from "./workspace-context";
 import { PageHeader, Panel, Segmented } from "./page";
 import { StatTile } from "./stat-tile";
+import { MetricCard } from "./metric-card";
 import { Skeleton, StateCard } from "./states";
 import { ColumnSeries, RankedBars } from "./charts";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent, fmtQuantity } from "@/li
 import { cn } from "@/lib/utils";
 import { kpiDelta } from "@/lib/period-compare";
 import { usePreviousPeriodReport } from "@/lib/use-previous-period";
+import { completedDayStats } from "@/lib/series-stats";
 import { averageCents, multiplyQuantityCents, sumCents } from "@/lib/money";
 
 type Period = "today" | "7d" | "30d";
@@ -150,6 +152,13 @@ export function RecordedOverview() {
         });
 
   const money = (c: number) => fmtMoneyCents(c, lng);
+  const shortDay = (day: string) => fmtDate(day, lng, { day: "numeric", month: "short" });
+  // Highest / lowest / average of the same daily series the chart draws (no extra query), over
+  // completed days only: today is still in progress in the store's time zone.
+  const dayStats =
+    view && period !== "today"
+      ? completedDayStats(view.report.daily, dayKey(new Date().toISOString(), timeZone))
+      : null;
   const storeName = (slug: string) => org.locations.find((l) => l.id === slug)?.name ?? slug;
   const monthName = fmtDate(`${todayIso().slice(0, 7)}-01`, lng, { month: "long" });
 
@@ -211,12 +220,15 @@ export function RecordedOverview() {
       ) : !view ? (
         <div className="space-y-6">
           <Skeleton className="h-16 rounded-xl" />
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            {Array.from({ length: 5 }, (_, i) => (
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+            <Skeleton className="h-[26rem] rounded-xl" />
+            <Skeleton className="hidden h-[26rem] rounded-xl lg:block" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-[92px] rounded-xl" />
             ))}
           </div>
-          <Skeleton className="h-72 rounded-xl" />
         </div>
       ) : (
         <>
@@ -286,93 +298,66 @@ export function RecordedOverview() {
           {seeSales && (
             <>
               <h2 className="eyebrow">{t("home.salesSection")}</h2>
-              <div
-                className={cn(
-                  "grid grid-cols-2 gap-4",
-                  canSeeFinance ? "md:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-3",
-                )}
-              >
-                <StatTile
+              {/* DOM (and reading) order: hero → indicators → stores. Wide screens place the stores
+                  beside the hero and the indicators below both. */}
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+                <MetricCard
                   label={t("home.kpi.netSales")}
                   value={money(view.report.revenueCents)}
                   delta={delta(view.report.revenueCents, prev?.revenueCents)}
                   hint={
                     view.report.revenueCents ? t("home.kpi.netSalesHint") : t("home.kpi.noSales")
                   }
-                  trend={period === "today" ? undefined : view.report.daily.map((d) => d.cents)}
-                />
-                <StatTile
-                  label={t("home.kpi.orders")}
-                  value={fmtNumber(view.report.orderCount, lng)}
-                  delta={delta(view.report.orderCount, prev?.orderCount)}
-                  hint={t("home.kpi.avgTicket", { value: money(view.report.avgTicketCents) })}
-                />
-                <StatTile
-                  label={t("home.kpi.cogs")}
-                  value={money(view.report.cogsCents)}
-                  delta={delta(view.report.cogsCents, prev?.cogsCents, "none")}
-                  hint={
-                    view.gross.cogsRate == null
-                      ? t("home.kpi.noSales")
-                      : t("home.kpi.cogsHint", { value: fmtPercent(view.gross.cogsRate, lng) })
+                  stats={
+                    dayStats && view.report.daysWithSales > 0
+                      ? [
+                          {
+                            key: "highest",
+                            label: t("home.hero.highest"),
+                            value: money(dayStats.highest.cents),
+                            detail: shortDay(dayStats.highest.day),
+                          },
+                          {
+                            key: "lowest",
+                            label: t("home.hero.lowest"),
+                            value: money(dayStats.lowest.cents),
+                            detail: shortDay(dayStats.lowest.day),
+                          },
+                          {
+                            key: "average",
+                            label: t("home.hero.average"),
+                            value: money(dayStats.averageCents),
+                            detail: t("home.hero.days", { count: dayStats.days }),
+                          },
+                        ]
+                      : undefined
                   }
-                />
-                {canSeeFinance && (
-                  <>
-                    <StatTile
-                      label={t("home.kpi.gross")}
-                      value={money(view.gross.grossProfitCents)}
-                      delta={delta(
-                        view.gross.grossProfitCents,
-                        prev ? prev.revenueCents - prev.cogsCents : undefined,
-                      )}
-                      hint={
-                        view.gross.grossMargin == null
-                          ? t("home.kpi.noSales")
-                          : t("home.kpi.grossHint", {
-                              value: fmtPercent(view.gross.grossMargin, lng),
-                            })
-                      }
-                    />
-                    <StatTile
-                      className="col-span-2 xl:col-span-1"
-                      label={t("home.kpi.month")}
-                      value={money(view.month.resultCents)}
-                      hint={t("home.kpi.monthHint", { month: monthName })}
-                      tone={view.month.resultCents < 0 ? "negative" : "positive"}
-                    />
-                  </>
-                )}
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-                <Panel title={t("home.sales.title")}>
+                  statsNote={t("home.hero.statsNote")}
+                >
                   {view.report.daysWithSales === 0 ? (
-                    <p className="py-12 text-center text-sm text-muted-foreground">
+                    <p className="py-10 text-center text-sm text-muted-foreground">
                       {t("home.sales.empty")}
                     </p>
                   ) : period === "today" ? (
-                    <p className="tabular py-8 text-center text-3xl font-semibold tracking-tight">
-                      {money(view.report.revenueCents)}
-                    </p>
+                    <p className="py-4 text-sm text-muted-foreground">{t("home.hero.todayNote")}</p>
                   ) : (
                     <>
                       <ColumnSeries
+                        animate
+                        height={184}
                         caption={t("home.sales.title")}
                         format={money}
                         formatAxis={(c) => fmtMoneyCents(c, lng, { compact: true })}
                         points={view.report.daily.map((d) => ({
                           key: d.day,
-                          label: fmtDate(d.day, lng, { day: "numeric", month: "short" }),
+                          label: shortDay(d.day),
                           value: d.cents,
                         }))}
                         previous={
                           prev && prev.daysWithSales > 0
                             ? {
                                 values: prev.daily.map((d) => d.cents),
-                                labels: prev.daily.map((d) =>
-                                  fmtDate(d.day, lng, { day: "numeric", month: "short" }),
-                                ),
+                                labels: prev.daily.map((d) => shortDay(d.day)),
                                 currentLabel: tc("compare.thisPeriod"),
                                 previousLabel: tc("compare.previousPeriod"),
                                 tableLabel: tc("compare.previousPeriod"),
@@ -387,7 +372,61 @@ export function RecordedOverview() {
                       )}
                     </>
                   )}
-                </Panel>
+                </MetricCard>
+
+                <div
+                  className={cn(
+                    "grid grid-cols-2 gap-4 lg:order-last lg:col-span-2",
+                    canSeeFinance && "xl:grid-cols-4",
+                  )}
+                >
+                  <StatTile
+                    label={t("home.kpi.orders")}
+                    value={fmtNumber(view.report.orderCount, lng)}
+                    delta={delta(view.report.orderCount, prev?.orderCount)}
+                    hint={t("home.kpi.avgTicket", { value: money(view.report.avgTicketCents) })}
+                  />
+                  <StatTile
+                    label={t("home.kpi.cogs")}
+                    value={money(view.report.cogsCents)}
+                    delta={delta(view.report.cogsCents, prev?.cogsCents, "none")}
+                    hint={
+                      view.gross.cogsRate == null
+                        ? t("home.kpi.noSales")
+                        : t("home.kpi.cogsHint", { value: fmtPercent(view.gross.cogsRate, lng) })
+                    }
+                  />
+                  {canSeeFinance && (
+                    <>
+                      {/* Phones: the two finance tiles take a full row each, so the month hint is
+                          never clamped and the grid keeps no gap. */}
+                      <StatTile
+                        className="max-sm:col-span-2"
+                        label={t("home.kpi.gross")}
+                        value={money(view.gross.grossProfitCents)}
+                        delta={delta(
+                          view.gross.grossProfitCents,
+                          prev ? prev.revenueCents - prev.cogsCents : undefined,
+                        )}
+                        hint={
+                          view.gross.grossMargin == null
+                            ? t("home.kpi.noSales")
+                            : t("home.kpi.grossHint", {
+                                value: fmtPercent(view.gross.grossMargin, lng),
+                              })
+                        }
+                      />
+                      <StatTile
+                        className="max-sm:col-span-2"
+                        label={t("home.kpi.month")}
+                        value={money(view.month.resultCents)}
+                        hint={t("home.kpi.monthHint", { month: monthName })}
+                        tone={view.month.resultCents < 0 ? "negative" : "positive"}
+                      />
+                    </>
+                  )}
+                </div>
+
                 <Panel title={t("home.sales.stores")}>
                   <RankedBars
                     caption={t("home.sales.stores")}

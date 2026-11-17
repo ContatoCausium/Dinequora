@@ -272,6 +272,33 @@
   box-shadow: var(--shadow-raised);
 }
 
+/*
+ * MetricCard backdrop (redesign stage A): a dotted field with a faint wash of the chart color,
+ * fading out toward the figures. Tokens only, so tenant brands and dark mode follow automatically.
+ * Purely decorative (always aria-hidden, behind the plot).
+ */
+@utility metric-backdrop {
+  background-image:
+    radial-gradient(
+      circle,
+      color-mix(in oklab, var(--color-foreground) 11%, transparent) 1px,
+      transparent 1.4px
+    ),
+    linear-gradient(
+      to left,
+      color-mix(in oklab, var(--color-chart-1) 7%, transparent),
+      transparent 75%
+    );
+  background-size:
+    14px 14px,
+    100% 100%;
+  /* Soft on every side but the right: fades toward the figures (left) and into the card (top). */
+  mask-image:
+    linear-gradient(to right, transparent, black 45%),
+    linear-gradient(to bottom, transparent, black 28%);
+  mask-composite: intersect;
+}
+
 /* Focus ring for form controls: 3px brand halo at 30%, plus the brand border. */
 @utility focus-field {
   border-color: var(--color-ring);
@@ -333,6 +360,16 @@
   --animate-pop: dq-pop 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-flash: dq-flash 1.2s ease-out;
   --animate-enter: dq-enter 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Chart columns rising from the baseline (MetricCard). `both` keeps the final state. */
+  --animate-grow: dq-grow 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  @keyframes dq-grow {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
   @keyframes dq-pop {
     0% {
       transform: scale(0.6);

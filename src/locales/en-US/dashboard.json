@@ -141,6 +141,15 @@
       "singleDay": "All sales so far fall on one day — the trend fills in as more days are recorded.",
       "stores": "By store"
     },
+    "hero": {
+      "highest": "Highest day",
+      "lowest": "Lowest day",
+      "average": "Daily average",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "statsNote": "Completed days only — today is still in progress.",
+      "todayNote": "The day-by-day chart appears in the 7- and 30-day views."
+    },
     "products": {
       "title": "Best sellers",
       "empty": "No products sold in this period.",

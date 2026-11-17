@@ -85,6 +85,7 @@ export function ColumnSeries({
   caption,
   height = 200,
   previous,
+  animate = false,
 }: {
   points: { key: string; label: string; value: number }[];
   format: (v: number) => string;
@@ -92,6 +93,11 @@ export function ColumnSeries({
   formatAxis?: (v: number) => string;
   caption: string;
   height?: number;
+  /**
+   * Columns rise from the baseline when they first appear (a new period). CSS only: a refetch of
+   * the same days never replays it, and prefers-reduced-motion shows the final state at once.
+   */
+  animate?: boolean;
   previous?:
     | {
         values: number[];
@@ -191,6 +197,7 @@ export function ColumnSeries({
                       <span
                         className={cn(
                           "w-full max-w-[14px] rounded-t-[3px] bg-chart-6 transition-opacity",
+                          animate && "origin-bottom animate-grow",
                           dim && "opacity-40",
                           (pv ?? 0) > 0 && "min-h-[2px]",
                         )}
@@ -201,6 +208,7 @@ export function ColumnSeries({
                       className={cn(
                         "w-full rounded-t-[4px] bg-chart-1 transition-opacity",
                         prev ? "max-w-[14px]" : "max-w-[32px]",
+                        animate && "origin-bottom animate-grow",
                         dim && "opacity-40",
                         p.value > 0 && "min-h-[2px]",
                       )}
