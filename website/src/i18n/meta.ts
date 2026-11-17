@@ -44,17 +44,15 @@ export type PageMeta = {
 export const pageMeta: Record<Locale, PageMeta> = {
   en: {
     title: "Dinequora — Restaurant Intelligence Platform",
-    description:
-      "Dinequora is the restaurant management platform for independent restaurants and multi-location groups: point of sale, kitchen display, inventory, purchasing, expenses, financial reports, and team permissions in one place.",
-    social: "Run your restaurant. Not the chaos. One platform for operations, inventory, finance, and your team.",
+    description: "Run your restaurant, not the chaos: POS, kitchen display, inventory and finance in one system for independent restaurants and groups. Book a demo.",
+    social: "Run your restaurant, not the chaos: POS, kitchen display, inventory and finance in one system for independent restaurants and groups. Book a demo.",
     imageAlt: "Dinequora — Restaurant Intelligence Platform",
     noscript: "Dinequora — Restaurant Intelligence Platform. Please enable JavaScript to view this site.",
   },
   pt: {
     title: "Dinequora — Plataforma de Inteligência para Restaurantes",
-    description:
-      "Dinequora é a plataforma de gestão para restaurantes independentes e grupos com várias unidades: PDV, tela da cozinha, estoque, compras, despesas, relatórios financeiros e permissões da equipe em um só lugar.",
-    social: "Comande seu restaurante. Não o caos. Uma só plataforma para operação, estoque, financeiro e equipe.",
+    description: "Comande seu restaurante, não o caos: PDV, tela da cozinha, estoque e financeiro num só sistema para restaurantes e grupos. Agende uma demonstração.",
+    social: "Comande seu restaurante, não o caos: PDV, tela da cozinha, estoque e financeiro num só sistema para restaurantes e grupos. Agende uma demonstração.",
     imageAlt: "Dinequora — Plataforma de Inteligência para Restaurantes",
     noscript: "Dinequora — Plataforma de Inteligência para Restaurantes. Ative o JavaScript para ver este site.",
   },

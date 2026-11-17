@@ -36,7 +36,7 @@ restaurant application. The restaurant application (`Servora/…` folder) was **
 ```bash
 npm install
 npm run dev        # http://localhost:5180
-npm run build      # typecheck + production build into dist/
+npm run build      # typecheck + production build into dist/, then pre-renders / and /pt/
 npm run preview    # serve dist/ at http://localhost:5181
 npm test           # vitest
 npm run lint
@@ -73,6 +73,9 @@ covers that state.
 - `public/404.html` (+ `404.css`): bilingual page, `noindex`. Because it exists, Cloudflare Pages answers unknown
   paths with **HTTP 404** instead of the home page.
 - `robots.txt` and `sitemap.xml` (`/` and `/pt/`, reciprocal hreflang, x-default = English) are generated at build time (`src/build/seo.ts`) from `VITE_SITE_URL`.
+- **Pre-rendered HTML.** `npm run build` also renders the app on the server side (`src/entry-server.tsx`, `scripts/prerender.mjs`) and writes the result into `dist/index.html` and `dist/pt/index.html`, so crawlers, AI assistants and link previews that do not run JavaScript see the title, headings and text. Inline `style` attributes are left out (the CSP refuses them; the app sets those values when it runs) and the build fails if the pre-render is empty or contains inline scripts or styles. Anything rendered must not read `window`/`document` outside effects; `src/test/prerender.test.tsx` renders the page without a browser to keep it that way.
+- **Structured data.** Each page carries schema.org JSON-LD (Organization, WebSite, SoftwareApplication with the Starter and Growth monthly prices from `PRICES`) built in `src/build/seo.ts` when `VITE_SITE_URL` is set. Only facts shown on the page; no address, ratings or reviews.
+- **Loading.** The opening film's 144 frames (and the chapters' frames) start downloading only after the visitor's first scroll or interaction; until then the phone- or desktop-sized poster shows. The Latin subset of Inter is preloaded for the opening headline.
 
 Demo request JSON payload: `name, email, restaurant, phone|null, locations, role, message|null, consent, language ("en"|"pt"), source, submittedAt`.
 `locations` and `role` are always sent as the English option values, whatever language the visitor used.
