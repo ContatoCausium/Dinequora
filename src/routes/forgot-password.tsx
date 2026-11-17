@@ -59,7 +59,7 @@ function ForgotPage() {
   const back = (
     <Link
       to="/auth"
-      className="mt-8 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+      className="mt-8 inline-flex min-h-6 items-center gap-1.5 rounded text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <ArrowLeft className="size-4" />
       {t("forgot.back")}

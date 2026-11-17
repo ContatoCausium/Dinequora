@@ -31,6 +31,7 @@ import {
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -1305,14 +1306,13 @@ export function MenuPage() {
                       <Trash2 className="size-3.5" aria-hidden />
                     </Button>
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox
                       checked={group.required}
-                      onChange={(e) => {
+                      onCheckedChange={(v) => {
                         const next = [...formModifiers];
                         const g = next[gIdx];
-                        if (g) next[gIdx] = { ...g, required: e.target.checked };
+                        if (g) next[gIdx] = { ...g, required: v === true };
                         setFormModifiers(next);
                       }}
                     />

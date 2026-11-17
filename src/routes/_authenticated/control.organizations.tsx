@@ -11,7 +11,6 @@ import {
   AssignOwnerDialog,
   btnOutline,
   EditOrgDialog,
-  inputCls,
   LoadingRows,
   PLANS,
   STATUS,
@@ -19,6 +18,7 @@ import {
   StatusPill,
   Tag,
 } from "@/components/control/control-ui";
+import { inputCls } from "@/components/control/control-styles";
 import { useControlData } from "@/components/control/use-control-data";
 import {
   Sheet,

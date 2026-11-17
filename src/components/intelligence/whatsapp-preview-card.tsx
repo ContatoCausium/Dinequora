@@ -17,6 +17,7 @@ import { Panel, Segmented } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormSelect } from "@/components/ui/form-select";
@@ -315,12 +316,11 @@ export function WhatsAppPreviewCard({
                     ))}
                   </FormSelect>
                 </div>
-                <label className="flex items-start gap-2 text-xs">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-start gap-2.5 text-xs">
+                  <Checkbox
                     className="mt-0.5"
                     checked={consent}
-                    onChange={(e) => setConsent(e.target.checked)}
+                    onCheckedChange={(v) => setConsent(v === true)}
                   />
                   {t("operations:consent")}
                 </label>

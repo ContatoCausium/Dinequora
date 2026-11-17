@@ -98,58 +98,100 @@ export function MoneyChart<T extends Record<string, string | number>>({
   const hasLine = series.some((s) => s.kind === "line");
   const Chart = hasLine ? ComposedChart : BarChart;
   return (
-    <div style={{ height }} role="img" aria-label={ariaLabel}>
-      <ResponsiveContainer width="100%" height="100%">
-        <Chart data={data} margin={{ left: 0, right: 4, top: 8, bottom: 0 }} barGap={2}>
-          <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
-          <XAxis
-            dataKey={xKey}
-            tickLine={false}
-            axisLine={false}
-            tick={axisTick}
-            tickFormatter={(v) => formatX(String(v))}
-            dy={6}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            // wide enough for negative compact values ("-US$ 40 mil") so the sign is never clipped
-            width={84}
-            tick={axisTick}
-            tickFormatter={(v: number) => fmtMoneyCents(v, lng, { compact: true })}
-          />
-          <Tooltip
-            cursor={{ fill: "var(--muted)", opacity: 0.5 }}
-            content={<MoneyTooltip lng={lng} series={series} formatLabel={formatX} />}
-          />
-          {series.map((s) =>
-            s.kind === "line" ? (
-              <Line
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                name={s.label}
-                stroke={s.color}
-                strokeWidth={1.5}
-                dot={{ r: 2.5, strokeWidth: 0, fill: s.color }}
-                activeDot={{ r: 3.5, strokeWidth: 0 }}
-                isAnimationActive={false}
-              />
-            ) : (
-              <Bar
-                key={s.key}
-                dataKey={s.key}
-                name={s.label}
-                fill={s.color}
-                radius={[3, 3, 0, 0]}
-                maxBarSize={28}
-                isAnimationActive={false}
-              />
-            ),
-          )}
-        </Chart>
-      </ResponsiveContainer>
-    </div>
+    <figure aria-label={ariaLabel}>
+      {/* Keyboard: Tab to the chart, then the arrow keys move the tooltip between periods. */}
+      <div
+        style={{ height }}
+        className="rounded-lg [&_.recharts-surface:focus-visible]:outline-none [&_.recharts-wrapper:has(.recharts-surface:focus-visible)]:ring-2 [&_.recharts-wrapper:has(.recharts-surface:focus-visible)]:ring-ring"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <Chart
+            data={data}
+            margin={{ left: 0, right: 4, top: 8, bottom: 0 }}
+            barGap={2}
+            accessibilityLayer
+            title={ariaLabel}
+          >
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
+            <XAxis
+              dataKey={xKey}
+              tickLine={false}
+              axisLine={false}
+              tick={axisTick}
+              tickFormatter={(v) => formatX(String(v))}
+              dy={6}
+            />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              // wide enough for negative compact values ("-US$ 40 mil") so the sign is never clipped
+              width={84}
+              tick={axisTick}
+              tickFormatter={(v: number) => fmtMoneyCents(v, lng, { compact: true })}
+            />
+            <Tooltip
+              cursor={{ fill: "var(--muted)", opacity: 0.5 }}
+              content={<MoneyTooltip lng={lng} series={series} formatLabel={formatX} />}
+            />
+            {series.map((s) =>
+              s.kind === "line" ? (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.label}
+                  stroke={s.color}
+                  strokeWidth={1.5}
+                  dot={{ r: 2.5, strokeWidth: 0, fill: s.color }}
+                  activeDot={{ r: 3.5, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              ) : (
+                <Bar
+                  key={s.key}
+                  dataKey={s.key}
+                  name={s.label}
+                  fill={s.color}
+                  radius={[3, 3, 0, 0]}
+                  maxBarSize={28}
+                  isAnimationActive={false}
+                />
+              ),
+            )}
+          </Chart>
+        </ResponsiveContainer>
+      </div>
+      {/* The same numbers for screen readers. */}
+      <div className="sr-only">
+        <table>
+          <caption>{ariaLabel}</caption>
+          <thead>
+            <tr>
+              <td />
+              {series.map((s) => (
+                <th key={s.key} scope="col">
+                  {s.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, i) => (
+              <tr key={i}>
+                <th scope="row">{formatX(String(row[xKey]))}</th>
+                {series.map((s) => (
+                  <td key={s.key}>
+                    {typeof row[s.key] === "number"
+                      ? fmtMoneyCents(row[s.key] as number, lng)
+                      : "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </figure>
   );
 }
 

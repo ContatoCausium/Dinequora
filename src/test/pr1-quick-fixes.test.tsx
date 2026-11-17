@@ -125,7 +125,7 @@ describe("POS receipt from the server confirmation", () => {
   });
 
   it("the POS no longer derives the receipt label from the organization type", () => {
-    const pos = fs.readFileSync(path.join(SRC, "routes/_authenticated/_app/pos.tsx"), "utf8");
+    const pos = fs.readFileSync(path.join(SRC, "components/pages/pos-page.tsx"), "utf8");
     expect(pos).not.toMatch(/isSimulation:\s*org\.fictional/);
     expect(pos).toContain("confirmedReceipt(paid, persistRes)");
   });
@@ -136,10 +136,7 @@ describe("POS receipt from the server confirmation", () => {
 // ---------------------------------------------------------------------------------------------
 describe("order history in Finance and Reports", () => {
   it("Finance uses the paged loader instead of a single page of 200", () => {
-    const finance = fs.readFileSync(
-      path.join(SRC, "routes/_authenticated/_app/finance.tsx"),
-      "utf8",
-    );
+    const finance = fs.readFileSync(path.join(SRC, "components/pages/finance-page.tsx"), "utf8");
     expect(finance).toContain('fetchAllOrders(org.id, "all")');
     expect(finance).not.toMatch(/limit:\s*200/);
     expect(finance).toContain("<OrdersTruncatedNotice");

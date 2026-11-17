@@ -163,7 +163,7 @@ function LoginPage() {
           trailing={
             <Link
               to="/forgot-password"
-              className="text-xs font-medium text-primary hover:underline"
+              className="-my-1 inline-flex min-h-6 items-center rounded px-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t("login.forgot")}
             </Link>

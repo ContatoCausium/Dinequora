@@ -464,9 +464,11 @@ export function RecordedOverview() {
                     danger={view.expenses.overdueCents > 0}
                   />
                   <MoneyRow label={t("home.finance.paid")} value={money(view.expenses.paidCents)} />
-                  <p className="border-t pt-2.5 text-xs text-muted-foreground">
-                    {t("home.finance.monthCosts")}
-                  </p>
+                </dl>
+                <p className="mt-2.5 border-t pt-2.5 text-xs text-muted-foreground">
+                  {t("home.finance.monthCosts")}
+                </p>
+                <dl className="mt-2.5 space-y-2.5 text-sm">
                   <MoneyRow
                     label={t("home.finance.personnel")}
                     value={money(view.monthCosts.personnelCents)}
@@ -752,7 +754,7 @@ function KitchenSection({
             {v.oldest.map((o) => (
               <li key={o.id} className="flex items-center justify-between gap-3 py-2">
                 <span className="font-mono text-[13px] font-medium">{o.orderNumber}</span>
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                <span className="min-w-0 flex-1 break-words text-muted-foreground">
                   {o.items.map((i) => `${i.quantity}× ${i.productName}`).join(", ")}
                 </span>
                 <span
@@ -828,7 +830,7 @@ function StockSection({
           <ul className="divide-y text-sm">
             {v.recent.map((m) => (
               <li key={m.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="min-w-0 flex-1 truncate">
+                <span className="min-w-0 flex-1 break-words">
                   {m.itemName}
                   {showStore && (
                     <span className="ml-1.5 text-xs text-muted-foreground">

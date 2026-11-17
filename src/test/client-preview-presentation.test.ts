@@ -25,7 +25,7 @@ describe("Insights: analysis from recorded data, no AI claim either way", () => 
       expect(json(`src/locales/${l}/common.json`).nav?.["intelligence"]).toBe("Insights");
       expect(json(`src/locales/${l}/intelligence.json`).title).toBe("Insights");
     }
-    expect(read("src/routes/_authenticated/_app/intelligence.tsx")).not.toContain(
+    expect(read("src/components/pages/intelligence-page.tsx")).not.toContain(
       "Dinequora Intelligence · Dinequora",
     );
   });
@@ -58,7 +58,7 @@ describe("Insights: analysis from recorded data, no AI claim either way", () => 
   });
 
   it("the WhatsApp card (integration not connected) never renders in the client preview", () => {
-    const src = read("src/routes/_authenticated/_app/intelligence.tsx");
+    const src = read("src/components/pages/intelligence-page.tsx");
     expect(src).toMatch(/const showWhatsApp = !isClientPreview\(\);/);
     expect(src).toMatch(/\{showWhatsApp && \(\s*<WhatsAppPreviewCard/);
     expect(src.match(/<WhatsAppPreviewCard/g)).toHaveLength(1);
@@ -95,10 +95,10 @@ describe("one honest demo indicator", () => {
 
   it("module pages no longer carry their own demo badge variant", () => {
     for (const f of [
-      "src/routes/_authenticated/_app/finance.tsx",
-      "src/routes/_authenticated/_app/intelligence.tsx",
-      "src/routes/_authenticated/_app/inventory.tsx",
-      "src/routes/_authenticated/_app/pos.tsx",
+      "src/components/pages/finance-page.tsx",
+      "src/components/pages/intelligence-page.tsx",
+      "src/components/pages/inventory-page.tsx",
+      "src/components/pages/pos-page.tsx",
       "src/components/menu/menu-page.tsx",
     ])
       expect(read(f), f).not.toMatch(/org\.fictional && <DemoBadge/);

@@ -137,5 +137,8 @@
   "focus": {
     "enter": "Tela cheia",
     "exit": "Sair da tela cheia"
+  },
+  "chart": {
+    "keyboardHint": "Use as setas para a esquerda e para a direita para ler cada dia."
   }
 }

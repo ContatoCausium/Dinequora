@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,17 +48,19 @@ export function RankedBars({
           </li>
         ))}
       </ul>
-      <table className="sr-only">
-        <caption>{caption}</caption>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key}>
-              <th scope="row">{r.label}</th>
-              <td>{format(r.value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="sr-only">
+        <table>
+          <caption>{caption}</caption>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <th scope="row">{r.label}</th>
+                <td>{format(r.value)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }
@@ -100,7 +103,27 @@ export function ColumnSeries({
       }
     | undefined;
 }) {
+  const { t } = useTranslation();
   const [active, setActive] = useState<number | null>(null);
+  // Keyboard: the plot is one focusable group; arrows move between days and the tooltip (and a
+  // polite announcement) follows, so the values are reachable without a mouse.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const last = points.length - 1;
+    const next = (current: number) =>
+      e.key === "ArrowLeft"
+        ? Math.max(0, current - 1)
+        : e.key === "ArrowRight"
+          ? Math.min(last, current + 1)
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? last
+              : null;
+    const target = next(active ?? last);
+    if (target === null) return;
+    e.preventDefault();
+    setActive(target);
+  };
   const prev = previous && previous.values.length === points.length ? previous : undefined;
   const top = niceCeil(Math.max(0, ...points.map((p) => p.value), ...(prev?.values ?? [])));
   const ticks = [top, top / 2, 0];
@@ -122,8 +145,16 @@ export function ColumnSeries({
           </li>
         </ul>
       )}
-      <div className="flex gap-2" aria-hidden>
-        <div className="relative w-12 shrink-0" style={{ height }}>
+      <div
+        className="flex gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-card"
+        tabIndex={0}
+        role="group"
+        aria-label={`${caption}. ${t("chart.keyboardHint")}`}
+        onFocus={() => setActive((a) => a ?? points.length - 1)}
+        onBlur={() => setActive(null)}
+        onKeyDown={onKeyDown}
+      >
+        <div className="relative w-12 shrink-0" style={{ height }} aria-hidden>
           {ticks.map((v) => (
             <span
               key={v}
@@ -134,7 +165,7 @@ export function ColumnSeries({
             </span>
           ))}
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1" aria-hidden>
           <div className="relative" style={{ height }}>
             <div className="absolute inset-x-0 top-0 border-t border-dashed border-border/70" />
             <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-border/70" />
@@ -228,31 +259,45 @@ export function ColumnSeries({
           </div>
         </div>
       </div>
-      <table className="sr-only">
-        <caption>{caption}</caption>
-        {prev && (
-          <thead>
-            <tr>
-              <td />
-              <th scope="col">{prev.currentLabel}</th>
-              <th scope="col">{prev.tableLabel}</th>
-            </tr>
-          </thead>
-        )}
-        <tbody>
-          {points.map((p, i) => (
-            <tr key={p.key}>
-              <th scope="row">{p.label}</th>
-              <td>{format(p.value)}</td>
-              {prev && (
-                <td>
-                  {prev.labels[i]}: {format(prev.values[i] ?? 0)}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <p className="sr-only" aria-live="polite">
+        {active != null && points[active]
+          ? [
+              `${points[active]!.label}: ${format(points[active]!.value)}`,
+              prev && prev.values[active] != null
+                ? `${prev.previousLabel}, ${prev.labels[active]}: ${format(prev.values[active]!)}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(". ")
+          : ""}
+      </p>
+      <div className="sr-only">
+        <table>
+          <caption>{caption}</caption>
+          {prev && (
+            <thead>
+              <tr>
+                <td />
+                <th scope="col">{prev.currentLabel}</th>
+                <th scope="col">{prev.tableLabel}</th>
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {points.map((p, i) => (
+              <tr key={p.key}>
+                <th scope="row">{p.label}</th>
+                <td>{format(p.value)}</td>
+                {prev && (
+                  <td>
+                    {prev.labels[i]}: {format(prev.values[i] ?? 0)}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

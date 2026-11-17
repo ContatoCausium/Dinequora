@@ -236,6 +236,8 @@ function BrandingPage() {
                 type="file"
                 accept="image/png,image/jpeg,image/svg+xml,image/webp"
                 className="sr-only"
+                tabIndex={-1}
+                aria-label={t("logo.upload")}
                 onChange={(e) => onFile(e.target.files?.[0])}
               />
             </div>
@@ -492,7 +494,9 @@ function MiniWorkspace({
         <aside className="hidden w-36 flex-col gap-1 border-r bg-sidebar p-2 text-[11px] text-sidebar-foreground sm:flex">
           <div className="mb-2 flex items-center gap-1.5 p-1">
             <OrgLogo logoUrl={logoUrl} initials={initials} className="size-6 rounded-md" />
-            <span className="truncate font-semibold text-foreground">{name}</span>
+            <span className="line-clamp-2 min-w-0 break-words font-semibold leading-tight text-foreground">
+              {name}
+            </span>
           </div>
           {["overview", "locations", "branding"].map((k, i) => (
             <span

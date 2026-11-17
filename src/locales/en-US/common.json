@@ -137,5 +137,8 @@
   "focus": {
     "enter": "Full screen",
     "exit": "Exit full screen"
+  },
+  "chart": {
+    "keyboardHint": "Use the left and right arrow keys to read each day."
   }
 }

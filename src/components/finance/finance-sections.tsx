@@ -180,8 +180,8 @@ export function BillListPanel({
           {bills.map((b) => (
             <li key={b.id} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{b.description}</p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="break-words text-sm font-medium text-foreground">{b.description}</p>
+                <p className="break-words text-xs text-muted-foreground">
                   {[
                     actions.showStore ? actions.storeName(b.locationId) : null,
                     t(`categories.${b.category}`),

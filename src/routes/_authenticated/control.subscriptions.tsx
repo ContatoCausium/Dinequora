@@ -200,7 +200,7 @@ function SubscriptionsControlRoute() {
   return (
     <div className="space-y-6">
       {/* Stripe Disconnected Notice */}
-      <div className="flex items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-200">
+      <div className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-foreground">
         <AlertTriangle className="size-5 shrink-0" />
         <div className="text-xs leading-relaxed md:text-sm">
           <strong>Stripe desconectado:</strong> Nenhuma cobrança real é faturada ou alterada em
@@ -232,10 +232,7 @@ function SubscriptionsControlRoute() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <div className="text-2xl font-bold">${metrics.mrr.toLocaleString("en-US")}</div>
-              <Badge
-                variant="outline"
-                className="text-[10px] text-amber-600 border-amber-300 dark:border-amber-700"
-              >
+              <Badge variant="outline" className="text-[10px]">
                 Estimativa
               </Badge>
             </div>
@@ -255,10 +252,7 @@ function SubscriptionsControlRoute() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <div className="text-2xl font-bold">${metrics.arr.toLocaleString("en-US")}</div>
-              <Badge
-                variant="outline"
-                className="text-[10px] text-amber-600 border-amber-300 dark:border-amber-700"
-              >
+              <Badge variant="outline" className="text-[10px]">
                 Estimativa
               </Badge>
             </div>
@@ -460,7 +454,7 @@ function SubscriptionsControlRoute() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-emerald-600 hover:bg-emerald-500/10"
+                              className="text-success hover:bg-success/10"
                               onClick={() => handleOpenAction(org, "reactivate")}
                               title="Reativar"
                             >

@@ -4,14 +4,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Check, Minus, Search, Shield, ShieldAlert, UserPlus, X } from "lucide-react";
 
-import {
-  btnPrimary,
-  inputCls,
-  LoadingRows,
-  Section,
-  Tag,
-  useErr,
-} from "@/components/control/control-ui";
+import { LoadingRows, Section, Tag, useErr } from "@/components/control/control-ui";
+import { btnPrimary, inputCls } from "@/components/control/control-styles";
 import {
   listPlatformAdmins,
   setPlatformRole,

@@ -268,8 +268,10 @@ function OrgSwitcher({ compact }: { compact?: boolean }) {
         {!compact && (
           <>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">{org.name}</span>
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="line-clamp-2 break-words text-[13px] font-semibold leading-tight">
+                {org.name}
+              </span>
+              <span className="sr-only">
                 {t(`plans.${org.plan}`)} ·{" "}
                 {t("shell.locationCount", { count: org.locations.length })}
               </span>
@@ -279,6 +281,13 @@ function OrgSwitcher({ compact }: { compact?: boolean }) {
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
+        <div className="px-2 pb-1.5 pt-1">
+          <p className="text-sm font-semibold">{org.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {t(`plans.${org.plan}`)} · {t("shell.locationCount", { count: org.locations.length })}
+          </p>
+        </div>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel className="eyebrow">{t("shell.organizations")}</DropdownMenuLabel>
         {orgs.map((o) => (
           <DropdownMenuItem key={o.id} onClick={() => setOrgId(o.id)} className="gap-2.5">
@@ -303,12 +312,12 @@ export function LocationSelector({ className }: { className?: string }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex h-9 min-w-0 items-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium shadow-xs transition-colors hover:border-input",
+          "inline-flex h-9 min-w-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-sm font-medium shadow-xs transition-colors hover:border-input sm:gap-2 sm:px-3",
           className,
         )}
         aria-label={t("shell.selectLocation")}
       >
-        <Store className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+        <Store className="size-4 shrink-0 text-muted-foreground max-sm:hidden" strokeWidth={1.75} />
         <span className="truncate">{current ? current.name : t("shell.allLocations")}</span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -700,7 +709,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             {!focusActive && (
-              <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-6">
+              <header className="sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b bg-background/85 px-3 backdrop-blur sm:gap-2 sm:px-4 md:px-6">
                 <button
                   onClick={() => setMobileOpen(true)}
                   className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-secondary lg:hidden"
@@ -711,18 +720,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <LocationSelector className="max-w-[220px] sm:max-w-xs" />
                 <button
                   onClick={() => setCmdOpen(true)}
-                  className="ml-2 hidden h-9 w-64 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:border-input md:inline-flex"
+                  className="ml-2 hidden h-9 w-48 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground shadow-xs transition-colors hover:border-input md:inline-flex xl:w-64"
                 >
                   <Search className="size-4" strokeWidth={1.75} />
                   <span className="flex-1 text-left">{t("shell.search")}</span>
                   <ShortcutHint />
                 </button>
-                <div className="ml-auto flex items-center gap-1">
+                <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
                   {/* One honest workspace-level indicator instead of a different badge on every page. */}
                   {org.fictional && (
                     <span title={t("demo.workspaceHint")} className="mr-1 inline-flex">
-                      <DemoBadge label={t("demo.workspace")} className="hidden sm:inline-flex" />
-                      <DemoBadge label={t("demo.workspaceShort")} className="sm:hidden" />
+                      <DemoBadge label={t("demo.workspace")} className="hidden xl:inline-flex" />
+                      <DemoBadge label={t("demo.workspaceShort")} className="px-2 xl:hidden" />
                     </span>
                   )}
                   <button

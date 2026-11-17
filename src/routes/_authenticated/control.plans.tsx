@@ -18,7 +18,8 @@ import {
   Clock,
 } from "lucide-react";
 
-import { Section, Tag, inputCls, LoadingRows } from "@/components/control/control-ui";
+import { Section, Tag, LoadingRows } from "@/components/control/control-ui";
+import { inputCls } from "@/components/control/control-styles";
 import {
   FullPlanDef,
   PlanChangeEntry,

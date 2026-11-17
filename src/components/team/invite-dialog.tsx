@@ -24,6 +24,7 @@ import {
 import { invitableRoles } from "@/lib/access-rules";
 import { createInvitation } from "@/lib/org-service";
 import { cn } from "@/lib/utils";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useProfileText, useTeamError } from "./team-hooks";
 import { StoreChecklist } from "./team-ui";
 import type { OrgRole, PermissionProfile } from "./team-types";
@@ -180,33 +181,32 @@ export function InviteDialog({
 
             <fieldset className="flex flex-col gap-1.5">
               <legend className="mb-1.5 text-sm font-medium">{t("invite.role")}</legend>
-              {roles.map((r) => (
-                <label
-                  key={r}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 transition-colors",
-                    tier === r ? "border-primary/50 bg-primary-soft/50" : "hover:bg-muted/60",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="invite-tier"
-                    value={r}
-                    checked={tier === r}
-                    onChange={() => {
-                      setTier(r);
-                      setProfileId(null);
-                    }}
-                    className="mt-0.5 accent-[var(--primary)]"
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">{t(`auth:roles.${r}`)}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t(`roleHelp.${r}`)}
+              <RadioGroup
+                value={tier}
+                onValueChange={(v) => {
+                  setTier(v as typeof tier);
+                  setProfileId(null);
+                }}
+                className="gap-1.5"
+              >
+                {roles.map((r) => (
+                  <label
+                    key={r}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 transition-colors",
+                      tier === r ? "border-primary/50 bg-primary-soft/50" : "hover:bg-muted/60",
+                    )}
+                  >
+                    <RadioGroupItem value={r} className="mt-0.5" />
+                    <span>
+                      <span className="block text-sm font-medium">{t(`auth:roles.${r}`)}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t(`roleHelp.${r}`)}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              ))}
+                  </label>
+                ))}
+              </RadioGroup>
             </fieldset>
 
             {tier !== "owner" && (

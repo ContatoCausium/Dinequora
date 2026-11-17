@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { CreditCard, Info, Loader2, ReceiptText, ShieldAlert } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock,
+  CreditCard,
+  Info,
+  Loader2,
+  ReceiptText,
+  ShieldAlert,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel } from "@/components/app/page";
@@ -226,15 +236,15 @@ function StatusPill({ status }: { status: string }) {
   const good = status === "active" || status === "trialing";
   const bad = status === "unpaid" || status === "canceled" || status === "past_due";
   return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[11px] font-medium",
-        good && "bg-success/12 text-success",
-        bad && "bg-destructive/12 text-destructive",
-        !good && !bad && "bg-warning/15",
+    <Badge variant={good ? "success" : bad ? "danger" : "warning"}>
+      {good ? (
+        <CheckCircle2 aria-hidden />
+      ) : bad ? (
+        <CircleAlert aria-hidden />
+      ) : (
+        <Clock aria-hidden />
       )}
-    >
       {t(`billing.statuses.${status}`, { defaultValue: status })}
-    </span>
+    </Badge>
   );
 }

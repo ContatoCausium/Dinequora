@@ -72,10 +72,10 @@ import {
   stopPresentation,
 } from "@/lib/presentation-mode";
 import { PresentationBanner, PresentationModeToggle } from "@/components/app/presentation-mode";
-import { OverviewEntry } from "@/routes/_authenticated/_app/index";
+import { OverviewEntry } from "@/components/pages/overview-page";
 import { Notifications } from "@/components/app/app-shell";
-import { LocationsPage } from "@/routes/_authenticated/_app/locations";
-import { KDSPage } from "@/routes/_authenticated/_app/kds";
+import { LocationsPage } from "@/components/pages/locations-page";
+import { KDSPage } from "@/components/pages/kds-page";
 
 // ── Fixtures: the E2E store and sale #4EB368F9 (2× Burger, Fries, Lemonade; 3100 + 217 = 3317) ──
 const STORE = {

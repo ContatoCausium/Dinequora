@@ -31,7 +31,7 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-import { POSPage } from "@/routes/_authenticated/_app/pos";
+import { POSPage } from "@/components/pages/pos-page";
 
 type Lifecycle = "active" | "inactive" | "placeholder";
 const store = (id: string, lifecycle: Lifecycle = "active", over: Partial<Location> = {}) =>

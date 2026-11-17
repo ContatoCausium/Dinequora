@@ -5,7 +5,8 @@ import { ChevronLeft, ChevronRight, FileJson, History, Search, X } from "lucide-
 
 import { LoadFailure } from "@/components/control/load-failure";
 import { EmptyState } from "@/components/app/states";
-import { inputCls, LoadingRows, Tag } from "@/components/control/control-ui";
+import { LoadingRows, Tag } from "@/components/control/control-ui";
+import { inputCls } from "@/components/control/control-styles";
 import { useControlData } from "@/components/control/use-control-data";
 import { fmtDate } from "@/lib/format";
 import {
