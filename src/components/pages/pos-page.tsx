@@ -1526,11 +1526,14 @@ function POSRegister({
           if (!submittingSale) setCheckoutOpen(open);
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby="pos-checkout-note">
           <DialogHeader>
             <DialogTitle className="tabular">
               {t("checkout.title", { amount: money(session.totalCents) })}
             </DialogTitle>
+            <DialogDescription id="pos-checkout-note">
+              {t("checkout.recordOnlyNote")}
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
             <div

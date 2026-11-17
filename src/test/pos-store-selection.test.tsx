@@ -103,10 +103,10 @@ const saleArg = () => persistence.persistFinalizedPOSSaleAtomic.mock.calls[0]?.[
 const ticketStore = () => screen.getByTestId("pos-store").textContent;
 const addBurger = async () =>
   fireEvent.click(await screen.findByRole("button", { name: /^Add Classic Burger,/ }));
-const chargeButton = () => screen.getByRole("button", { name: /^Charge / });
+const chargeButton = () => screen.getByRole("button", { name: /^Record payment \$/ });
 async function charge() {
   fireEvent.click(chargeButton());
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm payment" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Record payment" }));
 }
 const confirmed = (n: number) => ({
   success: true,
@@ -343,7 +343,7 @@ describe("store changes while the POS is open", () => {
       },
     ]);
     expect(refresh).toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Confirm payment" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Record payment" })).toBeNull();
     // the ticket is kept (nothing was charged)
     expect(screen.getByRole("button", { name: /^Remove Classic Burger/ })).toBeInTheDocument();
   });

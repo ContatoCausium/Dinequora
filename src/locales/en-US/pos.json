@@ -53,7 +53,7 @@
     "discount": "Discount",
     "hold": "Hold",
     "clear": "Clear",
-    "charge": "Charge {{amount}}",
+    "charge": "Record payment {{amount}}",
     "cancel": "Cancel",
     "apply": "Apply",
     "back": "Back",
@@ -80,13 +80,14 @@
     "amountLabel": "Discount amount"
   },
   "checkout": {
-    "title": "Charge {{amount}}",
+    "title": "Record payment · {{amount}}",
     "methodLabel": "Payment method",
     "tenderedLabel": "Amount tendered",
     "change": "Change to return: {{amount}}",
     "insufficient": "Amount tendered is less than the total.",
-    "confirm": "Confirm payment",
-    "confirming": "Confirming…"
+    "confirm": "Record payment",
+    "confirming": "Recording…",
+    "recordOnlyNote": "Dinequora records the payment you received — it does not charge cards or wallets. Run card and wallet payments on your own terminal first, then record them here."
   },
   "methods": {
     "cash": "Cash",
@@ -104,14 +105,14 @@
     "subtotal": "Subtotal",
     "discount": "Discount",
     "tax": "Tax ({{rate}})",
-    "total": "Total paid",
-    "method": "Payment method",
+    "total": "Total",
+    "method": "Payment recorded as",
     "change": "Change",
     "refund": "Cancel sale"
   },
   "cancelDialog": {
     "title": "Cancel completed sale",
-    "body": "This cancels the recorded order and automatically reverses its stock and cost-of-goods movements.",
+    "body": "This cancels the recorded order and automatically reverses its stock and cost-of-goods movements. It does not refund the customer: return the cash or refund the card on your terminal.",
     "reasonLabel": "Cancellation reason",
     "reasonPlaceholder": "e.g. Customer changed their mind, keying error",
     "defaultReason": "Cancellation requested by the cashier at the register",
@@ -135,7 +136,7 @@
     "configure": "Configure the store"
   },
   "errors": {
-    "tax_rate_changed": "The store's sales-tax rate changed while this ticket was open. The ticket was recalculated with the current rate; review the total and charge again.",
+    "tax_rate_changed": "The store's sales-tax rate changed while this ticket was open. The ticket was recalculated with the current rate; review the total and record the payment again.",
     "tax_rate_not_configured": "Sales tax is not configured for this store. An owner or store manager must set it before selling.",
     "store_unavailable": "This store can no longer record sales: it was deactivated or your access changed. Nothing was charged.",
     "insufficient_stock": "Not enough stock to sell this ticket: an ingredient of one of its items is below what the recipe needs. Nothing was recorded. Receive or adjust the stock in Inventory, or remove the item.",

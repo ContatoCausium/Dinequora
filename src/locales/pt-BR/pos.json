@@ -53,7 +53,7 @@
     "discount": "Desconto",
     "hold": "Em espera",
     "clear": "Limpar",
-    "charge": "Cobrar {{amount}}",
+    "charge": "Registrar pagamento {{amount}}",
     "cancel": "Cancelar",
     "apply": "Aplicar",
     "back": "Voltar",
@@ -80,13 +80,14 @@
     "amountLabel": "Valor do desconto"
   },
   "checkout": {
-    "title": "Cobrar {{amount}}",
+    "title": "Registrar pagamento · {{amount}}",
     "methodLabel": "Forma de pagamento",
     "tenderedLabel": "Valor recebido",
     "change": "Troco: {{amount}}",
     "insufficient": "O valor recebido é menor que o total.",
-    "confirm": "Confirmar pagamento",
-    "confirming": "Confirmando…"
+    "confirm": "Registrar pagamento",
+    "confirming": "Registrando…",
+    "recordOnlyNote": "O Dinequora registra o pagamento que você recebeu — ele não cobra cartões nem carteiras. Passe pagamentos de cartão e carteira na sua própria maquininha antes e depois registre aqui."
   },
   "methods": {
     "cash": "Dinheiro",
@@ -104,14 +105,14 @@
     "subtotal": "Subtotal",
     "discount": "Desconto",
     "tax": "Imposto ({{rate}})",
-    "total": "Total pago",
-    "method": "Forma de pagamento",
+    "total": "Total",
+    "method": "Pagamento registrado como",
     "change": "Troco",
     "refund": "Cancelar venda"
   },
   "cancelDialog": {
     "title": "Cancelar venda efetivada",
-    "body": "Esta operação cancela o pedido registrado e reverte automaticamente os movimentos de estoque e CMV.",
+    "body": "Esta operação cancela o pedido registrado e reverte automaticamente os movimentos de estoque e CMV. Ela não devolve o dinheiro ao cliente: devolva o dinheiro ou estorne o cartão na sua maquininha.",
     "reasonLabel": "Motivo do cancelamento",
     "reasonPlaceholder": "ex.: Cliente desistiu, erro de digitação",
     "defaultReason": "Cancelamento solicitado pelo operador no caixa",
@@ -135,7 +136,7 @@
     "configure": "Configurar a loja"
   },
   "errors": {
-    "tax_rate_changed": "A alíquota de imposto da loja mudou enquanto esta comanda estava aberta. A comanda foi recalculada com a alíquota atual; confira o total e cobre novamente.",
+    "tax_rate_changed": "A alíquota de imposto da loja mudou enquanto esta comanda estava aberta. A comanda foi recalculada com a alíquota atual; confira o total e registre o pagamento novamente.",
     "tax_rate_not_configured": "O imposto sobre vendas desta loja não está configurado. Um proprietário ou gerente da loja precisa defini-lo antes de vender.",
     "store_unavailable": "Esta loja não pode mais registrar vendas: ela foi desativada ou seu acesso mudou. Nada foi cobrado.",
     "insufficient_stock": "Estoque insuficiente para vender esta comanda: um ingrediente de um dos itens está abaixo do que a receita exige. Nada foi registrado. Receba ou ajuste o estoque em Estoque, ou remova o item.",

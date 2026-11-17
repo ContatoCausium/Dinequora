@@ -110,8 +110,8 @@ const found = {
 const addBurger = async () =>
   fireEvent.click(await screen.findByRole("button", { name: /^Add Classic Burger,/ }));
 async function charge() {
-  fireEvent.click(screen.getByRole("button", { name: /^Charge / }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm payment" }));
+  fireEvent.click(screen.getByRole("button", { name: /^Record payment \$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Record payment" }));
 }
 const keysSent = () =>
   persistence.persistFinalizedPOSSaleAtomic.mock.calls.map((c) => c[1] as string);
@@ -343,4 +343,11 @@ describe("POS sale outbox", () => {
     setItem.mockRestore();
   });
 
+  it("payment copy: Dinequora records payments, it does not charge cards", async () => {
+    render(<POSPage />);
+    await addBurger();
+    fireEvent.click(screen.getByRole("button", { name: /^Record payment \$/ }));
+    const dialog = await screen.findByRole("dialog", { name: /^Record payment ·/ });
+    expect(dialog).toHaveTextContent("it does not charge cards or wallets");
+  });
 });
