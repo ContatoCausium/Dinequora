@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { cx } from "../ui";
 import { pick, useLocale } from "../../i18n/locale";
 
-const reduced = () => typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reduced = () =>
+  typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* -------------------------------------------------------------- Night clock */
 
