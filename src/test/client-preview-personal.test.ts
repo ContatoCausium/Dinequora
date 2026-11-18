@@ -560,7 +560,9 @@ describe("reset brings demo display names up to date, never touches personal own
       seed.indexOf("async function seedOperational("),
     );
     // the passwords of the credentials file are verified before the file is first written
-    const check = run.indexOf("await (await signIn(a.email, p.password)).auth.signOut()");
+    const check = run.indexOf(
+      'await (await signIn(a.email, p.password)).auth.signOut({ scope: "local" })',
+    );
     const firstSave = run.indexOf("    save();");
     expect(check).toBeGreaterThan(-1);
     expect(check).toBeLessThan(firstSave);
@@ -575,6 +577,12 @@ describe("reset brings demo display names up to date, never touches personal own
     expect(run).toMatch(
       /accounts: Object\.fromEntries\(\s*ACCOUNTS\.filter\(\(a\) => kept\[a\.key\]\)/,
     );
+    // a reset that stops early leaves the previous file complete (organization, stores, summary)
+    expect(run).toMatch(
+      /const creds = \{\s*\.\.\.\(Object\.keys\(kept\)\.length \? previous : \{\}\),/,
+    );
+    // the password check never ends the account's other sessions (someone may be presenting)
+    expect(run).not.toMatch(/signIn\(a\.email, p\.password\)\)\.auth\.signOut\(\)/);
   });
   it("kept demo accounts (reserved .test domain) get the dataset name when it differs", () => {
     expect(seed).toMatch(/const byEmail = new Map\(audit\.demo\.map/);

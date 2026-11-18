@@ -240,8 +240,8 @@ async function run(
   // for a lost credentials file (new passwords for the demo accounts only).
   const rotate = process.env.PREVIEW_ROTATE_DEMO_PASSWORDS === "1";
   const kept = {};
+  let previous = null;
   if (!rotate && ACCOUNTS.some((a) => byEmail.has(a.email))) {
-    let previous = null;
     try {
       previous = JSON.parse(fs.readFileSync(credsPath, "utf8"));
     } catch {
@@ -260,7 +260,8 @@ async function run(
           `the credentials file has no current password for the demo ${a.key} account; nothing was changed`,
         );
       try {
-        await (await signIn(a.email, p.password)).auth.signOut();
+        // scope "local": ends only the session opened by this check, never the account's other sessions
+        await (await signIn(a.email, p.password)).auth.signOut({ scope: "local" });
       } catch {
         throw new SeedError(
           `the demo ${a.key} account does not accept the password of the credentials file; nothing was changed`,
@@ -269,7 +270,10 @@ async function run(
       kept[a.key] = p.password;
     }
   }
+  // On a reset the file starts as the previous one (organization, stores, last seed summary), so a
+  // run that stops before the end leaves a complete, still accurate file.
   const creds = {
+    ...(Object.keys(kept).length ? previous : {}),
     kind: "dinequora-client-preview",
     datasetVersion: DATASET_VERSION,
     target: target.where,
