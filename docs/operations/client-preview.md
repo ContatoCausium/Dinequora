@@ -159,13 +159,15 @@ Profiles (`PREVIEW_DATASET_PROFILE`):
 | ----------------------- | ------- | ------- | --------------- |
 | `ledger-safe` (default) | 22 days | ≈ 410   | ≈ 860 (< 1,000) |
 | `full`                  | 36 days | ≈ 3,300 | ≈ 6,800         |
+| `presentation`          | 63 days | ≈ 1,160 | ≈ 2,400         |
 
-**Known app limitation (product finding, not changed here):** `fetchOperationalResources` reads
-`finance_entries` in one PostgREST request without paging, and PostgREST returns at most 1,000 rows
-(Supabase default). Above that, the Finance and Reports screens add up an arbitrary subset of the
-ledger while the Dashboard (paged orders) stays right. `ledger-safe` keeps the whole ledger under the
-cap (room for ~70 live sales before the next reset); `full` needs a paged or aggregated ledger read
-first. The same limit affects any real organization above ~480 sales.
+`presentation` keeps the `ledger-safe` volume over 62 days, so the 7- and 30-day views (Overview,
+Reports, Insights) always have a complete previous period to compare with.
+
+**Former limitation, fixed in wave 0:** the screens used to read `finance_entries` in one PostgREST
+request, capped at 1,000 rows. Since wave 0 they read the ledger through `fetchLedgerSummary` (day
+totals per store, keyset pagination, complete or explicitly marked incomplete) and the export through
+`fetchLedgerRows`, so every profile is read completely; `ledger-safe` is simply the smallest.
 
 ### 5.4 Seed, reset, verify, smoke test
 
@@ -197,10 +199,14 @@ too. Order of a hosted release: deploy → smoke (read-only) → reset → verif
   no billing provider, as `seed-demo-orgs.sql`) and calls the dataset functions. Passwords go only to
   the credentials file (outside the repository, mode 600), which must be writable before anything is
   created.
-- **Reset** keeps the organization, its stores, every member (personal owners and demo accounts),
-  their store assignments and invitations, and replaces only the operational data
+- **Reset** keeps the organization with its settings (brand colours and logo), its stores (name,
+  address, phone, hours, time zone, tax rate), the subscription, every member (personal owners and
+  demo accounts), their store assignments, permission profiles and invitations — only the first seed
+  writes those settings — and replaces only the operational data
   (`public.client_preview_purge_operational`, run before any account is touched); demo accounts get
-  new passwords, personal owners keep theirs. Run it before each presentation: the live tickets and
+  new passwords, personal owners keep theirs. Before removing anything it checks that every store is
+  active, in the dataset's time zone and at the dataset's tax rate, and that the subscription is
+  active; otherwise it stops without changing the setting. Run it before each presentation: the live tickets and
   "today" follow the seed time. **Teardown** (`PREVIEW_TEARDOWN=1`) removes the organization
   (`public.client_preview_purge`), the demo accounts and the personal owners' accounts.
 - Every run first refuses a database holding any account outside the demo domain and the declared
@@ -216,7 +222,12 @@ too. Order of a hosted release: deploy → smoke (read-only) → reset → verif
   (from the 8th), and no future expense marked paid.
 - **Smoke test** calls the built Worker's server functions as the browser does (pages and headers,
   reads for every store, a POS sale, the kitchen moving it to delivered, the recipe consumption in
-  gal, the ledger read, store isolation) and prints the time and size of each call. The sale and its
+  gal, store isolation) and prints the time and size of each call. The ledger is checked in the
+  wave 0 contract: `fetchLedgerSummary` per store and for all stores (complete, every row, the same
+  totals per kind as a paged read of `finance_entries` under the same RLS, each store in its zone,
+  30 days with the same-time-yesterday comparison), `fetchLedgerRows` (every row exactly once),
+  resources without raw ledger rows, and ledger isolation (another store, no finance permission, no
+  session). The sale and its
   follow-ups run only as described above.
 
 ### 5.5 Dataset functions (`scripts/preview/sql/client-preview-functions.sql`)

@@ -284,7 +284,7 @@ async function run(
   const owner = await signIn(creds.accounts.owner.email, creds.accounts.owner.password);
 
   // 2. Organization and stores: created on the first run (onboarding path, classified as demo),
-  //    reused on a reset. Plan, brand, tax and hours are applied on every run.
+  //    reused on a reset. Plan, brand, tax and hours are written by the first seed only.
   let orgId;
   const loc = {};
   if (existing) {
@@ -309,27 +309,44 @@ async function run(
       _location_name: STORES[0].name,
     });
   }
-  await must(
-    svc
-      .from("subscriptions")
-      .update({
-        plan_id: ORG.plan,
-        status: "active",
-        trial_ends_at: null,
-        grace_ends_at: null,
-        billed_locations: STORES.length,
-      })
-      .eq("org_id", orgId),
-    "demo subscription",
-  );
+  // A reset keeps the organization's settings exactly as people left them: brand colours and logo,
+  // store names, addresses, phones, hours, time zone and tax rate, and the subscription. Only the
+  // first seed writes them. The dataset still needs what it was planned for (sales are recorded at
+  // the store's configured tax rate, in the dataset's time zone, in active stores, under an active
+  // subscription for three stores), so a reset checks that before anything is removed and stops
+  // instead of overwriting a setting someone changed.
+  if (existing) {
+    const sub = await must(
+      svc.from("subscriptions").select("status").eq("org_id", orgId).maybeSingle(),
+      "subscription",
+    );
+    if (sub?.status !== "active")
+      throw new SeedError(
+        "the demo subscription is not active; the reset keeps it as it is and stops",
+      );
+  } else
+    await must(
+      svc
+        .from("subscriptions")
+        .update({
+          plan_id: ORG.plan,
+          status: "active",
+          trial_ends_at: null,
+          grace_ends_at: null,
+          billed_locations: STORES.length,
+        })
+        .eq("org_id", orgId),
+      "demo subscription",
+    );
   const limit = await rpc(svc, "effective_store_limit", { _org_id: orgId });
   if (limit < STORES.length) throw new SeedError(`store limit ${limit} < ${STORES.length}`);
-  await rpc(owner, "save_org_brand", {
-    _org_id: orgId,
-    _primary: ORG.brandPrimary,
-    _accent: ORG.brandAccent,
-    _logo: null,
-  });
+  if (!existing)
+    await rpc(owner, "save_org_brand", {
+      _org_id: orgId,
+      _primary: ORG.brandPrimary,
+      _accent: ORG.brandAccent,
+      _logo: null,
+    });
   const org = await must(
     owner.from("organizations").select("slug").eq("id", orgId).single(),
     "org slug",
@@ -351,20 +368,33 @@ async function run(
         _tax_rate_ppm: s.taxRatePpm,
       });
   }
-  for (const s of STORES) {
-    await rpc(owner, "set_location_tax_rate", {
-      _location_id: loc[s.key],
-      _tax_rate_ppm: s.taxRatePpm,
-    });
-    await rpc(owner, "update_location", {
-      _id: loc[s.key],
-      _name: s.name,
-      _address: s.address,
-      _phone: s.phone,
-      _timezone: TIMEZONE,
-      _hours: hoursOf(s),
-    });
-  }
+  if (existing) {
+    const stored = await must(
+      svc.from("locations").select("id,status,timezone,tax_rate_ppm").eq("org_id", orgId),
+      "store settings",
+    );
+    for (const s of STORES) {
+      const l = stored.find((x) => x.id === loc[s.key]);
+      if (l?.status !== "active" || l.timezone !== TIMEZONE || l.tax_rate_ppm !== s.taxRatePpm)
+        throw new SeedError(
+          `store ${s.name}: status, time zone or tax rate differs from the dataset; the reset keeps the store as it is and stops before removing anything`,
+        );
+    }
+  } else
+    for (const s of STORES) {
+      await rpc(owner, "set_location_tax_rate", {
+        _location_id: loc[s.key],
+        _tax_rate_ppm: s.taxRatePpm,
+      });
+      await rpc(owner, "update_location", {
+        _id: loc[s.key],
+        _name: s.name,
+        _address: s.address,
+        _phone: s.phone,
+        _timezone: TIMEZONE,
+        _hours: hoursOf(s),
+      });
+    }
   Object.assign(creds, { org: { id: orgId, slug: org.slug, name: ORG.name }, stores: loc });
   save();
   log(

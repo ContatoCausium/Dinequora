@@ -123,6 +123,12 @@ describe("the ledger fits the app's single read", () => {
       LEDGER_READ_CAP,
     );
   });
+  it("presentation keeps the ledger-safe volume over 62 days (above the old cap; the app pages it since wave 0)", () => {
+    const p = buildDataset({ now: NOW, profile: "presentation" });
+    expect(p.summary.days).toBe(62);
+    expect(p.summary.ledgerEntries).toBeGreaterThan(LEDGER_READ_CAP);
+    expect(p.summary.ledgerEntries).toBeLessThan(3000);
+  });
   it("unknown profiles are refused", () => {
     expect(() => buildDataset({ now: NOW, profile: "huge" as "full" })).toThrow(
       /unknown dataset profile/,
@@ -283,6 +289,53 @@ describe("expenses v2: recognized when incurred, sized from each store's own sal
     for (const iso of ["2026-11-09T15:00:00Z", "2026-11-28T15:00:00Z", "2026-12-15T15:00:00Z"]) {
       const p = buildDataset({ now: Date.parse(iso) });
       expect(resultOf(p, keys, `${p.todayYmd.slice(0, 7)}-01`).margin, iso).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("presentation profile: every 7- and 30-day view has a previous period to compare", () => {
+  const p = buildDataset({ now: NOW, profile: "presentation" });
+  it("sales on every local day of the last 60 days in every store", () => {
+    for (const s of p.stores) {
+      const days = new Set(s.sales.map((x) => localYmd(x.at)));
+      for (let back = 0; back < 60; back++) {
+        const d = localYmd(NOW - back * 86_400_000);
+        expect(days.has(d), `${s.key} ${d}`).toBe(true);
+      }
+    }
+  });
+  it("everything in the past, inside the 120-day back-dating window, steps in order", () => {
+    for (const e of p.events) {
+      if (e.kind !== "sale") continue;
+      expect(e.sale.at).toBeLessThan(NOW);
+      expect(NOW - e.sale.at).toBeLessThan(120 * 86_400_000);
+      let prev = e.sale.at;
+      for (const st of e.sale.steps ?? []) {
+        expect(st.at).toBeGreaterThanOrEqual(prev);
+        prev = st.at;
+      }
+    }
+  });
+  it("the live kitchen board still has fresh open tickets in every store", () => {
+    for (const s of p.stores) expect(s.openTickets.length).toBeGreaterThanOrEqual(5);
+  });
+  it("no sale ever finds insufficient stock", () => {
+    for (const s of p.stores) {
+      const sp = p.stockPlan[s.key]!;
+      const q: Record<string, number> = { ...sp.opening };
+      for (const e of p.events.filter((x) => x.store === s.key)) {
+        if (e.kind === "receipt") {
+          for (const it of e.receipt.items) q[it.sku]! += it.quantity;
+          continue;
+        }
+        for (const it of e.sale.items)
+          for (const [sku, qty, unit, waste] of productById[it.productId]!.recipe) {
+            q[sku]! -=
+              convertQuantity(qty, unit, stockBySku[sku]!.unit) * (1 + waste / 100) * it.quantity;
+            expect(q[sku]!, `${s.key} ${sku}`).toBeGreaterThanOrEqual(-1e-9);
+          }
+      }
+      for (const sku of Object.keys(q)) expect(q[sku]!).toBeCloseTo(sp.expectedFinal[sku]!, 6);
     }
   });
 });

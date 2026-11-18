@@ -1,9 +1,12 @@
 // Resets the fictional "Dinequora Demo Restaurant" on a checked destination only.
 //
-// Default: keeps the organization, its three stores, every member (the personal owners and the demo
-// accounts) and their store assignments, and replaces only the operational data (menu, stock,
-// recipes, suppliers, purchases, expenses, sales history), anchored at the current time. Every person
-// keeps their own access and password; the demo accounts get new passwords (credentials file).
+// Default: keeps the organization with its settings (brand colours and logo), its three stores (name,
+// address, phone, hours, time zone, tax rate), the subscription, every member (the personal owners
+// and the demo accounts), their store assignments, permission profiles and invitations, and replaces
+// only the operational data (menu, stock, recipes, suppliers, purchases, expenses, sales history),
+// anchored at the current time. A store whose status, zone or tax rate no longer matches the dataset
+// stops the reset before anything is removed. Every person keeps their own access and password; the
+// demo accounts get new passwords (credentials file).
 //
 // PREVIEW_TEARDOWN=1 removes everything instead (organization, demo accounts and the personal owners'
 // accounts) and seeds nothing; a later seed creates the personal accounts again (new recovery links).

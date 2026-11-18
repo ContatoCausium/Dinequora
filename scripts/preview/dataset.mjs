@@ -15,15 +15,16 @@
 
 export const DATASET_VERSION = 2;
 
-// Volume profiles. The app reads the whole finance ledger in ONE PostgREST request
-// (fetchOperationalResources -> finance_entries, no paging), and PostgREST returns at most 1,000
-// rows (Supabase default "max rows"): with more entries the Finance and Reports screens would add
-// up an arbitrary subset. "ledger-safe" keeps the whole ledger under that cap so every screen agrees
-// with the Dashboard; "full" is the realistic volume, for when the ledger read is paged.
+// Volume profiles. Before wave 0 the app read the whole finance ledger in ONE PostgREST request,
+// capped at 1,000 rows, so "ledger-safe" kept the ledger under that cap. Since wave 0 the screens
+// read it completely with keyset pagination (fetchLedgerSummary / fetchLedgerRows), so larger
+// profiles are valid: "full" is the realistic volume; "presentation" keeps the ledger-safe volume
+// over 62 days, so every 7- and 30-day view has a complete previous period to compare with.
 export const LEDGER_READ_CAP = 1000;
 export const DATASET_PROFILES = Object.freeze({
   "ledger-safe": Object.freeze({ days: 21, volume: 0.2 }),
   full: Object.freeze({ days: 35, volume: 1 }),
+  presentation: Object.freeze({ days: 62, volume: 0.2 }),
 });
 export const ORG = Object.freeze({
   name: "Dinequora Demo Restaurant",

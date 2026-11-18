@@ -294,9 +294,14 @@ check(
   bad.steps.length,
 );
 
+// Since wave 0 the app reads the ledger completely with keyset pagination (no 1,000-row cap), so a
+// larger profile is valid; ledger-safe keeps its original promise of staying under the old cap.
+const datasetProfile = creds.summary?.profile ?? "ledger-safe";
 check(
-  `ledger fits one API read (<= ${LEDGER_READ_CAP} rows): Finance and Reports add up the whole ledger`,
-  entries.length <= LEDGER_READ_CAP,
+  datasetProfile === "ledger-safe"
+    ? `ledger-safe profile stays under ${LEDGER_READ_CAP} rows`
+    : `ledger size of the ${datasetProfile} profile (the app reads it completely, paged)`,
+  datasetProfile !== "ledger-safe" || entries.length <= LEDGER_READ_CAP,
   `${entries.length} entries`,
 );
 

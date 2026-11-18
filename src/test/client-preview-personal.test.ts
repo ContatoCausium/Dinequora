@@ -464,6 +464,43 @@ describe("policy: personal data and secrets", () => {
       teardown.indexOf("export function seedClientPreview"),
     );
   });
+
+  it("the reset keeps the organization's settings: brand, logo, stores and subscription are written by the first seed only", () => {
+    const core = read("scripts/preview/seed-core.mjs").replace(/^\s*\/\/.*$/gm, "");
+    const run = core.slice(
+      core.indexOf("async function run("),
+      core.indexOf("async function seedOperational("),
+    );
+    // each settings write sits directly in the first-seed branch (`if (!existing)` or the `else` of
+    // `if (existing)`), and nowhere else in the run
+    expect(run).toMatch(/if \(!existing\)\s*await rpc\(owner, "save_org_brand"/);
+    expect(run).toMatch(
+      /\} else\s*await must\(\s*svc\s*\.from\("subscriptions"\)\s*\.update\(\{\s*plan_id: ORG\.plan/,
+    );
+    expect(run).toMatch(
+      /\} else\s*for \(const s of STORES\) \{\s*await rpc\(owner, "set_location_tax_rate"[\s\S]{0,160}await rpc\(owner, "update_location"/,
+    );
+    for (const call of [
+      /"save_org_brand"/g,
+      /"set_location_tax_rate"/g,
+      /"update_location"/g,
+      /from\("subscriptions"\)\s*\.update/g,
+    ])
+      expect(run.match(call)?.length, String(call)).toBe(1);
+  });
+
+  it("a reset checks the stores and subscription before removing anything, and stops instead of overwriting", () => {
+    const core = read("scripts/preview/seed-core.mjs");
+    const purge = core.indexOf('"client_preview_purge_operational"');
+    const storeCheck = core.indexOf(
+      "the reset keeps the store as it is and stops before removing anything",
+    );
+    const subCheck = core.indexOf("the reset keeps it as it is and stops");
+    expect(storeCheck).toBeGreaterThan(-1);
+    expect(subCheck).toBeGreaterThan(-1);
+    expect(storeCheck).toBeLessThan(purge);
+    expect(subCheck).toBeLessThan(purge);
+  });
 });
 
 describe("personal owner display names (PREVIEW_PERSONAL_OWNER_NAMES)", () => {
