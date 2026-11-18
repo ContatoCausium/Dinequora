@@ -4,7 +4,7 @@ export class SeedError extends Error {}
 export function assertCredsFileOutsideRepo(file: string | undefined): string;
 type RunOptions = {
   now?: number | undefined;
-  profile?: "ledger-safe" | "full" | undefined;
+  profile?: "ledger-safe" | "full" | "presentation" | undefined;
   credsFile?: string | undefined;
   log?: ((line: string) => void) | undefined;
   concurrency?: number | undefined;

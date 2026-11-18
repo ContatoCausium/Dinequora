@@ -2,7 +2,7 @@
 export const DATASET_VERSION: number;
 export const LEDGER_READ_CAP: number;
 export const DATASET_PROFILES: Readonly<
-  Record<"ledger-safe" | "full", { days: number; volume: number }>
+  Record<"ledger-safe" | "full" | "presentation", { days: number; volume: number }>
 >;
 export const COST_FACTOR: number;
 export const ORG: {
@@ -139,7 +139,7 @@ export type Dataset = {
 };
 export function buildDataset(options: {
   now: number;
-  profile?: "ledger-safe" | "full" | undefined;
+  profile?: "ledger-safe" | "full" | "presentation" | undefined;
   seed?: number | undefined;
 }): Dataset;
 export function convertQuantity(quantity: number, from: string, to: string): number;
