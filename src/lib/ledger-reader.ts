@@ -1,4 +1,11 @@
-import { localDay, shiftDay, startOfLocalDay, zonedParts, zonedTimeToUtc } from "./store-time";
+import {
+  localDay,
+  localDayCache,
+  shiftDay,
+  startOfLocalDay,
+  zonedParts,
+  zonedTimeToUtc,
+} from "./store-time";
 
 /**
  * Complete reads of the financial ledger (finance_entries) — wave 0.
@@ -201,13 +208,17 @@ export interface LedgerSummary {
 
 class DaySink implements Sink {
   readonly buckets = new Map<string, LedgerBucket>();
+  // One Intl call per local day instead of one per row (Workers CPU budget); identical result.
+  private readonly dayOf: (at: string) => string;
   constructor(
     private readonly store: LedgerStore,
     private readonly sinceDay: string | null,
     private readonly untilDay: string,
-  ) {}
+  ) {
+    this.dayOf = localDayCache(store.timeZone);
+  }
   add(row: LedgerRow) {
-    const day = localDay(row.created_at, this.store.timeZone);
+    const day = this.dayOf(row.created_at);
     if ((this.sinceDay !== null && day < this.sinceDay) || day > this.untilDay) return;
     const key = `${day}|${row.kind}`;
     const b = this.buckets.get(key) ?? {
