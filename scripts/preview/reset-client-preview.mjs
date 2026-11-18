@@ -5,8 +5,10 @@
 // and the demo accounts), their store assignments, permission profiles and invitations, and replaces
 // only the operational data (menu, stock, recipes, suppliers, purchases, expenses, sales history),
 // anchored at the current time. A store whose status, zone or tax rate no longer matches the dataset
-// stops the reset before anything is removed. Every person keeps their own access and password; the
-// demo accounts get new passwords (credentials file).
+// stops the reset before anything is removed. Every person keeps their own access and password,
+// the demo accounts included: their passwords come from the credentials file, are checked by signing
+// in before anything is written, and are never set again (PREVIEW_ROTATE_DEMO_PASSWORDS=1 is the
+// explicit recovery path for a lost credentials file).
 //
 // PREVIEW_TEARDOWN=1 removes everything instead (organization, demo accounts and the personal owners'
 // accounts) and seeds nothing; a later seed creates the personal accounts again (new recovery links).

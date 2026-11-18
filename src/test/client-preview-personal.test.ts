@@ -554,7 +554,29 @@ describe("reset brings demo display names up to date, never touches personal own
     path.resolve(__dirname, "../../scripts/preview/seed-core.mjs"),
     "utf8",
   );
-  it("kept demo accounts (reserved .test domain) get the dataset name with their new password", () => {
+  it("kept demo accounts keep their password: checked by sign-in before any write, never set again", () => {
+    const run = seed.slice(
+      seed.indexOf("async function run("),
+      seed.indexOf("async function seedOperational("),
+    );
+    // the passwords of the credentials file are verified before the file is first written
+    const check = run.indexOf("await (await signIn(a.email, p.password)).auth.signOut()");
+    const firstSave = run.indexOf("    save();");
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(firstSave);
+    expect(run).toMatch(/nothing was changed/);
+    // a password is written to Auth only on explicit rotation, never for a kept account
+    expect(run).toMatch(
+      /if \(!kept\[a\.key\]\) \{[\s\S]{0,120}updateUserById\(found\.id, \{ password \}\)/,
+    );
+    expect(run.match(/updateUserById\(found\.id, \{ password/g)).toHaveLength(1);
+    expect(run).toMatch(/process\.env\.PREVIEW_ROTATE_DEMO_PASSWORDS === "1"/);
+    // the kept passwords are in the file from its first write (an interrupted run never loses them)
+    expect(run).toMatch(
+      /accounts: Object\.fromEntries\(\s*ACCOUNTS\.filter\(\(a\) => kept\[a\.key\]\)/,
+    );
+  });
+  it("kept demo accounts (reserved .test domain) get the dataset name when it differs", () => {
     expect(seed).toMatch(/const byEmail = new Map\(audit\.demo\.map/);
     expect(seed).toMatch(
       /user_metadata: \{ \.\.\.\(found\.user_metadata \?\? \{\}\), full_name: a\.fullName \}/,

@@ -233,12 +233,54 @@ async function run(
     `${existing ? "reset" : "seed"}: dataset profile ${profile}, ${plan.summary.orders} orders over ${plan.summary.days + 1} days, ~${plan.summary.ledgerEntries} ledger entries; ${owners.length} personal owner(s) declared`,
   );
   const started = Date.now();
+  const byEmail = new Map(audit.demo.map((u) => [u.email.toLowerCase(), u]));
+  // Demo passwords are kept across resets: an existing demo account keeps the password recorded in
+  // the credentials file, which is checked by signing in BEFORE anything is written (Auth included);
+  // its password is never set again. PREVIEW_ROTATE_DEMO_PASSWORDS=1 is the explicit recovery path
+  // for a lost credentials file (new passwords for the demo accounts only).
+  const rotate = process.env.PREVIEW_ROTATE_DEMO_PASSWORDS === "1";
+  const kept = {};
+  if (!rotate && ACCOUNTS.some((a) => byEmail.has(a.email))) {
+    let previous = null;
+    try {
+      previous = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+    } catch {
+      previous = null;
+    }
+    if (previous?.kind !== "dinequora-client-preview" || previous.apiUrl !== target.apiUrl)
+      throw new SeedError(
+        "the demo accounts exist but the credentials file is missing or belongs to another destination; the reset keeps the demo passwords and needs that file (nothing was changed)",
+      );
+    for (const a of ACCOUNTS) {
+      const found = byEmail.get(a.email);
+      if (!found) continue;
+      const p = previous.accounts?.[a.key];
+      if (!p?.password || p.email !== a.email || p.userId !== found.id)
+        throw new SeedError(
+          `the credentials file has no current password for the demo ${a.key} account; nothing was changed`,
+        );
+      try {
+        await (await signIn(a.email, p.password)).auth.signOut();
+      } catch {
+        throw new SeedError(
+          `the demo ${a.key} account does not accept the password of the credentials file; nothing was changed`,
+        );
+      }
+      kept[a.key] = p.password;
+    }
+  }
   const creds = {
     kind: "dinequora-client-preview",
     datasetVersion: DATASET_VERSION,
     target: target.where,
     apiUrl: target.apiUrl,
-    accounts: {},
+    // Kept passwords are in the file from the first write, so an interrupted run never loses them.
+    accounts: Object.fromEntries(
+      ACCOUNTS.filter((a) => kept[a.key]).map((a) => [
+        a.key,
+        { email: a.email, password: kept[a.key], userId: byEmail.get(a.email).id, role: a.role },
+      ]),
+    ),
   };
   const save = () => fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2), { mode: 0o600 });
   // The credentials file must be writable before anything is created, or passwords would be lost.
@@ -248,25 +290,36 @@ async function run(
     throw new SeedError(`cannot write the credentials file (${e.code ?? e.message})`);
   }
 
-  // 1. Demo accounts: created on the first run, new passwords on every reset.
-  const byEmail = new Map(audit.demo.map((u) => [u.email.toLowerCase(), u]));
+  // 1. Demo accounts: created on the first run; on a reset they keep their password (above) and only
+  //    get the dataset's display name when it differs.
   for (const a of ACCOUNTS) {
-    const password = newPassword();
     const found = byEmail.get(a.email);
+    const password = kept[a.key] ?? newPassword();
     let userId;
     if (found) {
-      // A kept demo account (reserved .test domain only, never a personal owner) gets a new password
-      // and the dataset's display name, so a reset also brings renamed demo people up to date.
-      const { error } = await svc.auth.admin.updateUserById(found.id, {
-        password,
-        user_metadata: { ...(found.user_metadata ?? {}), full_name: a.fullName },
-      });
-      if (error) throw new SeedError(`updateUser ${a.key}: ${error.message}`);
-      const { error: nameError } = await svc
-        .from("profiles")
-        .update({ full_name: a.fullName })
-        .eq("id", found.id);
-      if (nameError) throw new SeedError(`display name ${a.key}: ${nameError.message}`);
+      // A kept demo account (reserved .test domain only, never a personal owner).
+      if (!kept[a.key]) {
+        // Explicit rotation only (PREVIEW_ROTATE_DEMO_PASSWORDS=1).
+        const { error } = await svc.auth.admin.updateUserById(found.id, { password });
+        if (error) throw new SeedError(`updateUser ${a.key}: ${error.message}`);
+      }
+      if (found.user_metadata?.full_name !== a.fullName) {
+        const { error } = await svc.auth.admin.updateUserById(found.id, {
+          user_metadata: { ...(found.user_metadata ?? {}), full_name: a.fullName },
+        });
+        if (error) throw new SeedError(`display name ${a.key}: ${error.message}`);
+      }
+      const profile = await must(
+        svc.from("profiles").select("full_name").eq("id", found.id).maybeSingle(),
+        `profile ${a.key}`,
+      );
+      if (profile?.full_name !== a.fullName) {
+        const { error: nameError } = await svc
+          .from("profiles")
+          .update({ full_name: a.fullName })
+          .eq("id", found.id);
+        if (nameError) throw new SeedError(`display name ${a.key}: ${nameError.message}`);
+      }
       userId = found.id;
     } else {
       const { data, error } = await svc.auth.admin.createUser({

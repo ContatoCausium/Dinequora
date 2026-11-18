@@ -203,8 +203,11 @@ too. Order of a hosted release: deploy → smoke (read-only) → reset → verif
   address, phone, hours, time zone, tax rate), the subscription, every member (personal owners and
   demo accounts), their store assignments, permission profiles and invitations — only the first seed
   writes those settings — and replaces only the operational data
-  (`public.client_preview_purge_operational`, run before any account is touched); demo accounts get
-  new passwords, personal owners keep theirs. Before removing anything it checks that every store is
+  (`public.client_preview_purge_operational`, run before any account is touched). Everyone keeps their password: personal owners are never
+  updated, and the demo accounts keep the passwords of the credentials file, checked by signing in
+  before anything is written and never set again (`PREVIEW_ROTATE_DEMO_PASSWORDS=1` gives the demo
+  accounts new passwords, only to recover from a lost credentials file); without a valid file the
+  reset stops and changes nothing. Before removing anything it checks that every store is
   active, in the dataset's time zone and at the dataset's tax rate, and that the subscription is
   active; otherwise it stops without changing the setting. Run it before each presentation: the live tickets and
   "today" follow the seed time. **Teardown** (`PREVIEW_TEARDOWN=1`) removes the organization
