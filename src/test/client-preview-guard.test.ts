@@ -487,3 +487,25 @@ describe("the smoke test never contaminates the hosted demonstration", () => {
     expect(verify).toMatch(/target\.mode === "local" \|\| smokeOrders\.length === 0/);
   });
 });
+
+describe("the smoke test checks the wave 0 ledger contract", () => {
+  const smoke = read("scripts/preview/smoke-app.mjs").replace(/^\s*\/\/.*$/gm, "");
+  it("never expects raw ledger rows from fetchOperationalResources", () => {
+    expect(smoke).not.toMatch(/result\?\.finance\b/);
+    expect(smoke).toContain('!("finance" in (r.result ?? {}))');
+  });
+  it("reads the ledger the screens read and compares it with the database", () => {
+    for (const fn of ['"fetchLedgerSummary"', '"fetchLedgerRows"']) expect(smoke).toContain(fn);
+    expect(smoke).toMatch(/\.range\(from, from \+ 999\)/); // independent read past the 1,000-row cap
+    expect(smoke).toContain("sum.result?.complete === true");
+    expect(smoke).toContain("allSum.result?.complete === true");
+  });
+  it("keeps the ledger isolation checks (other store, no finance permission, no session)", () => {
+    for (const name of [
+      "Westside manager cannot read the Downtown ledger",
+      "Downtown kitchen (no finance permission) reads no ledger rows",
+      "no session: server functions refuse",
+    ])
+      expect(smoke).toContain(name);
+  });
+});

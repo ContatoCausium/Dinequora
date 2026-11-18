@@ -1,11 +1,17 @@
 // End-to-end smoke test of a client-preview app (the built Worker), through the SAME server
 // functions the browser calls, signed in with the demo accounts:
 //   pages      /auth renders with the preview headers, /signup redirects, robots disallow all
-//   reads      menu, stock/recipes/finance resources and orders for every store (owner)
+//   reads      menu, stock/recipes/expenses resources and orders for every store (owner)
+//   ledger     wave 0 contract: Finance/Reports/Insights read the ledger through fetchLedgerSummary
+//              (day totals per store in its own zone, read completely with keyset pagination) and
+//              the export through fetchLedgerRows; resources no longer carry raw ledger rows. Both
+//              are compared with a paginated read of finance_entries under the same RLS: complete,
+//              same rows, same totals per kind, per store and for all stores
 //   POS        one sale at Downtown through submitOperationalSale (prices/tax/stock/COGS by the server)
 //   KDS        the kitchen account moves it in_prep -> ready -> delivered (changeOperationalOrder)
 //   stock      the sale consumed exactly the recipe (lemonade base in gal: 0.1)
-//   finance    the sale's revenue = total - tax appears in the resources ledger
+//   finance    the sale's revenue = total - tax is in the ledger export, and the store's summary
+//              revenue grew by exactly that amount
 //   isolation  the Westside manager and the Downtown kitchen cannot read the other store; no token
 //              is refused; no account is a platform admin
 //
@@ -147,7 +153,33 @@ const { data: locs } = await owner.client
   .select("id,slug,name")
   .eq("org_id", creds.org.id);
 const slug = Object.fromEntries(locs.map((l) => [l.name.toLowerCase(), l.slug]));
+const idOf = (store) => locs.find((l) => l.slug === slug[store])?.id;
 const orgSlug = creds.org.slug;
+
+// The ledger as the database holds it, read through the same RLS as the app (owner session), in
+// pages of 1,000 (the PostgREST row cap), so the app's reader is checked against an independent read.
+async function ledgerFromDb(client, locationId) {
+  const rows = [];
+  for (let from = 0; ; from += 1000) {
+    let q = client.from("finance_entries").select("id,kind,amount_cents,location_id,order_id");
+    if (locationId) q = q.eq("location_id", locationId);
+    const { data, error } = await q.order("id").range(from, from + 999);
+    if (error) throw new Error(`ledger read: ${error.message}`);
+    rows.push(...data);
+    if (data.length < 1000) break;
+  }
+  return rows;
+}
+const totalsByKind = (items, amount = (x) => x.amount_cents) => {
+  const t = {};
+  for (const x of items) t[x.kind] = (t[x.kind] ?? 0) + Number(amount(x));
+  return t;
+};
+const sameTotals = (a, b) => Object.keys({ ...a, ...b }).every((k) => (a[k] ?? 0) === (b[k] ?? 0));
+const entriesIn = (summary) => (summary?.buckets ?? []).reduce((s, b) => s + b.entries, 0);
+/** Whole-history ledger summary of one store (or all stores) as the Finance screen requests it. */
+const ledgerSummary = (token, locationId, extra = {}) =>
+  call("fetchLedgerSummary", { orgId: orgSlug, locationId, days: null, ...extra }, token);
 const menu = await call("fetchOperationalMenu", { orgId: orgSlug }, owner.token);
 const menuItems = menu.result?.items ?? menu.result?.products ?? menu.result?.menu ?? [];
 check(
@@ -166,10 +198,29 @@ for (const store of ["downtown", "westside", "airport"]) {
     (i) => !i.location_id || i.location_id === locs.find((l) => l.slug === slug[store])?.id,
   );
   check(
-    `resources ${store}: stock, recipes and finance ledger`,
-    len(inv) > 0 && len(r.result?.recipes) > 0 && len(r.result?.finance) > 0,
+    `resources ${store}: stock, recipes and expenses (no raw ledger rows)`,
+    len(inv) > 0 &&
+      len(r.result?.recipes) > 0 &&
+      len(r.result?.expenses) > 0 &&
+      !("finance" in (r.result ?? {})),
     r.error ??
-      `stock ${len(store_)} recipes ${len(r.result?.recipes)} ledger ${len(r.result?.finance)} expenses ${len(r.result?.expenses)}`,
+      `stock ${len(store_)} recipes ${len(r.result?.recipes)} expenses ${len(r.result?.expenses)}`,
+  );
+  const dbRows = await ledgerFromDb(owner.client, idOf(store));
+  const sum = await ledgerSummary(owner.token, slug[store]);
+  check(
+    `ledger ${store}: summary complete, every row of the store, same totals per kind`,
+    sum.result?.complete === true &&
+      sum.result.rowsRead === dbRows.length &&
+      entriesIn(sum.result) === dbRows.length &&
+      dbRows.length > 0 &&
+      sum.result.buckets.every((b) => b.locationId === idOf(store)) &&
+      sameTotals(
+        totalsByKind(sum.result.buckets, (b) => b.amountCents),
+        totalsByKind(dbRows),
+      ),
+    sum.error ??
+      `${sum.result?.rowsRead} read / ${dbRows.length} in the database, complete ${sum.result?.complete}`,
   );
   const o = await call(
     "fetchOperationalOrders",
@@ -197,6 +248,10 @@ if (WRITES) {
       .eq("sku", "LEMONADE")
       .single()
   ).data;
+  const downtownRevenueBefore = totalsByKind(
+    (await ledgerSummary(owner.token, slug.downtown)).result?.buckets ?? [],
+    (b) => b.amountCents,
+  ).revenue;
   const clientOrderId = `cp-smoke-${Date.now()}`;
   const sale = await call(
     "submitOperationalSale",
@@ -257,29 +312,75 @@ if (WRITES) {
     Math.abs(Number(lemonadeBefore.quantity) - Number(lemonadeAfter.quantity) - 0.1) < 1e-9,
     `${lemonadeBefore.quantity} -> ${lemonadeAfter.quantity}`,
   );
-  const res2 = await call(
-    "fetchOperationalResources",
+  const exported = await call(
+    "fetchLedgerRows",
     { orgId: orgSlug, locationId: slug.downtown },
     owner.token,
   );
-  const rev = (res2.result?.finance ?? []).find(
+  const rev = (exported.result?.rows ?? []).find(
     (e) => e.order_id === order.id && e.kind === "revenue",
   );
+  const revenueAfter = totalsByKind(
+    (await ledgerSummary(owner.token, slug.downtown)).result?.buckets ?? [],
+    (b) => b.amountCents,
+  ).revenue;
   check(
     "finance: the sale's revenue (total - tax) is in the ledger the screens read",
-    rev?.amount_cents === order.total_cents - order.tax_cents,
-    rev?.amount_cents,
+    rev?.amount_cents === order.total_cents - order.tax_cents &&
+      revenueAfter - downtownRevenueBefore === order.total_cents - order.tax_cents,
+    exported.error ?? `${rev?.amount_cents}; summary +${revenueAfter - downtownRevenueBefore}`,
   );
 } else console.log("skipped: POS/KDS/stock/finance write checks (read-only run)");
 
-const allRes = await call("fetchOperationalResources", { orgId: orgSlug }, owner.token);
+// ---- ledger, all stores (Finance, Reports, Insights, Overview, export) ---------------------------
+const allDb = await ledgerFromDb(owner.client);
 const { count: ledgerRows } = await owner.client
   .from("finance_entries")
   .select("id", { count: "exact", head: true });
+const allSum = await ledgerSummary(owner.token, undefined);
 check(
   "Finance/Reports: the app reads the complete ledger",
-  len(allRes.result?.finance) === ledgerRows,
-  `${len(allRes.result?.finance)} read / ${ledgerRows} in the database`,
+  allSum.result?.complete === true &&
+    allSum.result.rowsRead === ledgerRows &&
+    allDb.length === ledgerRows &&
+    entriesIn(allSum.result) === ledgerRows,
+  allSum.error ??
+    `${allSum.result?.rowsRead} read / ${ledgerRows} in the database, complete ${allSum.result?.complete}`,
+);
+check(
+  "Finance/Reports: revenue, COGS and every kind equal the database totals",
+  sameTotals(
+    totalsByKind(allSum.result?.buckets ?? [], (b) => b.amountCents),
+    totalsByKind(allDb),
+  ),
+  JSON.stringify(totalsByKind(allSum.result?.buckets ?? [], (b) => b.amountCents)),
+);
+check(
+  "Finance/Reports: every store is summarized in its own time zone",
+  (allSum.result?.stores ?? []).length === locs.length &&
+    allSum.result.stores.every((w) => w.timeZone && /^\d{4}-\d{2}-\d{2}$/.test(w.today)),
+  (allSum.result?.stores ?? []).map((w) => w.timeZone).join(","),
+);
+const d30 = await call(
+  "fetchLedgerSummary",
+  { orgId: orgSlug, days: 30, sameTimeYesterday: true },
+  owner.token,
+);
+check(
+  "Overview/Reports: last 30 days with same-time-yesterday comparison, complete",
+  d30.result?.complete === true &&
+    (d30.result.sameTimeYesterday ?? []).length === locs.length &&
+    d30.result.stores.every((w) => w.sinceDay !== null),
+  d30.error ?? `${new Set((d30.result?.buckets ?? []).map((b) => b.day)).size} days with entries`,
+);
+const allRows = await call("fetchLedgerRows", { orgId: orgSlug }, owner.token);
+const exportIds = new Set((allRows.result?.rows ?? []).map((r) => r.id));
+check(
+  "Finance export: every ledger row, no more, no less",
+  allRows.result?.complete === true &&
+    exportIds.size === ledgerRows &&
+    allDb.every((r) => exportIds.has(r.id)),
+  allRows.error ?? `${exportIds.size} exported / ${ledgerRows} in the database`,
 );
 
 // ---- isolation ----------------------------------------------------------------------------------
@@ -306,10 +407,39 @@ check(
   Boolean(kWest.error) || len(kList) === 0,
   kWest.error ?? len(kList),
 );
+const mLedgerDown = await ledgerSummary(manager.token, slug.downtown);
+check(
+  "Westside manager cannot read the Downtown ledger",
+  Boolean(mLedgerDown.error) || (mLedgerDown.result?.rowsRead ?? 0) === 0,
+  mLedgerDown.error ?? `rows ${mLedgerDown.result?.rowsRead}`,
+);
+const mLedgerAll = await ledgerSummary(manager.token, undefined);
+const westRows = (await ledgerFromDb(owner.client, idOf("westside"))).length;
+check(
+  "Westside manager, all stores: the Westside ledger only, complete",
+  Boolean(mLedgerAll.error) ||
+    (mLedgerAll.result?.complete === true &&
+      mLedgerAll.result.rowsRead === westRows &&
+      mLedgerAll.result.buckets.every((b) => b.locationId === idOf("westside"))),
+  mLedgerAll.error ?? `${mLedgerAll.result?.rowsRead} read / ${westRows} Westside rows`,
+);
+const kLedger = await ledgerSummary(kitchen.token, slug.downtown);
+const kExport = await call(
+  "fetchLedgerRows",
+  { orgId: orgSlug, locationId: slug.downtown },
+  kitchen.token,
+);
+check(
+  "Downtown kitchen (no finance permission) reads no ledger rows (summary and export)",
+  (Boolean(kLedger.error) || (kLedger.result?.rowsRead ?? 0) === 0) &&
+    (Boolean(kExport.error) || len(kExport.result?.rows) === 0),
+  `${kLedger.error ?? `summary ${kLedger.result?.rowsRead}`}; ${kExport.error ?? `export ${len(kExport.result?.rows)}`}`,
+);
 const noToken = await call("fetchOperationalOrders", { orgId: orgSlug, limit: 5 });
+const noTokenLedger = await call("fetchLedgerSummary", { orgId: orgSlug, days: null });
 check(
   "no session: server functions refuse",
-  /Unauthorized/.test(noToken.error ?? ""),
+  /Unauthorized/.test(noToken.error ?? "") && /Unauthorized/.test(noTokenLedger.error ?? ""),
   noToken.error,
 );
 const admin = await owner.client.rpc("is_platform_admin");
