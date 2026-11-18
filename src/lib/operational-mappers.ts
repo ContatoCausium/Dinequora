@@ -10,6 +10,7 @@ import type { Supplier, PurchaseOrder } from "./suppliers-purchases-service";
 import { EXPENSE_CATEGORIES, type Expense } from "./finance-service";
 import { multiplyQuantityCents } from "./money";
 import { displayAmount } from "./format";
+import { RECIPE_UNITS } from "./units";
 
 /**
  * inventory_movements.kind as written by the RPCs. Manual movements (in/out/loss/adjustment) are all
@@ -71,9 +72,7 @@ export function mapResources(r: Resources) {
       .parse(p.metadata);
     const ingredients = p.recipe_ingredients.map((i) => {
       const item = items.find((x) => x.id === i.inventory_item_id);
-      const unit = z
-        .enum(["oz", "lb", "g", "kg", "ml", "l", "units", "pack", "tsp", "tbsp", "cup"])
-        .parse(i.unit);
+      const unit = z.enum(RECIPE_UNITS).parse(i.unit);
       // Current stock cost, same basis the sale RPC uses for COGS.
       const cost = item
         ? calculateIngredientCost(item, i.quantity, unit, i.waste_percentage)

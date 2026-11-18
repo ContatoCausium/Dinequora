@@ -7,8 +7,10 @@ import {
   writeTenantRecords,
 } from "./tenant-storage";
 import { multiplyQuantityCents, roundCents, sumCents } from "./money";
-import { convertQuantity } from "./units";
+import { convertQuantity, type RecipeUnit } from "./units";
 import { displayAmount } from "./format";
+
+export type { RecipeUnit } from "./units";
 
 /** Store-restricted callers may only write store-specific recipes in their stores; org-wide recipes need an org-wide caller. */
 function assertRecipeWritable(
@@ -19,9 +21,6 @@ function assertRecipeWritable(
   if (!locationId || !allowedLocationIds.includes(locationId))
     throw new TenantContextError("location_forbidden");
 }
-
-export type RecipeUnit =
-  "oz" | "lb" | "g" | "kg" | "ml" | "l" | "units" | "pack" | "tsp" | "tbsp" | "cup";
 
 export interface RecipeIngredient {
   id: string;
@@ -95,6 +94,31 @@ export function calculateIngredientCost(
   return {
     unitCostCents: inventoryItem.costCents,
     subtotalCostCents,
+  };
+}
+
+/**
+ * The ingredient row re-pointed at another stock item. Id, name AND unit follow the item: a recipe
+ * ingredient is counted in its stock item's unit (newIngredient does the same), and the server
+ * refuses a row whose unit is of another family than the item's ("incompatible_units"). The typed
+ * quantity is kept only while the unit stays the same; when the unit changes it goes back to 1, so
+ * an amount typed as "0.5 units" is never silently re-read as "0.5 lb". Costs are recomputed.
+ */
+export function ingredientForItem(
+  ingredient: RecipeIngredient,
+  item: InventoryItem,
+): RecipeIngredient {
+  const unit: RecipeUnit = item.unit;
+  const quantity = unit === ingredient.unit ? ingredient.quantity : 1;
+  const costs = calculateIngredientCost(item, quantity, unit, ingredient.wastePercentage);
+  return {
+    ...ingredient,
+    inventoryItemId: item.id,
+    name: item.name,
+    unit,
+    quantity,
+    unitCostCents: costs.unitCostCents,
+    subtotalCostCents: costs.subtotalCostCents,
   };
 }
 
