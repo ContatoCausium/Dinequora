@@ -137,7 +137,7 @@
   },
   "assign": {
     "title": "Assign owner of {{name}}",
-    "description": "Only after the owner's identity has been verified outside the app. The person must already have a confirmed Dinequora account.",
+    "description": "Only after the owner's identity has been verified outside the app. The person must already have a confirmed Dinequora account. Only for an organization without an owner, and never your own account or an account with a platform role.",
     "email": "Owner's account email",
     "note": "Verification note",
     "notePlaceholder": "How was identity verified? (e.g. ID + business registration checked on call, ticket #)",
@@ -240,6 +240,12 @@
     "user_not_found": "No confirmed account uses that email.",
     "last_admin": "The last platform administrator can't be removed.",
     "not_found": "That organization no longer exists.",
+    "owner_exists": "This organization already has an owner. Ownership can only be assigned to an organization without one.",
+    "self_assignment_forbidden": "You can't assign yourself as the owner of a customer organization.",
+    "platform_user_forbidden": "Accounts with a platform role can't become the owner of a customer organization.",
+    "user_ambiguous": "More than one account uses that email. Resolve the duplicate accounts first.",
+    "platform_role_owner_conflict": "This account owns a customer organization, so it can't hold a platform role.",
+    "isolation_unsupported": "The request ran in an unsupported transaction mode. Nothing was changed; please try again.",
     "unknown": "Something went wrong. Please try again."
   },
   "saved": "Saved and recorded in the audit log.",

@@ -195,7 +195,8 @@ const GUARDED = [
 // a function here without the same review; prefer GUARDED.
 const REVIEWED = {
   accept_invitation: "auth.uid() must match the invitation",
-  admin_assign_owner: "platform admin only",
+  admin_assign_owner:
+    "platform admin only; an organization without an active owner only, never the caller or an account with a platform role, serialized per organization (0034)",
   admin_set_org_feature: "platform admin only (0022, audited)",
   admin_set_platform_role: "platform admin only",
   admin_set_subscription: "platform admin only",

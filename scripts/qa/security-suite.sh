@@ -58,6 +58,14 @@
 #      invitations); staff never hold orders.resolve_pending; managers never act on managers, on
 #      themselves or outside their stores; other tenants and platform admins refused; a demotion
 #      drops what the lower tier cannot hold (audited) so a promotion reactivates nothing
+#   5i. 0034 platform owner assignment (direct RPC calls, two PostgreSQL sessions): only an
+#      organization without an active owner, never the caller or a platform account, never touching
+#      an existing owner; concurrent assignments (both orders, COMMIT and ROLLBACK) and an owner
+#      invitation accepted meanwhile are serialized by the per-organization lock; isolation levels
+#      above READ COMMITTED refused; the assigned owner sees nothing of another tenant; operators never
+#      own customer organizations (a platform role is refused for an owner, and an account with a
+#      platform role never becomes owner by any path: role change, transfer, invitation, new
+#      organization; test restaurants exempt)
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -123,6 +131,7 @@ must_refuse "API check with the anon key" env SB_SERVICE="$ANON_KEY" $GUARD chec
 must_refuse "race script" env QA_DB_URL="$DB_URL" node scripts/security/tax_rate_concurrency.mjs
 must_refuse "member grant integrity" env QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs
 must_refuse "M2 rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs
+must_refuse "platform owner assignment" env QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
 must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
 must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
@@ -219,6 +228,10 @@ echo "::group::5h. member grant integrity (0033, direct RPC calls as each role)"
 QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs | tee "$ARTIFACTS/member-grant-integrity.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
+echo "::group::5i. platform owner assignment (0034, direct RPC calls, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs | tee "$ARTIFACTS/admin-assign-owner.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
 echo "::group::6. demo reconstruction"
 for run in 1 2; do
   out=$(run_sql scripts/seeds/demo/seed-demo-orgs.sql 2>&1) || { echo "$out" | tail -5; echo "FAIL demo seed run $run"; exit 1; }
@@ -239,5 +252,6 @@ echo "::group::8. M2 rollback and re-application (LAST: changes the schema, leav
 QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs | tee "$ARTIFACTS/m2-rollback-reapply.txt" | grep -v "^PASS"
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"
+
 rm -f "$CREDS_FILE"
 echo "Security suite passed."
