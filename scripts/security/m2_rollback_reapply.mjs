@@ -7,8 +7,10 @@
 //      whose access to it was explicitly REVOKED, a staff member, and one closed key;
 //   2. rollback.sql in ONE transaction: the M2 objects are gone, finance_read is the 0019 policy,
 //      nobody holds the permission, it is stripped from every profile (custom included) and every
-//      grant, revocations and closed keys are kept, the member-grant integrity of 0033 stays; sales
-//      and the ledger still work;
+//      grant (audited), revocations and closed keys are kept, the member-grant integrity of 0033
+//      stays; sales and the ledger still work; the sale function of 0033 is kept, so a key closed
+//      before the rollback still refuses the register's resend; editing the revoked admin as the
+//      Team screen would keeps the revocation;
 //   3. reapply.sql in ONE transaction: functions, policies, triggers and their privileges identical to
 //      the state after 0033; only the owner and the org admin on the system profile hold the
 //      permission again — the custom profile, the individual grant and the revoked admin do NOT
@@ -164,8 +166,8 @@ try {
   const [{ src }] =
     await sql`select prosrc as src from pg_proc where proname = 'create_pos_sale_v2'`;
   check(
-    "2. create_pos_sale_v2 is the 0025 body (no closed-key or isolation check)",
-    !src.includes("sale_key_voided") && !src.includes("isolation_unsupported"),
+    "2. create_pos_sale_v2 is kept as 0033 left it (closed-key and isolation checks)",
+    src.includes("sale_key_voided") && src.includes("isolation_unsupported"),
   );
   const h1 = await holders();
   // has_permission is true for an owner whatever the name (owners hold everything, by design); what
@@ -180,7 +182,7 @@ try {
       (select count(*)::int from public.permission_profiles where ${RP} = any(permissions)) as profiles,
       (select count(*)::int from public.organization_members where ${RP} = any(extra_permissions) or ${RP} = any(effective_permissions)) as members,
       (select ${RP} = any(revoked_permissions) from public.organization_members where id = ${mid(U.ADMINR)}) as revoked_kept,
-      (select count(*)::int from pg_trigger where tgname = 'member_ceiling_extras') as integrity_trigger`;
+      (select count(*)::int from pg_trigger where tgname = 'member_ceiling_grants') as integrity_trigger`;
   check(
     "2. stripped from every profile (system AND custom) and every grant",
     st.profiles === 0 && st.members === 0,
@@ -203,6 +205,38 @@ try {
     "2. after the rollback a sale is recorded and the ledger is readable through RLS",
     afterRb.sale === true && afterRb.ledger > 0,
     JSON.stringify(afterRb),
+  );
+  const resend = await as(U.OWNER, (c) =>
+    sale(c, `${org.key}-closed`).then(
+      () => "recorded",
+      (e) => code(e),
+    ),
+  );
+  check(
+    "2. during the rollback window a key closed before it still refuses the register's resend",
+    resend === "sale_key_voided",
+    resend,
+  );
+  const pruned = await sql`select target, metadata from public.audit_logs where org_id = ${ORG}
+      and ((action = 'member.extras_pruned' and metadata->'removed' ? ${RP})
+        or (action = 'permission_profile.saved' and metadata->>'reason' = 'm2_rollback'))`;
+  check(
+    "2. the removals are audited (the individual grant and the custom profile)",
+    pruned.some((a) => a.target === U.MGRX) && pruned.some((a) => a.target === customProfile),
+    JSON.stringify(pruned.map((a) => a.target)),
+  );
+  // An edit of the revoked admin during the window, as the Team screen sends it: the profile no
+  // longer lists the permission, so the screen's revocation list does not mention it either.
+  await as(
+    U.OWNER,
+    (c) =>
+      c`select public.set_member_access(${mid(U.ADMINR)}, 'manager', ${ORG_ADMIN}::uuid, '{}'::text[], '{}'::text[], ${[STORE]}::uuid[])`,
+  );
+  const [{ still }] =
+    await sql`select ${RP} = any(revoked_permissions) as still from public.organization_members where id = ${mid(U.ADMINR)}`;
+  check(
+    "2. an edit during the window keeps the revocation (it is outside the catalog now)",
+    still === true,
   );
 
   // ---- 3. re-application

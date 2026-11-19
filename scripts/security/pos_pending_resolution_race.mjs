@@ -18,6 +18,8 @@
 //      session between the start of a transaction and the call is handled correctly in READ
 //      COMMITTED, in both orders, and refused (isolation_unsupported, nothing written) in REPEATABLE
 //      READ and SERIALIZABLE, whose snapshot predates the key's lock.
+//   9–10 (0033): a resolution asked for another store of the organization is refused without revealing
+//      the order; a suspended organization closes nothing.
 //
 // Isolation: own organization, store, product and two synthetic members (owner = seller,
 // owner = resolver), all removed at the end.
@@ -381,6 +383,43 @@ try {
         (await orders(key)) === 0 &&
         (await voids(key)) === 0,
       `${a} / ${b}`,
+    );
+  }
+  // ---- 9. (0033) the order of another store is neither revealed nor touched
+  {
+    const OTHER = crypto.randomUUID();
+    await fixtures.unsafe(`insert into public.locations(id, org_id, slug, name, address, tax_rate_ppm)
+      values ('${OTHER}', '${ORG}', 't_${org.key}_other', 'Other ${org.key}', '9 Test Street', ${RATE})`);
+    const key = `${org.key}-9`;
+    const s = await session(SELLER);
+    await sale(s, key);
+    const r =
+      await s.c`select public.resolve_pending_pos_sale(${ORG}, ${OTHER}, ${key}, 'Race test: asked from the wrong store')`.then(
+        () => "ok",
+        (e) => code(e),
+      );
+    await s.end();
+    check(
+      "9. a resolution asked for another store of the same organization is refused (location_forbidden), nothing written",
+      r === "location_forbidden" && (await voids(key)) === 0 && (await audits(key)).length === 0,
+      r,
+    );
+  }
+  // ---- 10. (0033) a suspended organization writes nothing
+  {
+    const key = `${org.key}-10`;
+    await fixtures`update public.organizations set status = 'suspended' where id = ${ORG}`;
+    const s = await session(RESOLVER);
+    const r = await resolve(s, key).then(
+      (x) => x.status,
+      (e) => code(e),
+    );
+    await s.end();
+    await fixtures`update public.organizations set status = 'active' where id = ${ORG}`;
+    check(
+      "10. a suspended organization cannot close a key (org_suspended), nothing written",
+      r === "org_suspended" && (await voids(key)) === 0 && (await audits(key)).length === 0,
+      r,
     );
   }
 } finally {

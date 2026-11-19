@@ -260,30 +260,56 @@ describe.skipIf(!ENABLED)(
       expect(audit(key)).toEqual([]);
     });
 
-    it("0033 (B4): a justification made only of whitespace or invisible characters is refused; the stored one is trimmed", async () => {
+    it("0033 (B4): a justification of whitespace, invisible characters or fewer than 5 letters/digits is refused; the stored one is trimmed", async () => {
+      const ch = (...cps: number[]) => String.fromCodePoint(...cps);
       const key = newSaleKey();
       for (const blank of [
         "\t".repeat(12),
         "\n\r\t \n\r\t \n\r\t",
-        "\u00a0".repeat(12),
-        "\u200b\u200c\u200d\u2060\ufeff".repeat(3),
-        "\u3000\u2003\u202f\u205f".repeat(3),
+        ch(0xa0).repeat(12), // no-break space
+        ch(0x200b, 0x200c, 0x200d, 0x2060, 0xfeff).repeat(3), // zero-width
+        ch(0x3000, 0x2003, 0x202f, 0x205f).repeat(3), // wide spaces
+        ch(0x200e).repeat(10), // left-to-right mark
+        ch(0x202a, 0x202b, 0x202c, 0x202d, 0x202e).repeat(2), // direction embeddings
+        ch(0xad, 0x34f, 0x3164, 0xffa0, 0x115f).repeat(2), // soft hyphen, grapheme joiner, fillers
+        ch(0xfe0f, 0x2061, 0x2069).repeat(4), // variation selector, invisible operators, isolates
+        `a${ch(0x200b).repeat(8)}b`, // two letters padded inside
+        "..........!!!", // punctuation only
       ]) {
         expect((await resolve(c["owner"]!, key, blank)).error?.message).toBe("reason_required");
       }
       // 9 visible characters padded with invisible ones is still too short
-      expect((await resolve(c["owner"]!, key, "\u00a0\t123456789\u200b\n")).error?.message).toBe(
-        "reason_required",
-      );
+      expect(
+        (await resolve(c["owner"]!, key, `${ch(0xa0)}\t123456789${ch(0x200b)}\n`)).error?.message,
+      ).toBe("reason_required");
       expect(voids(key)).toBe(0);
       expect(audit(key)).toEqual([]);
-      const r = await resolve(c["owner"]!, key, "\u00a0\t Customer left; drawer checked \u200b\n");
+      const r = await resolve(
+        c["owner"]!,
+        key,
+        `${ch(0xa0)}\t Customer left; drawer checked ${ch(0x200b, 0x200e)}\n`,
+      );
       expect(r.error).toBeNull();
       expect(
         sql(
           `select reason from public.pos_sale_key_voids where org_id = '${org.orgId}' and client_order_id = '${key}'`,
         ),
       ).toBe("Customer left; drawer checked");
+      // letters of any script count (a justification written in Japanese)
+      const other = newSaleKey();
+      const japanese = ch(
+        0x9867,
+        0x5ba2,
+        0x306f,
+        0x652f,
+        0x6255,
+        0x308f,
+        0x305a,
+        0x306b,
+        0x9000,
+        0x5e97,
+      );
+      expect((await resolve(c["owner"]!, other, japanese)).error).toBeNull();
     });
 
     it("closed keys are visible only inside the organization (RLS); nobody can write them directly", async () => {

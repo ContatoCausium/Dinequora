@@ -51,6 +51,9 @@ const U = Object.fromEntries(
     "OWNERB",
     "STAFFB",
     "PLAT",
+    "ADMIN2",
+    "STAFFX",
+    "STAFFINV",
   ].map((k) => [k, crypto.randomUUID()]),
 );
 const A = isolatedOrg("grants", {
@@ -64,6 +67,8 @@ const A = isolatedOrg("grants", {
     { userId: U.STAFF2, role: "staff", store: true },
     { userId: U.STAFF3, role: "staff", store: true },
     { userId: U.STAFFS2, role: "staff" },
+    { userId: U.ADMIN2, role: "manager", store: true },
+    { userId: U.STAFFX, role: "staff", store: true },
   ],
 });
 const B = isolatedOrg("grantsb", {
@@ -168,6 +173,8 @@ try {
       array['dashboard.view','pos.view']) as id`;
     await access(c, mid(A, U.ADMINP), "manager", ORG_ADMIN, []);
     await access(c, mid(A, U.MGRR), "manager", RESTRICTED, []);
+    await access(c, mid(A, U.ADMIN2), "manager", ORG_ADMIN, []);
+    await access(c, mid(A, U.STAFFX), "staff", CASHIER, ["inventory.adjust"]);
     await c.end({ timeout: 5 });
   }
   check(
@@ -476,6 +483,109 @@ try {
       (await audit(A.orgId, "member.extras_pruned", U.STAFF)).some((a) =>
         a.metadata.removed.includes(RP),
       ),
+    );
+  }
+  // ---- profiles across role changes (independent review: the profile stayed on set_member_role)
+  {
+    const before = JSON.stringify(await member(mid(A, U.ADMIN2)));
+    const r = await as(
+      U.OWNER,
+      (c) => c`select public.set_member_role(${mid(A, U.ADMIN2)}, 'staff')`,
+    );
+    check(
+      "I5 demoting an org admin to staff while it keeps the manager profile is refused (profile_tier_mismatch)",
+      r === "profile_tier_mismatch" && JSON.stringify(await member(mid(A, U.ADMIN2))) === before,
+      r,
+    );
+    const r2 = await as(U.OWNER, (c) => access(c, mid(A, U.ADMIN2), "staff", CASHIER, []));
+    const r3 = await as(
+      U.OWNER,
+      (c) => c`select public.set_member_role(${mid(A, U.ADMIN2)}, 'manager')`,
+    );
+    check(
+      "I6 demoted explicitly with a staff profile, a later promotion reactivates nothing of org admin",
+      r2 === "ok" &&
+        r3 === "ok" &&
+        !(await has(U.ADMIN2, A.orgId, RP)) &&
+        !(await has(U.ADMIN2, A.orgId, "team.manage")) &&
+        !(await has(U.ADMIN2, A.orgId, "finance.view")),
+      `${r2} ${r3}`,
+    );
+  }
+  {
+    const r1 = await as(
+      U.OWNER,
+      (c) => c`select public.set_member_role(${mid(A, U.STAFFX)}, 'owner')`,
+    );
+    const asOwner = await member(mid(A, U.STAFFX));
+    const pruned = (await audit(A.orgId, "member.extras_pruned", U.STAFFX)).map((a) => a.metadata);
+    check(
+      "I7 becoming an owner clears the profile and the individual grants (audited)",
+      r1 === "ok" &&
+        asOwner.profile_id === null &&
+        asOwner.extra.length === 0 &&
+        pruned.some((p) => p.profile_removed === CASHIER && p.removed.includes("inventory.adjust")),
+      `${r1} ${JSON.stringify(pruned)}`,
+    );
+    const r2 = await as(
+      U.OWNER,
+      (c) => c`select public.set_member_role(${mid(A, U.STAFFX)}, 'manager')`,
+    );
+    const m = await member(mid(A, U.STAFFX));
+    check(
+      "I7 demoted back to manager: tier defaults, nothing of the earlier profile or grants",
+      r2 === "ok" &&
+        m.profile_id === null &&
+        m.extra.length === 0 &&
+        !(await has(U.STAFFX, A.orgId, RP)),
+      r2,
+    );
+  }
+  {
+    let token = "";
+    let P = "";
+    await as(U.OWNER, async (c) => {
+      [{ id: P }] =
+        await c`select public.save_permission_profile(${A.orgId}, null, 'Front desk', '', 'staff',
+        array['dashboard.view','pos.view']) as id`;
+      [{ t: token }] =
+        await c`select public.create_invitation(${A.orgId}, ${`${A.key}-staffinv@example.test`},
+        'staff', ${[S1]}::uuid[], ${P}) as t`;
+    });
+    const r = await as(
+      U.OWNER,
+      (c) =>
+        c`select public.save_permission_profile(${A.orgId}, ${P}, 'Front desk', '', 'manager', array['dashboard.view','pos.view'])`,
+    );
+    check(
+      "I8 a profile used by a pending invitation cannot change tier (profile_tier_in_use)",
+      r === "profile_tier_in_use",
+      r,
+    );
+    await sql`update public.permission_profiles set tier = 'manager' where id = ${P}`; // a stale invitation, forced
+    const acc = await as(U.STAFFINV, (c) => c`select public.accept_invitation(${token})`);
+    const [{ n }] =
+      await sql`select count(*)::int n from public.organization_members where org_id = ${A.orgId} and user_id = ${U.STAFFINV}`;
+    check(
+      "I8 accepting an invitation as staff with a (now) manager-tier profile is refused, no member created",
+      acc === "profile_tier_mismatch" && n === 0,
+      acc,
+    );
+  }
+  {
+    await sql`update public.organization_members set revoked_permissions = revoked_permissions || array['legacy.removed_permission']
+               where id = ${mid(A, U.STAFF2)}`;
+    const r = await as(
+      U.OWNER,
+      (c) =>
+        c`select public.set_member_access(${mid(A, U.STAFF2)}, 'manager', null, '{}'::text[], array['reports.export']::text[], ${[S1]}::uuid[])`,
+    );
+    const [{ rev }] =
+      await sql`select revoked_permissions as rev from public.organization_members where id = ${mid(A, U.STAFF2)}`;
+    check(
+      "I9 a revocation of a permission no longer in the catalog survives an edit that does not send it",
+      r === "ok" && rev.includes("legacy.removed_permission") && rev.includes("reports.export"),
+      `${r} ${JSON.stringify(rev)}`,
     );
   }
   check(

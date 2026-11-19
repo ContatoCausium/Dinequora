@@ -1,46 +1,78 @@
 -- 0033_member_grant_integrity_and_pending_hardening — additive fixes found by the M2 integration
--- review (2026-11-19). Nothing here widens access; every change narrows it or makes it explicit.
+-- review (2026-11-19). No member gains access; every change narrows it or makes it explicit.
 --
--- A. Member grants (finding M1). Before, set_member_access validated individual grants only against
---    the catalog, and the "permission_exceeds_own" check of a manager compared EFFECTIVE sets. A grant
---    outside the member's tier ceiling was therefore stored, inert, and became active when an owner
---    later promoted the member (e.g. a manager without orders.resolve_pending planted it in a staff
---    member's extras; set_member_role to manager activated it). create_invitation let a manager invite
---    a staff member with a profile holding permissions the manager does not hold. Now:
---      * an individual grant must be within the member's tier ceiling (permission_outside_role), for
---        every caller, owners included: staff can never hold orders.resolve_pending, not even inert;
---      * a manager grants (extras) and invites (profile or tier defaults) only with permissions the
---        manager holds (permission_exceeds_own), checked on the request itself;
---      * a BEFORE trigger keeps the invariant on every other path (set_member_role, ownership
---        transfer, service role): extras outside the tier ceiling are dropped and audited
---        (member.extras_pruned) — a demotion can no longer leave a grant that a later promotion
---        reactivates;
---      * existing inert grants are dropped now (audited, actor null); effective permissions do not
---        change, because the ceiling already filtered them out.
+-- A. Member grants (finding M1 and the paths found by the independent review). Before:
+--    * set_member_access validated individual grants (extra_permissions) only against the catalog,
+--      and a manager's "permission_exceeds_own" check compared EFFECTIVE sets: a grant outside the
+--      member's tier was stored, inert, and became active when an owner later promoted the member
+--      (a manager without orders.resolve_pending planted it in a staff member's extras);
+--    * set_member_role kept the member's profile: demoting an org admin to staff left the manager
+--      profile in place (staff got org-admin permissions within the staff ceiling) and a later
+--      promotion reactivated all of it;
+--    * create_invitation let a manager invite staff with a profile beyond the manager's own;
+--    * revocations of a permission that left the catalog were lost on the next edit.
+--    Now:
+--      * an individual grant must be within the member's tier (permission_outside_role), for every
+--        caller, owners included: staff never hold orders.resolve_pending, not even inert;
+--      * a manager grants (extras or a profile) and invites only with permissions the manager holds
+--        (permission_exceeds_own), checked on the request itself;
+--      * a BEFORE trigger keeps the invariants on every path (set_member_role, ownership transfer,
+--        invitations, service role): a staff member can never carry a manager-tier profile
+--        (profile_tier_mismatch: the owner picks the new profile explicitly with set_member_access);
+--        becoming an owner clears profile and grants; grants outside the tier are dropped; every
+--        change is audited (member.extras_pruned), so nothing is left for a later promotion;
+--      * set_member_access keeps revocations of permissions that are no longer in the catalog (they
+--        only narrow access); save_permission_profile refuses to change the tier of a profile that
+--        a pending invitation uses;
+--      * existing data is made consistent WITHOUT changing anyone's effective permissions (checked
+--        row by row, the migration aborts otherwise): inert grants dropped; a staff member carrying a
+--        manager-tier profile gets the same effective set as explicit grants and revocations, with no
+--        profile; an owner's leftover profile/grants cleared. Each change audited, actor null.
 --    Unchanged rules: owners hold everything; only owners manage managers and create/edit profiles;
 --    managers manage staff of their own stores; platform admins are not members (no permission).
 --
--- B. Pending POS sale resolution (finding H1). Under REPEATABLE READ (or SERIALIZABLE) the snapshot is
---    taken by the transaction's first statement, BEFORE the key's advisory lock: the resolution would
---    not see a sale committed meanwhile and would close its key, and a sale would not see a closure
---    committed meanwhile and would record a sale under a closed key. Both functions now refuse to run
---    outside READ COMMITTED ('isolation_unsupported', nothing written; the register keeps the sale
---    pending). PostgREST and the app use READ COMMITTED (unchanged behaviour there).
---    create_pos_sale_v2 = the 0032 body plus that ONE line.
---
--- C. Justification (finding B4): leading/trailing whitespace of every kind (tabs, line breaks,
---    no-break and zero-width spaces) is removed before the 10–500 character check, so a justification
---    made only of such characters is refused (reason_required). The stored text is the trimmed one.
+-- B. Pending POS sale resolution.
+--    * H1: under REPEATABLE READ or SERIALIZABLE the snapshot is taken by the transaction's first
+--      statement, BEFORE the key's advisory lock: the resolution would not see a sale committed
+--      meanwhile and would close its key, and a sale would not see a closure committed meanwhile and
+--      would record a sale under a closed key. Both functions now refuse to run outside READ COMMITTED
+--      ('isolation_unsupported', nothing written; the register keeps the sale pending). PostgREST and
+--      the app use READ COMMITTED. create_pos_sale_v2 = the 0032 body plus that ONE line.
+--    * The resolution also checks that the organization is operational (org_suspended /
+--      subscription_inactive) and, when the key has an order, that it belongs to the requested store
+--      (location_forbidden; nothing revealed or written).
+--    * B4: leading/trailing whitespace and invisible formatting characters of every kind are removed
+--      (the set is built from code points, so this file stays plain ASCII), and the justification
+--      must keep 10-500 characters with at least 5 letters or digits (reason_required).
 --
 -- Same lock wait limit as 0031 (this migration may run alone): a lock not obtained within 5 s aborts
--- the whole run, nothing applied. Rollback: docs/operations/m2-rollback/rollback.sql.
+-- the whole run, nothing applied. No statement here takes an ACCESS EXCLUSIVE lock on a table the
+-- app reads (CREATE OR REPLACE TRIGGER takes SHARE ROW EXCLUSIVE; DROP TRIGGER would take ACCESS
+-- EXCLUSIVE and block every RLS check until the end of the run). Rollback: docs/operations/m2-rollback.
 set local lock_timeout = '5s';
 
 -- ================================================================ A. member grants
-create or replace function public.trg_member_extras_within_role()
+create or replace function public.trg_member_grant_integrity()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare _dropped text[];
+declare _dropped text[]; _tier public.org_role;
 begin
+  if tg_op = 'INSERT' or new.role is distinct from old.role or new.profile_id is distinct from old.profile_id then
+    if new.role = 'owner' then
+      -- owners hold the whole catalog; leftovers would come back on a later demotion
+      if new.profile_id is not null or cardinality(coalesce(new.extra_permissions, '{}')) > 0 then
+        perform public.write_audit(new.org_id, 'member.extras_pruned', new.user_id::text,
+          jsonb_build_object('role', new.role, 'removed', to_jsonb(coalesce(new.extra_permissions, '{}')),
+                             'profile_removed', new.profile_id));
+        new.profile_id := null;
+        new.extra_permissions := '{}';
+      end if;
+      return new;
+    end if;
+    if new.profile_id is not null then
+      select p.tier into _tier from public.permission_profiles p where p.id = new.profile_id;
+      if new.role = 'staff' and _tier = 'manager' then raise exception 'profile_tier_mismatch'; end if;
+    end if;
+  end if;
   if new.role = 'owner' then return new; end if;
   _dropped := array(select distinct p from unnest(coalesce(new.extra_permissions, '{}')) p
                      where not p = any(public.role_ceiling(new.role)) order by p);
@@ -52,21 +84,65 @@ begin
   end if;
   return new;
 end $$;
-revoke all on function public.trg_member_extras_within_role() from public, anon, authenticated;
--- "member_ceiling_…" sorts before "member_effective_permissions": the effective set is computed
--- from the pruned extras (the result is the same, the ceiling filters them out anyway).
-drop trigger if exists member_ceiling_extras on public.organization_members;
-create trigger member_ceiling_extras
-  before insert or update of role, extra_permissions on public.organization_members
-  for each row execute function public.trg_member_extras_within_role();
+revoke all on function public.trg_member_grant_integrity() from public, anon, authenticated;
 
--- Existing inert grants: dropped through the trigger above (one audit row per member).
-update public.organization_members m
-   set extra_permissions = m.extra_permissions
- where m.role <> 'owner'
-   and exists (select 1 from unnest(m.extra_permissions) p where not p = any(public.role_ceiling(m.role)));
+-- Existing data, made consistent before the trigger exists (each change audited, actor null). No
+-- member's effective permissions change: checked row by row, the migration aborts otherwise.
+do $$
+declare m record; _base text[]; _defaults text[]; _extra text[]; _revoked text[]; _before text[]; _after text[];
+begin
+  -- a staff member carrying a manager-tier profile: the same effective set as explicit grants
+  for m in select om.*, pp.permissions as profile_permissions from public.organization_members om
+             join public.permission_profiles pp on pp.id = om.profile_id
+            where om.role = 'staff' and pp.tier = 'manager' for update of om loop
+    _before := public.effective_permissions_for(m.role, m.profile_id, m.extra_permissions, m.revoked_permissions);
+    _base := array(select p from unnest(m.profile_permissions) p where p = any(public.role_ceiling('staff')));
+    _defaults := public.role_default_permissions('staff');
+    _extra := array(select distinct p from unnest(_base || m.extra_permissions) p
+                     where p = any(public.role_ceiling('staff')) and not p = any(_defaults) order by p);
+    _revoked := array(select distinct p from unnest(m.revoked_permissions || array(
+                  select d from unnest(_defaults) d where not d = any(_base) and not d = any(m.extra_permissions))) p order by p);
+    _after := public.effective_permissions_for('staff', null, _extra, _revoked);
+    if _after is distinct from _before then
+      raise exception 'member % would change effective permissions: % -> %', m.id, _before, _after;
+    end if;
+    update public.organization_members
+       set profile_id = null, extra_permissions = _extra, revoked_permissions = _revoked
+     where id = m.id;
+    perform public.write_audit(m.org_id, 'member.extras_pruned', m.user_id::text, jsonb_build_object(
+      'role', m.role, 'profile_removed', m.profile_id, 'converted_to_grants', to_jsonb(_extra),
+      'converted_to_revocations', to_jsonb(_revoked)));
+  end loop;
+  -- an owner's leftover profile or grants
+  for m in select * from public.organization_members
+            where role = 'owner' and (profile_id is not null or cardinality(extra_permissions) > 0) for update loop
+    update public.organization_members set profile_id = null, extra_permissions = '{}' where id = m.id;
+    perform public.write_audit(m.org_id, 'member.extras_pruned', m.user_id::text, jsonb_build_object(
+      'role', m.role, 'removed', to_jsonb(m.extra_permissions), 'profile_removed', m.profile_id));
+  end loop;
+  -- inert grants outside the tier
+  for m in select * from public.organization_members om
+            where om.role <> 'owner'
+              and exists (select 1 from unnest(om.extra_permissions) p where not p = any(public.role_ceiling(om.role)))
+            for update loop
+    _before := public.effective_permissions_for(m.role, m.profile_id, m.extra_permissions, m.revoked_permissions);
+    _extra := array(select p from unnest(m.extra_permissions) p where p = any(public.role_ceiling(m.role)));
+    if public.effective_permissions_for(m.role, m.profile_id, _extra, m.revoked_permissions) is distinct from _before then
+      raise exception 'member % would change effective permissions', m.id;
+    end if;
+    update public.organization_members set extra_permissions = _extra where id = m.id;
+    perform public.write_audit(m.org_id, 'member.extras_pruned', m.user_id::text, jsonb_build_object(
+      'role', m.role, 'removed', to_jsonb(array(select p from unnest(m.extra_permissions) p where not p = any(_extra)))));
+  end loop;
+end $$;
 
--- set_member_access: the 0018 body plus the two request checks marked 0033.
+-- "member_ceiling_..." sorts before "member_effective_permissions": the effective set is computed
+-- from the corrected row. CREATE OR REPLACE TRIGGER takes SHARE ROW EXCLUSIVE (reads not blocked).
+create or replace trigger member_ceiling_grants
+  before insert or update of role, profile_id, extra_permissions on public.organization_members
+  for each row execute function public.trg_member_grant_integrity();
+
+-- set_member_access: the 0018 body plus the request checks and the revocation rule marked 0033.
 create or replace function public.set_member_access(
   _member_id uuid, _role public.org_role, _profile_id uuid, _extra text[], _revoked text[], _location_ids uuid[])
 returns void language plpgsql security definer set search_path = public as $$
@@ -97,6 +173,10 @@ begin
       and (org_id is null or org_id = _t.org_id);
     if _p.id is null then raise exception 'invalid_profile'; end if;
     if _p.tier <> _role then raise exception 'profile_tier_mismatch'; end if;
+    -- 0033: a manager assigns only a profile whose permissions (within the tier) the manager holds.
+    if _me.role = 'manager' and exists (select 1 from unnest(_p.permissions) p
+        where p = any(public.role_ceiling(_role)) and not p = any(public.member_permissions(_me.id))) then
+      raise exception 'permission_exceeds_own'; end if;
   end if;
   if exists (select 1 from unnest(coalesce(_location_ids, '{}')) x
              where not exists (select 1 from public.locations l where l.id = x and l.org_id = _t.org_id)) then
@@ -110,7 +190,10 @@ begin
      set role = _role, -- tier change: last-owner guard + audit via trigger
          profile_id = case when _role = 'owner' then null else _profile_id end,
          extra_permissions = case when _role = 'owner' then '{}' else array(select distinct p from unnest(coalesce(_extra, '{}')) p) end,
-         revoked_permissions = case when _role = 'owner' then '{}' else array(select distinct p from unnest(coalesce(_revoked, '{}')) p) end
+         -- 0033: revocations of permissions no longer in the catalog are kept (they only narrow access;
+         -- the permission may come back, e.g. after an M2 rollback and re-application)
+         revoked_permissions = case when _role = 'owner' then '{}' else array(select distinct p from unnest(coalesce(_revoked, '{}')
+           || array(select r from unnest(_t.revoked_permissions) r where not r = any(public.permission_catalog()))) p) end
    where id = _member_id;
   if _role <> 'owner' then
     delete from public.member_location_access where member_id = _member_id
@@ -162,7 +245,47 @@ begin
   return _token;
 end $function$;
 
--- ================================================================ B + C. pending POS sale resolution
+-- save_permission_profile: the 0018 body plus the pending-invitation check marked 0033.
+create or replace function public.save_permission_profile(
+  _org_id uuid, _id uuid, _name text, _description text, _tier public.org_role, _permissions text[])
+returns uuid language plpgsql security definer set search_path = public as $$
+declare _pid uuid; _clean text[];
+begin
+  if not public.is_org_owner(_org_id) then raise exception 'forbidden'; end if;
+  perform public.assert_org_operational(_org_id);
+  if _tier not in ('manager','staff') then raise exception 'invalid_tier'; end if;
+  if coalesce(length(trim(_name)), 0) not between 2 and 60 then raise exception 'invalid_name'; end if;
+  if exists (select 1 from unnest(coalesce(_permissions, '{}')) p where not p = any(public.role_ceiling(_tier))) then
+    raise exception 'invalid_permission';
+  end if;
+  _clean := array(select distinct p from unnest(coalesce(_permissions, '{}')) p order by p);
+  if _id is null then
+    insert into public.permission_profiles (org_id, key, name, description, tier, permissions, created_by)
+    values (_org_id, 'custom_' || encode(extensions.gen_random_bytes(5), 'hex'), trim(_name),
+            coalesce(trim(_description), ''), _tier, _clean, auth.uid())
+    returning id into _pid;
+  else
+    update public.permission_profiles
+       set name = trim(_name), description = coalesce(trim(_description), ''), tier = _tier,
+           permissions = _clean, updated_at = now()
+     where id = _id and org_id = _org_id and not is_system and archived_at is null
+    returning id into _pid;
+    if _pid is null then raise exception 'forbidden'; end if;
+    if exists (select 1 from public.organization_members where profile_id = _pid and role <> _tier) then
+      raise exception 'profile_tier_in_use';
+    end if;
+    -- 0033: nor a pending invitation (its acceptance would give staff a manager-tier profile).
+    if exists (select 1 from public.invitations where profile_id = _pid and role <> _tier
+                 and accepted_at is null and revoked_at is null) then
+      raise exception 'profile_tier_in_use';
+    end if;
+  end if;
+  perform public.write_audit(_org_id, 'permission_profile.saved', _pid::text,
+    jsonb_build_object('name', trim(_name), 'tier', _tier, 'permissions', to_jsonb(_clean)));
+  return _pid;
+end $$;
+
+-- ================================================================ B. pending POS sale resolution
 create or replace function public.resolve_pending_pos_sale(
   _org_id uuid,
   _location_id uuid,
@@ -178,10 +301,13 @@ set search_path = public
 as $$
 declare
   k text := btrim(coalesce(_client_order_id, ''));
-  -- 0033 (B4): every kind of leading/trailing whitespace and invisible format character.
-  why text := regexp_replace(coalesce(_reason, ''),
-    '^[[:space:]\u00a0\u1680\u180e\u2000-\u200d\u2028\u2029\u202f\u205f\u2060\u3000\ufeff]+|[[:space:]\u00a0\u1680\u180e\u2000-\u200d\u2028\u2029\u202f\u205f\u2060\u3000\ufeff]+$',
-    '', 'g');
+  -- 0033 (B4): whitespace and invisible formatting characters (soft hyphen, zero-width and
+  -- direction marks, fillers, variation selectors...), built from code points so the file stays ASCII.
+  ws text := '[[:space:]' || chr(160) || chr(173) || chr(847) || chr(1564) || chr(4447) || chr(4448)
+             || chr(5760) || chr(6068) || chr(6069) || chr(6155) || '-' || chr(6159)
+             || chr(8192) || '-' || chr(8207) || chr(8232) || '-' || chr(8239) || chr(8287) || '-' || chr(8303)
+             || chr(12288) || chr(12644) || chr(65024) || '-' || chr(65039) || chr(65279) || chr(65440) || ']';
+  why text;
   o public.orders;
   v public.pos_sale_key_voids;
   paid boolean;
@@ -193,8 +319,15 @@ begin
   if auth.uid() is null or not public.is_org_member(_org_id) then raise exception 'forbidden'; end if;
   if _location_id is null or not public.location_in_org(_location_id, _org_id) then raise exception 'location_forbidden'; end if;
   perform public.assert_permission(_org_id, 'orders.resolve_pending', _location_id);
+  -- 0033: a suspended organization (or one without an active subscription) writes nothing.
+  perform public.assert_org_operational(_org_id);
   if length(k) not between 1 and 160 then raise exception 'invalid_key'; end if;
-  if length(why) not between 10 and 500 then raise exception 'reason_required'; end if;
+  -- 0033 (B4): trimmed of every kind of whitespace; 10-500 characters, at least 5 letters or digits.
+  why := regexp_replace(coalesce(_reason, ''), '^' || ws || '+|' || ws || '+$', '', 'g');
+  if length(why) not between 10 and 500
+     or length(regexp_replace(regexp_replace(why, ws, '', 'g'), '[^[:alnum:]]', '', 'g')) < 5 then
+    raise exception 'reason_required';
+  end if;
   if _amount_cents is not null and _amount_cents < 0 then raise exception 'invalid_amount'; end if;
   if _attempts is not null and _attempts < 0 then raise exception 'invalid_attempts'; end if;
 
@@ -203,6 +336,8 @@ begin
 
   select * into o from public.orders where org_id = _org_id and client_order_id = k;
   if o.id is not null then
+    -- 0033: the order of another store is neither revealed nor touched.
+    if o.location_id <> _location_id then raise exception 'location_forbidden'; end if;
     -- The sale exists: recover it, close nothing.
     paid := exists (select 1 from public.payments p where p.org_id = _org_id and p.order_id = o.id);
     perform set_config('servora.audit_location', o.location_id::text, true);

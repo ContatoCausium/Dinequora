@@ -39,8 +39,13 @@ autorização específica do responsável.** Nada aqui foi executado fora de sta
       `rpc/ledger_day_totals`.
 - [ ] `orders.resolve_pending`: owners e o perfil `org_admin` têm; managers sem concessão, staff e
       admin da plataforma não.
-- [ ] Nenhum membro com extras fora do teto. Os registros `member.extras_pruned` da migration
-      (ator nulo) foram conferidos: cada um é uma concessão que estava inerte.
+- [ ] Nenhum membro com extras fora do teto, nenhum staff com perfil de manager e nenhum owner com
+      perfil. Os registros `member.extras_pruned` da migration (ator nulo) foram conferidos: cada um
+      é uma concessão inerte removida ou um perfil convertido em concessões equivalentes. A migration
+      garante que nenhuma permissão efetiva mudou.
+- [ ] Tela de Equipe: editar um staff e um manager funciona. A tela usa `set_member_access`, que já
+      exigia um perfil do nível escolhido. `set_member_role`, que a tela não usa, agora também recusa
+      rebaixar para staff quem tem perfil de manager.
 - [ ] Monitoramento: erros do Worker (incluindo `isolation_unsupported`, que não deve aparecer) e
       tempo das leituras do ledger.
 
