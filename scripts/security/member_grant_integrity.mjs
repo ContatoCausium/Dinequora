@@ -588,6 +588,14 @@ try {
       `${r} ${JSON.stringify(rev)}`,
     );
   }
+  await refused(
+    "I10 a NULL element in the grants or revocations is refused (invalid_permission)",
+    "invalid_permission",
+    U.OWNER,
+    (c) =>
+      c`select public.set_member_access(${mid(A, U.STAFF)}, 'staff', null, array['inventory.adjust', null]::text[], '{}'::text[], ${[S1]}::uuid[])`,
+    mid(A, U.STAFF),
+  );
   check(
     "I4 no staff member of either organization holds orders.resolve_pending, effective or stored",
     (

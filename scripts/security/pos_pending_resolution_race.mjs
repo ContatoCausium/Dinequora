@@ -404,6 +404,19 @@ try {
       r === "location_forbidden" && (await voids(key)) === 0 && (await audits(key)).length === 0,
       r,
     );
+    // a key closed for the first store (scenario 3) is not revealed to a request for the other one
+    const s2 = await session(SELLER);
+    const closed =
+      await s2.c`select public.resolve_pending_pos_sale(${ORG}, ${OTHER}, ${`${org.key}-3`}, 'Race test: asked from the wrong store')`.then(
+        (x) => x[0]?.resolve_pending_pos_sale?.status ?? "ok",
+        (e) => code(e),
+      );
+    await s2.end();
+    check(
+      "9. a key closed for another store is not revealed (location_forbidden instead of already_resolved)",
+      closed === "location_forbidden",
+      closed,
+    );
   }
   // ---- 10. (0033) a suspended organization writes nothing
   {

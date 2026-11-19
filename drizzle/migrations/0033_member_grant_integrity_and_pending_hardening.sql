@@ -1,4 +1,4 @@
--- 0033_member_grant_integrity_and_pending_hardening — additive fixes found by the M2 integration
+-- 0033_member_grant_integrity_and_pending_hardening - additive fixes found by the M2 integration
 -- review (2026-11-19). No member gains access; every change narrows it or makes it explicit.
 --
 -- A. Member grants (finding M1 and the paths found by the independent review). Before:
@@ -91,6 +91,13 @@ revoke all on function public.trg_member_grant_integrity() from public, anon, au
 do $$
 declare m record; _base text[]; _defaults text[]; _extra text[]; _revoked text[]; _before text[]; _after text[];
 begin
+  -- NULL elements (accepted before 0033: the catalog check ignored them) never matched a permission:
+  -- removing them changes nothing, and keeps the checks below exact
+  update public.organization_members
+     set extra_permissions = array_remove(extra_permissions, null),
+         revoked_permissions = array_remove(revoked_permissions, null)
+   where array_position(extra_permissions, null) is not null
+      or array_position(revoked_permissions, null) is not null;
   -- a staff member carrying a manager-tier profile: the same effective set as explicit grants
   for m in select om.*, pp.permissions as profile_permissions from public.organization_members om
              join public.permission_profiles pp on pp.id = om.profile_id
@@ -162,6 +169,9 @@ begin
   end if;
   if exists (select 1 from unnest(coalesce(_extra, '{}') || coalesce(_revoked, '{}')) p
              where not p = any(public.permission_catalog())) then raise exception 'invalid_permission'; end if;
+  -- 0033: a NULL element is not a permission (it slipped through the catalog check before)
+  if array_position(coalesce(_extra, '{}') || coalesce(_revoked, '{}'), null) is not null then
+    raise exception 'invalid_permission'; end if;
   -- 0033: an individual grant must be one the tier can hold (never stored inert).
   if _role <> 'owner' and exists (select 1 from unnest(coalesce(_extra, '{}')) p
              where not p = any(public.role_ceiling(_role))) then raise exception 'permission_outside_role'; end if;
@@ -349,6 +359,8 @@ begin
 
   select * into v from public.pos_sale_key_voids where org_id = _org_id and client_order_id = k;
   if v.client_order_id is not null then
+    -- 0033: a key closed for another store is not revealed either.
+    if v.location_id <> _location_id then raise exception 'location_forbidden'; end if;
     return jsonb_build_object('status', 'already_resolved', 'resolved_at', v.created_at);
   end if;
 

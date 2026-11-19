@@ -24,7 +24,7 @@ chamadas diretas à API e escritas pelo `service_role`.
 |---|---|
 | `set_member_access` | Uma concessão individual precisa caber no teto do papel do membro, para **qualquer** autor, owner inclusive: `permission_outside_role`. Um staff nunca guarda `orders.resolve_pending`, nem inerte |
 | `set_member_access` | Um manager concede só o que tem, verificado **no pedido**, tanto nas concessões individuais quanto no perfil atribuído: `permission_exceeds_own` |
-| `set_member_access` | Revogações de permissões que não estão mais no catálogo são **mantidas**: só restringem |
+| `set_member_access` | Revogações de permissões que não estão mais no catálogo são **mantidas**: só restringem. Elementos NULL, antes aceitos sem efeito, são recusados (`invalid_permission`) e os já gravados foram removidos |
 | `create_invitation` | Um manager convida (staff) só com permissões que ele tem, seja o perfil, sejam os padrões do papel: `permission_exceeds_own` |
 | `save_permission_profile` | O nível de um perfil usado por convite pendente não muda: `profile_tier_in_use` |
 | Gatilho `member_ceiling_grants` (BEFORE INSERT/UPDATE OF `role`, `profile_id`, `extra_permissions`) | Vale em todos os caminhos: `set_member_role`, transferência de propriedade, aceite de convite, `service_role`. Regras: (1) um staff nunca fica com perfil de nível manager (`profile_tier_mismatch`): para rebaixar, o owner escolhe o novo perfil explicitamente com `set_member_access`; (2) quem vira owner perde perfil e concessões, que voltariam num rebaixamento; (3) concessões fora do teto do papel são removidas. Todas auditadas (`member.extras_pruned`) |

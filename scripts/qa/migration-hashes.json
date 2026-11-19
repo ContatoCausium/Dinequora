@@ -34,7 +34,7 @@
     "0030_permission_profiles_table_privileges": "5de7eec4fb1849c5ef9af6c8049499aa8e1c7fb51862635c281c8cba050716cc",
     "0031_ledger_day_totals": "351c9a520f20e7bdc80752f66d4924280a7ca2156ad76f0a7ef6cf85264e36c4",
     "0032_pos_pending_sale_resolution": "06242f84f0e22a5b069e8dc78e3c7e77659bd0c7f9990ddc9e469a12b493196c",
-    "0033_member_grant_integrity_and_pending_hardening": "2f53d925fd82c4e7204bbc4017edda78f82c1fc54a74e63bdb09e163705d4114"
+    "0033_member_grant_integrity_and_pending_hardening": "73fdf66f2925b44e66e173538df31676de8d17ff8640ea2ffb5a0d09a65629c4"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

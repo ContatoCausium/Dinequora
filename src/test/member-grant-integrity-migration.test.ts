@@ -46,10 +46,9 @@ describe("lock wait limit", () => {
     expect(M0033).toContain("create or replace trigger member_ceiling_grants");
   });
 
-  it("0033 is plain ASCII except the em dash of its title (no invisible characters)", () => {
+  it("0033 is plain ASCII (no invisible or look-alike characters)", () => {
     const nonAscii = M0033.split("\n").filter((l) => /[^\x20-\x7e]/.test(l.replace(/\t/g, " ")));
-    expect(nonAscii).toHaveLength(1);
-    expect(nonAscii[0]).toMatch(/^-- 0033_member_grant_integrity_and_pending_hardening — /);
+    expect(nonAscii).toEqual([]);
   });
 });
 
@@ -62,6 +61,8 @@ describe("0033 member grants", () => {
       "         revoked_permissions = case when _role = 'owner' then '{}' else array(select distinct p from unnest(coalesce(_revoked, '{}')) p) end",
     ]);
     expect(code(added)).toEqual([
+      "  if array_position(coalesce(_extra, '{}') || coalesce(_revoked, '{}'), null) is not null then",
+      "    raise exception 'invalid_permission'; end if;",
       "  if _role <> 'owner' and exists (select 1 from unnest(coalesce(_extra, '{}')) p",
       "             where not p = any(public.role_ceiling(_role))) then raise exception 'permission_outside_role'; end if;",
       "  if _me.role = 'manager' and exists (select 1 from unnest(coalesce(_extra, '{}')) p",
@@ -136,6 +137,9 @@ describe("0033 pending sale (H1, B4)", () => {
     expect(body).toContain("perform public.assert_org_operational(_org_id);");
     expect(body).toContain(
       "if o.location_id <> _location_id then raise exception 'location_forbidden'; end if;",
+    );
+    expect(body).toContain(
+      "if v.location_id <> _location_id then raise exception 'location_forbidden'; end if;",
     );
     expect(body).toContain(
       "why := regexp_replace(coalesce(_reason, ''), '^' || ws || '+|' || ws || '+$', '', 'g');",
