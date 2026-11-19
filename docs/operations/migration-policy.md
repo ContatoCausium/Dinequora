@@ -67,6 +67,14 @@ banco recém-criado).
 
 ## Regras de conteúdo
 
+- **Privilégios sempre explícitos.** Os projetos hospedados novos (Client Preview, produção) não dão
+  nada aos papéis da API por padrão: toda tabela ou sequência nova que o app usa precisa de `GRANT`
+  explícito. Funções são o contrário: `PUBLIC` recebe `EXECUTE` em toda função nova, nos dois
+  modelos, então toda função começa com `REVOKE ALL … FROM PUBLIC, anon` e só então recebe o `GRANT`
+  de quem deve chamá-la (as stacks locais do CLI ainda concedem tudo por omissão). A suíte roda nos dois modelos e a etapa 2c compara os privilégios
+  efetivos com `scripts/qa/api-privileges.hosted.json`; uma migration que muda privilégios regenera
+  esse manifesto no mesmo commit (`docs/operations/privilege-models.md`).
+
 - **Aditiva por padrão**: colunas novas nulas ou com padrão seguro; constraints novas com
   `NOT VALID` seguido de `VALIDATE CONSTRAINT` quando houver dados; remoção de coluna/constraint só
   depois de uma versão inteira sem uso.

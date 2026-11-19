@@ -16,8 +16,21 @@
 #   0b. claim: the new, empty database is marked disposable (bound to its cluster and database)
 #   0c. target guard self-test on probe databases of this cluster: remote and closed targets, copied
 #      and tampered markers, populated databases, adopt confirmations, concurrent claims
+#   0d. privilege model (QA_PRIVILEGE_MODEL, default "hosted"): BEFORE the migrations, role postgres
+#      gets the default privileges of the hosted projects (scripts/qa/hosted-default-privileges.sql:
+#      nothing for anon, authenticated and service_role), so every table, function and sequence the
+#      migrations create has only its explicit GRANTs (and, for functions, PUBLIC's built-in EXECUTE until
+#      revoked), exactly as on the Client Preview and production.
+#      QA_PRIVILEGE_MODEL=cli keeps the Supabase CLI defaults (the API roles get everything postgres
+#      creates): the model of older projects and of the local demo/QA stacks. CI runs both. See
+#      docs/operations/privilege-models.md
 #   1. apply every migration from zero with the same tool as production (drizzle-kit migrate)
 #   2. journal/tracker/hash integrity and SQL-first policy (scripts/qa/check-migrations.mjs)
+#   2c. API privileges (scripts/security/api_privileges.mjs): hosted model: the effective privileges of
+#      anon, authenticated and service_role are EXACTLY scripts/qa/api-privileges.hosted.json, plus
+#      invariants (anon reads no table, the only direct write is the own profile, retired and trigger
+#      functions executable by nobody); cli model: every privilege of the manifest is present and the
+#      extra ones this model adds are counted. Run again at the very end (after the rehearsals)
 #   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
@@ -96,6 +109,8 @@ cd "$(dirname "$0")/../.."
 eval "$(supabase status --workdir scripts/qa -o env 2>/dev/null | grep -E '^(API_URL|DB_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
 [[ -n "${API_URL:-}" && -n "${DB_URL:-}" && -n "${SERVICE_ROLE_KEY:-}" ]] || { echo "Refusing: the scripts/qa stack is not running (supabase start --workdir scripts/qa)"; exit 2; }
 GUARD="node scripts/guard/target-guard.mjs"
+PRIVILEGE_MODEL="${QA_PRIVILEGE_MODEL:-hosted}"
+[[ "$PRIVILEGE_MODEL" == "hosted" || "$PRIVILEGE_MODEL" == "cli" ]] || { echo "Refusing: QA_PRIVILEGE_MODEL must be hosted or cli"; exit 2; }
 
 ARTIFACTS="${QA_ARTIFACTS:-$(mktemp -d)}"
 mkdir -p "$ARTIFACTS"
@@ -148,6 +163,8 @@ must_refuse "platform owner assignment" env QA_DB_URL="$DB_URL" node scripts/sec
 must_refuse "justification privacy" env QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs
 must_refuse "security closure rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs
 must_refuse "POS sale flow" env QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs
+must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
+must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
 must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
 must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
@@ -164,6 +181,14 @@ echo "::group::0c. target guard self-test (probe databases of this cluster)"
 DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" bash scripts/guard/selftest.sh
 echo "::endgroup::"
 
+echo "::group::0d. privilege model: $PRIVILEGE_MODEL"
+if [[ "$PRIVILEGE_MODEL" == "hosted" ]]; then
+  run_check scripts/qa/hosted-default-privileges.sql
+else
+  echo "  Supabase CLI default privileges kept (the API roles get every privilege on what postgres creates)"
+fi
+echo "::endgroup::"
+
 echo "::group::1. migrations from zero"
 $GUARD check --db-url "$DB_URL" --operation suite:migrate --new-empty
 LOVABLE_DB_MIGRATION_URL="$DB_URL" npx --no-install drizzle-kit migrate 2>&1 | grep -E "applied|error|Error" || true
@@ -171,6 +196,10 @@ echo "::endgroup::"
 
 echo "::group::2. migration integrity"
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
+echo "::endgroup::"
+
+echo "::group::2c. API privileges ($PRIVILEGE_MODEL model)"
+QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs --expect "$PRIVILEGE_MODEL" | tee "$ARTIFACTS/api-privileges.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::2b. new database without fictional organizations"
@@ -283,5 +312,8 @@ echo "::group::9. 0034/0035/0036 rollback and re-application (LAST: changes the 
 QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs | tee "$ARTIFACTS/security-closure-rollback.txt" | grep -v "^PASS"
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"
+echo "::group::9b. API privileges after the rehearsals (unchanged)"
+QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs --expect "$PRIVILEGE_MODEL" | tee "$ARTIFACTS/api-privileges-final.txt" | grep -v "^PASS"
+echo "::endgroup::"
 rm -f "$CREDS_FILE"
-echo "Security suite passed."
+echo "Security suite passed (privilege model: $PRIVILEGE_MODEL)."

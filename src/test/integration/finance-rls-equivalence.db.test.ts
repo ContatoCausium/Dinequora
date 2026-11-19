@@ -319,16 +319,29 @@ describe.skipIf(!ENABLED)(
         `insert into public.finance_entries(org_id, location_id, kind, amount_cents, client_event_id, description, actor_id)
          values ('${A.orgId}', '${storesA[0]}', 'revenue', 1, 'direct-write', 'x', '${owner}')`,
       );
-      expect(ins).toMatch(/^refused:new row violates row-level security policy/);
-      // UPDATE / DELETE see no row through RLS: nothing is changed
-      expect(
-        await attempt(
-          `update public.finance_entries set amount_cents = 0 where org_id = '${A.orgId}'`,
-        ),
-      ).toBe("ok:0");
-      expect(await attempt(`delete from public.finance_entries where org_id = '${A.orgId}'`)).toBe(
-        "ok:0",
+      const upd = await attempt(
+        `update public.finance_entries set amount_cents = 0 where org_id = '${A.orgId}'`,
       );
+      const del = await attempt(`delete from public.finance_entries where org_id = '${A.orgId}'`);
+      // The exact refusal depends on the privilege model of THIS database, read from it (not assumed):
+      // docs/operations/privilege-models.md
+      const tablePrivilege =
+        sql(
+          `select has_table_privilege('authenticated', 'public.finance_entries', 'INSERT')::text`,
+        ) === "true";
+      if (tablePrivilege) {
+        // cli model: the role holds the table privileges; RLS (no write policy) is the barrier
+        expect(ins).toMatch(/^refused:new row violates row-level security policy/);
+        expect(upd).toBe("ok:0");
+        expect(del).toBe("ok:0");
+      } else {
+        // hosted model: no INSERT/UPDATE/DELETE privilege at all; refused before RLS
+        const denied = "refused:permission denied for table finance_entries";
+        expect(ins).toBe(denied);
+        expect(upd).toBe(denied);
+        expect(del).toBe(denied);
+      }
+      // either way nothing changed (checked as the database owner)
       expect(
         Number(
           sql(

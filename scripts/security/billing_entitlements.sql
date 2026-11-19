@@ -126,8 +126,12 @@ SELECT set_config('request.jwt.claim.sub',:'owner_a',false);
 DO $$ BEGIN IF (SELECT status FROM public.subscriptions WHERE org_id=current_setting('fx.org_a')::uuid) IS DISTINCT FROM 'trialing' THEN RAISE EXCEPTION 'FAIL the owner cannot read the own subscription'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.billing_events WHERE org_id=current_setting('fx.org_a')::uuid) THEN RAISE EXCEPTION 'FAIL the owner cannot read the own billing history'; END IF; END $$;
 -- privileged writes as the owner (RLS has no write policy: refused or no row touched)
-UPDATE public.subscriptions SET status='active', plan_id='enterprise' WHERE org_id=:'org_a';
-UPDATE public.billing_plans SET default_store_limit=99 WHERE id='starter';
+-- Two privilege models, one outcome. On a CLI stack with its default privileges the API role holds
+-- UPDATE on these tables and RLS (no write policy) touches no row; on a hosted project (and with
+-- QA_PRIVILEGE_MODEL=hosted) the role has no UPDATE at all and the statement is refused (42501).
+-- Either way nothing may change: checked below as the database owner, whatever happened here.
+DO $$ BEGIN BEGIN UPDATE public.subscriptions SET status='active', plan_id='enterprise' WHERE org_id=current_setting('fx.org_a')::uuid; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
+DO $$ BEGIN BEGIN UPDATE public.billing_plans SET default_store_limit=99 WHERE id='starter'; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
 DO $$ BEGIN BEGIN UPDATE public.organizations SET store_limit_override=99, store_limit=99, plan='enterprise' WHERE id=current_setting('fx.org_a')::uuid; EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$;
 SELECT pg_temp.refused('owner fabricates payment history', pg_temp.q($$INSERT INTO public.billing_events(org_id,kind,amount_cents) VALUES ('{A}','invoice.paid',1)$$), '42501');
 SELECT pg_temp.refused('owner inserts a subscription', pg_temp.q($$INSERT INTO public.subscriptions(org_id,plan_id) VALUES ('{B}','enterprise')$$), NULL);
@@ -136,7 +140,13 @@ SELECT pg_temp.refused('owner applies a Stripe event', pg_temp.q($$SELECT public
 SELECT pg_temp.refused('owner changes the own plan', pg_temp.q($$SELECT public.admin_set_subscription('{A}','enterprise','active','self upgrade')$$), 'forbidden');
 SELECT pg_temp.refused('owner calls the admin plan change', pg_temp.q($$SELECT public.admin_update_organization('{A}',NULL,'enterprise',50,'self')$$), 'forbidden');
 SELECT pg_temp.refused('user bootstraps a platform admin', pg_temp.q($$SELECT public.bootstrap_first_platform_admin(auth.uid(),'trying to self-bootstrap')$$), '42501');
-DO $$ BEGIN IF EXISTS (SELECT 1 FROM public.stripe_webhook_events) OR EXISTS (SELECT 1 FROM public.platform_bootstrap) THEN RAISE EXCEPTION 'FAIL users read webhook or bootstrap rows'; END IF; END $$;
+-- no row visible (RLS, CLI privileges) or no SELECT at all (hosted privileges): both mean "cannot read"
+DO $$ BEGIN
+  BEGIN IF EXISTS (SELECT 1 FROM public.stripe_webhook_events) THEN RAISE EXCEPTION 'FAIL users read webhook rows'; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN IF EXISTS (SELECT 1 FROM public.platform_bootstrap) THEN RAISE EXCEPTION 'FAIL users read bootstrap rows'; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
 RESET ROLE; SET ROLE anon;
 DO $$ BEGIN
   BEGIN IF EXISTS (SELECT 1 FROM public.stripe_webhook_events) OR EXISTS (SELECT 1 FROM public.platform_bootstrap) OR EXISTS (SELECT 1 FROM public.billing_events) OR EXISTS (SELECT 1 FROM public.subscriptions) THEN RAISE EXCEPTION 'FAIL anon reads billing rows'; END IF;

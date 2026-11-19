@@ -1,25 +1,29 @@
-# Checklist de publicação da M2 (0031–0035)
+# Checklist de publicação da M2 (0031–0036)
 
 Para quando a publicação for autorizada. **Cada item que toca um ambiente hospedado precisa de
 autorização específica do responsável.** Nada aqui foi executado fora de stacks descartáveis.
 
-As migrations da publicação são cinco:
+As migrations da publicação são seis:
 - **0031:** agregação do ledger.
 - **0032:** resolução de venda pendente.
 - **0033:** integridade de concessões, isolamento e justificativa.
 - **0034:** definição de Owner pela plataforma ([platform-owner-assignment.md](platform-owner-assignment.md)).
 - **0035:** privacidade das justificativas ([pending-reason-privacy.md](pending-reason-privacy.md)).
+- **0036:** RPCs de venda antigas fora da API ([pos-sale-flow-security.md](pos-sale-flow-security.md)).
 
 ## Antes
 
 - [ ] Branch e commit aprovados. Hashes das migrations iguais aos de `scripts/qa/migration-hashes.json`
       (`node scripts/qa/check-migrations.mjs`: PASS).
-- [ ] Suíte de segurança completa num stack descartável novo (`scripts/qa/security-suite.sh`),
-      inclusive:
+- [ ] Suíte de segurança completa num stack descartável novo (`scripts/qa/security-suite.sh`), **no
+      modelo de privilégios `hosted`** (o padrão; reproduz o Client Preview) e também no `cli`
+      ([privilege-models.md](privilege-models.md)), inclusive:
+      - 0d e 2c: modelo de privilégios e privilégios da API iguais ao manifesto;
       - 5g: isolamento;
       - 5h: integridade de concessões;
       - 5i: definição de Owner;
       - 5j: privacidade das justificativas;
+      - 5k: fluxo de venda do PDV;
       - 7: integração pelo PostgREST;
       - 8 e 9: rollback e reaplicação.
 - [ ] Testes de integração com banco, `gen-types --check`, tsc, lint, testes unitários e build: verdes.
@@ -30,7 +34,9 @@ As migrations da publicação são cinco:
 - [ ] Ambiente de destino conferido, somente leitura e com autorização:
       - projeto, ref, e banco em **0030** com tracker de 31 linhas;
       - `DB_URL=<destino> node scripts/qa/check-migrations.mjs --preflight`: PASS, listando
-        0031–0035 como pendentes e nenhuma entrada "would be skipped by the migrator";
+        0031–0036 como pendentes e nenhuma entrada "would be skipped by the migrator";
+      - o build de servidor publicado no destino contém o commit `10b2d94` (o app chama as RPCs v2):
+        condição da 0036. O Worker `55493d4` contém;
       - as consultas de collation, isolamento padrão, convites pendentes e dados que a 0033 converte
         (procedimento somente leitura do relatório de fechamento de segurança).
 - [ ] Backup completo do banco de destino, com SHA-256 conferido e restauração testada num stack
@@ -47,13 +53,13 @@ As migrations da publicação são cinco:
 2. [ ] **Migrations** pelo mecanismo único (`scripts/preview/hosted-db.mjs` → `drizzle-kit migrate`).
        - **Não** exporte `PGOPTIONS`: o limite de lock está dentro da 0031, da 0033, da 0034 e da
          0035 (`set local lock_timeout = '5s'`).
-       - As cinco migrations entram numa única transação.
+       - As seis migrations entram numa única transação.
 3. [ ] Se sair `drizzle-kit migrate failed (exit 1)`:
        - o drizzle-kit não imprime a causa;
        - confira no log do Postgres se houve `canceling statement due to lock timeout`;
        - confirme que o tracker continua com 31 linhas (nada foi aplicado);
        - repita depois. Nunca contorne o limite.
-4. [ ] Tracker com 36 linhas; `check-migrations` com `DB_URL` do destino: PASS (somente leitura).
+4. [ ] Tracker com 37 linhas; `check-migrations` com `DB_URL` do destino: PASS (somente leitura).
 
 ## Verificação (somente leitura onde possível)
 
