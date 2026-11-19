@@ -25,8 +25,9 @@ idempotência. A 0032 acrescenta um terceiro caminho, **manual, autorizado e def
    - **se o pedido existe** ⇒ `recorded`: nada é encerrado, o POS mostra o recibo e a recuperação
      fica auditada (`pos.pending_sale_recovered`);
    - **se não existe** ⇒ grava a chave em `pos_sale_key_voids` e audita
-     (`pos.pending_sale_resolved`: responsável, loja, chave, horário, justificativa, valor,
-     tentativas) ⇒ `resolved`;
+     (`pos.pending_sale_resolved`: responsável, loja, chave, horário, valor, tentativas) ⇒
+     `resolved`. Desde a 0035, a justificativa vai só para o armazenamento privado
+     `pos_pending_resolution_reasons`, e a auditoria guarda `reason_id` e `reason_length`;
    - chave já encerrada ⇒ `already_resolved` (idempotente, sem nova auditoria).
 5. `create_pos_sale_v2` passa a recusar uma chave encerrada (`sale_key_voided`), sob o mesmo lock
    e depois da checagem de pedido existente. **Nenhuma requisição atrasada consegue registrar a
@@ -64,7 +65,7 @@ pendentes".
 | Organização suspensa ou sem assinatura | Desde a 0033 a resolução chama `assert_org_operational` (`org_suspended` / `subscription_inactive`) e não grava nada |
 | Chave de uma venda de outra loja | Desde a 0033, se a chave tem pedido **ou já foi encerrada** em outra loja da organização, a resolução recusa (`location_forbidden`) sem revelar nada nem auditar. Resta, por desenho, que alguém com a permissão numa loja encerre uma chave ainda sem pedido que pertença a outra loja: exige conhecer a chave (`pos-<uuid>`, gerada no caixa) |
 | Encerrar uma venda que de fato foi paga | Permissão própria, verificação prévia, justificativa, confirmação explícita, auditoria. **Irreversível por desenho**: um "desfazer" reabriria o risco de duplicidade |
-| A justificativa pode conter dados pessoais | Texto livre de no máximo 500 caracteres, visível a quem lê o log de atividades; orientar a equipe. Retenção: proposta em [m2-rollback/README.md § Retenção](m2-rollback/README.md#reten%C3%A7%C3%A3o-da-justificativa-proposta-n%C3%A3o-implementada), nada implementado |
+| A justificativa pode conter dados pessoais | Desde a 0035, o texto fica só num armazenamento privado e é legível apenas pelo Owner, pelo Admin da organização e por managers com `orders.resolve_pending` na loja, pela RPC `list_pending_sale_reasons`. A auditoria guarda os campos estruturados, sem o texto ([pending-reason-privacy.md](pending-reason-privacy.md)). Retenção: proposta em [pending-reason-retention.md](pending-reason-retention.md), nada implementado |
 | Venda pendente só no navegador do caixa | Resolução restrita ao caixa original nesta etapa (decisão aprovada) |
 
 ## Ordem de rollout

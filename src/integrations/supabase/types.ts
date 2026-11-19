@@ -1212,6 +1212,61 @@ export type Database = {
         };
         Relationships: [];
       };
+      pos_pending_resolution_reasons: {
+        Row: {
+          actor_id: string | null;
+          client_order_id: string;
+          created_at: string;
+          id: string;
+          location_id: string;
+          order_id: string | null;
+          org_id: string;
+          outcome: string;
+          reason: string;
+          redacted_at: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id?: string | null;
+          client_order_id: string;
+          created_at?: string;
+          id?: string;
+          location_id: string;
+          order_id?: string | null;
+          org_id: string;
+          outcome: string;
+          reason: string;
+          redacted_at?: string | null;
+        };
+        Update: {
+          actor_id?: string | null;
+          client_order_id?: string;
+          created_at?: string;
+          id?: string;
+          location_id?: string;
+          order_id?: string | null;
+          org_id?: string;
+          outcome?: string;
+          reason?: string;
+          redacted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pos_pending_resolution_reasons_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pos_pending_resolution_reasons_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       pos_sale_key_voids: {
         Row: {
           actor_id: string;
@@ -1866,6 +1921,7 @@ export type Database = {
         Args: { _location_id?: string; _org_id: string; _perm: string };
         Returns: undefined;
       };
+      audit_visible_location_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       billing_apply_stripe_event: {
         Args: {
           _amount_cents: number;
@@ -2076,6 +2132,19 @@ export type Database = {
           _same_time_yesterday?: boolean;
         };
         Returns: Json;
+      };
+      list_pending_sale_reasons: {
+        Args: { _client_order_id?: string; _limit?: number; _location_id: string; _org_id: string };
+        Returns: {
+          actor_id: string;
+          client_order_id: string;
+          created_at: string;
+          order_id: string;
+          outcome: string;
+          reason: string;
+          reason_id: string;
+          redacted_at: string;
+        }[];
       };
       location_in_org: { Args: { _location_id: string; _org_id: string }; Returns: boolean };
       log_access_denied: {

@@ -66,6 +66,10 @@
 #      own customer organizations (a platform role is refused for an owner, and an account with a
 #      platform role never becomes owner by any path: role change, transfer, invitation, new
 #      organization; test restaurants exempt)
+#   5j. 0035 justification privacy (every role, direct reads and RPC): the text only in the private
+#      store, never through the API (closed keys, private store, audit); the reader answers the owner,
+#      the organization admin and granted managers at their stores only; the activity log is scoped to
+#      the reader's stores; staff, other tenants, platform admins and anon refused
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -77,6 +81,10 @@
 #      profiles stripped, revocations and closed keys kept; re-application restores functions,
 #      policies and triggers exactly as after 0033 without reactivating custom profiles or individual
 #      grants; idempotent
+#   9. LAST (changes the schema, leaves it re-applied): 0034/0035 rollback and re-application
+#      (docs/operations/security-closure): previous bodies restored, private store and column
+#      privilege kept; texts written the 0033 way during the window are moved exactly on
+#      re-application (audited); schema identical afterwards; idempotent
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -132,6 +140,8 @@ must_refuse "race script" env QA_DB_URL="$DB_URL" node scripts/security/tax_rate
 must_refuse "member grant integrity" env QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs
 must_refuse "M2 rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs
 must_refuse "platform owner assignment" env QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs
+must_refuse "justification privacy" env QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs
+must_refuse "security closure rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
 must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
 must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
@@ -232,6 +242,10 @@ echo "::group::5i. platform owner assignment (0034, direct RPC calls, two Postgr
 QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs | tee "$ARTIFACTS/admin-assign-owner.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
+echo "::group::5j. justification privacy (0035, every role, direct reads and RPC)"
+QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs | tee "$ARTIFACTS/pending-reason-privacy.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
 echo "::group::6. demo reconstruction"
 for run in 1 2; do
   out=$(run_sql scripts/seeds/demo/seed-demo-orgs.sql 2>&1) || { echo "$out" | tail -5; echo "FAIL demo seed run $run"; exit 1; }
@@ -246,6 +260,8 @@ QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_K
   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run \
   src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts \
   src/test/integration/menu-archive.db.test.ts
+# pending-sale resolution through PostgREST as signed-in members (0032/0033/0035)
+QA_PENDING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL"   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/pos-pending-resolution.db.test.ts
 echo "::endgroup::"
 
 echo "::group::8. M2 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
@@ -253,5 +269,9 @@ QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs | tee "$ARTIFA
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"
 
+echo "::group::9. 0034/0035 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
+QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs | tee "$ARTIFACTS/security-closure-rollback.txt" | grep -v "^PASS"
+DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
+echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."

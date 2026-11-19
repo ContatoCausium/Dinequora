@@ -246,6 +246,13 @@
       "when": 1795431679812,
       "tag": "0034_platform_owner_assignment_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795518079812,
+      "tag": "0035_pending_sale_reason_privacy",
+      "breakpoints": true
     }
   ]
 }

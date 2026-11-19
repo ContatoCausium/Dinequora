@@ -20,6 +20,8 @@ set local lock_timeout = '5s';
 -- ---------------------------------------------------------------- 0032
 -- the resolution RPC goes away (create_pos_sale_v2 and pos_sale_key_voids are kept, see above)
 drop function if exists public.resolve_pending_pos_sale(uuid, uuid, text, text, integer, integer, timestamptz);
+-- ...and the reader of the justifications (0035); their private store and its rows are kept
+drop function if exists public.list_pending_sale_reasons(uuid, uuid, text, integer);
 -- catalog (0020), tier ceiling and defaults (0018)
 create or replace function public.permission_catalog()
 returns text[] language sql immutable set search_path = public as $$

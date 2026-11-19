@@ -175,6 +175,7 @@ const GUARDED = [
   "finalize_pos_sale_atomic",
   "finalize_pos_sale_atomic_v2",
   "inventory_item_costs",
+  "list_pending_sale_reasons",
   "receive_operational_purchase",
   "record_operational_movement",
   "remove_member",

@@ -389,7 +389,8 @@
       "pos": {
         "finalized": "Sale completed",
         "pending_sale_resolved": "Pending sale closed as not recorded",
-        "pending_sale_recovered": "Pending sale recovered (already recorded)"
+        "pending_sale_recovered": "Pending sale recovered (already recorded)",
+        "pending_reasons_moved": "Pending sale justifications moved to restricted storage"
       },
       "inventory": {
         "moved": "Stock movement recorded",

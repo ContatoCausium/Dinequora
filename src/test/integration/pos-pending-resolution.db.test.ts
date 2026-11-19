@@ -98,7 +98,7 @@ describe.skipIf(!ENABLED)(
         `select count(*) from public.pos_sale_key_voids where org_id = '${org.orgId}' and client_order_id = '${key}'`,
       );
     const audit = (key: string) =>
-      sql(`select action || '|' || coalesce(actor_id::text,'') || '|' || coalesce(location_id::text,'') || '|' || target || '|' || coalesce(metadata->>'reason','') || '|' || (created_at is not null)
+      sql(`select action || '|' || coalesce(actor_id::text,'') || '|' || coalesce(location_id::text,'') || '|' || target || '|' || coalesce((select r.reason from public.pos_pending_resolution_reasons r where r.id::text = metadata->>'reason_id'),'') || '|' || (not metadata ? 'reason') || '|' || (created_at is not null)
              from public.audit_logs where org_id = '${org.orgId}' and target = '${key}' and action like 'pos.pending_sale_%' order by created_at`)
         .split("\n")
         .filter(Boolean);
@@ -168,13 +168,19 @@ describe.skipIf(!ENABLED)(
       expect(r.data).toMatchObject({ status: "resolved" });
       expect(voids(key)).toBe(1);
       expect(
-        sql(`select actor_id || '|' || location_id || '|' || reason || '|' || amount_cents || '|' || attempts || '|' || (last_attempt_at is not null)
+        sql(`select actor_id || '|' || location_id || '|' || coalesce(reason, 'NULL') || '|' || amount_cents || '|' || attempts || '|' || (last_attempt_at is not null)
                from public.pos_sale_key_voids where org_id = '${org.orgId}' and client_order_id = '${key}'`),
       ).toBe(
-        `${creds.owner.userId}|${org.locationId}|Customer left without paying; cash drawer checked|299|3|true`,
+        `${creds.owner.userId}|${org.locationId}|[moved to pos_pending_resolution_reasons]|299|3|true`,
       );
+      // 0035: the text lives only in the private store
+      expect(
+        sql(
+          `select outcome || '|' || reason from public.pos_pending_resolution_reasons where org_id = '${org.orgId}' and client_order_id = '${key}'`,
+        ),
+      ).toBe("resolved|Customer left without paying; cash drawer checked");
       expect(audit(key)).toEqual([
-        `pos.pending_sale_resolved|${creds.owner.userId}|${org.locationId}|${key}|Customer left without paying; cash drawer checked|true`,
+        `pos.pending_sale_resolved|${creds.owner.userId}|${org.locationId}|${key}|Customer left without paying; cash drawer checked|true|true`,
       ]);
       // A request still travelling on the network arrives now: refused, never recorded.
       const late = await sale(c["owner"]!, key);
@@ -292,7 +298,7 @@ describe.skipIf(!ENABLED)(
       expect(r.error).toBeNull();
       expect(
         sql(
-          `select reason from public.pos_sale_key_voids where org_id = '${org.orgId}' and client_order_id = '${key}'`,
+          `select reason from public.pos_pending_resolution_reasons where org_id = '${org.orgId}' and client_order_id = '${key}'`,
         ),
       ).toBe("Customer left; drawer checked");
       // letters of any script count (a justification written in Japanese)
@@ -337,6 +343,64 @@ describe.skipIf(!ENABLED)(
         .select();
       expect(del.data ?? []).toEqual([]);
       expect(voids(key)).toBe(1);
+    });
+
+    it("0035: the justification is read only through list_pending_sale_reasons, by the owner, the organization admin and a manager granted at its store (direct API calls)", async () => {
+      const key = newSaleKey();
+      const text = "Terminal froze; the customer paid again in cash";
+      expect((await resolve(c["owner"]!, key, text)).error).toBeNull();
+      const anon = createClient<Database>(URL_, process.env["SB_ANON"]!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const everyone = { ...c, anon };
+      // no direct read of the text by anyone, owners included
+      for (const [who, cl] of Object.entries(everyone)) {
+        const voidText = await cl
+          .from("pos_sale_key_voids")
+          .select("reason")
+          .eq("client_order_id", key);
+        const privateStore = await cl.from("pos_pending_resolution_reasons").select("reason");
+        expect(voidText.error, `${who} closed key reason`).not.toBeNull();
+        expect(privateStore.error, `${who} private store`).not.toBeNull();
+        const audit = await cl.from("audit_logs").select("metadata").eq("target", key);
+        for (const row of audit.data ?? [])
+          expect(JSON.stringify(row.metadata), `${who} audit`).not.toContain(text);
+      }
+      const read = async (cl: SupabaseClient<Database>, location = org.locationId) => {
+        const r = await cl.rpc("list_pending_sale_reasons", {
+          _org_id: org.orgId,
+          _location_id: location,
+          _client_order_id: key,
+        });
+        return r.error ? r.error.message : (r.data ?? []).map((x) => x.reason).join("|");
+      };
+      expect(await read(c["owner"]!)).toBe(text);
+      expect(await read(c["orgAdmin"]!)).toBe(text);
+      expect(await read(c["manager"]!)).toBe("permission_denied");
+      sql(`update public.organization_members set extra_permissions = array['orders.resolve_pending'],
+                  effective_permissions = public.effective_permissions_for(role, profile_id, array['orders.resolve_pending'], revoked_permissions)
+            where id = '${managerMemberId}';`);
+      try {
+        expect(await read(c["manager"]!)).toBe(text);
+        // granted, but store B is not one of its stores
+        expect(await read(c["manager"]!, storeB)).toBe("permission_denied");
+      } finally {
+        sql(`update public.organization_members set extra_permissions = '{}',
+                    effective_permissions = public.effective_permissions_for(role, profile_id, '{}', revoked_permissions)
+              where id = '${managerMemberId}';`);
+      }
+      expect(await read(c["cashier"]!)).toBe("forbidden");
+      expect(await read(c["platformAdmin"]!)).toBe("forbidden");
+      expect(await read(c["otherTenant"]!)).toBe("forbidden");
+      expect(await read(anon)).not.toBe(text);
+      // the register's lookup of a closed key is unchanged
+      expect(
+        await lookupSaleByKey(c["cashier"]!, {
+          orgId: org.orgId,
+          locationId: org.locationId,
+          clientOrderId: key,
+        }),
+      ).toMatchObject({ status: "resolved" });
     });
 
     it("the sale function is unchanged apart from the closed-key check (same privileges, same idempotency)", async () => {

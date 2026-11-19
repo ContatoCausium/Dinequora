@@ -5,11 +5,11 @@ O teste `src/test/m2-rollback-files.test.ts` falha se eles divergirem das migrat
 
 | Arquivo | O que faz |
 |---|---|
-| `rollback.sql` | Desfaz a 0032 e a 0031, nessa ordem; a 0033 fica |
-| `reapply.sql` | Reaplica 0031, 0032 e 0033 depois desse rollback, de forma idempotente onde o rollback manteve objetos |
+| `rollback.sql` | Desfaz a 0032 e a 0031, nessa ordem; a 0033 fica. Remove também o leitor de justificativas da 0035 (`list_pending_sale_reasons`), mantendo o armazenamento privado e seus textos |
+| `reapply.sql` | Reaplica 0031, 0032, 0033 e **0035** depois desse rollback, de forma idempotente onde o rollback manteve objetos. A 0035 vem depois da 0033 porque a função da 0033 gravaria o texto na chave e na auditoria |
 
 Nenhum dos dois é uma migration. Num rollback real, cada um vira o conteúdo de uma migration **nova**
-e revisada (0034, 0035…), aplicada pelo runner normal, que usa uma transação única. Por isso eles não
+e revisada (0036, 0037…), aplicada pelo runner normal, que usa uma transação única. Por isso eles não
 têm `BEGIN`/`COMMIT` e começam com `set local lock_timeout = '5s';`.
 
 ## O que o rollback faz e por quê
@@ -79,6 +79,10 @@ QA_DB_URL=postgresql://...@127.0.0.1:<porta>/postgres node scripts/security/m2_r
 
 ## Retenção da justificativa (proposta, não implementada)
 
+> **Atualizado pela 0035:** o texto saiu da chave encerrada e da auditoria e vive só em
+> `pos_pending_resolution_reasons`. A proposta revisada, com a escolha do agendamento, está em
+> [../pending-reason-retention.md](../pending-reason-retention.md); o texto abaixo descreve o estado da 0033.
+
 Nada foi apagado nem anonimizado. Esta seção é uma proposta para decisão.
 
 ### Onde está o texto
@@ -109,6 +113,9 @@ Nada foi apagado nem anonimizado. Esta seção é uma proposta para decisão.
 | **Alternativas** | (a) manter para sempre (situação atual) e orientar a equipe a não escrever dados pessoais; (b) deixar de copiar o texto para a auditoria daqui para a frente (menos duplicação, menos rastreabilidade); (c) prazo diferente |
 
 ### Ponto relacionado (achado H2 da revisão, decisão de negócio)
+
+> **Resolvido pela 0035** ([../pending-reason-privacy.md](../pending-reason-privacy.md)): o texto só é
+> legível pelo Owner, pelo Admin da organização e por managers com `orders.resolve_pending` na loja.
 
 Hoje, quem tem `pos.sell` ou `orders.view` na loja lê o motivo, o ator e o valor dos encerramentos.
 Uma opção é restringir a leitura do **texto** a quem tem `orders.resolve_pending`.

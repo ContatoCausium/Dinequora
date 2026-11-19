@@ -64,4 +64,27 @@ describe("M2 rollback files", () => {
       "drop policy if exists pos_voids_read on public.pos_sale_key_voids;",
     );
   });
+
+  it("0035: the rollback drops the justification reader and keeps its private store; reapply runs 0035 AFTER 0033", () => {
+    const s = statements(built.rollback);
+    expect(s).toContain(
+      "drop function if exists public.list_pending_sale_reasons(uuid, uuid, text, integer);",
+    );
+    expect(s).not.toMatch(/pos_pending_resolution_reasons/);
+    // re-applying 0033 alone would bring back the body that stores the text in the closed key and audit
+    const m0035 = fs
+      .readFileSync(
+        path.resolve(__dirname, "../../drizzle/migrations/0035_pending_sale_reason_privacy.sql"),
+        "utf8",
+      )
+      .replace(/\r\n/g, "\n");
+    expect(built.reapply.endsWith(m0035)).toBe(true);
+    expect(
+      built.reapply.lastIndexOf("create or replace function public.resolve_pending_pos_sale("),
+    ).toBe(
+      built.reapply.length -
+        m0035.length +
+        m0035.indexOf("create or replace function public.resolve_pending_pos_sale("),
+    );
+  });
 });

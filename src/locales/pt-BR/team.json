@@ -389,7 +389,8 @@
       "pos": {
         "finalized": "Venda concluída",
         "pending_sale_resolved": "Venda pendente encerrada como não registrada",
-        "pending_sale_recovered": "Venda pendente recuperada (já registrada)"
+        "pending_sale_recovered": "Venda pendente recuperada (já registrada)",
+        "pending_reasons_moved": "Justificativas de vendas pendentes movidas para armazenamento restrito"
       },
       "inventory": {
         "moved": "Movimentação de estoque registrada",
