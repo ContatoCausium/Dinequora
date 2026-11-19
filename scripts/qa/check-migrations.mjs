@@ -2,6 +2,7 @@
 //
 //   node scripts/qa/check-migrations.mjs                           # files: journal, history, policy
 //   DB_URL=postgresql://... node scripts/qa/check-migrations.mjs   # + applied database
+//   DB_URL=... node scripts/qa/check-migrations.mjs --preflight     # before publishing: pending OK
 //   node scripts/qa/check-migrations.mjs --add-new-hashes          # record hashes of NEW entries
 //
 // Files mode fails (exit 1) when:
@@ -16,7 +17,10 @@
 //    describes tables/enums/etc. (sign that `drizzle-kit generate` ran), or drizzle-kit/drizzle-orm
 //    are not pinned to an exact version equal to package-lock.json.
 // With DB_URL it also fails when:
-//  - the tracker has rows the journal does not know, a journal entry is not applied, an applied
+//  - a journal entry is not applied and its `when` is not above the last applied row (the migrator
+//    would skip it silently, even with --preflight);
+//  - the tracker has rows the journal does not know, a journal entry is not applied (accepted with
+//    --preflight when the migrator will apply it: listed as pending), an applied
 //    hash differs from the LF-normalized file, or an orphan is recorded as applied;
 //  - a guarded RPC lost its permission check or has more than one definition (e.g. the orphan
 //    0011_create_pos_sale_and_idempotency.sql run by hand);
@@ -41,6 +45,11 @@ const ROOT = process.env.CHECK_MIGRATIONS_ROOT
 const DIR = path.join(ROOT, "drizzle/migrations");
 const MANIFEST = path.join(ROOT, "scripts/qa/migration-hashes.json");
 const ADD_NEW = process.argv.includes("--add-new-hashes");
+// Before a publication (read-only): journal entries not applied yet are accepted when the migrator
+// WILL apply them (`when` above the last applied row), and listed. Without the flag they fail.
+const PREFLIGHT = process.argv.includes("--preflight");
+const pending = [];
+const pendingFunctions = [];
 
 // Files that were committed (and published) outside the journal. Superseded: their content is
 // part of 0013 (create_pos_sale + orders_org_client_order_id_uniq) and 0017 (realtime) and
@@ -243,9 +252,20 @@ if (process.env.DB_URL) {
     await sql.end();
   }
   const g = new Map(guards.map((r) => [r.name, r]));
+  // --preflight: a guarded RPC may be missing only because a pending migration creates it.
+  const lastWhen = applied.reduce((m, r) => Math.max(m, Number(r.created_at)), -Infinity);
+  const createdByPending = (name) =>
+    PREFLIGHT &&
+    entries.some(
+      (e) =>
+        e.when > lastWhen &&
+        !applied.some((r) => String(r.created_at) === String(e.when)) &&
+        lf(path.join(DIR, `${e.tag}.sql`)).includes(`function public.${name}(`),
+    );
   for (const name of GUARDED) {
     const r = g.get(name);
-    if (!r) problems.push(`missing function public.${name}`);
+    if (!r && createdByPending(name)) pendingFunctions.push(name);
+    else if (!r) problems.push(`missing function public.${name}`);
     else if (!r.guarded || r.defs !== 1)
       problems.push(
         `public.${name} lost its permission check or has ${r.defs} definitions ` +
@@ -275,9 +295,17 @@ if (process.env.DB_URL) {
     if (orphanHashes.has(r.hash))
       problems.push(`orphan recorded as applied: ${orphanHashes.get(r.hash)}`);
   const byWhen = new Map(applied.map((r) => [String(r.created_at), r.hash]));
+  // drizzle-orm's migrator applies an entry only when its `when` is greater than the created_at of
+  // the LAST applied row: an unapplied entry at or below it is skipped silently, forever.
+  const lastApplied = applied.reduce((m, r) => Math.max(m, Number(r.created_at)), -Infinity);
   for (const e of entries) {
     const h = byWhen.get(String(e.when));
-    if (!h) problems.push(`not applied: ${e.tag}`);
+    if (!h && e.when <= lastApplied)
+      problems.push(
+        `would be skipped by the migrator: ${e.tag} (when ${e.when} <= last applied ${lastApplied})`,
+      );
+    else if (!h && PREFLIGHT) pending.push(e.tag);
+    else if (!h) problems.push(`not applied: ${e.tag}`);
     else if (h !== lfHash(e.tag)) problems.push(`applied hash differs from file: ${e.tag}`);
   }
   const known = new Set(entries.map((e) => String(e.when)));
@@ -303,6 +331,12 @@ console.log(
     `recorded hashes: ${Object.keys(recorded).length}` +
     (applied ? `; applied rows: ${applied.length}` : ""),
 );
+if (PREFLIGHT && !applied)
+  problems.push("--preflight needs DB_URL (it describes an applied database)");
+if (pending.length)
+  console.log(`pending (the migrator will apply them, in this order): ${pending.join(", ")}`);
+if (pendingFunctions.length)
+  console.log(`guarded functions a pending migration creates: ${pendingFunctions.join(", ")}`);
 if (problems.length) {
   console.error(problems.map((p) => `FAIL ${p}`).join("\n"));
   process.exit(1);

@@ -145,6 +145,25 @@ describe("migration gate (files mode)", () => {
     expect(r.out).toContain("'when' not increasing");
   });
 
+  it("fails on a new entry stamped with the current time below a future-dated last entry (drizzle-kit generate would; the migrator would skip it)", () => {
+    const root = sandbox();
+    appendJournalEntry(root, "0090_now_stamped");
+    editJson<Journal>(journalFile(root), (j) => {
+      const prev = j.entries.at(-2)!;
+      j.entries.at(-1)!.when = Math.min(Date.now(), prev.when - 1);
+    });
+    check(root, "--add-new-hashes");
+    const r = check(root);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("'when' not increasing at 0090_now_stamped");
+  });
+
+  it("--preflight needs a database", () => {
+    const r = check(sandbox(), "--preflight");
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("--preflight needs DB_URL");
+  });
+
   it("fails when drizzle/schema.ts is no longer blank", () => {
     const root = sandbox();
     fs.appendFileSync(path.join(root, "drizzle/schema.ts"), 'export const t = pgTable("t", {});\n');
