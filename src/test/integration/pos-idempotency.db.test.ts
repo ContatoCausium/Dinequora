@@ -17,7 +17,7 @@ import {
   isolatedOrg,
   type IsolatedOrg,
 } from "../../../scripts/qa/isolated-org.mjs";
-import { disposableQa, type QaSql } from "./qa-db";
+import { disposableQa, dropPooledConnections, type QaSql } from "./qa-db";
 
 const ENABLED = process.env["QA_POS_DB"] === "1";
 const URL_ = process.env["SB_URL"] ?? "";
@@ -86,6 +86,8 @@ describe.skipIf(!ENABLED)(
         if (error) throw new Error("sign-in failed");
         return c;
       };
+      // the synchronous fixtures above blocked the event loop (see dropPooledConnections)
+      dropPooledConnections();
       client = await signIn(creds.owner);
       other = await signIn(creds.tenantB.owner);
     }, 120_000);

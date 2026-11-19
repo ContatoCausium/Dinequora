@@ -27,7 +27,7 @@ import {
   isolatedOrg,
   type IsolatedOrg,
 } from "../../../scripts/qa/isolated-org.mjs";
-import { disposableQa, type QaSql } from "./qa-db";
+import { disposableQa, dropPooledConnections, type QaSql } from "./qa-db";
 
 const ENABLED = process.env["QA_M2_DB"] === "1";
 const URL_ = process.env["SB_URL"] ?? "";
@@ -130,9 +130,10 @@ describe.skipIf(!ENABLED)(
       owner = await signIn(creds.owner);
     }, 180_000);
 
+    // Removing up to 1,000,000 ledger rows takes longer than vitest's 10 s default.
     afterAll(() => {
       if (org) sql(dropIsolatedOrgsSql([org.orgId]));
-    });
+    }, 180_000);
 
     it.each([999, 1000, 1001, 10_000, 100_000])(
       "%i rows over 4 stores × 4 zones (with ties): aggregation = SQL = paged reader",
@@ -171,6 +172,8 @@ describe.skipIf(!ENABLED)(
           `now() - interval '720 days' + (g * interval '4 minutes')`,
         );
       sql("analyze public.finance_entries;");
+      // the synchronous fixture blocked the event loop for ~80 s (see dropPooledConnections)
+      dropPooledConnections();
       const t0 = performance.now();
       const a = await agg(owner, null);
       const ms = performance.now() - t0;
