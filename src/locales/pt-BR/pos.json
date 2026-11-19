@@ -182,6 +182,24 @@
     "storageUnavailable": "Este navegador não consegue guardar uma cópia segura da venda (modo privado ou armazenamento cheio), então ela não foi enviada. Libere espaço ou use uma janela normal.",
     "resolvedElsewhere": "Esta venda foi resolvida em outra aba.",
     "conflictRecorded": "Esta comanda já tinha sido registrada (pedido {{number}}) antes de ser alterada. A versão registrada é exibida; confira antes de receber qualquer outro pagamento.",
-    "live": "Venda aguardando confirmação"
+    "live": "Venda aguardando confirmação",
+    "resolveStart": "Encerrar esta venda manualmente…",
+    "resolveNeedsPermission": "Somente um proprietário, um administrador da organização ou um gerente autorizado a resolver vendas pendentes pode encerrar esta venda manualmente — neste caixa.",
+    "resolveTitle": "Encerrar esta venda como NÃO registrada?",
+    "resolveBody": "O Dinequora verificou este código de venda e não encontrou nenhuma venda registrada. O encerramento é definitivo: o código fica bloqueado para sempre, então esta venda nunca poderá ser registrada depois — nem por uma requisição que ainda esteja a caminho. Use somente quando o pagamento não foi recebido, ou foi devolvido.",
+    "resolveAmount": "Valor",
+    "resolveCode": "Código da venda",
+    "resolveAttempts": "Tentativas",
+    "resolveAttemptsValue": "{{attempts}} · última às {{time}}",
+    "resolveReasonLabel": "Justificativa (obrigatória)",
+    "resolveReasonHint": "Mínimo de 10 caracteres. Fica registrada no log de atividades com seu nome, a loja, o código da venda e o horário.",
+    "resolveConfirm": "Confirmo que {{amount}} não foi recebido por esta venda, ou que foi devolvido.",
+    "resolveSubmit": "Encerrar venda como não registrada",
+    "resolving": "Encerrando…",
+    "resolvedDone": "Venda pendente encerrada como não registrada e registrada no log. A comanda foi liberada: cobre de novo somente se o cliente ainda quiser.",
+    "closedElsewhere": "Esta venda foi encerrada como não registrada por uma pessoa autorizada. A comanda foi liberada: cobre de novo somente se o cliente ainda quiser.",
+    "resolveFoundRecorded": "Esta venda tinha sido registrada: nada foi encerrado. O recibo é exibido.",
+    "resolveDenied": "Você não tem permissão para encerrar vendas pendentes nesta loja. A venda continua pendente.",
+    "resolveFailed": "Não foi possível encerrar a venda (sem resposta ou com erro). Ela continua pendente — nada foi alterado."
   }
 }

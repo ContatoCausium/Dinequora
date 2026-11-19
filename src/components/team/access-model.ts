@@ -186,6 +186,8 @@ export const KNOWN_AUDIT_ACTIONS = [
   "orders.cancelled",
   "orders.item_ready",
   "pos.finalized",
+  "pos.pending_sale_resolved",
+  "pos.pending_sale_recovered",
   "inventory.moved",
   "inventory.saved",
   "purchase.received",

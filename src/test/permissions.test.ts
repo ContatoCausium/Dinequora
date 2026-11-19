@@ -13,13 +13,15 @@ import { requiredFor } from "@/lib/route-permissions";
 const migration = (name: string) =>
   fs.readFileSync(path.resolve(__dirname, "../../drizzle/migrations", name), "utf8");
 const MIGRATION = migration("0018_member_permissions.sql");
-/** Latest definition of the catalog (0020 added inventory.costs). */
+/** 0020 added inventory.costs. */
 const COSTS_MIGRATION = migration("0020_inventory_cost_permission.sql");
+/** Latest definition of the catalog (0032 added orders.resolve_pending). */
+const PENDING_MIGRATION = migration("0032_pos_pending_sale_resolution.sql");
 
 describe("permission catalog parity with the database", () => {
-  it("TS catalog equals the latest public.permission_catalog() (migration 0020)", () => {
-    const body = COSTS_MIGRATION.slice(
-      COSTS_MIGRATION.indexOf("function public.permission_catalog()"),
+  it("TS catalog equals the latest public.permission_catalog() (migration 0032)", () => {
+    const body = PENDING_MIGRATION.slice(
+      PENDING_MIGRATION.indexOf("function public.permission_catalog()"),
     );
     const literal = body.slice(body.indexOf("array["), body.indexOf("]::text[]"));
     const sqlCatalog = [...literal.matchAll(/'([a-z]+\.[a-z_]+)'/g)].map((m) => m[1]);
@@ -36,6 +38,52 @@ describe("permission catalog parity with the database", () => {
       const perms = [...row.matchAll(/'([a-z]+\.[a-z_]+)'/g)].map((m) => m[1]!);
       for (const p of perms) expect(roleCeiling(tier)).toContain(p);
     }
+  });
+});
+
+describe("pending POS sale resolution permission (migration 0032)", () => {
+  it("is its own permission, never orders.refund", () => {
+    expect(PERMISSION_CATALOG).toContain("orders.resolve_pending");
+    expect(PERMISSION_CATALOG).toContain("orders.refund");
+  });
+  it("owner always; manager only by explicit grant; staff never (not even through a grant)", () => {
+    expect(roleDefaults("owner")).toContain("orders.resolve_pending");
+    expect(roleCeiling("manager")).toContain("orders.resolve_pending");
+    expect(roleDefaults("manager")).not.toContain("orders.resolve_pending");
+    expect(roleCeiling("staff")).not.toContain("orders.resolve_pending");
+    expect(
+      effectivePermissions({ role: "manager", profilePermissions: null, extra: [], revoked: [] }),
+    ).not.toContain("orders.resolve_pending");
+    expect(
+      effectivePermissions({
+        role: "manager",
+        profilePermissions: null,
+        extra: ["orders.resolve_pending"],
+        revoked: [],
+      }),
+    ).toContain("orders.resolve_pending");
+    expect(
+      effectivePermissions({
+        role: "staff",
+        profilePermissions: ["orders.resolve_pending"],
+        extra: ["orders.resolve_pending"],
+        revoked: [],
+      }),
+    ).not.toContain("orders.resolve_pending");
+  });
+  it("mirrors the database tier rules and grants it only to the org_admin template", () => {
+    const ceiling = PENDING_MIGRATION.slice(
+      PENDING_MIGRATION.indexOf("function public.role_ceiling"),
+    );
+    expect(ceiling.slice(0, ceiling.indexOf("$;"))).toContain("p <> 'orders.resolve_pending'");
+    const defaults = PENDING_MIGRATION.slice(
+      PENDING_MIGRATION.indexOf("function public.role_default_permissions"),
+    );
+    expect(defaults.slice(0, defaults.indexOf("$;"))).toContain(
+      "p <> 'suppliers.edit' and p <> 'orders.resolve_pending'",
+    );
+    expect(PENDING_MIGRATION).toMatch(/where is_system and key = 'org_admin'/);
+    expect(PENDING_MIGRATION).not.toMatch(/key in \(/);
   });
 });
 

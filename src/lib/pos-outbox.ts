@@ -148,6 +148,8 @@ export type AttemptOutcome =
   | { kind: "refused"; code: string }
   | { kind: "conflict" }
   | { kind: "cancelled" }
+  /** The key was closed by an authorized person (0032): no sale can ever be recorded under it. */
+  | { kind: "voided" }
   | {
       kind: "unknown";
       reason: "timeout" | "network" | "server" | "access";
@@ -175,6 +177,7 @@ export function classifyAttempt(
     return { kind: "unknown", reason: "timeout" };
   if (code === "idempotency_conflict") return { kind: "conflict" };
   if (code === "order_cancelled") return { kind: "cancelled" };
+  if (code === "sale_key_voided") return { kind: "voided" };
   if (code && DEFINITIVE_REFUSALS.has(code)) return { kind: "refused", code };
   if (code && ACCESS_REFUSALS.has(code)) return { kind: "unknown", reason: "access", code };
   if (!code || /fetch|network|failed to fetch|load failed|econn|socket/i.test(code))

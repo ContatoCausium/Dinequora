@@ -31,7 +31,9 @@
     "0027_save_operational_menu_category_lock": "879243da28ab136b245fd2820112d447848ecee30c90547f8e836f44baf403fe",
     "0028_save_operational_menu_category_deactivation": "71042f0c0bc543f527807293daf6fb6005b6f0a1099d5b814088d3bcddc361c9",
     "0029_save_operational_menu_category_intent": "d3deec3b23fea7eb6454082557392922a36620f0f985c319e3da708ac12a2b9d",
-    "0030_permission_profiles_table_privileges": "5de7eec4fb1849c5ef9af6c8049499aa8e1c7fb51862635c281c8cba050716cc"
+    "0030_permission_profiles_table_privileges": "5de7eec4fb1849c5ef9af6c8049499aa8e1c7fb51862635c281c8cba050716cc",
+    "0031_ledger_day_totals": "836bb3c7515c8fce32a85b05c34f900793aa6bf873668680469db7057ff1143f",
+    "0032_pos_pending_sale_resolution": "06242f84f0e22a5b069e8dc78e3c7e77659bd0c7f9990ddc9e469a12b493196c"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

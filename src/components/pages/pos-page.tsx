@@ -53,7 +53,7 @@ import {
   cancelOrderWithReversal,
 } from "@/lib/orders-persistence-service";
 import { confirmedReceipt } from "@/lib/pos-receipt";
-import { findSaleByClientOrderId } from "@/lib/operational.functions";
+import { findSaleByClientOrderId, resolvePendingSale } from "@/lib/operational.functions";
 import {
   classifyAttempt,
   clearPendingSale,
@@ -67,11 +67,13 @@ import {
 import { canSellAt, resolvePosStore, type PosStoreState } from "@/lib/pos-store";
 import type { Location } from "@/lib/tenants";
 import { type OrderType } from "@/lib/orders-service";
-import { fmtMoneyCents, fmtRatePpm, INVALID_VALUE_TEXT } from "@/lib/format";
+import { fmtDateTime, fmtMoneyCents, fmtRatePpm, INVALID_VALUE_TEXT } from "@/lib/format";
 import { captureError, isExpectedBusinessError } from "@/lib/observability";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -351,6 +353,13 @@ function POSRegister({
   const [pendingNote, setPendingNote] = useState<string | null>(null);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
+  // Manual resolution (0032): only with orders.resolve_pending, only at this register.
+  const canResolvePending = can("orders.resolve_pending");
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [resolveReason, setResolveReason] = useState("");
+  const [resolveConfirmed, setResolveConfirmed] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveNote, setResolveNote] = useState<string | null>(null);
 
   // A profile name change only relabels the open ticket; it never discards it.
   useEffect(() => {
@@ -599,6 +608,33 @@ function POSRegister({
   };
 
   /**
+   * The sale's key was closed as "not recorded" (0032): nothing can ever be recorded under it.
+   * The pending sale is removed and the ticket comes back, unlocked, WITHOUT that key — charging it
+   * again is a new sale with a new key, only if the customer still wants it.
+   */
+  const closeVoided = (p: PendingSale, message: string) => {
+    clearPendingSale(org.id, p.key);
+    setPending(null);
+    setPendingNote(null);
+    setResolveOpen(false);
+    setSession((cur) => {
+      if (cur.saleKey === p.key) return { ...cur, saleKey: undefined };
+      if (cur.cart.length === 0) {
+        // After a reload the register starts empty: bring the ticket back, without the payment
+        // fields and without the closed key.
+        const ticket: Partial<POSSession> = { ...p.session };
+        delete ticket.saleKey;
+        delete ticket.paymentMethod;
+        delete ticket.tenderedCents;
+        delete ticket.changeDueCents;
+        return savePOSSession({ ...(ticket as POSSession), id: `pos-${Date.now()}` });
+      }
+      return cur;
+    });
+    toast.info(message);
+  };
+
+  /**
    * Looks the sale up by its key. "found" resolves it; "not found" or a failed lookup NEVER mean
    * the sale does not exist: it stays pending.
    */
@@ -619,6 +655,10 @@ function POSRegister({
       }
       if (found.status === "found" && found.paid) {
         finishRecorded(p, found);
+        return "found";
+      }
+      if (found.status === "resolved") {
+        closeVoided(p, t("pending.closedElsewhere"));
         return "found";
       }
       setPendingNote(found.status === "found" ? "foundUnpaid" : "notFoundYet");
@@ -717,6 +757,10 @@ function POSRegister({
       });
       return;
     }
+    if (outcome.kind === "voided") {
+      closeVoided(p, t("pending.closedElsewhere"));
+      return;
+    }
     if (outcome.kind === "cancelled") {
       clearPendingSale(org.id, p.key);
       setPending(null);
@@ -788,6 +832,77 @@ function POSRegister({
     }
   };
 
+  /**
+   * Step 1 of the manual resolution: check the key first. A recorded sale shows its receipt; a
+   * closed key unlocks the ticket; a failed check keeps the sale pending (no resolution offered).
+   * Only "not found" opens the confirmation.
+   */
+  const handleStartResolve = async () => {
+    const p = pendingRef.current;
+    if (!p || pendingBusy || submittingSale || !canResolvePending) return;
+    setPendingBusy("verifying");
+    setResolveNote(null);
+    try {
+      const found = await findSaleByClientOrderId({
+        data: { orgId: p.orgId, locationId: p.locationId, clientOrderId: p.key },
+        signal: AbortSignal.timeout(SALE_TIMEOUT_MS),
+      });
+      if (found.status === "found" && found.paid) return void finishRecorded(p, found);
+      if (found.status === "resolved") return void closeVoided(p, t("pending.closedElsewhere"));
+      if (found.status === "found") return void setPendingNote("foundUnpaid");
+      setResolveReason("");
+      setResolveConfirmed(false);
+      setResolveOpen(true);
+    } catch {
+      setPendingNote("verifyFailed");
+    } finally {
+      setPendingBusy(null);
+    }
+  };
+
+  /**
+   * Step 2: the database decides under the sale's own lock. Any error or timeout keeps the sale
+   * pending — nothing is ever closed on the client's own judgement.
+   */
+  const handleConfirmResolve = async () => {
+    const p = pendingRef.current;
+    const reason = resolveReason.trim();
+    if (!p || resolving || !canResolvePending || !resolveConfirmed || reason.length < 10) return;
+    setResolving(true);
+    setResolveNote(null);
+    try {
+      const res = await resolvePendingSale({
+        data: {
+          orgId: p.orgId,
+          locationId: p.locationId,
+          clientOrderId: p.key,
+          reason,
+          amountCents: p.session.totalCents,
+          attempts: p.attempts,
+          lastAttemptAt: p.lastAttemptAt,
+        },
+        signal: AbortSignal.timeout(SALE_TIMEOUT_MS),
+      });
+      if (res.status === "recorded") {
+        setResolveOpen(false);
+        if (res.order.status === "found") finishRecorded(p, res.order);
+        else setPendingNote("verifyFailed");
+        toast.info(t("pending.resolveFoundRecorded"));
+        return;
+      }
+      closeVoided(p, t("pending.resolvedDone"));
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      setResolveNote(
+        code === "permission_denied" || STORE_REFUSALS.has(code)
+          ? "resolveDenied"
+          : "resolveFailed",
+      );
+    } finally {
+      setResolving(false);
+    }
+  };
+
   const handleVerifyPending = () => {
     const p = pendingRef.current;
     if (!p || pendingBusy || submittingSale) return;
@@ -825,6 +940,8 @@ function POSRegister({
             setPendingNote(null);
             setSession((cur) => (cur.saleKey === current.key ? newSession() : cur));
             toast.info(t("pending.resolvedElsewhere"));
+          } else if (found.status === "resolved") {
+            closeVoided(current, t("pending.closedElsewhere"));
           } else if (found.status === "not_found") {
             // Refused in the other tab: unlock here; the ticket keeps its key.
             setPending(null);
@@ -1456,7 +1573,7 @@ function POSRegister({
 
       {/* Pending sale (wave 0): outcome unknown — the register stays on it until it is resolved
           by its key. It cannot be dismissed: verifying and resending are the only safe actions. */}
-      <Dialog open={pending !== null} onOpenChange={() => undefined}>
+      <Dialog open={pending !== null && !resolveOpen} onOpenChange={() => undefined}>
         <DialogContent
           className="max-w-md [&>button:last-child]:hidden"
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -1493,6 +1610,20 @@ function POSRegister({
                         : null}
                 </p>
               </div>
+              <div className="border-t pt-3 text-sm">
+                {canResolvePending ? (
+                  <Button
+                    variant="ghost"
+                    className="h-11 px-0 text-muted-foreground underline-offset-4 hover:underline"
+                    disabled={pendingBusy !== null || submittingSale}
+                    onClick={() => void handleStartResolve()}
+                  >
+                    {t("pending.resolveStart")}
+                  </Button>
+                ) : (
+                  <p className="text-muted-foreground">{t("pending.resolveNeedsPermission")}</p>
+                )}
+              </div>
               <DialogFooter className="flex-col gap-2 sm:flex-row">
                 <Button
                   variant="outline"
@@ -1512,6 +1643,95 @@ function POSRegister({
                 >
                   {pendingBusy === "resending" && <Loader2 className="animate-spin" aria-hidden />}
                   {t("pending.resend")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual resolution (0032): explicit, justified, irreversible; the database decides. */}
+      <Dialog
+        open={resolveOpen && pending !== null}
+        onOpenChange={(open) => {
+          if (!resolving) setResolveOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-md" aria-describedby="pos-resolve-body">
+          {pending && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t("pending.resolveTitle")}</DialogTitle>
+                <DialogDescription id="pos-resolve-body">
+                  {t("pending.resolveBody")}
+                </DialogDescription>
+              </DialogHeader>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">{t("pending.resolveAmount")}</dt>
+                <dd className="tabular font-medium">{money(pending.session.totalCents)}</dd>
+                <dt className="text-muted-foreground">{t("pending.resolveCode")}</dt>
+                <dd className="tabular break-all text-xs">{pending.key}</dd>
+                <dt className="text-muted-foreground">{t("pending.resolveAttempts")}</dt>
+                <dd className="tabular">
+                  {t("pending.resolveAttemptsValue", {
+                    attempts: pending.attempts,
+                    time: fmtDateTime(pending.lastAttemptAt, lng),
+                  })}
+                </dd>
+              </dl>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="pos-resolve-reason"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  {t("pending.resolveReasonLabel")}
+                </label>
+                <Textarea
+                  id="pos-resolve-reason"
+                  value={resolveReason}
+                  maxLength={500}
+                  rows={3}
+                  disabled={resolving}
+                  aria-describedby="pos-resolve-reason-hint"
+                  onChange={(e) => setResolveReason(e.target.value)}
+                />
+                <p id="pos-resolve-reason-hint" className="text-xs text-muted-foreground">
+                  {t("pending.resolveReasonHint")}
+                </p>
+              </div>
+              <div className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  id="pos-resolve-confirm"
+                  className="mt-0.5"
+                  checked={resolveConfirmed}
+                  disabled={resolving}
+                  onCheckedChange={(v) => setResolveConfirmed(v === true)}
+                />
+                <label htmlFor="pos-resolve-confirm" className="cursor-pointer">
+                  {t("pending.resolveConfirm", { amount: money(pending.session.totalCents) })}
+                </label>
+              </div>
+              <p role="status" aria-live="polite" className="min-h-5 text-sm text-destructive">
+                {resolveNote ? t(`pending.${resolveNote}`) : null}
+              </p>
+              <DialogFooter className="flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  disabled={resolving}
+                  onClick={() => setResolveOpen(false)}
+                >
+                  {t("actions.cancel")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="h-11"
+                  disabled={resolving || !resolveConfirmed || resolveReason.trim().length < 10}
+                  aria-busy={resolving}
+                  onClick={() => void handleConfirmResolve()}
+                >
+                  {resolving && <Loader2 className="animate-spin" aria-hidden />}
+                  {resolving ? t("pending.resolving") : t("pending.resolveSubmit")}
                 </Button>
               </DialogFooter>
             </>

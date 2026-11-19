@@ -182,6 +182,24 @@
     "storageUnavailable": "This browser can't keep a safe copy of the sale (private mode or full storage), so it was not sent. Free up storage or use a normal window.",
     "resolvedElsewhere": "This sale was resolved in another tab.",
     "conflictRecorded": "This ticket had already been recorded (order {{number}}) before it was changed. The recorded version is shown; review it before taking any other payment.",
-    "live": "Sale pending confirmation"
+    "live": "Sale pending confirmation",
+    "resolveStart": "Close this sale manually…",
+    "resolveNeedsPermission": "Only an owner, an organization admin or a manager allowed to resolve pending sales can close this sale manually — at this register.",
+    "resolveTitle": "Close this sale as NOT recorded?",
+    "resolveBody": "Dinequora checked this sale code and found no recorded sale. Closing it is final: the code is locked for good, so this sale can never be recorded later — not even by a request still on its way. Use it only when the payment was not taken, or was returned.",
+    "resolveAmount": "Amount",
+    "resolveCode": "Sale code",
+    "resolveAttempts": "Attempts",
+    "resolveAttemptsValue": "{{attempts}} · last at {{time}}",
+    "resolveReasonLabel": "Justification (required)",
+    "resolveReasonHint": "At least 10 characters. Recorded in the activity log with your name, the store, the sale code and the time.",
+    "resolveConfirm": "I confirm that {{amount}} was not received for this sale, or that it was returned.",
+    "resolveSubmit": "Close sale as not recorded",
+    "resolving": "Closing…",
+    "resolvedDone": "Pending sale closed as not recorded and logged. The ticket is unlocked: charge it again only if the customer still wants it.",
+    "closedElsewhere": "This sale was closed as not recorded by an authorized person. The ticket is unlocked: charge it again only if the customer still wants it.",
+    "resolveFoundRecorded": "This sale had in fact been recorded: nothing was closed. Its receipt is shown.",
+    "resolveDenied": "You are not allowed to close pending sales at this store. The sale stays pending.",
+    "resolveFailed": "The sale could not be closed (no answer or an error). It stays pending — nothing was changed."
   }
 }
