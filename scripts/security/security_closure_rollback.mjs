@@ -1,17 +1,18 @@
-// Security closure rollback and re-application rehearsal (0034, 0035; docs/operations/security-closure).
+// Security closure rollback and re-application rehearsal (0034, 0035, 0036; docs/operations/security-closure).
 // LOCAL/CI QA stack ONLY: it changes the schema of the database it runs on and leaves it re-applied
 // (same functions, policies, triggers and privileges as before — checked), so the security suite runs
 // it after the M2 rehearsal, LAST.
 //
 //   1. fixture: an organization with an owner, an ownerless organization and a platform admin;
-//   2. 0035-rollback.sql + 0034-rollback.sql in ONE transaction: admin_assign_owner and
+//   2. 0036-, 0035- and 0034-rollback.sql in ONE transaction: the basis-point sale RPCs are callable by
+//      authenticated again (never anon or service_role); admin_assign_owner and
 //      resolve_pending_pos_sale have their previous bodies (0001, 0033), the reader and the audit
 //      helper are gone, both 0034 triggers stay with no-op functions, the activity log has the 0019
 //      policy; the private store, its rows and the column privilege of the closed keys are KEPT (the
 //      texts already moved are not exposed again; NEW events are, see the WARNING of 0035-rollback);
 //   3. while rolled back, resolutions store the text the 0033 way (closed key + audit), for both
 //      outcomes, plus a closed key written outside the RPC;
-//   4. 0034 + 0035 again in ONE transaction: every text is MOVED exactly (same text, linked from its
+//   4. 0034 + 0035 + 0036 again in ONE transaction: every text is MOVED exactly (same text, linked from its
 //      audit event, reason_length right, closed keys NULL), audited per organization, nothing left;
 //      functions, policies, triggers and privileges identical to step 1; the closed key still refuses
 //      the sale; the owner rule is back;
@@ -42,6 +43,15 @@ const ROLLBACK_0034 = read("docs/operations/security-closure/0034-rollback.sql")
 const ROLLBACK_0035 = read("docs/operations/security-closure/0035-rollback.sql");
 const M0034 = read("drizzle/migrations/0034_platform_owner_assignment_guard.sql");
 const M0035 = read("drizzle/migrations/0035_pending_sale_reason_privacy.sql");
+const ROLLBACK_0036 = read("docs/operations/security-closure/0036-rollback.sql");
+const M0036 = read("drizzle/migrations/0036_retire_legacy_pos_sale_rpcs.sql");
+const legacyCallable = async () =>
+  (
+    await sql`select string_agg(p.proname || ':' || has_function_privilege('authenticated', p.oid, 'execute') || ':' ||
+                 (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('service_role', p.oid, 'execute')), ',' order by p.proname) as v
+            from pg_proc p where p.pronamespace = 'public'::regnamespace
+             and p.proname in ('create_pos_sale', 'finalize_pos_sale_atomic', 'persist_finalized_pos_sale_atomic')`
+  )[0].v;
 const M2_ROLLBACK = read("docs/operations/m2-rollback/rollback.sql");
 const M2_REAPPLY = read("docs/operations/m2-rollback/reapply.sql");
 const MARKER = "[moved to pos_pending_resolution_reasons]";
@@ -143,10 +153,20 @@ try {
 
   // ---- 2. rollback 0035 then 0034, one transaction
   await sql.begin(async (tx) => {
+    await tx.unsafe(ROLLBACK_0036);
     await tx.unsafe(ROLLBACK_0035);
     await tx.unsafe(ROLLBACK_0034);
   });
-  check("2. 0035-rollback.sql and 0034-rollback.sql applied in one transaction", true);
+  check("2. 0036-, 0035- and 0034-rollback.sql applied in one transaction", true);
+  {
+    const v = await legacyCallable();
+    check(
+      "2. 0036 rolled back: the three basis-point sale RPCs are callable by authenticated again, never by anon or service_role",
+      v ===
+        "create_pos_sale:true:false,finalize_pos_sale_atomic:true:false,persist_finalized_pos_sale_atomic:true:false",
+      v,
+    );
+  }
   const assignSrc = await src("public.admin_assign_owner(uuid,text,text)");
   const resolveSrc = await src(
     "public.resolve_pending_pos_sale(uuid,uuid,text,text,integer,integer,timestamptz)",
@@ -227,8 +247,18 @@ try {
   await sql.begin(async (tx) => {
     await tx.unsafe(M0034);
     await tx.unsafe(M0035);
+    await tx.unsafe(M0036);
   });
-  check("4. 0034 and 0035 re-applied in one transaction", true);
+  check("4. 0034, 0035 and 0036 re-applied in one transaction", true);
+  {
+    const v = await legacyCallable();
+    check(
+      "4. 0036 back: no API role can execute the three basis-point sale RPCs",
+      v ===
+        "create_pos_sale:false:false,finalize_pos_sale_atomic:false:false,persist_finalized_pos_sale_atomic:false:false",
+      v,
+    );
+  }
   const moved =
     await sql`select r.client_order_id k, r.outcome, r.reason, r.order_id is not null has_order, r.location_id::text loc, r.actor_id::text actor
                             from public.pos_pending_resolution_reasons r where r.org_id = ${ORG} order by r.client_order_id`;

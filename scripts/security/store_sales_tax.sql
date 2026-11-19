@@ -57,8 +57,9 @@ DO $$ DECLARE A uuid:='b2500000-0000-4000-8000-000000000001'; A1 uuid:='c2500000
  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'tax_rate_not_configured' THEN RAISE; END IF; END;
  BEGIN PERFORM public.persist_finalized_pos_sale_atomic_v2(A,A1,'takeout','T',_tax_rate_ppm=>88750,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-none-1'); RAISE EXCEPTION 'FAIL sale without a store rate (88750)';
  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'tax_rate_not_configured' THEN RAISE; END IF; END;
- BEGIN PERFORM public.persist_finalized_pos_sale_atomic(A,A1,'takeout','T',_tax_rate_basis_points=>888,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-none-2'); RAISE EXCEPTION 'FAIL legacy sale without a store rate';
- EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'tax_rate_not_configured' THEN RAISE; END IF; END;
+ -- 0036: the basis-point signatures are retired from the API (permission denied, before any rule)
+ BEGIN PERFORM public.persist_finalized_pos_sale_atomic(A,A1,'takeout','T',_tax_rate_basis_points=>888,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-none-2'); RAISE EXCEPTION 'FAIL retired signature callable by a member';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  IF EXISTS(SELECT 1 FROM public.orders WHERE org_id=A) THEN RAISE EXCEPTION 'FAIL an order was recorded without a rate'; END IF;
 END $$;
 
@@ -150,8 +151,21 @@ DO $$ DECLARE A uuid:='b2500000-0000-4000-8000-000000000001'; A1 uuid:='c2500000
  IF o.tax_cents<>70 OR o.total_cents<>1070 OR o.tax_rate_ppm<>70000 THEN RAISE EXCEPTION 'FAIL sale at the new rate'; END IF;
 END $$;
 
--- 6. Previous signatures: basis points x 100 must equal the store rate; they never bypass it.
+-- 6. Previous signatures (retired from the API by 0036). As a member: permission denied, nothing recorded.
 SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000001',false);
+DO $$ DECLARE A uuid:='b2500000-0000-4000-8000-000000000001'; A1 uuid:='c2500000-0000-4000-8000-000000000001'; n int; BEGIN
+ SELECT count(*) INTO n FROM public.orders WHERE org_id=A;
+ BEGIN PERFORM public.create_pos_sale(A,A1,'takeout','T',_tax_rate_basis_points=>700,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-retired-1'); RAISE EXCEPTION 'FAIL retired create_pos_sale callable by a member';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.finalize_pos_sale_atomic(A,A1,'takeout','T',_tax_rate_basis_points=>700,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-retired-2'); RAISE EXCEPTION 'FAIL retired finalize_pos_sale_atomic callable by a member';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.persist_finalized_pos_sale_atomic(A,A1,'takeout','T',_tax_rate_basis_points=>700,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-retired-3'); RAISE EXCEPTION 'FAIL retired persist_finalized_pos_sale_atomic callable by a member';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF (SELECT count(*) FROM public.orders WHERE org_id=A)<>n THEN RAISE EXCEPTION 'FAIL a retired signature recorded an order'; END IF;
+END $$;
+-- As the owner of the functions (not an API role; same signed-in user): basis points x 100 must equal
+-- the store rate; the wrappers never bypass it.
+RESET ROLE;
 DO $$ DECLARE A uuid:='b2500000-0000-4000-8000-000000000001'; A1 uuid:='c2500000-0000-4000-8000-000000000001'; A2 uuid:='c2500000-0000-4000-8000-000000000002'; sale uuid; o public.orders; BEGIN
  sale:=public.persist_finalized_pos_sale_atomic(A,A1,'takeout','T',_tax_rate_basis_points=>700,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-legacy-ok'); SELECT * INTO o FROM public.orders WHERE id=sale; IF o.id IS NULL THEN RAISE EXCEPTION 'FAIL recorded order not readable by the caller'; END IF;
  IF o.tax_cents<>70 OR o.tax_rate_ppm<>70000 OR o.tax_rate_basis_points<>700 THEN RAISE EXCEPTION 'FAIL legacy sale at the store rate'; END IF;
@@ -164,6 +178,8 @@ DO $$ DECLARE A uuid:='b2500000-0000-4000-8000-000000000001'; A1 uuid:='c2500000
  BEGIN PERFORM public.create_pos_sale(A,A1,'takeout','T',_tax_rate_basis_points=>10001,_items=>'[{"product_id":"soda","quantity":1,"modifiers":[]}]',_client_order_id=>'t-legacy-range'); RAISE EXCEPTION 'FAIL legacy range';
  EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'invalid_sale' THEN RAISE; END IF; END;
 END $$;
+
+SET ROLE authenticated;
 
 -- 7. Reads: members see the rate of their stores (the POS needs it); the other organization does not.
 SELECT set_config('request.jwt.claim.sub','a2500000-0000-4000-8000-000000000003',false);

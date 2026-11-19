@@ -945,13 +945,13 @@ const stamp = Date.now();
     "tax_rate_changed",
   );
   expectDeny(
-    "previous signature cannot bypass the store rate either (888 bp at 6.25%)",
+    "previous signature (retired by 0036) is not callable through the API: no way around the store rate",
     await call(cashier, "persist_finalized_pos_sale_atomic", {
       ...sale(L.downtown, `perm-tax-legacy-${stamp}`),
       _tax_rate_ppm: undefined,
       _tax_rate_basis_points: 888,
     }),
-    "tax_rate_changed",
+    "permission denied for function persist_finalized_pos_sale_atomic",
   );
   // Manager (Riverside, settings.locations): changes the rate of its own store, audited; the
   // kitchen ticket created at the old rate is unaffected, a new sale must confirm the new rate.

@@ -211,6 +211,49 @@ describe.skipIf(!ENABLED)(
       expect(ordersFor(key)).toBe(1);
     });
 
+    it("0036: the basis-point sale RPCs are not callable through the API (no alternative path to a key), signed in or not", async () => {
+      const key = newSaleKey();
+      const first = await sale(key);
+      expect(first.error).toBeNull();
+      const anon = createClient<Database>(URL_, process.env["SB_ANON"]!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const legacyArgs = (k: string) => ({
+        _org_id: org.orgId,
+        _location_id: org.locationId,
+        _type: "takeout" as const,
+        _customer_name: "Wave 0",
+        _tax_rate_basis_points: RATE / 100,
+        _items: [{ product_id: "w0-soda", quantity: 1, notes: "", modifiers: [] }],
+        _client_order_id: k,
+      });
+      const fresh = newSaleKey();
+      for (const [who, c] of [
+        ["owner", client],
+        ["anon", anon],
+      ] as const)
+        for (const k of [key, fresh]) {
+          const a = await c.rpc("create_pos_sale", legacyArgs(k));
+          const b = await c.rpc("finalize_pos_sale_atomic", {
+            ...legacyArgs(k),
+            _payment_method: "cash",
+          });
+          const d = await c.rpc("persist_finalized_pos_sale_atomic", {
+            ...legacyArgs(k),
+            _payment_method: "cash",
+          });
+          for (const r of [a, b, d]) {
+            expect(r.data, who).toBeNull();
+            expect(r.error?.code, who).toBe("42501");
+          }
+        }
+      // nothing was recorded through them, and the current flow is unaffected
+      expect(ordersFor(fresh)).toBe(0);
+      expect(ordersFor(key)).toBe(1);
+      const again = await sale(key);
+      expect(again.data).toBe(first.data);
+    });
+
     it("a failed lookup throws (it is never reported as 'not found')", async () => {
       const broken = createClient<Database>("http://127.0.0.1:9", process.env["SB_ANON"]!, {
         auth: { persistSession: false, autoRefreshToken: false },

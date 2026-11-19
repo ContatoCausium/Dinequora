@@ -36,7 +36,8 @@
     "0032_pos_pending_sale_resolution": "06242f84f0e22a5b069e8dc78e3c7e77659bd0c7f9990ddc9e469a12b493196c",
     "0033_member_grant_integrity_and_pending_hardening": "73fdf66f2925b44e66e173538df31676de8d17ff8640ea2ffb5a0d09a65629c4",
     "0034_platform_owner_assignment_guard": "66132313eb788a7dd18d58cbce0d32cb2ba857574c8e77c79302cb11dba3c24b",
-    "0035_pending_sale_reason_privacy": "8a6117fc66727e3bdffb6c258ac639af14be186b0a300ffd124033735e9876f5"
+    "0035_pending_sale_reason_privacy": "8a6117fc66727e3bdffb6c258ac639af14be186b0a300ffd124033735e9876f5",
+    "0036_retire_legacy_pos_sale_rpcs": "902e8a7e879346db83635b9034b33028a61be3aef3290ba3bdf982b706040e18"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

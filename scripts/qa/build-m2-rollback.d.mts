@@ -3,4 +3,5 @@ export function buildM2RollbackFiles(): { rollback: string; reapply: string };
 export function buildSecurityClosureRollbackFiles(): {
   "0034-rollback": string;
   "0035-rollback": string;
+  "0036-rollback": string;
 };

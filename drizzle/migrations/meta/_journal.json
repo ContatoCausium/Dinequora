@@ -253,6 +253,13 @@
       "when": 1795518079812,
       "tag": "0035_pending_sale_reason_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795604479812,
+      "tag": "0036_retire_legacy_pos_sale_rpcs",
+      "breakpoints": true
     }
   ]
 }

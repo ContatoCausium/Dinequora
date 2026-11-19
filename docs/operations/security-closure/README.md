@@ -1,4 +1,4 @@
-# Rollback e reaplicação das migrations 0034 e 0035
+# Rollback e reaplicação das migrations 0034, 0035 e 0036
 
 Os arquivos desta pasta são **gerados** por `scripts/qa/build-m2-rollback.mjs` a partir das próprias
 migrations. `src/test/security-closure-migrations.test.ts` falha se divergirem.
@@ -7,12 +7,13 @@ migrations. `src/test/security-closure-migrations.test.ts` falha se divergirem.
 |---|---|
 | `0034-rollback.sql` | Volta `admin_assign_owner` ao corpo da 0001 e transforma as funções dos gatilhos `member_owner_serialize` e `platform_role_separation` em no-ops. Os gatilhos ficam, para não usar `DROP TRIGGER` (ACCESS EXCLUSIVE em `organization_members`). **Reabre a escalada que a 0034 fechou** |
 | `0035-rollback.sql` | Volta `resolve_pending_pos_sale` ao corpo da 0033 **só se a função existir** (depois do rollback da M2 ela não volta), a policy da auditoria à 0019, e remove `list_pending_sale_reasons` e `audit_visible_location_ids`. **Mantém** o armazenamento privado com os textos e o privilégio por coluna das chaves encerradas. **Amplia o acesso** para eventos novos até a reaplicação (veja o WARNING do arquivo) |
+| `0036-rollback.sql` | Devolve a `authenticated` o `EXECUTE` das três RPCs de venda em pontos-base (`create_pos_sale`, `finalize_pos_sale_atomic`, `persist_finalized_pos_sale_atomic`). Não reabre contorno de chave encerrada (elas delegam à v2); só reabre três pontos de entrada redundantes. `anon` e `service_role` não recebem nada |
 
-Nenhum dos dois é migration. Num rollback real, cada um vira o conteúdo de uma migration **nova**
+Nenhum dos três é migration. Num rollback real, cada um vira o conteúdo de uma migration **nova**
 revisada, aplicada pelo runner normal numa transação. Por isso não têm BEGIN nem COMMIT, e começam
 com `set local lock_timeout = '5s'`.
 
-**Reaplicação:** rodar o arquivo da migration de novo, 0034 e/ou 0035. Todas as instruções são
+**Reaplicação:** rodar o arquivo da migration de novo (0034, 0035 e/ou 0036). Todas as instruções são
 idempotentes. A 0035 move para o armazenamento privado os textos que a função da 0033 tiver gravado
 durante a janela.
 
@@ -23,6 +24,8 @@ durante a janela.
   chave encerrada (coluna ainda ilegível pela API) e na auditoria, legível por todo `team.activity`
   da organização (inclusive managers de outras lojas) e pelos admins da plataforma, até a
   reaplicação. O recorte por loja some para todos os eventos.
+- **0036:** só se um build de servidor anterior ao commit `10b2d94` (anterior à 0025) precisar
+  voltar a registrar vendas. Nenhum ambiente conhecido roda um build assim.
 - **0034:** só se a regra nova impedir uma operação legítima e não houver alternativa. Reabre a
   possibilidade de um admin da plataforma assumir um tenant.
 

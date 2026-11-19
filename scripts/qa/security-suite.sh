@@ -81,7 +81,7 @@
 #      profiles stripped, revocations and closed keys kept; re-application restores functions,
 #      policies and triggers exactly as after 0033 without reactivating custom profiles or individual
 #      grants; idempotent
-#   9. LAST (changes the schema, leaves it re-applied): 0034/0035 rollback and re-application
+#   9. LAST (changes the schema, leaves it re-applied): 0034/0035/0036 rollback and re-application
 #      (docs/operations/security-closure): previous bodies restored, private store and column
 #      privilege kept; texts written the 0033 way during the window are moved exactly on
 #      re-application (audited); schema identical afterwards; idempotent
@@ -269,7 +269,7 @@ QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs | tee "$ARTIFA
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"
 
-echo "::group::9. 0034/0035 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
+echo "::group::9. 0034/0035/0036 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
 QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs | tee "$ARTIFACTS/security-closure-rollback.txt" | grep -v "^PASS"
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"

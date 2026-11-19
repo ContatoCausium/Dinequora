@@ -63,8 +63,10 @@ recebem `_tax_rate_ppm`: **a alíquota que o cliente exibiu**, usada só como co
 
 As assinaturas anteriores (`create_pos_sale`, `finalize_pos_sale_atomic`,
 `persist_finalized_pos_sale_atomic`, com `_tax_rate_basis_points`) continuam existindo, como manda a
-política de migrations, e delegam às v2 com `bp × 100`: um cliente antigo confirma uma alíquota de
-duas casas e nunca contorna a alíquota da loja (888 bp numa loja a 8,875 % é recusado).
+política de migrations, e delegam às v2 com `bp × 100`: nunca contornam a alíquota da loja (888 bp
+numa loja a 8,875 % é recusado). **Desde a 0036 elas não são mais chamáveis pela API**: o `EXECUTE`
+foi revogado de `anon`, `authenticated` e `service_role`, porque nenhuma versão do app as usa desde
+a 0025. Ficam no banco só com o dono ([pos-sale-flow-security.md](pos-sale-flow-security.md)).
 
 ## No PDV
 
