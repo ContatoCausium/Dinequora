@@ -50,13 +50,25 @@
 #      sessions, both orders, with COMMIT and ROLLBACK: the same advisory lock serializes them; a
 #      recorded sale is recovered (nothing closed), a closed key refuses any later sale
 #      (sale_key_voided), the audit trail holds exactly the committed closures (own isolated
-#      organization, removed at the end)
+#      organization, removed at the end); 0033: the API default is READ COMMITTED, the same
+#      interleavings are correct in READ COMMITTED and refused (isolation_unsupported, nothing written)
+#      in REPEATABLE READ and SERIALIZABLE, in both orders
+#   5h. 0033 member grant integrity (direct RPC calls as each role): owners and managers grant only
+#      what the tier can hold and, for managers, what they hold themselves (extras, profiles and
+#      invitations); staff never hold orders.resolve_pending; managers never act on managers, on
+#      themselves or outside their stores; other tenants and platform admins refused; a demotion
+#      drops what the lower tier cannot hold (audited) so a promotion reactivates nothing
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
 #      >100 newer orders, realtime events of the own organization only (each file in its own
 #      isolated organization, fixed timestamps, run in parallel); menu categories archived through
 #      PostgREST by signed-in members (0026)
+#   8. LAST (changes the schema, leaves it re-applied): M2 rollback and re-application
+#      (docs/operations/m2-rollback): rollback in one transaction, nobody keeps the permission, custom
+#      profiles stripped, revocations and closed keys kept; re-application restores functions,
+#      policies and triggers exactly as after 0033 without reactivating custom profiles or individual
+#      grants; idempotent
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -109,6 +121,8 @@ must_refuse "QA seed" env SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SER
 must_refuse "permission matrix with ALLOW_DEMO_WRITES" env ALLOW_DEMO_WRITES=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" node scripts/security/permission_matrix.mjs
 must_refuse "API check with the anon key" env SB_SERVICE="$ANON_KEY" $GUARD check-api --api-url "$API_URL" --operation test:x
 must_refuse "race script" env QA_DB_URL="$DB_URL" node scripts/security/tax_rate_concurrency.mjs
+must_refuse "member grant integrity" env QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs
+must_refuse "M2 rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
 must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
 must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
@@ -197,8 +211,12 @@ echo "::group::5f. category intents concurrency (0029, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/menu_category_intent_race.mjs | tee "$ARTIFACTS/menu-category-intent-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
-echo "::group::5g. pending POS sale resolution concurrency (0032, two PostgreSQL sessions)"
+echo "::group::5g. pending POS sale resolution concurrency (0032/0033, two PostgreSQL sessions, isolation levels)"
 QA_DB_URL="$DB_URL" node scripts/security/pos_pending_resolution_race.mjs | tee "$ARTIFACTS/pos-pending-resolution-race.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5h. member grant integrity (0033, direct RPC calls as each role)"
+QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs | tee "$ARTIFACTS/member-grant-integrity.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
@@ -215,6 +233,11 @@ QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_K
   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run \
   src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts \
   src/test/integration/menu-archive.db.test.ts
+echo "::endgroup::"
+
+echo "::group::8. M2 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
+QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs | tee "$ARTIFACTS/m2-rollback-reapply.txt" | grep -v "^PASS"
+DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
 echo "Security suite passed."
