@@ -70,6 +70,11 @@
 #      store, never through the API (closed keys, private store, audit); the reader answers the owner,
 #      the organization admin and granted managers at their stores only; the activity log is scoped to
 #      the reader's stores; staff, other tenants, platform admins and anon refused
+#   5k. POS sale flow (0025/0032/0033/0036, direct RPC calls, real sessions): a sale and an open order;
+#      a lost reply replayed is the same order; a closed key refused by every v2 entry point; two and ten
+#      simultaneous sends are one order; the basis-point RPCs retired by 0036 refused for every API role
+#      and, for their owner, still delegating to v2 (closed key refused, same idempotency); who may sell
+#      where; no direct write of orders, payments, ledger, audit or closed keys
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -142,6 +147,7 @@ must_refuse "M2 rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/securit
 must_refuse "platform owner assignment" env QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs
 must_refuse "justification privacy" env QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs
 must_refuse "security closure rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs
+must_refuse "POS sale flow" env QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
 must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
 must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
@@ -244,6 +250,10 @@ echo "::endgroup::"
 
 echo "::group::5j. justification privacy (0035, every role, direct reads and RPC)"
 QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs | tee "$ARTIFACTS/pending-reason-privacy.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5k. POS sale flow (0025/0032/0033/0036, direct RPC calls, real sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs | tee "$ARTIFACTS/pos-sale-flow.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
