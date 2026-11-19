@@ -31,6 +31,15 @@
 --   3. drop function accessible_location_ids();
 -- The app falls back to the paged reader when ledger_day_totals does not exist (only that error —
 -- any other error is raised).
+--
+-- Lock wait limit (added 2026-11-19, before this migration was applied to any hosted database):
+-- ALTER POLICY below needs an ACCESS EXCLUSIVE lock on finance_entries; queued behind a slow reader
+-- it would also hold back every new ledger read. drizzle-kit migrate (postgres.js driver) applies
+-- ALL pending migrations and their tracker rows in ONE transaction, so SET LOCAL holds for the rest
+-- of that transaction (this file and every later one in the same run). A lock not obtained within
+-- 5 s raises 55P03 and the WHOLE run rolls back: nothing applied, nothing recorded; run it again.
+-- PGOPTIONS does not work here: the runner does not pass it on and postgres.js ignores it.
+set local lock_timeout = '5s';
 
 -- ---------------------------------------------------------------- store access, once per query
 create or replace function public.accessible_location_ids()

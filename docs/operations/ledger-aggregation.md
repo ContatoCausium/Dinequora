@@ -91,21 +91,43 @@ Evidências completas em `C:\dev\Servora-backups\dinequora-m2-pending-design-202
 O app primeiro, porque funciona com e sem a função. Depois a migration. Em qualquer ordem o
 resultado está correto.
 
-**Aplique com `lock_timeout` curto** (por exemplo `PGOPTIONS='-c lock_timeout=5s'`), num horário de
-pouco movimento, e repita se o tempo esgotar. Motivo: o `ALTER POLICY` precisa de um lock exclusivo
-em `finance_entries`. No ensaio com 1.000.000 de linhas, ele esperou 56,6 s na fila atrás de uma
-leitura que ainda usava a política antiga (lenta), e durante a espera também segurou novas leituras.
-Com `lock_timeout` curto, ele desiste em vez de enfileirar.
+### Limite de espera por lock (5 s), dentro da própria migration
+
+O `ALTER POLICY` precisa de um lock exclusivo em `finance_entries`. No ensaio com 1.000.000 de
+linhas, ele esperou 56,6 s na fila atrás de uma leitura que ainda usava a política antiga (lenta), e
+durante a espera também segurou novas leituras.
+
+Por isso a **primeira instrução da 0031 é `set local lock_timeout = '5s';`** (alteração de
+2026-11-19, antes de a 0031 ser aplicada em qualquer banco hospedado; hash novo registrado). Isso
+funciona porque o mecanismo real (`scripts/preview/hosted-db.mjs` → `drizzle-kit migrate`, driver
+`postgres`) aplica **todas as migrations pendentes e as linhas do tracker numa única transação**:
+o `SET LOCAL` vale até o fim dela, inclusive para a 0032 e a 0033 da mesma execução. A 0033 repete a
+instrução, para o caso de rodar sozinha.
+
+- **Lock não obtido em 5 s:** erro `55P03` (`canceling statement due to lock timeout`) e a execução
+  **inteira** é desfeita: nenhuma migration aplicada, nenhuma linha no tracker. Basta repetir num
+  horário de pouco movimento.
+- **Testado com concorrência real** (stack descartável, banco em 0030, mecanismo real com a mesma
+  allowlist de ambiente): leitor segurando `finance_entries` → aborta com espera ≤ 5 s; escritor
+  segurando `organization_members` (bloqueia só a 0033) → aborta e desfaz também a 0031 e a 0032 da
+  mesma execução; a 0033 sozinha → aborta pelo próprio `SET LOCAL`; sem bloqueio → aplica em ~2 s.
+  Em todos os abortos, tracker e schema idênticos ao estado anterior.
+- **`PGOPTIONS` não funciona** (orientação anterior, retirada): o runner não repassa a variável ao
+  processo filho, o driver a ignora e a URL só aceita `?sslmode=verify-full`. Ensaio: a migration
+  esperou 21,3 s.
+- **Atenção na leitura do erro:** o drizzle-kit 0.31.11 sai com código 1 **sem imprimir a causa**
+  (o `renderWithTask` captura o erro). O runner mostra só `drizzle-kit migrate failed (exit 1)`. A
+  causa aparece no log do Postgres (painel do Supabase → Logs → Postgres): procure
+  `canceling statement due to lock timeout`. Confirme que o tracker não mudou antes de repetir.
 
 ## Rollback
 
-Uma migration **nova**, nesta ordem e **nunca** com `DROP ... CASCADE`. O `CASCADE` removeria
-também a política que depende de `accessible_location_ids`, deixando o ledger ilegível; isso foi
-observado num ensaio no stack descartável.
-
-1. `alter policy finance_read` de volta à expressão anterior (registrada em comentário na 0031);
-2. `drop function ledger_day_totals(uuid, uuid[], integer, boolean)`;
-3. `drop function accessible_location_ids()`.
+Procedimento único para 0031, 0032 e a parte de POS da 0033:
+[`m2-rollback/README.md`](m2-rollback/README.md). Para a 0031, o rollback devolve a `finance_read`
+à expressão da 0019 e remove `ledger_day_totals` e `accessible_location_ids`, nesta ordem e **nunca**
+com `DROP ... CASCADE`. O `CASCADE` removeria também a política que depende de
+`accessible_location_ids`, deixando o ledger ilegível; isso foi observado num ensaio no stack
+descartável.
 
 O app detecta a função ausente e volta ao leitor paginado.
 

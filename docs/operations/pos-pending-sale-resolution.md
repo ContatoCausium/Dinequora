@@ -42,8 +42,13 @@ idempotência. A 0032 acrescenta um terceiro caminho, **manual, autorizado e def
 | Owner | sempre (o owner tem o catálogo inteiro) |
 | Administrador da organização (perfil de sistema `org_admin`) | sim |
 | Manager | **não por padrão**; pode recebê-la explicitamente (perfil ou permissão extra), sempre limitada às lojas a que tem acesso |
-| Staff | **nunca**: fora do teto do papel (`role_ceiling`), então nem perfil nem permissão extra concedem |
+| Staff | **nunca**: fora do teto do papel (`role_ceiling`). Desde a 0033 a concessão nem é gravada: `permission_outside_role` para qualquer autor, owner inclusive |
 | Platform admin | sem acesso automático (não é membro da organização) |
+
+Quem concede (0033, [member-grant-integrity.md](member-grant-integrity.md)): o owner, a qualquer
+manager; um manager só concede a staff o que ele mesmo tem, e staff não pode tê-la, então na prática
+**só o owner concede `orders.resolve_pending`** (a regra "managers só gerenciam staff das suas lojas"
+foi preservada, o que vale também para o administrador da organização).
 
 Não reaproveita `orders.refund`. Aparece na matriz de permissões da equipe como "Resolver vendas
 pendentes".
@@ -54,8 +59,10 @@ pendentes".
 |---|---|
 | Alterar `create_pos_sale_v2` (caminho crítico) | O corpo da 0025 é copiado literalmente, mais **uma** linha (teste de arquivo `pos-pending-resolution-migration.test.ts`); privilégios preservados (teste de integração); suítes de POS e idempotência |
 | Corrida venda × resolução | Mesmo lock; `scripts/security/pos_pending_resolution_race.mjs` (passo 5g da suíte) prova as duas ordens, com COMMIT e ROLLBACK, e a espera por `pg_blocking_pids` |
+| Transação em REPEATABLE READ / SERIALIZABLE (H1) | O snapshot dessas transações nasce na primeira instrução, **antes** do lock da chave: a resolução não veria uma venda gravada nesse meio-tempo (e encerraria a chave), e a venda não veria um encerramento (e gravaria sob chave encerrada). Desde a 0033 as duas funções só rodam em READ COMMITTED (o padrão da API) e recusam os outros níveis com `isolation_unsupported`, sem gravar nada; o caixa mantém a venda pendente. Passo 5g: as duas ordens nos três níveis |
+| Justificativa só com espaços invisíveis (B4) | Desde a 0033 o banco remove espaços de todo tipo nas pontas (tab, quebra de linha, espaço sem quebra, espaços de largura zero) antes de exigir 10–500 caracteres, e grava o texto aparado. O servidor (zod `.trim()`) já recusava |
 | Encerrar uma venda que de fato foi paga | Permissão própria, verificação prévia, justificativa, confirmação explícita, auditoria. **Irreversível por desenho**: um "desfazer" reabriria o risco de duplicidade |
-| A justificativa pode conter dados pessoais | Texto livre de no máximo 500 caracteres, visível a quem lê o log de atividades; orientar a equipe |
+| A justificativa pode conter dados pessoais | Texto livre de no máximo 500 caracteres, visível a quem lê o log de atividades; orientar a equipe. Retenção: proposta em [m2-rollback/README.md § Retenção](m2-rollback/README.md#reten%C3%A7%C3%A3o-da-justificativa-proposta-n%C3%A3o-implementada), nada implementado |
 | Venda pendente só no navegador do caixa | Resolução restrita ao caixa original nesta etapa (decisão aprovada) |
 
 ## Ordem de rollout
@@ -66,13 +73,21 @@ tem a permissão, que só existe depois da migration.
 
 ## Rollback
 
-Uma migration **nova**:
+Procedimento único, gerado das próprias migrations e ensaiado (aplicação → rollback → reaplicação):
+[`m2-rollback/README.md`](m2-rollback/README.md). Para a 0032 e a parte de POS da 0033, uma
+migration **nova** que:
 
 1. recria `create_pos_sale_v2` com o corpo da 0025;
 2. remove `resolve_pending_pos_sale`;
-3. **mantém** `pos_sale_key_voids` (histórico e auditoria);
+3. **mantém** `pos_sale_key_voids` (histórico, auditoria e proteção contra requisições atrasadas,
+   se a função voltar);
 4. restaura `permission_catalog`, `role_ceiling` e `role_default_permissions` (0020/0018);
-5. tira a permissão do perfil `org_admin` e recalcula as `effective_permissions`.
+5. tira a permissão de **todos** os perfis, de sistema **e personalizados**, e de todas as concessões
+   individuais, e recalcula as `effective_permissions` (correção de 2026-11-19: antes só o
+   `org_admin` era limpo, e um perfil personalizado guardaria a permissão, reativada sem aviso numa
+   reaplicação);
+6. **mantém** as revogações explícitas (`revoked_permissions`): revogar só restringe, e apagá-las
+   devolveria a permissão a um administrador da organização numa reaplicação.
 
 O POS volta ao comportamento da Onda 0: pendência sem encerramento manual.
 

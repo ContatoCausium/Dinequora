@@ -232,6 +232,13 @@
       "when": 1795258879812,
       "tag": "0032_pos_pending_sale_resolution",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795345279812,
+      "tag": "0033_member_grant_integrity_and_pending_hardening",
+      "breakpoints": true
     }
   ]
 }

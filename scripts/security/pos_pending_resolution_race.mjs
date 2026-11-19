@@ -14,6 +14,10 @@
 //      closed key, no audit of the rolled-back resolution); resolving afterwards → "recorded".
 // Audit: exactly one 'pos.pending_sale_resolved' per committed closure, by the resolver; nothing
 // of the rolled-back one.
+//   5–8 (0033): isolation. The API default is READ COMMITTED; a sale or closure committed by the other
+//      session between the start of a transaction and the call is handled correctly in READ
+//      COMMITTED, in both orders, and refused (isolation_unsupported, nothing written) in REPEATABLE
+//      READ and SERIALIZABLE, whose snapshot predates the key's lock.
 //
 // Isolation: own organization, store, product and two synthetic members (owner = seller,
 // owner = resolver), all removed at the end.
@@ -279,6 +283,105 @@ try {
     );
     await seller.end();
     await resolver.end();
+  }
+
+  // ---- 5–8. transaction isolation (0033, finding H1). The snapshot of a REPEATABLE READ /
+  // SERIALIZABLE transaction is taken by its FIRST statement, before the key's advisory lock: such a
+  // transaction cannot see what the other session committed meanwhile. Both functions therefore run
+  // only in READ COMMITTED (the default, which PostgREST uses) and refuse anything else, writing
+  // nothing; in READ COMMITTED the same interleavings are handled correctly.
+  {
+    const s = await session(SELLER);
+    const [{ dti }] = await s.c`select current_setting('transaction_isolation') as dti`;
+    check("5. the API role's default isolation is READ COMMITTED", dti === "read committed", dti);
+    await s.end();
+  }
+  for (const level of ["read committed", "repeatable read", "serializable"]) {
+    const strict = level !== "read committed";
+    // 6. the resolution's transaction starts, a sale of the same key commits elsewhere, then it resolves
+    {
+      const key = `${org.key}-6-${level.replace(" ", "")}`;
+      const seller = await session(SELLER);
+      const resolver = await session(RESOLVER);
+      await resolver.c.unsafe(`begin isolation level ${level}`);
+      await resolver.c`select 1`; // first statement: the snapshot of a strict transaction is taken here
+      const id = await sale(seller, key); // committed by the other session
+      const r = await resolve(resolver, key).then(
+        (x) => x.status,
+        (e) => code(e),
+      );
+      await resolver.c`rollback`;
+      check(
+        strict
+          ? `6. ${level}: a resolution after a sale committed meanwhile is refused (isolation_unsupported)`
+          : `6. ${level}: a resolution after a sale committed meanwhile finds it (recorded)`,
+        strict ? r === "isolation_unsupported" : r === "recorded",
+        r,
+      );
+      check(
+        `6. ${level}: exactly the one sale, no closed key, no closure audited`,
+        typeof id === "string" &&
+          (await orders(key)) === 1 &&
+          (await voids(key)) === 0 &&
+          (await audits(key)).every((a) => a.action !== "pos.pending_sale_resolved"),
+      );
+      await seller.end();
+      await resolver.end();
+    }
+    // 7. the sale's transaction starts, a closure of the same key commits elsewhere, then it sells
+    {
+      const key = `${org.key}-7-${level.replace(" ", "")}`;
+      const seller = await session(SELLER);
+      const resolver = await session(RESOLVER);
+      await seller.c.unsafe(`begin isolation level ${level}`);
+      await seller.c`select 1`;
+      const r = await resolve(resolver, key); // committed by the other session
+      const outcome = await sale(seller, key).then(
+        () => "recorded",
+        (e) => code(e),
+      );
+      await seller.c`rollback`;
+      check(
+        strict
+          ? `7. ${level}: a sale after a closure committed meanwhile is refused (isolation_unsupported)`
+          : `7. ${level}: a sale after a closure committed meanwhile is refused (sale_key_voided)`,
+        r?.status === "resolved" &&
+          outcome === (strict ? "isolation_unsupported" : "sale_key_voided"),
+        outcome,
+      );
+      check(
+        `7. ${level}: no order under the closed key, one closed key`,
+        (await orders(key)) === 0 && (await voids(key)) === 1,
+      );
+      await seller.end();
+      await resolver.end();
+    }
+  }
+  // 8. a strict transaction that only sells or only resolves (no race) is refused too, writing nothing
+  for (const level of ["repeatable read", "serializable"]) {
+    const key = `${org.key}-8-${level.replace(" ", "")}`;
+    const s = await session(SELLER);
+    await s.c.unsafe(`begin isolation level ${level}`);
+    const a = await sale(s, key).then(
+      () => "recorded",
+      (e) => code(e),
+    );
+    await s.c`rollback`;
+    await s.c.unsafe(`begin isolation level ${level}`);
+    const b = await resolve(s, key).then(
+      (x) => x.status,
+      (e) => code(e),
+    );
+    await s.c`rollback`;
+    await s.end();
+    check(
+      `8. ${level}: sale and resolution are both refused, nothing written`,
+      a === "isolation_unsupported" &&
+        b === "isolation_unsupported" &&
+        (await orders(key)) === 0 &&
+        (await voids(key)) === 0,
+      `${a} / ${b}`,
+    );
   }
 } finally {
   try {

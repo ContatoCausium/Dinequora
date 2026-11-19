@@ -365,7 +365,8 @@
         "removed": "Member removed",
         "role_changed": "Tier changed",
         "access_changed": "Access changed",
-        "locations_changed": "Store access changed"
+        "locations_changed": "Store access changed",
+        "extras_pruned": "Grants outside the tier removed"
       },
       "invitation": {
         "created": "Invitation created",
@@ -430,6 +431,7 @@
     "forbidden": "You don't have permission to make this change.",
     "permission_denied": "Your access doesn't allow this action.",
     "permission_exceeds_own": "You can't give someone permissions you don't have yourself.",
+    "permission_outside_role": "One of these permissions can't be held at this member's tier.",
     "invalid_permission": "One of the permissions isn't valid for this tier.",
     "invalid_profile": "That permission profile is no longer available. Reload and try again.",
     "profile_tier_mismatch": "The profile belongs to a different tier than the one selected.",

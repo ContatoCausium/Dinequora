@@ -260,6 +260,32 @@ describe.skipIf(!ENABLED)(
       expect(audit(key)).toEqual([]);
     });
 
+    it("0033 (B4): a justification made only of whitespace or invisible characters is refused; the stored one is trimmed", async () => {
+      const key = newSaleKey();
+      for (const blank of [
+        "\t".repeat(12),
+        "\n\r\t \n\r\t \n\r\t",
+        "\u00a0".repeat(12),
+        "\u200b\u200c\u200d\u2060\ufeff".repeat(3),
+        "\u3000\u2003\u202f\u205f".repeat(3),
+      ]) {
+        expect((await resolve(c["owner"]!, key, blank)).error?.message).toBe("reason_required");
+      }
+      // 9 visible characters padded with invisible ones is still too short
+      expect((await resolve(c["owner"]!, key, "\u00a0\t123456789\u200b\n")).error?.message).toBe(
+        "reason_required",
+      );
+      expect(voids(key)).toBe(0);
+      expect(audit(key)).toEqual([]);
+      const r = await resolve(c["owner"]!, key, "\u00a0\t Customer left; drawer checked \u200b\n");
+      expect(r.error).toBeNull();
+      expect(
+        sql(
+          `select reason from public.pos_sale_key_voids where org_id = '${org.orgId}' and client_order_id = '${key}'`,
+        ),
+      ).toBe("Customer left; drawer checked");
+    });
+
     it("closed keys are visible only inside the organization (RLS); nobody can write them directly", async () => {
       const key = newSaleKey();
       await resolve(c["owner"]!, key);

@@ -365,7 +365,8 @@
         "removed": "Membro removido",
         "role_changed": "Nível alterado",
         "access_changed": "Acesso alterado",
-        "locations_changed": "Acesso às unidades alterado"
+        "locations_changed": "Acesso às unidades alterado",
+        "extras_pruned": "Permissões fora do nível removidas"
       },
       "invitation": {
         "created": "Convite criado",
@@ -430,6 +431,7 @@
     "forbidden": "Você não tem permissão para fazer essa alteração.",
     "permission_denied": "Seu acesso não permite essa ação.",
     "permission_exceeds_own": "Você não pode conceder permissões que você mesmo não tem.",
+    "permission_outside_role": "Uma dessas permissões não pode ser concedida no nível deste membro.",
     "invalid_permission": "Uma das permissões não é válida para este nível.",
     "invalid_profile": "Esse perfil de permissões não está mais disponível. Recarregue e tente novamente.",
     "profile_tier_mismatch": "O perfil pertence a um nível diferente do selecionado.",
