@@ -229,6 +229,7 @@
     "status": {
       "not_configured": "The assistant is not set up for this workspace yet.",
       "limit_reached": "Your organization used this month's assistant allowance.",
+      "rate_limited": "You asked several questions in a row. Wait a minute and ask again.",
       "refused": "The assistant could not answer this question. Try asking it another way.",
       "busy": "The assistant is busy right now. Try again in a minute.",
       "unavailable": "The assistant is unavailable right now. Nothing was changed."

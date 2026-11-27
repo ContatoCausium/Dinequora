@@ -18,6 +18,31 @@ import { readRecipeCosts } from "./operational.functions";
  */
 export const ASSISTANT_MODEL = "claude-opus-5-5";
 const DEFAULT_MONTHLY_TOKEN_CAP = 2_000_000;
+/** Questions one member may ask per minute (a burst limit on the costliest endpoint). */
+const DEFAULT_PER_MINUTE_LIMIT = 6;
+
+/**
+ * Whether the member asked `limit` questions or more in the last minute, counted in assistant_usage
+ * (0040; a member reads their own rows). Soft: questions still being answered are not recorded yet,
+ * so a burst of simultaneous calls can pass it by the number in flight; the monthly cap still holds.
+ */
+export async function overPerMinuteLimit(
+  client: SupabaseClient<Database>,
+  orgDbId: string,
+  userId: string,
+  limit: number,
+  now = Date.now(),
+): Promise<boolean> {
+  if (!(limit > 0)) return false;
+  const { count, error } = await client
+    .from("assistant_usage")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgDbId)
+    .eq("user_id", userId)
+    .gte("created_at", new Date(now - 60_000).toISOString());
+  if (error) throw new Error("assistant_unavailable");
+  return (count ?? 0) >= limit;
+}
 
 const SYSTEM_PROMPT = `You are the management assistant of Dinequora, a restaurant operations platform used by restaurants in the United States.
 
@@ -45,7 +70,10 @@ const askInput = z.object({
 
 export type AssistantResult =
   | { status: "ok"; answer: string; model: string }
-  | { status: "not_configured" | "limit_reached" | "refused" | "busy" | "unavailable" };
+  | {
+      status:
+        "not_configured" | "limit_reached" | "rate_limited" | "refused" | "busy" | "unavailable";
+    };
 
 async function orgScope(client: SupabaseClient<Database>, orgId: string, locationId: string) {
   const isUuid = z.string().uuid().safeParse(orgId).success;
@@ -84,6 +112,9 @@ export const askAssistant = createServerFn({ method: "POST" })
     const used = await c.rpc("assistant_month_tokens", { _org_id: s.org.id });
     if (used.error) throw new Error("assistant_unavailable");
     if (Number(used.data ?? 0) >= cap) return { status: "limit_reached" };
+    const perMinute = Number(process.env["ASSISTANT_PER_MINUTE_LIMIT"] ?? DEFAULT_PER_MINUTE_LIMIT);
+    if (await overPerMinuteLimit(c, s.org.id, context.userId, perMinute))
+      return { status: "rate_limited" };
 
     // The snapshot, read through RLS as the asking member.
     const storeIds = s.store ? [s.store.id] : s.stores.map((x) => x.id);

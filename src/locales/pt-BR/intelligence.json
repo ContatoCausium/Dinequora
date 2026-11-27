@@ -229,6 +229,7 @@
     "status": {
       "not_configured": "O assistente ainda não foi configurado neste ambiente.",
       "limit_reached": "Sua organização usou a franquia do assistente deste mês.",
+      "rate_limited": "Você fez várias perguntas seguidas. Espere um minuto e pergunte de novo.",
       "refused": "O assistente não conseguiu responder a esta pergunta. Tente perguntar de outro jeito.",
       "busy": "O assistente está ocupado agora. Tente de novo em um minuto.",
       "unavailable": "O assistente está indisponível agora. Nada foi alterado."
