@@ -1975,7 +1975,9 @@ export function InventoryPage() {
               <div
                 role="radiogroup"
                 aria-labelledby="move-type-label"
-                className="grid grid-cols-3 gap-1.5 sm:grid-cols-5"
+                // Three columns at every width: the dialog is narrow, and five columns cut
+                // "Transferência" (with its icon) out of its button.
+                className="grid grid-cols-3 gap-1.5"
               >
                 {MOVE_TYPES.map((tType) => (
                   <Button

@@ -41,7 +41,14 @@ import { prepStats } from "@/lib/kitchen-metrics";
 import { netSalesCents, type RecordedOrder } from "@/lib/recorded-data";
 import { displayAmount, fmtDateTime } from "@/lib/format";
 import { financialResult, summarizeExpenses, todayIso } from "@/lib/expense-metrics";
-import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent, fmtQuantity } from "@/lib/format";
+import {
+  fmtDate,
+  fmtMoneyAxis,
+  fmtMoneyCents,
+  fmtNumber,
+  fmtPercent,
+  fmtQuantity,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { kpiDelta } from "@/lib/period-compare";
 import { completedDayStats } from "@/lib/series-stats";
@@ -368,7 +375,7 @@ export function RecordedOverview() {
                         height={184}
                         caption={t("home.sales.title")}
                         format={money}
-                        formatAxis={(c) => fmtMoneyCents(c, lng, { compact: true })}
+                        formatAxis={(c) => fmtMoneyAxis(c, lng)}
                         points={view.report.daily.map((d) => ({
                           key: d.day,
                           label: shortDay(d.day),

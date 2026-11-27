@@ -46,6 +46,22 @@ export function fmtMoneyCents(cents: number, lng: string, opts: { compact?: bool
 }
 
 /**
+ * Chart axis labels: whole dollars ("US$ 2.000") below a million, compact above. The compact
+ * notation alone depends on the browser's locale data (one browser showed "US$ 2 milhões" for
+ * US$ 2,000 in pt-BR), so small amounts are written out.
+ */
+export function fmtMoneyAxis(cents: number, lng: string) {
+  if (typeof cents !== "number" || !Number.isFinite(cents)) return fmtMoneyCents(cents, lng);
+  if (Math.abs(cents) >= 100_000_000) return fmtMoneyCents(cents, lng, { compact: true });
+  return new Intl.NumberFormat(lng, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(cents / 100));
+}
+
+/**
  * Runs a money computation for DISPLAY. If it throws (non-integer cents, NaN quantities from
  * corrupted data), the error is reported and NaN is returned, which fmtMoneyCents shows as "—".
  * Values sent to the server keep the strict, throwing helpers.

@@ -23,7 +23,7 @@ import { buildPreviousReport, buildReport, ordersReadSince } from "@/lib/report-
 import { PERIOD, readSpanDays } from "@/lib/financial-period";
 import { recognizedInStoreWindows, storeWindows } from "@/lib/financial-summary";
 import { financialResult } from "@/lib/expense-metrics";
-import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
+import { fmtDate, fmtMoneyAxis, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { kpiDelta } from "@/lib/period-compare";
 import { centsToDecimalString } from "@/lib/money";
@@ -252,7 +252,7 @@ function ReportsPage() {
                 <ColumnSeries
                   caption={t("daily.title")}
                   format={money}
-                  formatAxis={(c) => fmtMoneyCents(c, lng, { compact: true })}
+                  formatAxis={(c) => fmtMoneyAxis(c, lng)}
                   points={report.daily.map((d) => ({
                     key: d.day,
                     label: dayLabel(d.day),

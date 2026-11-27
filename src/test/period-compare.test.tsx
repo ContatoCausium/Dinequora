@@ -108,7 +108,8 @@ describe("ColumnSeries", () => {
         }}
       />,
     );
-    expect(screen.getByText("$250")).toBeInTheDocument(); // 23,000 cents → 25,000 nice max
+    // 23,000 cents → 25,000 nice max (twice: the label and the invisible copy that sizes the column)
+    expect(screen.getAllByText("$250").length).toBe(2);
     expect(screen.getByText("$125")).toBeInTheDocument();
     const table = container.querySelector("table")!;
     expect(table.textContent).toContain("Nov 15$0.00Nov 8: $50.00");

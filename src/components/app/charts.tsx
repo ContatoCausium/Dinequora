@@ -160,7 +160,12 @@ export function ColumnSeries({
         onBlur={() => setActive(null)}
         onKeyDown={onKeyDown}
       >
-        <div className="relative w-12 shrink-0" style={{ height }} aria-hidden>
+        <div className="relative min-w-12 shrink-0" style={{ height }} aria-hidden>
+          {/* Invisible copy of the widest label: the column grows to fit it, so a long label
+              ("US$ 20.000") is never cut at the card's edge. */}
+          <span className="tabular invisible block h-0 overflow-hidden whitespace-nowrap text-[11px]">
+            {ticks.map((v) => axis(v)).reduce((a, b) => (b.length > a.length ? b : a), "")}
+          </span>
           {ticks.map((v) => (
             <span
               key={v}
