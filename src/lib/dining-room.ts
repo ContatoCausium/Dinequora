@@ -399,6 +399,8 @@ export interface DaySummary {
   /** The store's local calendar day (YYYY-MM-DD). */
   day: string;
   checksClosed: number;
+  /** Checks still open right now at the store. */
+  checksOpen: number;
   /** What recorded tenders applied to checks today (tax included, tips excluded). */
   receivedCents: number;
   tipsCents: number;
@@ -421,6 +423,7 @@ export function summarizeDay(input: {
   checks: readonly { id: string; session_id: string; status: string }[];
   sessions: readonly { id: string; server_id: string }[];
   closedToday: number;
+  openNow?: number;
   profiles: readonly { id: string; full_name: string | null }[];
 }): DaySummary {
   const sessionOf = new Map(input.checks.map((c) => [c.id, c.session_id]));
@@ -449,6 +452,7 @@ export function summarizeDay(input: {
   return {
     day: input.day,
     checksClosed: input.closedToday,
+    checksOpen: input.openNow ?? 0,
     byMethod: [...methods.entries()]
       .map(([method, v]) => ({ method, ...v }))
       .sort(

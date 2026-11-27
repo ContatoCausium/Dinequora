@@ -11,6 +11,7 @@ export interface DayCloseLabels {
   day: string;
   partial: string;
   checksClosed: string;
+  checksOpen: string;
   byMethod: string;
   method: (key: string) => string;
   tips: string;
@@ -63,7 +64,11 @@ export function dayCloseHtml(input: {
 <div class="c"><b>${esc(L.title)}</b> · ${esc(L.day)} ${esc(input.dayLabel)}</div>
 ${input.partial ? `<div class="c">${esc(L.partial)}</div>` : ""}
 <hr>
-<table><tr><td>${esc(L.checksClosed)}</td><td class="n">${d.checksClosed}</td></tr></table>
+<table><tr><td>${esc(L.checksClosed)}</td><td class="n">${d.checksClosed}</td></tr>${
+    d.checksOpen > 0
+      ? `<tr><td><b>${esc(L.checksOpen)}</b></td><td class="n"><b>${d.checksOpen}</b></td></tr>`
+      : ""
+  }</table>
 <hr>
 <h2>${esc(L.byMethod)}</h2>
 <table>${methods}</table>

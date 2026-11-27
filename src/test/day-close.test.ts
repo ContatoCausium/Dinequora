@@ -5,6 +5,7 @@ import type { DaySummary } from "@/lib/dining-room";
 const summary: DaySummary = {
   day: "2026-11-27",
   checksClosed: 2,
+  checksOpen: 0,
   receivedCents: 2284,
   tipsCents: 306,
   byServer: [
@@ -32,6 +33,7 @@ const html = (s: DaySummary, restaurant = "Test Kitchen", partial = true) =>
       day: "Day",
       partial: "Partial: the day is still open",
       checksClosed: "Checks closed",
+      checksOpen: "Checks still open",
       byMethod: "Received by payment method",
       method: (m) => ({ cash: "Cash", card: "Card" })[m] ?? m,
       tips: "tips",
@@ -62,6 +64,13 @@ describe("printed day close", () => {
     const h = html({ ...summary, byServer: [] }, "Test Kitchen", false);
     expect(h).not.toContain("Partial");
     expect(h).not.toContain("Tips by server");
+    expect(h).not.toContain("Checks still open");
+  });
+
+  it("warns on paper when checks are still open", () => {
+    expect(html({ ...summary, checksOpen: 3 })).toContain(
+      '<b>Checks still open</b></td><td class="n"><b>3</b>',
+    );
   });
 
   it("escapes names so a restaurant or server name cannot inject markup", () => {
