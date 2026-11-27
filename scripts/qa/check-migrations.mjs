@@ -181,6 +181,7 @@ const GUARDED = [
   "finalize_pos_sale_atomic_v2",
   "fire_check_round",
   "inventory_item_costs",
+  "list_check_reversal_reasons",
   "list_pending_sale_reasons",
   "move_check_round",
   "move_dining_session",

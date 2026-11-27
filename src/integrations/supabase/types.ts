@@ -2622,6 +2622,13 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_check_reversal_reasons: {
+        Args: { _check_id: string; _location_id: string; _org_id: string };
+        Returns: {
+          payment_id: string;
+          reason: string;
+        }[];
+      };
       list_pending_sale_reasons: {
         Args: { _client_order_id?: string; _limit?: number; _location_id: string; _org_id: string };
         Returns: {
