@@ -289,7 +289,9 @@
     "serverTips": "{{name}}: {{amount}} in tips",
     "byMethodLabel": "Received today by payment method",
     "method": "{{method}}: {{amount}}",
-    "methodWithTips": "{{method}}: {{amount}} + {{tips}} in tips"
+    "methodWithTips": "{{method}}: {{amount}} + {{tips}} in tips",
+    "openChecks_one": "{{formatted}} check is still open: close it before closing the drawer.",
+    "openChecks_other": "{{formatted}} checks are still open: close them before closing the drawer."
   },
   "bill": {
     "print": "Print check",
@@ -352,6 +354,7 @@
     "tipsTotal": "Tips",
     "byServer": "Tips by server",
     "tipsNote": "Tips belong to the staff; they are not revenue.",
-    "printedAt": "Printed"
+    "printedAt": "Printed",
+    "checksOpen": "Checks still open"
   }
 }
