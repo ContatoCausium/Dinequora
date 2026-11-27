@@ -719,16 +719,18 @@ describe("Tables screen: check history", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Closed checks" }));
     const dlg = await screen.findByRole("dialog", { name: "Checks closed today" });
     expect(await within(dlg).findByText("No check closed today yet.")).toBeInTheDocument();
-    fireEvent.change(within(dlg).getByLabelText("Day"), { target: { value: "2026-11-26" } });
+    // pick the first earlier day in the list (yesterday)
+    fireEvent.keyDown(within(dlg).getByRole("combobox", { name: "Day" }), { key: "Enter" });
+    const options = await screen.findAllByRole("option");
+    expect(options[0]).toHaveTextContent("Today");
+    fireEvent.click(options[1]!);
     await waitFor(() =>
-      expect(api.fetchClosedChecksToday).toHaveBeenLastCalledWith({
-        data: { orgId: expect.any(String), locationId: "store-1", day: "2026-11-26" },
-      }),
+      expect(api.fetchClosedChecksToday.mock.lastCall?.[0].data.day).toMatch(/^\d{4}-\d{2}-\d{2}$/),
     );
-    expect(
-      await screen.findByRole("dialog", { name: "Checks closed on 2026-11-26" }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(await screen.findByRole("dialog", { name: /^Checks closed on / })).toBeInTheDocument();
+    expect(await screen.findByText("No check closed on that day.")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Day" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "Today" }));
     await waitFor(() =>
       expect(api.fetchClosedChecksToday).toHaveBeenLastCalledWith({
         data: { orgId: expect.any(String), locationId: "store-1" },
