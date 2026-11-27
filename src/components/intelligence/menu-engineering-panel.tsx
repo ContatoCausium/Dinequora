@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, UtensilsCrossed } from "lucide-react";
+import { ChevronRight, Download, UtensilsCrossed } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { downloadCsv } from "@/components/app/charts";
 
 import { Panel } from "@/components/app/page";
 import { EmptyState, Skeleton } from "@/components/app/states";
@@ -55,13 +57,47 @@ export function MenuEngineeringPanel({
       title={t("menuEng.title")}
       subtitle={t("menuEng.subtitle", { count: periodDays })}
       action={
-        <Link
-          to="/menu"
-          className="inline-flex min-h-6 items-center gap-0.5 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {t("menuEng.openMenu")}
-          <ChevronRight className="size-3.5" aria-hidden />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!result || (result.items.length === 0 && result.noCost.length === 0)}
+            onClick={() =>
+              result &&
+              downloadCsv(
+                `menu-engineering-${periodDays}d.csv`,
+                [
+                  t("menuEng.cols.dish"),
+                  t("menuEng.cols.class"),
+                  t("menuEng.cols.units"),
+                  t("menuEng.cols.mix"),
+                  t("menuEng.cols.price"),
+                  t("menuEng.cols.cost"),
+                  t("menuEng.cols.margin"),
+                ],
+                [...result.items, ...result.noCost].map((i) => [
+                  i.name,
+                  i.menuClass ? t(`menuEng.classes.${i.menuClass}`) : "",
+                  i.units,
+                  i.mix === null ? "" : (i.mix * 100).toFixed(1),
+                  (i.avgPriceCents / 100).toFixed(2),
+                  i.unitCostCents === null ? "" : (i.unitCostCents / 100).toFixed(2),
+                  i.marginCents === null ? "" : (i.marginCents / 100).toFixed(2),
+                ]),
+              )
+            }
+          >
+            <Download aria-hidden />
+            {t("menuEng.csv")}
+          </Button>
+          <Link
+            to="/menu"
+            className="inline-flex min-h-6 items-center gap-0.5 rounded text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {t("menuEng.openMenu")}
+            <ChevronRight className="size-3.5" aria-hidden />
+          </Link>
+        </div>
       }
     >
       {q.isPending ? (

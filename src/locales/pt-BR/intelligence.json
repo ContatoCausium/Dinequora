@@ -305,6 +305,7 @@
     "noCost_one": "{{count}} prato vendido sem custo de ficha técnica não foi classificado: {{names}}.",
     "noCost_other": "{{count}} pratos vendidos sem custo de ficha técnica não foram classificados: {{names}}.",
     "andMore": "e mais {{count}}",
-    "method": "Popular: pelo menos {{mix}} das unidades (70% de uma divisão igual). Margem alta: pelo menos {{margin}} por unidade (a média). Preço é a média vendida, com opções, antes de descontos e imposto; custo é o da ficha técnica atual."
+    "method": "Popular: pelo menos {{mix}} das unidades (70% de uma divisão igual). Margem alta: pelo menos {{margin}} por unidade (a média). Preço é a média vendida, com opções, antes de descontos e imposto; custo é o da ficha técnica atual.",
+    "csv": "CSV"
   }
 }

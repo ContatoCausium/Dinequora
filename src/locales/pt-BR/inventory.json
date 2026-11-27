@@ -312,7 +312,8 @@
       "cover": "Dura",
       "buy": "Comprar",
       "supplier": "Fornecedor",
-      "order": "Pedir"
+      "order": "Pedir",
+      "unit": "Unidade"
     },
     "days_one": "{{formatted}} dia",
     "days_other": "{{formatted}} dias",
@@ -321,6 +322,7 @@
     "method_one": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dia + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso.",
     "method_other": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dias + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso.",
     "order": "Pedir",
-    "orderItem": "Criar pedido de compra de {{item}}"
+    "orderItem": "Criar pedido de compra de {{item}}",
+    "csv": "CSV"
   }
 }
