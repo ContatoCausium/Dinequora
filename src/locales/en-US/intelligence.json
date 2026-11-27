@@ -305,6 +305,7 @@
     "noCost_one": "{{count}} dish sold without a recipe cost is not classified: {{names}}.",
     "noCost_other": "{{count}} dishes sold without a recipe cost are not classified: {{names}}.",
     "andMore": "and {{count}} more",
-    "method": "Popular: at least {{mix}} of the units (70% of an even share). High margin: at least {{margin}} per unit (the average). Price is the average sold, with options, before discounts and tax; cost is the current recipe cost."
+    "method": "Popular: at least {{mix}} of the units (70% of an even share). High margin: at least {{margin}} per unit (the average). Price is the average sold, with options, before discounts and tax; cost is the current recipe cost.",
+    "csv": "CSV"
   }
 }

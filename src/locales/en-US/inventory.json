@@ -312,7 +312,8 @@
       "cover": "Lasts",
       "buy": "Buy",
       "supplier": "Supplier",
-      "order": "Order"
+      "order": "Order",
+      "unit": "Unit"
     },
     "days_one": "{{formatted}} day",
     "days_other": "{{formatted}} days",
@@ -321,6 +322,7 @@
     "method_one": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} day + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use.",
     "method_other": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} days + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use.",
     "order": "Order",
-    "orderItem": "Start a purchase order for {{item}}"
+    "orderItem": "Start a purchase order for {{item}}",
+    "csv": "CSV"
   }
 }
