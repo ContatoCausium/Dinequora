@@ -5,6 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildAssistantSnapshot, type AssistantSnapshotRows } from "./assistant-snapshot";
+import { readRecipeCosts } from "./operational.functions";
 
 /**
  * Management assistant (migration 0040). A member with assistant.use (feature ai_assistant) asks a
@@ -20,13 +21,14 @@ const DEFAULT_MONTHLY_TOKEN_CAP = 2_000_000;
 
 const SYSTEM_PROMPT = `You are the management assistant of Dinequora, a restaurant operations platform used by restaurants in the United States.
 
-You answer questions from a restaurant owner or manager about their own business, using ONLY the data snapshot included in their message (sales and costs from the ledger, best sellers, stock below its minimum, open orders, stores). The snapshot was read with the asking person's permissions: if a part is empty or missing, say that this information is not available to them or not recorded yet. Never invent numbers, periods, products or causes.
+You answer questions from a restaurant owner or manager about their own business, using ONLY the data snapshot included in their message (sales and costs from the ledger, best sellers, menu engineering per dish, stock below its minimum, open orders, stores). The snapshot was read with the asking person's permissions: if a part is empty or missing, say that this information is not available to them or not recorded yet. Never invent numbers, periods, products or causes.
 
 How to answer:
 - Answer in the language of the question (Portuguese or English).
 - Lead with the direct answer, then the numbers that support it, with their period (for example "last 7 days") and the store when it matters.
 - Money is in US dollars; the snapshot gives cents, so convert (12345 cents = $123.45).
 - When you suggest something (a purchase, a price review, a promotion), say it is a suggestion and what in the data supports it.
+- For questions about which dishes to promote, reprice or remove, use menuEngineeringLast30Days (its method field explains the classes). A dish listed under soldWithoutRecipeCost has no known cost: say so instead of guessing its margin.
 - Keep it short: a few sentences or a short list. No tables unless asked.
 - You cannot change anything in the system. If asked to act (sell, refund, change a price, adjust stock), explain where in Dinequora the person can do it.`;
 
@@ -84,8 +86,7 @@ export const askAssistant = createServerFn({ method: "POST" })
 
     // The snapshot, read through RLS as the asking member.
     const storeIds = s.store ? [s.store.id] : s.stores.map((x) => x.id);
-    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const [ledger, lowStock, sold, open] = await Promise.all([
+    const [ledger, lowStock, sold, open, recipeCosts] = await Promise.all([
       c.rpc("ledger_day_totals", { _org_id: s.org.id, _location_ids: storeIds, _days: 30 }),
       c
         .from("inventory_items")
@@ -94,28 +95,32 @@ export const askAssistant = createServerFn({ method: "POST" })
         .in("location_id", storeIds)
         .eq("active", true)
         .limit(500),
-      c
-        .from("orders")
-        .select(
-          "location_id,status,is_simulation,order_items(product_name,quantity,subtotal_cents),payments(status)",
-        )
-        .eq("org_id", s.org.id)
-        .in("location_id", storeIds)
-        .gte("created_at", since)
-        .limit(2000),
+      // Aggregated in the database (0042), under the member's RLS: no row cap to truncate a busy month.
+      c.rpc("menu_item_sales", { _org_id: s.org.id, _location_ids: storeIds, _days: 30 }),
       c
         .from("orders")
         .select("id", { count: "exact", head: true })
         .eq("org_id", s.org.id)
         .in("location_id", storeIds)
         .in("status", ["new", "confirmed", "in_prep", "ready"]),
+      // Recipe costs need inventory.costs; without it menu engineering is "not available" (null).
+      readRecipeCosts(c, s.org.id).catch(() => null),
     ]);
     const rows: AssistantSnapshotRows = {
       organization: s.org.name,
       stores: s.stores.filter((x) => storeIds.includes(x.id)),
       ledger: ledger.error ? null : (ledger.data ?? null),
       inventory: lowStock.error ? null : (lowStock.data ?? []),
-      orders: sold.error ? null : (sold.data ?? []),
+      itemSales: sold.error
+        ? null
+        : (sold.data ?? []).map((r) => ({
+            location_id: r.location_id,
+            product_id: r.product_id,
+            product_name: r.product_name,
+            units: Number(r.units),
+            sales_cents: Number(r.sales_cents),
+          })),
+      recipeCosts,
       openOrders: open.error ? null : (open.count ?? 0),
       now: new Date().toISOString(),
     };
