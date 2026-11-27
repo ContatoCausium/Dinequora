@@ -473,3 +473,30 @@ export async function pingBackend() {
   if (!ok) throw new Error("forbidden");
   return { ok: true, ms: Math.round(performance.now() - t0) };
 }
+
+/* ---------------------------------------------------------------- organization modules (0022) */
+export type OrgModule = { key: string; description: string; enabled: boolean; isDefault: boolean };
+
+/**
+ * Every module of the catalog and whether it is on for one organization (platform admins read
+ * org_features of any organization; the catalog is readable by every signed-in user). A module with
+ * no row for the organization takes the catalog's default (OFF for every current module).
+ */
+export async function listOrgModules(orgId: string): Promise<OrgModule[]> {
+  const [catalog, rows] = await Promise.all([
+    supabase.from("feature_catalog").select("key,description,default_enabled").order("key"),
+    supabase.from("org_features").select("feature,enabled").eq("org_id", orgId),
+  ]);
+  if (catalog.error || rows.error) throw new Error("backend");
+  const set = new Map((rows.data ?? []).map((r) => [r.feature, r.enabled]));
+  return (catalog.data ?? []).map((c) => ({
+    key: c.key,
+    description: c.description,
+    enabled: set.get(c.key) ?? c.default_enabled,
+    isDefault: !set.has(c.key),
+  }));
+}
+
+/** Turns a module on or off for one organization (platform admin only; audited by the database). */
+export const setOrgModule = (orgId: string, feature: string, enabled: boolean) =>
+  call<void>("admin_set_org_feature", { _org_id: orgId, _feature: feature, _enabled: enabled });

@@ -560,5 +560,25 @@
       "confirm": "Confirm action"
     },
     "nothingApplied": "Nothing was changed: this action needs the billing provider, which is not connected."
+  },
+  "modules": {
+    "title": "Modules",
+    "hint": "Turn modules on for this organization. Each change is audited; a module that is off is hidden for everyone in it, owners included.",
+    "toggle": "{{name}} for this organization",
+    "turnedOn": "{{name}} turned on.",
+    "turnedOff": "{{name}} turned off.",
+    "failed": "The change was not saved. Try again.",
+    "loadFailed": "The modules could not be loaded.",
+    "names": {
+      "table_service": "Tables and checks",
+      "ai_assistant": "AI assistant",
+      "multi_tender_payments": "Multiple payments",
+      "card_terminals": "Card terminals",
+      "cash_management": "Cash management",
+      "cloud_printing": "Cloud printing",
+      "delivery_channels": "Delivery channels",
+      "integrations": "Integrations",
+      "tax_engine": "Tax engine"
+    }
   }
 }

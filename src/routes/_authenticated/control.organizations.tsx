@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { OrgModules } from "@/components/control/org-modules";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
@@ -395,6 +396,8 @@ function OrgDetail({
             value={org.last_activity ? fmtDate(org.last_activity, lng) : "—"}
           />
         </dl>
+
+        <OrgModules orgId={org.id} />
 
         <div>
           <p className="mb-2 flex items-baseline justify-between text-sm font-semibold">
