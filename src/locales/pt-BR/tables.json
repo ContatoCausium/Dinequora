@@ -305,5 +305,31 @@
     "tipLine": "{{percent}}%: {{tip}} → total {{total}}",
     "thanks": "Obrigado!",
     "printedAt": "Impresso em"
+  },
+  "history": {
+    "open": "Histórico",
+    "openFor": "Histórico de {{check}}",
+    "title": "Histórico · {{check}}",
+    "hint": "Tudo o que aconteceu nesta comanda, do mais antigo ao mais recente. Os motivos de cancelamentos e estornos ficam com os gerentes.",
+    "listLabel": "Eventos da comanda",
+    "loading": "Carregando o histórico…",
+    "error": "Não foi possível carregar o histórico. Tente de novo.",
+    "opened": "Comanda aberta",
+    "roundFired": "Rodada {{n}} enviada para a cozinha · {{amount}}",
+    "roundVoided": "Rodada {{n}} cancelada, ingredientes de volta ao estoque",
+    "roundMovedIn": "Uma rodada veio de {{check}}",
+    "roundMovedOut": "Uma rodada foi para {{check}}",
+    "anotherCheck": "outra comanda",
+    "paid": "Pagamento de {{amount}} · {{method}}",
+    "paidWithTip": "Pagamento de {{amount}} · {{method}} · gorjeta {{tip}}",
+    "reversed": "Pagamento de {{amount}} ({{method}}) estornado",
+    "closed": "Comanda paga e fechada",
+    "voided": "Comanda fechada sem nada a pagar",
+    "by": "por {{name}}",
+    "closedOpen": "Comandas fechadas",
+    "closedTitle": "Comandas fechadas hoje",
+    "closedHint": "Da mais recente para a mais antiga. Abra uma para ver o histórico.",
+    "closedEmpty": "Nenhuma comanda fechada hoje ainda.",
+    "closedLoading": "Carregando as comandas de hoje…"
   }
 }

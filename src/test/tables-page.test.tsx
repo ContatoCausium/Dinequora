@@ -44,6 +44,8 @@ const api = vi.hoisted(() => ({
   voidCheckPayment: vi.fn(),
   moveCheckRound: vi.fn(),
   fetchDiningDaySummary: vi.fn(),
+  fetchCheckHistory: vi.fn(),
+  fetchClosedChecksToday: vi.fn(),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const workspace = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -614,6 +616,90 @@ describe("Tables screen: paying a check", () => {
     renderPage();
     const sheet = await openCheck1();
     expect(within(sheet).getByRole("button", { name: "Charge $5.84 and close" })).toBeDisabled();
+  });
+});
+
+describe("Tables screen: check history", () => {
+  beforeEach(() => {
+    api.fetchDiningRoom.mockImplementation(async () => seatedRoom());
+    api.fetchOperationalMenu.mockResolvedValue(MENU);
+  });
+
+  it("an open check shows its timeline with who did each step, no reasons", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.fetchCheckHistory.mockResolvedValue([
+      { kind: "opened", at: "2026-11-27T12:00:00Z", actor: "Sam" },
+      {
+        kind: "round_fired",
+        at: "2026-11-27T12:05:00Z",
+        actor: "Sam",
+        roundNo: 1,
+        amountCents: 584,
+      },
+      { kind: "round_voided", at: "2026-11-27T12:06:00Z", actor: "Mia", roundNo: 1 },
+      {
+        kind: "payment_reversed",
+        at: "2026-11-27T12:09:00Z",
+        actor: null,
+        method: "card",
+        amountCents: 300,
+        tipCents: 0,
+      },
+    ]);
+    renderPage();
+    const menu = await openTable(/^Table T2,/);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Open check" }));
+    const sheet = await screen.findByRole("dialog", { name: "Check · T2" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "History" }));
+    const dlg = await screen.findByRole("dialog", { name: /^History · T2/ });
+    const list = await within(dlg).findByRole("list", { name: "Check events" });
+    const lines = within(list)
+      .getAllByRole("listitem")
+      .map((li) => li.textContent ?? "");
+    expect(lines[0]).toContain("Check opened · by Sam");
+    expect(lines[1]).toContain("Round 1 sent to the kitchen · $5.84 · by Sam");
+    expect(lines[2]).toContain("Round 1 voided, ingredients back to stock · by Mia");
+    expect(lines[3]).toContain("Payment of $3.00 (Card) reversed");
+    expect(lines[3]).not.toContain(" by ");
+    expect(api.fetchCheckHistory.mock.calls[0]![0].data).toEqual({
+      orgId: expect.any(String),
+      locationId: "store-1",
+      checkId: CHECK1,
+    });
+  });
+
+  it("checks closed today stay reachable from the day summary, each with its history", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.fetchDiningDaySummary.mockResolvedValue({
+      day: "2026-11-27",
+      checksClosed: 1,
+      receivedCents: 1700,
+      tipsCents: 300,
+      byServer: [],
+    });
+    api.fetchClosedChecksToday.mockResolvedValue([
+      {
+        id: UUID(77),
+        tableLabel: "T5",
+        number: 2,
+        label: "Ana",
+        closedAt: "2026-11-27T13:00:00Z",
+        paidCents: 1700,
+        tipsCents: 300,
+      },
+    ]);
+    api.fetchCheckHistory.mockResolvedValue([
+      { kind: "opened", at: "2026-11-27T12:00:00Z", actor: null },
+      { kind: "closed", at: "2026-11-27T13:00:00Z", actor: null },
+    ]);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Closed checks" }));
+    const list = await screen.findByRole("dialog", { name: "Checks closed today" });
+    expect(await within(list).findByText("T5 · Ana")).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: "History of T5 · Ana" }));
+    const dlg = await screen.findByRole("dialog", { name: "History · T5 · Ana" });
+    expect(await within(dlg).findByText("Check paid and closed")).toBeInTheDocument();
+    expect(api.fetchCheckHistory.mock.calls[0]![0].data.checkId).toBe(UUID(77));
   });
 });
 
