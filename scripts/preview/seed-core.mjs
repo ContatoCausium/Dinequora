@@ -26,6 +26,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { assertResolvedTarget } from "./client-preview-target.mjs";
 import { personalLabel } from "./personal-owners.mjs";
+import { seedDiningRoom } from "./seed-dining.mjs";
 import {
   ACCOUNTS,
   buildDataset,
@@ -561,6 +562,8 @@ async function run(
 
   // 5. Operational data.
   await seedOperational({ owner, svc, orgId, org, loc, plan, log, concurrency });
+  // 6. Today's dining room (Tables module on for the demo organization): see seed-dining.mjs.
+  await seedDiningRoom({ target, owner, svc, orgId, loc, rpc, must, log });
 
   let onboarding = "complete";
   try {

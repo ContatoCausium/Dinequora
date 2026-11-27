@@ -139,6 +139,24 @@ planned with the server's own consumption rule, so, executed in business-time or
 insufficient stock; four items end below their minimum (a recorded closing-check loss) so the alerts
 are real.
 
+**Today's dining room (dataset step 6, `scripts/preview/seed-dining.mjs`).** After the history, the
+seed turns the Tables module on for the demo organization (dataset function
+`client_preview_enable_feature`, the way a platform admin would) and serves today through the Tables
+RPCs: 19 tables in sections (Downtown 8, Westside 6, Airport 5), 7 checks closed today with 10 tenders
+(a table split into two checks, card with tip, cash with change, an equal split paid by several
+people), their rounds delivered by the kitchen, 5 checks still open with rounds in the kitchen
+(new / in prep / ready), reserved tables, and closed tables in Cleaning. Westside's tables are served by
+the store manager, so the tips report shows two servers. All of it is "now": the Today panel, the day
+close, the tips report, the check histories and the KDS show it at once. A reset removes the dining
+room first (`client_preview_purge_operational`: tenders, rounds, checks, sessions, status events,
+tables, sections and assistant usage before the orders), then seeds it again. `verify-dataset.mjs`
+checks the floor, the checks, that every closed check was paid exactly its rounds' total, tips, and
+that an open check has no revenue yet; its order checks know the two dining rules (an open check's
+rounds have stock movements but no payment, revenue or COGS; a closed check's are written at close).
+
+Requires the migrations 0037-0046 and the dataset functions of this version on the destination
+(`PREVIEW_DB_OPERATION=functions` on the hosted preview, after `migrate`).
+
 Names read as a real business (Springfield suppliers and addresses, no "(demo)" tags on rows): the
 workspace is marked once, honestly, by the header indicator "Demo workspace · fictional data"
 (`is_demo`). Phones stay in the fictional 555-01xx range and accounts in the `.test` domain.
