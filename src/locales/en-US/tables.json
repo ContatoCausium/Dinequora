@@ -335,5 +335,19 @@
     "closedEmpty": "No check closed today yet.",
     "closedLoading": "Loading today's checks…",
     "reason": "Reason: {{reason}}"
+  },
+  "close": {
+    "print": "Print day close",
+    "title": "Day close",
+    "day": "Day",
+    "partial": "Partial: the day is still open",
+    "checksClosed": "Checks closed",
+    "byMethod": "Received by payment method",
+    "tips": "tips",
+    "received": "Received",
+    "tipsTotal": "Tips",
+    "byServer": "Tips by server",
+    "tipsNote": "Tips belong to the staff; they are not revenue.",
+    "printedAt": "Printed"
   }
 }
