@@ -47,7 +47,13 @@ export function PermissionMatrix({
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-col gap-2">
         {!plain && role !== "owner" && <MatrixLegend />}
-        <div className="overflow-x-auto rounded-lg border">
+        {/* Scrolls on its own: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
+        <div
+          role="region"
+          tabIndex={0}
+          aria-label={caption}
+          className="overflow-x-auto rounded-lg border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <table className="w-full min-w-[760px] border-collapse text-sm">
             <caption className="sr-only">{caption}</caption>
             <thead>

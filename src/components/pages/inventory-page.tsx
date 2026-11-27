@@ -1008,7 +1008,13 @@ export function InventoryPage() {
           body={t("movements.emptyBody")}
         />
       ) : (
-        <div className="max-h-[640px] overflow-auto">
+        <div
+          role="region"
+          tabIndex={0}
+          aria-label={t("movements.title")}
+          className="max-h-[640px] overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {/* Scrolls on its own: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
           <table className="data-table text-left">
             <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b text-xs text-muted-foreground">

@@ -11,6 +11,10 @@ import { cn } from "@/lib/utils";
  * native input: the value is a calendar day `YYYY-MM-DD` (no time, no time zone) and `onChange`
  * receives `{ target: { value } }`, so forms keep their state and validation. Days are built and read
  * with local getters only, so a picked day never shifts across time zones.
+ *
+ * The control is a button, and `aria-required` is not allowed on buttons (axe aria-allowed-attr), so a
+ * required field says so in its accessible description instead: a visually hidden "Required" joined to
+ * any `aria-describedby` the form passes.
  */
 export type DateFieldChange = { target: { value: string } };
 
@@ -43,8 +47,12 @@ export function DateField({
   placeholder,
   ...aria
 }: DateFieldProps) {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const [open, setOpen] = React.useState(false);
+  const requiredId = `${React.useId()}-required`;
+  const describedBy =
+    [aria["aria-describedby"], required ? requiredId : undefined].filter(Boolean).join(" ") ||
+    undefined;
   const selected = toDate(value);
   const label = selected
     ? new Intl.DateTimeFormat(i18n.language || "en-US", {
@@ -54,38 +62,44 @@ export function DateField({
       }).format(selected)
     : (placeholder ?? "");
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          id={id}
-          disabled={disabled}
-          aria-required={required || undefined}
-          aria-describedby={aria["aria-describedby"]}
-          aria-invalid={aria["aria-invalid"]}
-          data-value={value}
-          className={cn(
-            "flex h-9 w-full items-center gap-2 rounded-lg border border-input bg-card px-3 text-left text-sm shadow-xs transition-[border-color,box-shadow] focus-visible:focus-field disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-50 aria-[invalid=true]:border-destructive data-[state=open]:focus-field",
-            !selected && "text-muted-foreground",
-            className,
-          )}
-        >
-          <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="tabular flex-1 truncate">{label}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="start">
-        <Calendar
-          mode="single"
-          {...(selected ? { selected, defaultMonth: selected } : {})}
-          onSelect={(d) => {
-            if (!d) return;
-            onChange({ target: { value: toYmd(d) } });
-            setOpen(false);
-          }}
-          autoFocus
-        />
-      </PopoverContent>
-    </Popover>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            id={id}
+            disabled={disabled}
+            aria-describedby={describedBy}
+            aria-invalid={aria["aria-invalid"]}
+            data-value={value}
+            className={cn(
+              "flex h-9 w-full items-center gap-2 rounded-lg border border-input bg-card px-3 text-left text-sm shadow-xs transition-[border-color,box-shadow] focus-visible:focus-field disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-50 aria-[invalid=true]:border-destructive data-[state=open]:focus-field",
+              !selected && "text-muted-foreground",
+              className,
+            )}
+          >
+            <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="tabular flex-1 truncate">{label}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2" align="start">
+          <Calendar
+            mode="single"
+            {...(selected ? { selected, defaultMonth: selected } : {})}
+            onSelect={(d) => {
+              if (!d) return;
+              onChange({ target: { value: toYmd(d) } });
+              setOpen(false);
+            }}
+            autoFocus
+          />
+        </PopoverContent>
+      </Popover>
+      {required && (
+        <span id={requiredId} className="sr-only">
+          {t("a11y.required")}
+        </span>
+      )}
+    </>
   );
 }

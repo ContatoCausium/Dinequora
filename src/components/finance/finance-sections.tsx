@@ -885,7 +885,13 @@ export function StoresPanel({ stores }: { stores: StoreResult[] }) {
             ariaLabel={t("stores.title")}
           />
           <ChartLegend series={series} />
-          <div className="mt-5 overflow-x-auto rounded-md border">
+          {/* Scrolls on its own: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
+          <div
+            role="region"
+            tabIndex={0}
+            aria-label={t("stores.title")}
+            className="mt-5 overflow-x-auto rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <table className="data-table text-left">
               <thead className="border-b bg-muted text-[11px] text-muted-foreground">
                 <tr>
