@@ -129,6 +129,8 @@
 #   5u. 0045 sales tax summary (SECURITY INVOKER read): orders, taxable sales, tax and total per store
 #      and local month, cancelled and simulated orders left out, the last N months; another tenant and
 #      anon get nothing
+#   5v. 0046 tips by server (SECURITY INVOKER read): recorded tenders only, cash tips apart, the server of
+#      the table's session, the store's last N local days; another tenant and anon get nothing
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -214,6 +216,7 @@ must_refuse "tenant isolation sweep" env QA_DB_URL="$DB_URL" node scripts/securi
 must_refuse "platform admin hardening" env QA_DB_URL="$DB_URL" node scripts/security/platform_admin_hardening.mjs
 must_refuse "inventory consumption" env QA_DB_URL="$DB_URL" node scripts/security/inventory_consumption_integrity.mjs
 must_refuse "sales tax summary" env QA_DB_URL="$DB_URL" node scripts/security/sales_tax_integrity.mjs
+must_refuse "tips by server" env QA_DB_URL="$DB_URL" node scripts/security/tips_by_server_integrity.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -374,6 +377,10 @@ echo "::endgroup::"
 
 echo "::group::5u. sales tax summary (0045, SECURITY INVOKER read as each role)"
 QA_DB_URL="$DB_URL" node scripts/security/sales_tax_integrity.mjs | tee "$ARTIFACTS/sales-tax.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5v. tips by server (0046, SECURITY INVOKER read as each role)"
+QA_DB_URL="$DB_URL" node scripts/security/tips_by_server_integrity.mjs | tee "$ARTIFACTS/tips-by-server.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useScopedLocations } from "@/components/app/workspace-context";
 import { SalesTaxPanel } from "@/components/finance/sales-tax-panel";
+import { TipsPanel } from "@/components/finance/tips-panel";
 import { useTranslation } from "react-i18next";
 import { CircleAlert, Plus, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -605,6 +606,15 @@ export function FinancePage() {
                   scopedLocationsForTax.find((l) => l.dbId === dbId)?.name ?? dbId
                 }
               />
+              {can("tables.view") && (
+                <TipsPanel
+                  orgId={org.id}
+                  locationId={locationId}
+                  storeName={(dbId) =>
+                    scopedLocationsForTax.find((l) => l.dbId === dbId)?.name ?? dbId
+                  }
+                />
+              )}
               <OrdersTruncatedNotice
                 shown={orders.length}
                 total={ordersMeta.total}

@@ -175,6 +175,7 @@
     "function|shares_org_with(_user_id uuid)|anon|EXECUTE",
     "function|shares_org_with(_user_id uuid)|authenticated|EXECUTE",
     "function|shares_org_with(_user_id uuid)|service_role|EXECUTE",
+    "function|tips_by_server(_org_id uuid, _location_ids uuid[], _days integer)|authenticated|EXECUTE",
     "function|transfer_ownership(_org_id uuid, _new_owner uuid)|authenticated|EXECUTE",
     "function|trg_invitations_audit()|anon|EXECUTE",
     "function|trg_invitations_audit()|authenticated|EXECUTE",

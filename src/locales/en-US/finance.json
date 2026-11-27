@@ -350,5 +350,28 @@
       "total": "Total with tax"
     },
     "note": "Taxable sales = subtotal − discounts. Month by the store's time zone. Tips are not sales. Check the figures with your accountant before filing: Dinequora applies one rate per store."
+  },
+  "tips": {
+    "title": "Tips by server",
+    "subtitle": "Tips recorded on dining room checks, by the server of each table. Tips belong to the staff; they are not revenue.",
+    "daysLabel": "Period",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "csv": "CSV",
+    "loadFailed": "The tips report could not be loaded. Try again.",
+    "emptyTitle": "No tips recorded in the period",
+    "emptyBody": "Tips taken when a check is paid on the floor show up here by server.",
+    "tableLabel": "Tips by server and store",
+    "unknownServer": "Unknown server",
+    "cols": {
+      "server": "Server",
+      "store": "Store",
+      "tenders": "Payments",
+      "tips": "Tips",
+      "cash": "Cash tips",
+      "nonCash": "Card and wallet tips",
+      "paid": "Paid (tax included, tips excluded)"
+    },
+    "note": "Reversed payments are left out. Cash and non-cash tips are apart because payroll treats them differently; confirm the rules with your accountant."
   }
 }

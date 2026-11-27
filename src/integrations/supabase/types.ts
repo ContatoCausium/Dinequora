@@ -2946,6 +2946,17 @@ export type Database = {
       set_order_item_ready: { Args: { _item_id: string; _ready: boolean }; Returns: undefined };
       shares_org_with: { Args: { _user_id: string }; Returns: boolean };
       sync_org_entitlements: { Args: { _org_id: string }; Returns: undefined };
+      tips_by_server: {
+        Args: { _days?: number; _location_ids?: string[]; _org_id: string };
+        Returns: {
+          cash_tips_cents: number;
+          location_id: string;
+          paid_cents: number;
+          server_id: string;
+          tenders: number;
+          tips_cents: number;
+        }[];
+      };
       transfer_ownership: { Args: { _new_owner: string; _org_id: string }; Returns: undefined };
       update_dining_session: {
         Args: {

@@ -1585,3 +1585,39 @@ export const fetchSalesTaxSummary = createServerFn({ method: "POST" })
       total_cents: Number(r.total_cents),
     }));
   });
+
+/** Tips recorded on dining room checks per server and store, last N local days (0046, read under RLS). */
+export const fetchTipsByServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      days: z.number().int().min(1).max(366),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const sc = await scope(context.supabase, data.orgId, data.locationId);
+    const c = context.supabase;
+    const { data: rows, error } = await c.rpc("tips_by_server", {
+      _org_id: sc.org.id,
+      ...(sc.location ? { _location_ids: [sc.location.id] } : {}),
+      _days: data.days,
+    });
+    if (error) throw new Error("tips_read_failed");
+    const ids = [...new Set((rows ?? []).map((r) => r.server_id))];
+    const profiles = ids.length
+      ? await c.from("profiles").select("id,full_name").in("id", ids)
+      : { data: [], error: null };
+    if (profiles.error) throw new Error("tips_read_failed");
+    const names = new Map((profiles.data ?? []).map((p) => [p.id, p.full_name?.trim() || null]));
+    return (rows ?? []).map((r) => ({
+      locationId: r.location_id,
+      serverId: r.server_id,
+      serverName: names.get(r.server_id) ?? null,
+      tenders: Number(r.tenders),
+      tipsCents: Number(r.tips_cents),
+      cashTipsCents: Number(r.cash_tips_cents),
+      paidCents: Number(r.paid_cents),
+    }));
+  });
