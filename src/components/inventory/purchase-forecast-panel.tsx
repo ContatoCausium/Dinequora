@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { PackageSearch } from "lucide-react";
+import { Download, PackageSearch } from "lucide-react";
+import { downloadCsv } from "@/components/app/charts";
 
 import { Panel, Segmented } from "@/components/app/page";
 import { EmptyState, Skeleton } from "@/components/app/states";
@@ -52,15 +53,51 @@ export function PurchaseForecastPanel({
       title={t("forecast.title")}
       subtitle={t("forecast.subtitle", { days: WINDOW_DAYS })}
       action={
-        <Segmented<Cover>
-          label={t("forecast.coverLabel")}
-          value={cover}
-          onChange={setCover}
-          options={(["7", "14"] as const).map((d) => ({
-            value: d,
-            label: t("forecast.coverDays", { count: Number(d) }),
-          }))}
-        />
+        <div className="flex items-center gap-2">
+          <Segmented<Cover>
+            label={t("forecast.coverLabel")}
+            value={cover}
+            onChange={setCover}
+            options={(["7", "14"] as const).map((d) => ({
+              value: d,
+              label: t("forecast.coverDays", { count: Number(d) }),
+            }))}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!forecast || forecast.lines.length === 0}
+            onClick={() =>
+              forecast &&
+              downloadCsv(
+                `purchase-forecast-${cover}d.csv`,
+                [
+                  t("forecast.cols.item"),
+                  t("forecast.cols.store"),
+                  t("forecast.cols.onHand"),
+                  t("forecast.cols.dailyUse"),
+                  t("forecast.cols.cover"),
+                  t("forecast.cols.buy"),
+                  t("forecast.cols.unit"),
+                  t("forecast.cols.supplier"),
+                ],
+                forecast.lines.map((l) => [
+                  l.name,
+                  storeName ? storeName(l.locationId) : "",
+                  l.quantity,
+                  Math.round(l.dailyUse * 100) / 100,
+                  Math.floor(l.coverDays),
+                  l.suggested,
+                  l.unit,
+                  l.supplier,
+                ]),
+              )
+            }
+          >
+            <Download aria-hidden />
+            {t("forecast.csv")}
+          </Button>
+        </div>
       }
     >
       {q.isPending ? (

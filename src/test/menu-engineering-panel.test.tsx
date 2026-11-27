@@ -1,11 +1,13 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import i18n from "@/lib/i18n";
 
 const api = vi.hoisted(() => ({ fetchMenuItemSales: vi.fn() }));
+const csv = vi.hoisted(() => ({ downloadCsv: vi.fn() }));
 vi.mock("@/lib/operational.functions", () => api);
+vi.mock("@/components/app/charts", () => csv);
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children, className }: { to: string; children: ReactNode; className?: string }) => (
     <a href={to} className={className}>
@@ -75,6 +77,13 @@ describe("menu engineering panel", () => {
     expect(api.fetchMenuItemSales).toHaveBeenCalledWith({
       data: { orgId: "org-1", locationId: "store-1", days: 30 },
     });
+    // CSV: classified dishes first, then the ones without a recipe cost (blank cost and margin)
+    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    const [name, header, body] = csv.downloadCsv.mock.calls.at(-1)!;
+    expect(name).toBe("menu-engineering-30d.csv");
+    expect(header[0]).toBe("Dish");
+    expect(body[0]).toEqual(["Burger", "Star", 80, "40.0", "10.00", "4.00", "6.00"]);
+    expect(body.at(-1)).toEqual(["Special", "", 3, "", "15.00", "", ""]);
   });
 
   it("no sales: an empty state, never invented figures", async () => {
