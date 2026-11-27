@@ -286,7 +286,10 @@
     "closed_other": "{{formatted}} checks closed",
     "received": "Received {{amount}}",
     "tips": "Tips {{amount}}",
-    "serverTips": "{{name}}: {{amount}} in tips"
+    "serverTips": "{{name}}: {{amount}} in tips",
+    "byMethodLabel": "Received today by payment method",
+    "method": "{{method}}: {{amount}}",
+    "methodWithTips": "{{method}}: {{amount}} + {{tips}} in tips"
   },
   "bill": {
     "print": "Print check",

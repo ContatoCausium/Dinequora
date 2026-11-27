@@ -153,6 +153,7 @@ beforeEach(() => {
     receivedCents: 0,
     tipsCents: 0,
     byServer: [],
+    byMethod: [],
   });
 });
 afterEach(cleanup);
@@ -676,6 +677,8 @@ describe("Tables screen: check history", () => {
       receivedCents: 1700,
       tipsCents: 300,
       byServer: [],
+      byMethod: [],
+      byMethod: [],
     });
     api.fetchClosedChecksToday.mockResolvedValue([
       {
@@ -708,10 +711,10 @@ describe("day summary", () => {
     const d = summarizeDay({
       day: "2026-11-27",
       tenders: [
-        { amount_cents: 584, tip_cents: 0, status: "recorded", check_id: "c1" },
-        { amount_cents: 1700, tip_cents: 306, status: "recorded", check_id: "c2" },
-        { amount_cents: 999, tip_cents: 500, status: "reversed", check_id: "c2" },
-        { amount_cents: 428, tip_cents: 64, status: "recorded", check_id: "c3" },
+        { amount_cents: 584, tip_cents: 0, status: "recorded", check_id: "c1", method: "cash" },
+        { amount_cents: 1700, tip_cents: 306, status: "recorded", check_id: "c2", method: "card" },
+        { amount_cents: 999, tip_cents: 500, status: "reversed", check_id: "c2", method: "cash" },
+        { amount_cents: 428, tip_cents: 64, status: "recorded", check_id: "c3", method: "card" },
       ],
       checks: [
         { id: "c1", session_id: "s1", status: "closed" },
@@ -732,5 +735,29 @@ describe("day summary", () => {
       { serverId: "u1", name: "Sam", tipsCents: 306, tenders: 2 },
       { serverId: "u2", name: null, tipsCents: 64, tenders: 1 },
     ]);
+    // the drawer: cash first, then card; the reversed cash tender is left out
+    expect(d.byMethod).toEqual([
+      { method: "cash", amountCents: 584, tipsCents: 0, tenders: 1 },
+      { method: "card", amountCents: 1700 + 428, tipsCents: 306 + 64, tenders: 2 },
+    ]);
+  });
+
+  it("the panel shows what came in by payment method", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.fetchDiningDaySummary.mockResolvedValue({
+      day: "2026-11-27",
+      checksClosed: 2,
+      receivedCents: 2712,
+      tipsCents: 370,
+      byServer: [],
+      byMethod: [
+        { method: "cash", amountCents: 584, tipsCents: 0, tenders: 1 },
+        { method: "card", amountCents: 2128, tipsCents: 370, tenders: 2 },
+      ],
+    });
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Received today by payment method" });
+    expect(within(list).getByText("Cash: $5.84")).toBeInTheDocument();
+    expect(within(list).getByText("Card: $21.28 + $3.70 in tips")).toBeInTheDocument();
   });
 });

@@ -48,6 +48,27 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
           </Button>
         )}
       </p>
+      {d.byMethod.length > 0 && (
+        <ul
+          aria-label={t("day.byMethodLabel")}
+          className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-muted-foreground"
+        >
+          {d.byMethod.map((m) => (
+            <li key={m.method}>
+              {m.tipsCents > 0
+                ? t("day.methodWithTips", {
+                    method: t(`pay.methods.${m.method}`, { defaultValue: m.method }),
+                    amount: money(m.amountCents),
+                    tips: money(m.tipsCents),
+                  })
+                : t("day.method", {
+                    method: t(`pay.methods.${m.method}`, { defaultValue: m.method }),
+                    amount: money(m.amountCents),
+                  })}
+            </li>
+          ))}
+        </ul>
+      )}
       {d.byServer.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-muted-foreground">
           {d.byServer.map((s) => (
