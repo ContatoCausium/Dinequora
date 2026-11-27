@@ -309,6 +309,13 @@
       "when": 1796209279812,
       "tag": "0043_platform_admin_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1796295679812,
+      "tag": "0044_inventory_consumption",
+      "breakpoints": true
     }
   ]
 }

@@ -1465,6 +1465,30 @@ export const fetchMenuItemSales = createServerFn({ method: "POST" })
     }));
   });
 
+/** What sales consumed of each stock item over the last N local days (0044, read under RLS). */
+export const fetchInventoryConsumption = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      days: z.number().int().min(1).max(366),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const sc = await scope(context.supabase, data.orgId, data.locationId);
+    const { data: rows, error } = await context.supabase.rpc("inventory_consumption", {
+      _org_id: sc.org.id,
+      ...(sc.location ? { _location_ids: [sc.location.id] } : {}),
+      _days: data.days,
+    });
+    if (error) throw new Error("consumption_read_failed");
+    return (rows ?? []).map((r) => ({
+      inventory_item_id: r.inventory_item_id,
+      consumed: Number(r.consumed),
+    }));
+  });
+
 /**
  * Current recipe cost per serving of each product at each store (database store ids), computed the
  * same way the screens compute it (mapResources). Server-side helper for the assistant (0040/0042).

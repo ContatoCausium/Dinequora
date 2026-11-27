@@ -123,6 +123,9 @@
 #      members of customer organizations in any role (both sides, demo allowed); platform role changes
 #      serialized (a revocation race never leaves zero admins); audit only on real changes; the grace
 #      window starts only on a status change; the suspension text changes only with a status
+#   5t. 0044 inventory consumption (SECURITY INVOKER read): sales minus reversals of sales per item and
+#      store, adjustments and other reversals left out, the store's last N local days; another tenant
+#      and anon get nothing
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -206,6 +209,7 @@ must_refuse "reversal reasons" env QA_DB_URL="$DB_URL" node scripts/security/che
 must_refuse "menu item sales" env QA_DB_URL="$DB_URL" node scripts/security/menu_item_sales_integrity.mjs
 must_refuse "tenant isolation sweep" env QA_DB_URL="$DB_URL" node scripts/security/tenant_isolation_sweep.mjs
 must_refuse "platform admin hardening" env QA_DB_URL="$DB_URL" node scripts/security/platform_admin_hardening.mjs
+must_refuse "inventory consumption" env QA_DB_URL="$DB_URL" node scripts/security/inventory_consumption_integrity.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -358,6 +362,10 @@ echo "::endgroup::"
 
 echo "::group::5s. platform admin hardening (0043, direct RPC calls, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/platform_admin_hardening.mjs | tee "$ARTIFACTS/platform-admin-hardening.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5t. inventory consumption (0044, SECURITY INVOKER read as each role)"
+QA_DB_URL="$DB_URL" node scripts/security/inventory_consumption_integrity.mjs | tee "$ARTIFACTS/inventory-consumption.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
