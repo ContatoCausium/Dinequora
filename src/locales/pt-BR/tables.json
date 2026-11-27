@@ -286,7 +286,10 @@
     "closed_other": "{{formatted}} comandas fechadas",
     "received": "Recebido {{amount}}",
     "tips": "Gorjetas {{amount}}",
-    "serverTips": "{{name}}: {{amount}} em gorjetas"
+    "serverTips": "{{name}}: {{amount}} em gorjetas",
+    "byMethodLabel": "Recebido hoje por forma de pagamento",
+    "method": "{{method}}: {{amount}}",
+    "methodWithTips": "{{method}}: {{amount}} + {{tips}} de gorjeta"
   },
   "bill": {
     "print": "Imprimir conta",
