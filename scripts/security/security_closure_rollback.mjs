@@ -45,6 +45,26 @@ const M0034 = read("drizzle/migrations/0034_platform_owner_assignment_guard.sql"
 const M0035 = read("drizzle/migrations/0035_pending_sale_reason_privacy.sql");
 const ROLLBACK_0036 = read("docs/operations/security-closure/0036-rollback.sql");
 const M0036 = read("drizzle/migrations/0036_retire_legacy_pos_sale_rpcs.sql");
+// Later migrations that redefine a function of 0034-0036 (0043 redefines admin_set_platform_role and the
+// 0034 separation trigger function): re-running a closure file brings back its OLD body, so the
+// rehearsal re-runs these after it to end at the tip, as a real re-application must. Found from the
+// journal, so a new one is picked up; each must be re-runnable (create or replace, guarded DDL).
+const CLOSURE_FUNCTIONS = new Set(
+  [M0034, M0035, M0036].flatMap((src) =>
+    [...src.matchAll(/create or replace function public\.(\w+)\s*\(/gi)].map((m) =>
+      m[1].toLowerCase(),
+    ),
+  ),
+);
+const LATER_REDEFINITIONS = JSON.parse(read("drizzle/migrations/meta/_journal.json"))
+  .entries.map((e) => e.tag)
+  .filter((tag) => tag > "0036")
+  .map((tag) => ({ tag, src: read(`drizzle/migrations/${tag}.sql`) }))
+  .filter(({ src }) =>
+    [...src.matchAll(/create or replace function public\.(\w+)\s*\(/gi)].some((m) =>
+      CLOSURE_FUNCTIONS.has(m[1].toLowerCase()),
+    ),
+  );
 const legacyCallable = async () =>
   (
     await sql`select string_agg(p.proname || ':' || has_function_privilege('authenticated', p.oid, 'execute') || ':' ||
@@ -248,8 +268,13 @@ try {
     await tx.unsafe(M0034);
     await tx.unsafe(M0035);
     await tx.unsafe(M0036);
+    for (const later of LATER_REDEFINITIONS) await tx.unsafe(later.src);
   });
-  check("4. 0034, 0035 and 0036 re-applied in one transaction", true);
+  check(
+    "4. 0034, 0035 and 0036 re-applied in one transaction, then the later redefinitions",
+    true,
+    LATER_REDEFINITIONS.map((l) => l.tag).join(", ") || "none",
+  );
   {
     const v = await legacyCallable();
     check(

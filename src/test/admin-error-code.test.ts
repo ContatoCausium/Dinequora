@@ -11,6 +11,7 @@ const CODES = [
   "self_assignment_forbidden",
   "platform_user_forbidden",
   "platform_role_owner_conflict",
+  "platform_role_member_conflict",
   "user_ambiguous",
   "user_not_found",
   "owner_exists",

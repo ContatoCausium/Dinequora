@@ -613,16 +613,18 @@ try {
     const transfer = await as(U.SOCK, (s) =>
       s.c`select public.transfer_ownership(${C5.orgId}, ${U.PLAT2})`.then(() => "ok"),
     );
-    const [{ role }] =
-      await sql`select role::text from public.organization_members where id = ${plat2InC5}`;
+    const [{ role, platform }] = await sql`
+      select m.role::text, exists (select 1 from public.user_roles r where r.user_id = m.user_id) platform
+        from public.organization_members m where m.id = ${plat2InC5}`;
+    // 0043: a manager of a customer organization cannot get a platform role at all, so the chain stops
+    // at the grant; the promotion that follows is an ordinary member becoming owner, with no role.
     check(
-      "X7 demote -> grant the role -> promote again (role change or ownership transfer): refused at commit, the operator stays a manager",
+      "X7 demote -> grant the role (refused since 0043: member of a customer organization) -> promote: never an owner with a platform role",
       demote === "ok" &&
-        regrant === "ok" &&
-        promote === "platform_role_owner_conflict" &&
-        transfer === "platform_role_owner_conflict" &&
-        role === "manager",
-      `${demote}/${regrant}/${promote}/${transfer}/${role}`,
+        regrant === "platform_role_member_conflict" &&
+        promote === "ok" &&
+        platform === false,
+      `${demote}/${regrant}/${promote}/${transfer}/${role}/platform=${platform}`,
     );
   }
   {
