@@ -14,14 +14,16 @@
   },
   "summary": {
     "label": "Resumo do salão",
+    "seats_zero": "{{count}} lugares",
     "seats_one": "{{count}} lugar",
     "seats_other": "{{count}} lugares"
   },
   "card": {
+    "seats_zero": "{{count}} lugares",
     "seats_one": "{{count}} lugar",
     "seats_other": "{{count}} lugares",
     "since": "há {{time}}",
-    "justNow": "agora",
+    "justNow": "alterada agora",
     "minutes": "{{count}} min",
     "hours": "{{hours}}h {{minutes}}min",
     "days_one": "{{count}} dia",
@@ -38,6 +40,7 @@
   },
   "section": {
     "none": "Sem setor",
+    "count_zero": "{{count}} mesas",
     "count_one": "{{count}} mesa",
     "count_other": "{{count}} mesas",
     "empty": "Ainda não há mesas neste setor.",
@@ -88,8 +91,8 @@
     "conflictUnknown": "Outra pessoa mudou a mesa {{label}}. Nada foi sobrescrito; confira o salão e tente de novo."
   },
   "states": {
-    "chooseStoreTitle": "Escolha uma loja",
-    "chooseStoreBody": "As mesas pertencem a uma loja. Escolha uma no seletor de lojas no topo da página.",
+    "chooseStoreTitle": "Escolha uma unidade",
+    "chooseStoreBody": "As mesas pertencem a uma unidade. Escolha uma no seletor de unidades no topo da página.",
     "noStoreTitle": "Nenhuma loja ainda",
     "noStoreBody": "Você não tem uma loja para trabalhar. Peça a um proprietário acesso a uma delas.",
     "loading": "Carregando o salão…",

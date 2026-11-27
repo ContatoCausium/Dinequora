@@ -98,6 +98,12 @@ function formatSince(iso: string, now: number, t: TFunction<"tables">): string {
   return t("card.days", { count: Math.floor(minutes / 1440) });
 }
 
+/** "for 12 min" in the current status; "changed just now" under a minute. */
+function sinceText(iso: string, now: number, t: TFunction<"tables">): string {
+  const minutes = Math.floor((now - new Date(iso).getTime()) / 60000);
+  return minutes < 1 ? t("card.justNow") : t("card.since", { time: formatSince(iso, now, t) });
+}
+
 type TableForm = { id: string | null; label: string; seats: string; sectionId: string | null };
 type SectionForm = { id: string | null; name: string };
 const NO_SECTION = "__none__";
@@ -388,7 +394,7 @@ function Floor({
                 );
               })}
             </ul>
-            <div className="overflow-x-auto">
+            <div className="-mx-1 overflow-x-auto px-1 pb-1 [&_button]:whitespace-nowrap">
               <Segmented
                 label={t("filter.label")}
                 value={filter}
@@ -750,7 +756,7 @@ function TableCard({
           {status}
         </StatusBadge>
         <span className="text-[12px] text-muted-foreground">
-          {t("card.since", { time: formatSince(table.statusChangedAt, now, t) })}
+          {sinceText(table.statusChangedAt, now, t)}
         </span>
       </span>
     </>

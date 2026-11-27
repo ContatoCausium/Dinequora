@@ -14,14 +14,16 @@
   },
   "summary": {
     "label": "Floor summary",
+    "seats_zero": "{{count}} seats",
     "seats_one": "{{count}} seat",
     "seats_other": "{{count}} seats"
   },
   "card": {
+    "seats_zero": "{{count}} seats",
     "seats_one": "{{count}} seat",
     "seats_other": "{{count}} seats",
     "since": "for {{time}}",
-    "justNow": "just now",
+    "justNow": "changed just now",
     "minutes": "{{count}} min",
     "hours": "{{hours}}h {{minutes}}m",
     "days_one": "{{count}} day",
@@ -38,6 +40,7 @@
   },
   "section": {
     "none": "No section",
+    "count_zero": "{{count}} tables",
     "count_one": "{{count}} table",
     "count_other": "{{count}} tables",
     "empty": "No tables in this section yet.",
@@ -89,7 +92,7 @@
   },
   "states": {
     "chooseStoreTitle": "Choose a store",
-    "chooseStoreBody": "Tables belong to a store. Pick one in the store switcher at the top of the page.",
+    "chooseStoreBody": "Tables belong to a store. Pick one in the location switcher at the top of the page.",
     "noStoreTitle": "No store yet",
     "noStoreBody": "You have no store to work in. Ask an owner to give you access to one.",
     "loading": "Loading the floor…",
