@@ -245,6 +245,7 @@
     "platform_user_forbidden": "Accounts with a platform role can't become the owner of a customer organization.",
     "user_ambiguous": "More than one account uses that email. Resolve the duplicate accounts first.",
     "platform_role_owner_conflict": "This account owns a customer organization, so it can't hold a platform role.",
+    "platform_role_member_conflict": "This account is a member of a customer organization, so it can't hold a platform role.",
     "isolation_unsupported": "The request ran in an unsupported transaction mode. Nothing was changed; please try again.",
     "unknown": "Something went wrong. Please try again."
   },
