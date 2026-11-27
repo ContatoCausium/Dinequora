@@ -423,6 +423,32 @@ export const SUPPLIERS = Object.freeze([
 // Cups/containers are "pack" items of 50 (1/50 = 0.02 pack per serving).
 const CUP = ["CUP", 0.02, "pack", 0];
 const BOX = ["BOX", 0.02, "pack", 0];
+/**
+ * Menu photos: the licensed demo photos the app already serves from public/media/menu (credits in
+ * public/media/menu/CREDITS.md). Illustrative; a few dishes share the closest photo, and the
+ * milkshake has none (its card shows its initials).
+ */
+export const PRODUCT_PHOTOS = Object.freeze({
+  "prod-classic-burger": "/media/menu/classic-burger.webp",
+  "prod-cheeseburger": "/media/menu/classic-burger.webp",
+  "prod-bacon-bbq-burger": "/media/menu/bacon-smash.webp",
+  "prod-veggie-burger": "/media/menu/classic-burger.webp",
+  "prod-grilled-chicken": "/media/menu/chicken-sandwich.webp",
+  "prod-crispy-chicken": "/media/menu/chicken-sandwich.webp",
+  "prod-caesar-salad": "/media/menu/caesar.webp",
+  "prod-harvest-bowl": "/media/menu/caesar.webp",
+  "prod-fries": "/media/menu/fries.webp",
+  "prod-sweet-fries": "/media/menu/fries.webp",
+  "prod-onion-rings": "/media/menu/fries.webp",
+  "prod-fountain-soda": "/media/menu/soda.webp",
+  "prod-lemonade": "/media/menu/lemonade.webp",
+  "prod-iced-tea": "/media/menu/lemonade.webp",
+  "prod-cold-brew": "/media/menu/espresso.webp",
+  "prod-bottled-water": "/media/menu/soda.webp",
+  "prod-brownie": "/media/menu/lava-cake.webp",
+  "prod-apple-pie": "/media/menu/lava-cake.webp",
+});
+
 export const PRODUCTS = Object.freeze([
   {
     id: "prod-classic-burger",

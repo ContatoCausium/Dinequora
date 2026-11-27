@@ -1109,7 +1109,18 @@ export function InventoryPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-semibold" title={rec.productName}>
-                    {rec.productName}
+                    {canEditRecipes ? (
+                      // The dish name opens the recipe too, not only the Edit button below.
+                      <button
+                        type="button"
+                        onClick={() => openRecipeModal(rec)}
+                        className="max-w-full truncate rounded-sm text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {rec.productName}
+                      </button>
+                    ) : (
+                      rec.productName
+                    )}
                   </h3>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {t("recipes.yield", {

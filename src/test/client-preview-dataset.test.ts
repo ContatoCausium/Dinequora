@@ -12,6 +12,7 @@ import {
   LEDGER_READ_CAP,
   localYmd,
   ORG,
+  PRODUCT_PHOTOS,
   PRODUCTS,
   STOCK,
   STORES,
@@ -156,6 +157,16 @@ describe("valid against the app contracts", () => {
         createdAt: new Date(NOW).toISOString(),
       });
     expect(new Set(PRODUCTS.map((p) => p.category))).toEqual(new Set(CATEGORIES.map((c) => c.id)));
+  });
+  it("every menu photo is a product of the dataset and a file the app serves", () => {
+    const ids = new Set(PRODUCTS.map((p) => p.id));
+    const media = path.resolve(__dirname, "../../public");
+    for (const [id, url] of Object.entries(PRODUCT_PHOTOS)) {
+      expect(ids.has(id), id).toBe(true);
+      expect(url).toMatch(/^\/media\/menu\/[a-z-]+\.webp$/);
+      expect(fs.existsSync(path.join(media, url)), url).toBe(true);
+    }
+    expect(Object.keys(PRODUCT_PHOTOS).length).toBeGreaterThanOrEqual(PRODUCTS.length - 1);
   });
   it("every recipe is a valid recipe payload with units the server converts to the stock unit", () => {
     for (const p of PRODUCTS) {
