@@ -287,5 +287,23 @@
     "received": "Recebido {{amount}}",
     "tips": "Gorjetas {{amount}}",
     "serverTips": "{{name}}: {{amount}} em gorjetas"
+  },
+  "bill": {
+    "print": "Imprimir conta",
+    "title": "Conta · {{label}}",
+    "table": "Mesa",
+    "check": "Comanda",
+    "guests": "Pessoas",
+    "server": "Garçom",
+    "round": "Rodada",
+    "subtotal": "Subtotal",
+    "tax": "Imposto (sales tax)",
+    "total": "Total",
+    "paid": "Pago",
+    "balance": "A pagar",
+    "tipTitle": "Sugestão de gorjeta (sobre o subtotal):",
+    "tipLine": "{{percent}}%: {{tip}} → total {{total}}",
+    "thanks": "Obrigado!",
+    "printedAt": "Impresso em"
   }
 }
