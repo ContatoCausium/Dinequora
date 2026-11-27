@@ -29,6 +29,8 @@ export interface CheckEvent {
   method?: string;
   /** The other check of a move, by its number and label. */
   other?: { number: number; label: string | null } | null;
+  /** Why a payment was reversed: present only for who may reverse payments (0041). */
+  reason?: string;
 }
 
 /** Same instant: the opening first, the closing last, the rest in the order things happen. */
@@ -62,6 +64,7 @@ export function toCheckHistory(input: {
   /** order_status_history rows that cancelled one of the rounds. */
   cancellations: readonly { order_id: string; created_at: string; actor_id: string | null }[];
   tenders: readonly {
+    id?: string;
     method: string;
     amount_cents: number;
     tip_cents: number;
@@ -79,7 +82,10 @@ export function toCheckHistory(input: {
   }[];
   otherChecks: readonly { id: string; number: number; label: string | null }[];
   profiles: readonly { id: string; full_name: string | null }[];
+  /** From list_check_reversal_reasons(); empty for whoever may not read them. */
+  reversalReasons?: readonly { payment_id: string; reason: string }[];
 }): CheckEvent[] {
+  const reasonOf = new Map((input.reversalReasons ?? []).map((r) => [r.payment_id, r.reason]));
   const names = new Map(input.profiles.map((p) => [p.id, p.full_name?.trim() || null]));
   const who = (id: string | null) => (id ? (names.get(id) ?? null) : null);
   const totals = new Map(input.orders.map((o) => [o.id, o.total_cents]));
@@ -142,6 +148,7 @@ export function toCheckHistory(input: {
       tipCents: t.tip_cents,
     });
     if (t.status === "reversed" && t.reversed_at) {
+      const reason = t.id ? reasonOf.get(t.id)?.trim() : undefined;
       out.push({
         kind: "payment_reversed",
         at: t.reversed_at,
@@ -149,6 +156,7 @@ export function toCheckHistory(input: {
         method: t.method,
         amountCents: t.amount_cents,
         tipCents: t.tip_cents,
+        ...(reason ? { reason } : {}),
       });
     }
   }

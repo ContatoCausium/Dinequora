@@ -108,9 +108,27 @@ no dia local da loja, mais recentes primeiro, até 200). A linha do tempo é mon
 | Rodada movida | `audit_logs` (`tables.round_moved`, metadata `from`/`to`) | só aparece para quem tem `team.activity` na loja; os demais não recebem linhas (RLS) |
 | Comanda fechada / anulada | `dining_checks.closed_at` + `status` | sem autor |
 
-**Motivos** de cancelamento e de estorno **não** são lidos nem mostrados aqui. Nenhuma função nova
+**Motivos de cancelamento** não são lidos nem mostrados aqui. O **motivo de um estorno** aparece só para
+quem tem `orders.refund` na loja (a mesma permissão que estorna), via `list_check_reversal_reasons`
+(migration 0041); para os demais o banco recusa e a linha aparece sem motivo. Nenhuma função nova
 no banco, nenhum privilégio novo: as funções de servidor `fetchCheckHistory` e `fetchClosedChecksToday`
 usam o cliente do usuário (RLS) e o escopo `diningScope`/`scope` de sempre.
 
 Testes: `src/test/check-history.test.ts` (ordem, desempates, cancelamento duplicado ou de outro pedido
 ignorado, movimentos, comanda anulada, lista do dia) e `src/test/tables-page.test.tsx` ("check history").
+
+## Privacidade do motivo do estorno (migration 0041)
+
+Antes, `dining_check_payments` dava SELECT em todas as colunas para `authenticated`, e qualquer membro
+com permissão de mesas na loja lia `reversal_reason` pela API. A 0041:
+
+- concede SELECT por coluna, **sem** `reversal_reason` (as linhas e a política de RLS não mudam; o app
+  nunca selecionou essa coluna; `select *` passa a ser recusado);
+- cria `list_check_reversal_reasons(org, loja, comanda)`: devolve os motivos dos estornos daquela comanda
+  a quem tem `orders.refund` na loja; outra organização, loja de outra organização, staff sem a
+  permissão e anon são recusados. Só leitura, sem auditoria.
+
+Teste: passo 5p da suíte de segurança (`scripts/security/check_reversal_reason_privacy.mjs`, 13 checagens).
+
+Rollback (uma migration NOVA): `grant select on table public.dining_check_payments to authenticated;`
+e `drop function public.list_check_reversal_reasons(uuid, uuid, uuid);`.

@@ -310,7 +310,7 @@
     "open": "Histórico",
     "openFor": "Histórico de {{check}}",
     "title": "Histórico · {{check}}",
-    "hint": "Tudo o que aconteceu nesta comanda, do mais antigo ao mais recente. Os motivos de cancelamentos e estornos ficam com os gerentes.",
+    "hint": "Tudo o que aconteceu nesta comanda, do mais antigo ao mais recente. O motivo de um estorno aparece só para quem pode estornar.",
     "listLabel": "Eventos da comanda",
     "loading": "Carregando o histórico…",
     "error": "Não foi possível carregar o histórico. Tente de novo.",
@@ -330,6 +330,7 @@
     "closedTitle": "Comandas fechadas hoje",
     "closedHint": "Da mais recente para a mais antiga. Abra uma para ver o histórico.",
     "closedEmpty": "Nenhuma comanda fechada hoje ainda.",
-    "closedLoading": "Carregando as comandas de hoje…"
+    "closedLoading": "Carregando as comandas de hoje…",
+    "reason": "Motivo: {{reason}}"
   }
 }

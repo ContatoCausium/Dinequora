@@ -125,6 +125,22 @@ describe("check history", () => {
   });
 });
 
+describe("reversal reasons", () => {
+  it("a reason shows on its reversed payment only when the database gave it", () => {
+    const tenders = base.tenders.map((t, i) => ({ ...t, id: `p${i}` }));
+    const withReason = toCheckHistory({
+      ...base,
+      tenders,
+      reversalReasons: [{ payment_id: "p0", reason: " Charged twice " }],
+    });
+    const rev = withReason.find((e) => e.kind === "payment_reversed");
+    expect(rev?.reason).toBe("Charged twice");
+    expect(withReason.filter((e) => e.reason).length).toBe(1);
+    const without = toCheckHistory({ ...base, tenders });
+    expect(without.find((e) => e.kind === "payment_reversed")).not.toHaveProperty("reason");
+  });
+});
+
 describe("checks closed today", () => {
   it("newest first, with the table and what was paid (reversed tenders left out)", () => {
     const list = toClosedChecks({
