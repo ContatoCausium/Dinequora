@@ -23,11 +23,13 @@ export interface BillLabels {
   printedAt: string;
 }
 
-const esc = (s: string) =>
+export const escapeHtml = (s: string) =>
   s.replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
+
+const esc = escapeHtml;
 
 export function checkBillTotals(check: SessionCheck) {
   const live = check.rounds.filter((r) => r.status !== "cancelled");
