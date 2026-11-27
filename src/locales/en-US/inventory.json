@@ -292,5 +292,32 @@
     "permission_denied": "You do not have permission for this action.",
     "recipe_exists_for_product": "This product already has a recipe at this store. Edit that recipe instead.",
     "invalid_recipe": "Check the servings and the selling price: servings must be above zero and the price cannot be negative."
+  },
+  "forecast": {
+    "title": "Purchase forecast",
+    "subtitle": "What to buy, from what sales actually used in the last {{days}} days.",
+    "coverLabel": "Cover",
+    "coverDays_one": "{{count}} day",
+    "coverDays_other": "{{count}} days",
+    "loadFailed": "Stock use could not be loaded. Try again.",
+    "emptyTitle": "Nothing to buy for now",
+    "emptyBody_one": "At the current pace every item lasts {{count}} day and stays above its minimum.",
+    "emptyBody_other": "At the current pace every item lasts {{count}} days and stays above its minimum.",
+    "tableLabel": "Items to buy, the ones that run out first at the top",
+    "cols": {
+      "item": "Item",
+      "store": "Store",
+      "onHand": "On hand",
+      "dailyUse": "Use / day",
+      "cover": "Lasts",
+      "buy": "Buy",
+      "supplier": "Supplier"
+    },
+    "days_one": "{{formatted}} day",
+    "days_other": "{{formatted}} days",
+    "noUse_one": "{{count}} item at or below its minimum had no sales use to project from: {{names}}.",
+    "noUse_other": "{{count}} items at or below their minimum had no sales use to project from: {{names}}.",
+    "method_one": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} day + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use.",
+    "method_other": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} days + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use."
   }
 }

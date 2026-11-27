@@ -292,5 +292,32 @@
     "permission_denied": "Você não tem permissão para esta ação.",
     "recipe_exists_for_product": "Este produto já tem uma receita nesta unidade. Edite essa receita em vez de criar outra.",
     "invalid_recipe": "Confira as porções e o preço de venda: as porções devem ser maiores que zero e o preço não pode ser negativo."
+  },
+  "forecast": {
+    "title": "Previsão de compras",
+    "subtitle": "O que comprar, a partir do que as vendas consumiram de verdade nos últimos {{days}} dias.",
+    "coverLabel": "Cobertura",
+    "coverDays_one": "{{count}} dia",
+    "coverDays_other": "{{count}} dias",
+    "loadFailed": "Não foi possível carregar o consumo do estoque. Tente de novo.",
+    "emptyTitle": "Nada a comprar por enquanto",
+    "emptyBody_one": "No ritmo atual, todo item dura {{count}} dia e fica acima do mínimo.",
+    "emptyBody_other": "No ritmo atual, todo item dura {{count}} dias e fica acima do mínimo.",
+    "tableLabel": "Itens a comprar, os que acabam primeiro no topo",
+    "cols": {
+      "item": "Item",
+      "store": "Loja",
+      "onHand": "Em estoque",
+      "dailyUse": "Uso / dia",
+      "cover": "Dura",
+      "buy": "Comprar",
+      "supplier": "Fornecedor"
+    },
+    "days_one": "{{formatted}} dia",
+    "days_other": "{{formatted}} dias",
+    "noUse_one": "{{count}} item no mínimo ou abaixo não teve uso em vendas para projetar: {{names}}.",
+    "noUse_other": "{{count}} itens no mínimo ou abaixo não tiveram uso em vendas para projetar: {{names}}.",
+    "method_one": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dia + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso.",
+    "method_other": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dias + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso."
   }
 }

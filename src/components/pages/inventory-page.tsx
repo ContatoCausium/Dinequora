@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { PurchaseForecastPanel } from "@/components/inventory/purchase-forecast-panel";
 import {
   fetchOperationalResources,
   fetchOperationalMenu,
@@ -1428,7 +1429,16 @@ export function InventoryPage() {
     ) : activeTab === "suppliers" ? (
       renderSuppliers()
     ) : (
-      renderPurchases()
+      <div className="space-y-6">
+        <PurchaseForecastPanel
+          orgId={org.id}
+          locationId={locationId}
+          items={items}
+          storeName={showStore ? storeName : null}
+          unitLabel={unitLabel}
+        />
+        {renderPurchases()}
+      </div>
     );
 
   const scopeHint = locationId === "all" ? t("allStores") : storeName(locationId);
