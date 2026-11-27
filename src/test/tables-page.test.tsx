@@ -11,6 +11,9 @@ import {
   seatsByStatus,
   toDiningRoom,
   toOpenSessions,
+  equalShares,
+  itemsShareCents,
+  parseMoneyInput,
   type DiningRoom,
 } from "@/lib/dining-room";
 
@@ -36,6 +39,9 @@ const api = vi.hoisted(() => ({
   closeEmptyDiningSession: vi.fn(),
   updateDiningSession: vi.fn(),
   changeOperationalOrder: vi.fn(),
+  payDiningCheck: vi.fn(),
+  voidCheckPayment: vi.fn(),
+  moveCheckRound: vi.fn(),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const workspace = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -499,5 +505,105 @@ describe("Tables screen: checks", () => {
     expect(
       within(sheet).getByText("Sending to the kitchen also needs permission to sell at the POS."),
     ).toBeInTheDocument();
+  });
+});
+
+/* ---------------------------------------------------------------- payments (0039) */
+describe("payment helpers", () => {
+  it("splits a balance in equal shares, the first ones carrying the odd cents", () => {
+    expect(equalShares(1000, 3)).toEqual([334, 333, 333]);
+    expect(equalShares(856, 2)).toEqual([428, 428]);
+    expect(equalShares(5, 0)).toEqual([5]);
+  });
+  it("prices selected items with their share of the round tax", () => {
+    // a round of 800 + 56 tax: one 400 item pays 400 + 28
+    expect(
+      itemsShareCents([{ subtotalCents: 400, roundSubtotalCents: 800, roundTaxCents: 56 }]),
+    ).toBe(428);
+  });
+  it("reads typed dollars", () => {
+    expect(parseMoneyInput("12")).toBe(1200);
+    expect(parseMoneyInput("12,5")).toBe(1250);
+    expect(parseMoneyInput("8.56")).toBe(856);
+    expect(parseMoneyInput("1.234")).toBeNull();
+    expect(parseMoneyInput("abc")).toBeNull();
+  });
+});
+
+describe("Tables screen: paying a check", () => {
+  beforeEach(() => {
+    api.fetchDiningRoom.mockImplementation(async () => seatedRoom());
+    api.fetchOperationalMenu.mockResolvedValue(MENU);
+  });
+  async function openCheck1() {
+    const menu = await openTable(/^Table T2,/);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Open check" }));
+    return screen.findByRole("dialog", { name: "Check · T2" });
+  }
+
+  it("charges the whole balance with a tip; cash shows the change", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.payDiningCheck.mockResolvedValue({
+      paymentId: UUID(91),
+      checkStatus: "closed",
+      balanceCents: 0,
+    });
+    renderPage();
+    const sheet = await openCheck1();
+    expect(within(sheet).getByText("Left to pay")).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("radio", { name: "Cash" }));
+    fireEvent.click(within(sheet).getByRole("radio", { name: "20%" }));
+    fireEvent.change(within(sheet).getByLabelText("Cash received"), { target: { value: "10" } });
+    // 5.84 + 1.17 tip = 7.01; change 2.99
+    expect(within(sheet).getByText("$2.99")).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Charge $7.01 and close" }));
+    await waitFor(() => expect(api.payDiningCheck).toHaveBeenCalledTimes(1));
+    expect(api.payDiningCheck.mock.calls[0]![0].data).toMatchObject({
+      checkId: CHECK1,
+      method: "cash",
+      amountCents: 584,
+      tipCents: 117,
+      tenderedCents: 1000,
+    });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Check paid and closed."));
+  });
+
+  it("split by people charges one share; a retry after a failure reuses the key", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.payDiningCheck
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ paymentId: UUID(92), checkStatus: "open", balanceCents: 292 });
+    renderPage();
+    const sheet = await openCheck1();
+    fireEvent.click(within(sheet).getByRole("radio", { name: "Split by people" }));
+    expect(within(sheet).getByText("$2.92 per person")).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Charge $2.92" }));
+    expect(
+      await within(sheet).findByText("Something went wrong. Nothing was changed."),
+    ).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Charge $2.92" }));
+    await waitFor(() => expect(api.payDiningCheck).toHaveBeenCalledTimes(2));
+    const [a, b] = api.payDiningCheck.mock.calls.map((c) => c[0].data);
+    expect(a).toMatchObject({ amountCents: 292, method: "card", tipCents: 0, tenderedCents: null });
+    expect(b.clientKey).toBe(a.clientKey);
+  });
+
+  it("refuses more than the balance before calling the server", async () => {
+    setWorkspace(roleDefaults("manager"));
+    renderPage();
+    const sheet = await openCheck1();
+    fireEvent.change(within(sheet).getByLabelText("Amount (US$)"), { target: { value: "9" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Charge $9.00" }));
+    expect(
+      await within(sheet).findByText("The amount is more than what is left to pay."),
+    ).toBeInTheDocument();
+    expect(api.payDiningCheck).not.toHaveBeenCalled();
+  });
+
+  it("without pos.sell no payment can be taken", async () => {
+    setWorkspace(["tables.view", "tables.serve"]);
+    renderPage();
+    const sheet = await openCheck1();
+    expect(within(sheet).getByRole("button", { name: "Charge $5.84 and close" })).toBeDisabled();
   });
 });

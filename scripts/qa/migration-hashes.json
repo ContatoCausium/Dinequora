@@ -39,7 +39,8 @@
     "0035_pending_sale_reason_privacy": "8a6117fc66727e3bdffb6c258ac639af14be186b0a300ffd124033735e9876f5",
     "0036_retire_legacy_pos_sale_rpcs": "902e8a7e879346db83635b9034b33028a61be3aef3290ba3bdf982b706040e18",
     "0037_dining_room_tables": "efb53702eb966b39c4ea60bdceb095fb8f58feff52621e207ab845d75b098b42",
-    "0038_dining_sessions_checks_rounds": "7d0955e7090345aaf2a8cf25de7b1a2bed60a509afffbf9ddf6d9f170dce8b14"
+    "0038_dining_sessions_checks_rounds": "7d0955e7090345aaf2a8cf25de7b1a2bed60a509afffbf9ddf6d9f170dce8b14",
+    "0039_dining_check_payments": "fc58a071bddee76495e7c105ced71fe9f720a0e659a26e51c57b1696fa3c8b91"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

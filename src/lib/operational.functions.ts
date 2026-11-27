@@ -863,6 +863,13 @@ export const fetchDiningRoom = createServerFn({ method: "POST" })
       : { data: [], error: null };
     if (rounds.error) throw new Error("dining_read_failed");
     const orderIds = (rounds.data ?? []).map((x) => x.order_id);
+    const tenders = checkIds.length
+      ? await c
+          .from("dining_check_payments")
+          .select("id,check_id,method,amount_cents,tip_cents,change_cents,status,created_at")
+          .in("check_id", checkIds)
+      : { data: [], error: null };
+    if (tenders.error) throw new Error("dining_read_failed");
     const serverIds = [...new Set((sessions.data ?? []).map((x) => x.server_id))];
     const [orders, items, profiles] = await Promise.all([
       orderIds.length
@@ -890,6 +897,7 @@ export const fetchDiningRoom = createServerFn({ method: "POST" })
         orders: orders.data ?? [],
         items: items.data ?? [],
         profiles: profiles.data ?? [],
+        tenders: tenders.data ?? [],
       }),
     });
   });
@@ -1137,4 +1145,76 @@ export const openDiningCheck = createServerFn({ method: "POST" })
     if (error || !id)
       throw await refused(context.supabase, error, s.orgId, "tables.check_open", s.locationId);
     return { id };
+  });
+
+// ---------------------------------------------------------------- check payments (0039)
+// A tender records what it settles of the check; the check closes (allocation, revenue, COGS) when its
+// balance reaches zero, and the table when its last check closes. The key is kept by the screen across
+// retries so a lost reply never records a second tender.
+export const payDiningCheck = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      checkId: z.string().uuid(),
+      clientKey: z.string().min(1).max(160),
+      method: z.enum(["cash", "card", "digital"]),
+      amountCents: z.number().int().positive(),
+      tipCents: z.number().int().min(0).max(10_000_000),
+      tenderedCents: z.number().int().min(0).nullable(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: result, error } = await context.supabase.rpc("pay_dining_check", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _check_id: data.checkId,
+      _client_key: data.clientKey,
+      _method: data.method,
+      _amount_cents: data.amountCents,
+      _tip_cents: data.tipCents,
+      ...(data.tenderedCents !== null ? { _tendered_cents: data.tenderedCents } : {}),
+    });
+    if (error || !result)
+      throw await refused(context.supabase, error, s.orgId, "tables.check_pay", s.locationId);
+    const r = result as { payment?: string; check_status?: string; balance_cents?: number };
+    return {
+      paymentId: String(r.payment ?? ""),
+      checkStatus: r.check_status === "closed" ? ("closed" as const) : ("open" as const),
+      balanceCents: Number(r.balance_cents ?? 0),
+    };
+  });
+
+export const voidCheckPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({ id: z.string().uuid(), reason: z.string().trim().min(3).max(300) }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("void_check_payment", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _payment_id: data.id,
+      _reason: data.reason,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.payment_reverse", s.locationId);
+    return { success: true };
+  });
+
+export const moveCheckRound = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore.extend({ orderId: z.string().uuid(), toCheckId: z.string().uuid() }))
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("move_check_round", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _order_id: data.orderId,
+      _to_check_id: data.toCheckId,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.round_move", s.locationId);
+    return { success: true };
   });

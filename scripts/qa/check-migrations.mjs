@@ -182,9 +182,11 @@ const GUARDED = [
   "fire_check_round",
   "inventory_item_costs",
   "list_pending_sale_reasons",
+  "move_check_round",
   "move_dining_session",
   "open_dining_check",
   "open_dining_session",
+  "pay_dining_check",
   "receive_operational_purchase",
   "record_operational_movement",
   "remove_member",
@@ -202,6 +204,7 @@ const GUARDED = [
   "update_dining_session",
   "update_location",
   "update_order_status",
+  "void_check_payment",
 ];
 // RPCs retired from the API (0036): they still exist (and stay GUARDED above where listed), but
 // anon, authenticated and service_role must not be able to execute them.
