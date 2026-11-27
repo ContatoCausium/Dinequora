@@ -33,8 +33,8 @@ entradas (tabelas, colunas, funções, sequências e schema), zero diferenças.
 | `hosted` (padrão) | Aplica `hosted-default-privileges.sql` **antes** das migrations | Reproduz o Client Preview e a produção. É o modelo contra o qual uma publicação é validada |
 | `cli` | Mantém os padrões do Supabase CLI | Reproduz a demo local, o QA local e projetos antigos |
 
-A CI roda os dois, como dois checks obrigatórios: `security (hosted privileges)` e
-`security (cli privileges)`.
+A CI roda os dois: `security (hosted privileges)` e `security (cli privileges)`. O check obrigatório
+na proteção da `main` é `security`, um job final que só passa quando os dois passaram.
 
 ### O que cada teste prova em cada modelo
 

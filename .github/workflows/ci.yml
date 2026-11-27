@@ -1,7 +1,7 @@
-# Dinequora CI. Three required checks; configure them as "required status checks" in the GitHub
-# branch protection of main (and integration/*) so a regression blocks the merge: "quality",
-# "security (hosted privileges)" and "security (cli privileges)" (the former single "security" check
-# no longer exists under that name).
+# Dinequora CI. Two required checks in the GitHub branch protection of main (and integration/*), so a
+# regression blocks the merge: "quality" and "security". The "security" check is the gate job at the
+# end: it passes only when both runs of the security suite, "security (hosted privileges)" and
+# "security (cli privileges)", passed, so the protection does not change when the matrix does.
 #   quality  - TypeScript, ESLint, Vitest, production build, migration journal integrity
 #   security - fresh disposable Supabase (scripts/qa), migrations from zero, SQL security fixtures,
 #              isolated QA tenant, permission matrix (6 profiles, store scope, tenant isolation).
@@ -94,3 +94,19 @@ jobs:
       - name: Stop QA Supabase
         if: always()
         run: supabase stop --workdir scripts/qa --no-backup
+
+  # The required "security" check. Runs even when a matrix run fails or is cancelled (a skipped job
+  # would count as passing), and passes only if every run of the security suite passed.
+  security-gate:
+    name: security
+    needs: security
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both privilege models passed
+        env:
+          RESULT: ${{ needs.security.result }}
+        run: |
+          echo "security suite: $RESULT"
+          test "$RESULT" = "success"
