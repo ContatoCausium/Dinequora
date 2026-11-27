@@ -1,14 +1,8 @@
 import { Order, KitchenStation, OrderStatus, saveOrder } from "./orders-service";
+import { DEFAULT_THRESHOLDS, type KDSThresholds } from "./kds-thresholds";
 
-export interface KDSThresholds {
-  warningMinutes: number;
-  delayedMinutes: number;
-}
-
-export const DEFAULT_THRESHOLDS: KDSThresholds = {
-  warningMinutes: 10,
-  delayedMinutes: 20,
-};
+// Thresholds live in a dependency-free module so the server (sidebar counters) uses the same values.
+export { DEFAULT_THRESHOLDS, type KDSThresholds };
 
 export function calculateElapsedMinutes(createdAtIso: string, now: Date = new Date()): number {
   const created = new Date(createdAtIso).getTime();
@@ -167,4 +161,30 @@ export function simulateIncomingOrder(orgId: string, locationId: string): Order 
 
   saveOrder(orgId, newOrder);
   return newOrder;
+}
+
+/** Clock time a ticket was placed, in its store's zone (the device's zone only as a fallback). */
+export function formatPlacedAt(iso: string, language: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat(language, {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(new Date(iso));
+}
+
+/** How long a delivered ticket stays in "Completed": the recent part of the shift, not the day. */
+export const COMPLETED_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Delivered tickets of the last two hours, most recent first (at most 10). `updatedAt` is the
+ * moment of the last status change, i.e. delivery for a delivered order.
+ */
+export function recentlyCompleted<T extends { status: string; updatedAt: string }>(
+  orders: readonly T[],
+  now: number,
+): T[] {
+  return orders
+    .filter((o) => o.status === "delivered" && now - Date.parse(o.updatedAt) <= COMPLETED_WINDOW_MS)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .slice(0, 10);
 }

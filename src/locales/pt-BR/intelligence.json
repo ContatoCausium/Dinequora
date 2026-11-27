@@ -1,9 +1,9 @@
 {
-  "title": "Dinequora Intelligence",
+  "title": "Insights",
   "description": "Receita, CMV e sinais de estoque calculados a partir das operações registradas.",
   "allStores": "Todas as lojas",
   "demoBadge": "Restaurante demo",
-  "dataSource": "Calculado a partir de lançamentos, fichas técnicas e estoque registrados, sem nenhum modelo de IA. {{entries}} lançamentos · {{orders}} pedidos no período.",
+  "dataSource": "Calculado a partir dos lançamentos, fichas técnicas e estoque registrados. {{entries}} lançamentos · {{orders}} pedidos no período.",
   "period": {
     "label": "Período de análise",
     "days": "{{count}} dias"
@@ -30,8 +30,8 @@
     "noPrior": "Sem receita nos {{days}} dias anteriores"
   },
   "agent": {
-    "title": "Agente executivo de consultas",
-    "subtitle": "Respostas determinísticas a partir de dados registrados. Nenhum modelo de IA é usado.",
+    "title": "Respostas rápidas",
+    "subtitle": "Respostas calculadas a partir dos seus dados registrados, com a evidência e o método de cada número.",
     "inputLabel": "Faça uma pergunta",
     "placeholder": "Ex.: Qual é o meu CMV atual?",
     "ask": "Consultar",
@@ -43,7 +43,7 @@
       "margin": "Como estão a margem bruta e as despesas?",
       "suppliers": "Quantos pedidos de compra estão em aberto?"
     },
-    "deterministic": "Determinístico",
+    "deterministic": "Calculado",
     "answeredAt": "Respondido {{time}}",
     "scope": "Últimos {{days}} dias · {{scope}}",
     "evidence": "Evidências registradas",
@@ -208,10 +208,10 @@
   },
   "message": {
     "noValue": "—",
-    "footer": "_Simulação do Dinequora Intelligence. Esta mensagem não foi enviada._",
-    "financial_summary": "*Dinequora Intelligence · Resumo financeiro*\nOlá, *{{name}}*. Números registrados nos últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Resultado líquido: {{net}}\n• CMV: {{cmv}}\n• Margem bruta: {{margin}}\n• Itens com estoque baixo: {{lowStock}}",
-    "cmv_audit": "*Dinequora Intelligence · Revisão de CMV*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• CMV: {{cmv}}\n• Custo das fichas: {{recipeCost}}\n• Faturamento bruto: {{revenue}}\n• Fichas técnicas ativas: {{recipes}}",
-    "low_stock_alert": "*Dinequora Intelligence · Alerta de estoque baixo*\nOlá, *{{name}}*. {{lowStock}} de {{tracked}} itens monitorados estão no estoque mínimo ou abaixo ({{scope}}).\n\nAbra o Estoque no Dinequora para planejar o próximo pedido de compra.",
-    "pulse": "*Dinequora Intelligence · Atualização operacional*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Pedidos: {{orders}}"
+    "footer": "_Simulação do Dinequora Insights. Esta mensagem não foi enviada._",
+    "financial_summary": "*Dinequora Insights · Resumo financeiro*\nOlá, *{{name}}*. Números registrados nos últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Resultado líquido: {{net}}\n• CMV: {{cmv}}\n• Margem bruta: {{margin}}\n• Itens com estoque baixo: {{lowStock}}",
+    "cmv_audit": "*Dinequora Insights · Revisão de CMV*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• CMV: {{cmv}}\n• Custo das fichas: {{recipeCost}}\n• Faturamento bruto: {{revenue}}\n• Fichas técnicas ativas: {{recipes}}",
+    "low_stock_alert": "*Dinequora Insights · Alerta de estoque baixo*\nOlá, *{{name}}*. {{lowStock}} de {{tracked}} itens monitorados estão no estoque mínimo ou abaixo ({{scope}}).\n\nAbra o Estoque no Dinequora para planejar o próximo pedido de compra.",
+    "pulse": "*Dinequora Insights · Atualização operacional*\nOlá, *{{name}}*. Últimos {{days}} dias ({{scope}}):\n\n• Faturamento bruto: {{revenue}}\n• Pedidos: {{orders}}"
   }
 }

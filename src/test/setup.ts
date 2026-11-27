@@ -18,3 +18,16 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// Radix Select (the design-system select) uses pointer capture and scrollIntoView, which jsdom does
+// not implement. No-op stubs let tests open it and pick options like a user would.
+if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
+if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+// Radix Checkbox/Switch measure themselves with ResizeObserver (absent from jsdom).
+if (!("ResizeObserver" in globalThis))
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };

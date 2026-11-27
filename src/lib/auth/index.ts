@@ -1,5 +1,6 @@
 import { supabaseAuth } from "./supabase-adapter";
 import type { AuthService, SocialProvider } from "./types";
+import { isClientPreview } from "../deployment-profile";
 
 export * from "./types";
 
@@ -26,9 +27,9 @@ export function socialProvidersFromEnv(
   return KNOWN_SOCIAL_PROVIDERS.map((id) => ({ id, enabled: wanted.has(id) }));
 }
 
-/** Social providers shown on sign-in screens. */
+/** Social providers shown on sign-in screens (none in the client preview: provisioned accounts only). */
 export const SOCIAL_PROVIDERS: { id: SocialProvider; enabled: boolean }[] = socialProvidersFromEnv(
-  import.meta.env["VITE_AUTH_SOCIAL_PROVIDERS"] as string | undefined,
+  isClientPreview() ? "" : (import.meta.env["VITE_AUTH_SOCIAL_PROVIDERS"] as string | undefined),
 );
 
 /** Accept only same-origin relative paths for post-auth redirects. */

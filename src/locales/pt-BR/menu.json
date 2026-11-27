@@ -181,5 +181,10 @@
     "selectUpTo": "Escolha até {{max}}",
     "close": "Fechar Prévia",
     "empty": "Ainda não há produtos disponíveis."
+  },
+  "view": {
+    "label": "Visualização",
+    "list": "Ver em lista",
+    "grid": "Ver em grade"
   }
 }

@@ -17,7 +17,8 @@
     "descriptionRequired": "Enter a description for the expense.",
     "amountPositive": "Enter an amount greater than zero.",
     "storeRequired": "Choose the store this expense belongs to.",
-    "dueDateRequired": "Choose a due date."
+    "dueDateRequired": "Choose a due date.",
+    "competencyDateRequired": "Choose a competency date."
   },
   "tabs": {
     "label": "Finance views",
@@ -140,7 +141,7 @@
   },
   "pnl": {
     "title": "Profit & loss",
-    "subtitle": "Same definitions as the Dashboard and Intelligence: result = revenue − COGS − operating expenses",
+    "subtitle": "Same definitions as the Dashboard and Insights: result = revenue − COGS − operating expenses",
     "revenue": "Revenue (net of tax)",
     "revenueHint": "POS sales net of tax, minus reversals",
     "cogs": "(−) Cost of goods sold",
@@ -212,7 +213,9 @@
     "responsiblePlaceholder": "Who approves this bill",
     "cancel": "Cancel",
     "save": "Save expense",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "competencyDate": "Competency date",
+    "competencyHint": "The day this cost belongs to. Results count it only once this date has arrived; it defaults to the due date."
   },
   "deleteConfirm": {
     "title": "Delete this expense?",
@@ -308,6 +311,22 @@
       "colStatus": "Status",
       "colNotes": "Notes",
       "sheetName": "Financial report"
-    }
-  }
+    },
+    "rowsLoading": "Loading every ledger entry for this report…",
+    "rowsError": "The ledger entries could not be loaded, so this report cannot be shown or exported. Try again later."
+  },
+  "periodLabel": "Period",
+  "periods": {
+    "month": "This month",
+    "30d": "30 days",
+    "90d": "90 days",
+    "all": "All time"
+  },
+  "periodCaption": {
+    "month": "This month to date",
+    "30d": "Last 30 days",
+    "90d": "Last 90 days",
+    "all": "All recorded data"
+  },
+  "recognitionNote": "Expenses count from their competency date, never before it arrives. Overdue and upcoming bills are shown as of today."
 }

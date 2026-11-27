@@ -2,6 +2,7 @@
 //
 //   node scripts/qa/check-migrations.mjs                           # files: journal, history, policy
 //   DB_URL=postgresql://... node scripts/qa/check-migrations.mjs   # + applied database
+//   DB_URL=... node scripts/qa/check-migrations.mjs --preflight     # before publishing: pending OK
 //   node scripts/qa/check-migrations.mjs --add-new-hashes          # record hashes of NEW entries
 //
 // Files mode fails (exit 1) when:
@@ -16,8 +17,13 @@
 //    describes tables/enums/etc. (sign that `drizzle-kit generate` ran), or drizzle-kit/drizzle-orm
 //    are not pinned to an exact version equal to package-lock.json.
 // With DB_URL it also fails when:
-//  - the tracker has rows the journal does not know, a journal entry is not applied, an applied
+//  - a journal entry is not applied and its `when` is not above the last applied row (the migrator
+//    would skip it silently, even with --preflight);
+//  - the tracker has rows the journal does not know, a journal entry is not applied (accepted with
+//    --preflight when the migrator will apply it: listed as pending), an applied
 //    hash differs from the LF-normalized file, or an orphan is recorded as applied;
+//  - a retired RPC (0036: the basis-point sale functions) is executable by anon, authenticated or
+//    service_role (accepted with --preflight only while the migration that revokes it is pending);
 //  - a guarded RPC lost its permission check or has more than one definition (e.g. the orphan
 //    0011_create_pos_sale_and_idempotency.sql run by hand);
 //  - a public table has RLS disabled, a SECURITY DEFINER function has no fixed search_path, a
@@ -41,6 +47,11 @@ const ROOT = process.env.CHECK_MIGRATIONS_ROOT
 const DIR = path.join(ROOT, "drizzle/migrations");
 const MANIFEST = path.join(ROOT, "scripts/qa/migration-hashes.json");
 const ADD_NEW = process.argv.includes("--add-new-hashes");
+// Before a publication (read-only): journal entries not applied yet are accepted when the migrator
+// WILL apply them (`when` above the last applied row), and listed. Without the flag they fail.
+const PREFLIGHT = process.argv.includes("--preflight");
+const pending = [];
+const pendingFunctions = [];
 
 // Files that were committed (and published) outside the journal. Superseded: their content is
 // part of 0013 (create_pos_sale + orders_org_client_order_id_uniq) and 0017 (realtime) and
@@ -166,9 +177,11 @@ const GUARDED = [
   "finalize_pos_sale_atomic",
   "finalize_pos_sale_atomic_v2",
   "inventory_item_costs",
+  "list_pending_sale_reasons",
   "receive_operational_purchase",
   "record_operational_movement",
   "remove_member",
+  "resolve_pending_pos_sale",
   "revoke_invitation",
   "save_operational_menu",
   "save_operational_record",
@@ -179,13 +192,21 @@ const GUARDED = [
   "update_location",
   "update_order_status",
 ];
+// RPCs retired from the API (0036): they still exist (and stay GUARDED above where listed), but
+// anon, authenticated and service_role must not be able to execute them.
+const RETIRED = [
+  "create_pos_sale",
+  "finalize_pos_sale_atomic",
+  "persist_finalized_pos_sale_atomic",
+];
 // Data-writing SECURITY DEFINER functions callable by signed-in users that authorize WITHOUT the
 // permission catalog (reviewed 2026-11-09 against the definitions in 0000-0020;
 // admin_set_org_feature reviewed 2026-11-10 in 0022). Each one checks something else. Do not add
 // a function here without the same review; prefer GUARDED.
 const REVIEWED = {
   accept_invitation: "auth.uid() must match the invitation",
-  admin_assign_owner: "platform admin only",
+  admin_assign_owner:
+    "platform admin only; an organization without an active owner only, never the caller or an account with a platform role, serialized per organization (0034)",
   admin_set_org_feature: "platform admin only (0022, audited)",
   admin_set_platform_role: "platform admin only",
   admin_set_subscription: "platform admin only",
@@ -212,7 +233,7 @@ if (process.env.DB_URL) {
   const require = createRequire(path.join(REPO, "package.json"));
   const postgres = require("postgres");
   const sql = postgres(process.env.DB_URL, { max: 1, onnotice: () => {} });
-  let guards, noRls, noSearchPath, writers;
+  let guards, noRls, noSearchPath, writers, retired;
   try {
     applied = await sql`select hash, created_at from drizzle.__drizzle_migrations order by id`;
     guards = await sql`select p.proname as name,
@@ -238,19 +259,51 @@ if (process.env.DB_URL) {
       where n.nspname = 'public' and p.prosecdef and p.prorettype <> 'trigger'::regtype
         and p.prosrc ~* '\\m(insert|update|delete)\\M'
       order by 1`;
+    retired = await sql`select p.proname as name,
+        array_to_string(array(select r from unnest(array['anon', 'authenticated', 'service_role']) r
+                               where has_function_privilege(r, p.oid, 'EXECUTE')), ',') as roles
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = any(${RETIRED})
+      order by 1`;
   } finally {
     await sql.end();
   }
   const g = new Map(guards.map((r) => [r.name, r]));
+  // --preflight: a guarded RPC may be missing only because a pending migration creates it.
+  const lastWhen = applied.reduce((m, r) => Math.max(m, Number(r.created_at)), -Infinity);
+  const createdByPending = (name) =>
+    PREFLIGHT &&
+    entries.some(
+      (e) =>
+        e.when > lastWhen &&
+        !applied.some((r) => String(r.created_at) === String(e.when)) &&
+        lf(path.join(DIR, `${e.tag}.sql`)).includes(`function public.${name}(`),
+    );
   for (const name of GUARDED) {
     const r = g.get(name);
-    if (!r) problems.push(`missing function public.${name}`);
+    if (!r && createdByPending(name)) pendingFunctions.push(name);
+    else if (!r) problems.push(`missing function public.${name}`);
     else if (!r.guarded || r.defs !== 1)
       problems.push(
         `public.${name} lost its permission check or has ${r.defs} definitions ` +
           `(was an orphan migration such as 0011_create_pos_sale_and_idempotency.sql run by hand?)`,
       );
   }
+  // Retired RPCs stay in the database but no API role may execute them (0036). --preflight accepts
+  // them only while the migration that revokes them is still pending.
+  const revokedByPending = (name) =>
+    PREFLIGHT &&
+    entries.some(
+      (e) =>
+        e.when > lastWhen &&
+        !applied.some((r) => String(r.created_at) === String(e.when)) &&
+        lf(path.join(DIR, `${e.tag}.sql`)).includes(`revoke all on function public.${name}(`),
+    );
+  for (const r of retired)
+    if (r.roles && revokedByPending(r.name))
+      pendingFunctions.push(`${r.name} (retired by a pending migration)`);
+    else if (r.roles)
+      problems.push(`retired function public.${r.name} is executable by ${r.roles}`);
   for (const r of noRls) problems.push(`table public.${r.name} has row level security disabled`);
   for (const r of noSearchPath)
     problems.push(`SECURITY DEFINER function public.${r.name} has no fixed search_path`);
@@ -274,9 +327,17 @@ if (process.env.DB_URL) {
     if (orphanHashes.has(r.hash))
       problems.push(`orphan recorded as applied: ${orphanHashes.get(r.hash)}`);
   const byWhen = new Map(applied.map((r) => [String(r.created_at), r.hash]));
+  // drizzle-orm's migrator applies an entry only when its `when` is greater than the created_at of
+  // the LAST applied row: an unapplied entry at or below it is skipped silently, forever.
+  const lastApplied = applied.reduce((m, r) => Math.max(m, Number(r.created_at)), -Infinity);
   for (const e of entries) {
     const h = byWhen.get(String(e.when));
-    if (!h) problems.push(`not applied: ${e.tag}`);
+    if (!h && e.when <= lastApplied)
+      problems.push(
+        `would be skipped by the migrator: ${e.tag} (when ${e.when} <= last applied ${lastApplied})`,
+      );
+    else if (!h && PREFLIGHT) pending.push(e.tag);
+    else if (!h) problems.push(`not applied: ${e.tag}`);
     else if (h !== lfHash(e.tag)) problems.push(`applied hash differs from file: ${e.tag}`);
   }
   const known = new Set(entries.map((e) => String(e.when)));
@@ -302,6 +363,12 @@ console.log(
     `recorded hashes: ${Object.keys(recorded).length}` +
     (applied ? `; applied rows: ${applied.length}` : ""),
 );
+if (PREFLIGHT && !applied)
+  problems.push("--preflight needs DB_URL (it describes an applied database)");
+if (pending.length)
+  console.log(`pending (the migrator will apply them, in this order): ${pending.join(", ")}`);
+if (pendingFunctions.length)
+  console.log(`guarded functions a pending migration creates: ${pendingFunctions.join(", ")}`);
 if (problems.length) {
   console.error(problems.map((p) => `FAIL ${p}`).join("\n"));
   process.exit(1);

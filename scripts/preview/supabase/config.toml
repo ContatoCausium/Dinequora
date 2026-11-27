@@ -1,0 +1,62 @@
+# Local, DISPOSABLE rehearsal stack of the Client Preview (Dinequora). Its own identity: project_id
+# dq-client-preview, ports 6473x. It is NOT the commercial demo (supabase/, 543xx), NOT the persistent
+# QA (dq-rebuild, 553xx) and NOT the CI stack (scripts/qa, dq-ci, 6442x). It never points at a hosted
+# project. It exists to build and verify the client-preview dataset before the hosted preview project:
+#
+#   supabase start --workdir scripts/preview -x studio,imgproxy,vector,logflare,supavisor,edge-runtime,mailpit,storage-api,postgres-meta
+#   node scripts/guard/target-guard.mjs claim --db-url <DB_URL>     # while the database is new and empty
+#   LOVABLE_DB_MIGRATION_URL=<DB_URL> npx drizzle-kit migrate
+#
+# Ports and names do not protect anything: every write goes through the target guard
+# (scripts/guard/target-guard.mjs) or the client-preview guard (scripts/preview/preview-target.mjs).
+project_id = "dq-client-preview"
+
+[api]
+enabled = true
+port = 64731
+# dq_guard exposes only dq_guard.attest() to the service role (scripts/guard/target-guard.mjs).
+schemas = ["public", "graphql_public", "dq_guard"]
+extra_search_path = ["public", "extensions"]
+
+[db]
+port = 64732
+shadow_port = 64730
+major_version = 17
+
+[db.seed]
+# Only the empty dq_guard schema; the schema comes from drizzle/migrations, the data from
+# scripts/preview/seed-client-preview.mjs.
+enabled = true
+sql_paths = ["./guard-schema.sql"]
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[storage]
+enabled = false
+
+[realtime]
+# The kitchen board subscribes to order changes.
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:8798"
+additional_redirect_urls = ["http://127.0.0.1:8798/**"]
+# Same as the hosted client preview: accounts are provisioned by the seed, never self-created.
+enable_signup = false
+enable_anonymous_sign_ins = false
+
+[auth.email]
+# Email + password sign-in stays on (auth.enable_signup above closes sign-up). Do not set
+# auth.email.enable_signup: CLI 3 reads it as the deprecated switch of the whole email provider.
+enable_confirmations = false

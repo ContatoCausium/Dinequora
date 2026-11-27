@@ -12,7 +12,10 @@ import {
 import { Panel, Segmented } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { StatTile } from "@/components/app/stat-tile";
+import { Pager, SortableTh } from "@/components/app/data-table";
+import { useSort } from "@/lib/use-sort";
 import { Badge } from "@/components/ui/badge";
+import { CircleAlert, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,12 +31,14 @@ import {
   SERIES,
   filterExpenses,
   groupExpenses,
+  pnlExpenseGroups,
   sortExpenses,
   type ExpenseFilters,
   type MonthPoint,
   type StoreResult,
 } from "./finance-model";
 import { averageCents } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 /** Shared row actions and display context passed down from the page. */
 export interface ExpenseActions {
@@ -46,22 +51,31 @@ export interface ExpenseActions {
   onDelete: (e: Expense) => void;
 }
 
-const STATUS_VARIANT: Record<ExpenseStatusView, "success" | "neutral" | "danger"> = {
-  paid: "success",
-  pending: "neutral",
-  overdue: "danger",
+/** Bills: one vocabulary (color + icon + label) wherever a bill status appears. */
+const STATUS_STYLE: Record<
+  ExpenseStatusView,
+  { variant: "success" | "info" | "danger"; icon: typeof Clock }
+> = {
+  paid: { variant: "success", icon: CheckCircle2 },
+  pending: { variant: "info", icon: Clock },
+  overdue: { variant: "danger", icon: CircleAlert },
 };
 
 export function StatusBadge({ status }: { status: ExpenseStatusView }) {
   const { t } = useTranslation("finance");
   return (
-    <Badge variant={STATUS_VARIANT[status]} className="whitespace-nowrap text-[11px]">
+    <Badge variant={STATUS_STYLE[status].variant} className="whitespace-nowrap">
+      {(() => {
+        const Icon = STATUS_STYLE[status].icon;
+        return <Icon aria-hidden />;
+      })()}
       {t(`status.${status}`)}
     </Badge>
   );
 }
 
 const longDate = { year: "numeric", month: "short", day: "numeric" } as const;
+const EXPENSE_PAGE_SIZE = 20;
 const monthLabel = (month: string, lng: string) =>
   fmtDate(`${month}-01`, lng, { month: "short", year: "numeric" });
 
@@ -166,8 +180,8 @@ export function BillListPanel({
           {bills.map((b) => (
             <li key={b.id} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{b.description}</p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="break-words text-sm font-medium text-foreground">{b.description}</p>
+                <p className="break-words text-xs text-muted-foreground">
                   {[
                     actions.showStore ? actions.storeName(b.locationId) : null,
                     t(`categories.${b.category}`),
@@ -303,9 +317,9 @@ export function ExpensesPanel({
           placeholder={t("table.searchPlaceholder")}
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
-          className="h-9 w-full text-xs sm:w-64"
+          className="h-9 w-full sm:w-80"
         />
-        <select
+        <FormSelect
           aria-label={t("table.statusFilter")}
           value={filters.status}
           onChange={(e) => set("status", e.target.value as ExpenseFilters["status"])}
@@ -315,8 +329,8 @@ export function ExpensesPanel({
           <option value="overdue">{t("status.overdue")}</option>
           <option value="pending">{t("status.pending")}</option>
           <option value="paid">{t("status.paid")}</option>
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("table.categoryFilter")}
           value={filters.category}
           onChange={(e) => set("category", e.target.value as ExpenseCategory | "all")}
@@ -328,9 +342,9 @@ export function ExpensesPanel({
               {t(`categories.${c}`)}
             </option>
           ))}
-        </select>
+        </FormSelect>
         {actions.showStore && (
-          <select
+          <FormSelect
             aria-label={t("table.storeFilter")}
             value={filters.locationId}
             onChange={(e) => set("locationId", e.target.value)}
@@ -342,9 +356,9 @@ export function ExpensesPanel({
                 {s.name}
               </option>
             ))}
-          </select>
+          </FormSelect>
         )}
-        <select
+        <FormSelect
           aria-label={t("table.recurrenceFilter")}
           value={filters.recurrence}
           onChange={(e) => set("recurrence", e.target.value as ExpenseFilters["recurrence"])}
@@ -354,7 +368,7 @@ export function ExpensesPanel({
           <option value="fixed">{t("recurrence.fixed")}</option>
           <option value="variable">{t("recurrence.variable")}</option>
           <option value="recurring">{t("recurrence.recurring")}</option>
-        </select>
+        </FormSelect>
         {filtersActive && (
           <Button
             size="sm"
@@ -404,96 +418,146 @@ function ExpenseTable({
 }) {
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
-  const th = "p-3 font-medium";
+  // Presentation only: sorts and pages the expenses already filtered on screen.
+  const STATUS_ORDER = { overdue: 0, pending: 1, paid: 2 } as const;
+  const { sorted, sort, toggle } = useSort(expenses, {
+    description: (e) => e.description,
+    store: (e) => actions.storeName(e.locationId),
+    category: (e) => t(`categories.${e.category}`),
+    recurrence: (e) => t(`recurrence.${e.recurrence}`),
+    due: (e) => e.dueDate,
+    amount: (e) => e.amountCents,
+    status: (e) => STATUS_ORDER[effectiveStatus(e, today)],
+  });
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / EXPENSE_PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const rows = sorted.slice((current - 1) * EXPENSE_PAGE_SIZE, current * EXPENSE_PAGE_SIZE);
+  const onSort = (key: Parameters<typeof toggle>[0]) => {
+    toggle(key);
+    setPage(1);
+  };
   return (
-    <div className="max-h-[640px] overflow-auto rounded-md border">
-      <table className="w-full text-left text-xs">
-        <thead className="sticky top-0 z-10 border-b bg-muted text-[11px] text-muted-foreground">
-          <tr>
-            <th className={th}>{t("table.description")}</th>
-            {actions.showStore && <th className={th}>{t("table.store")}</th>}
-            <th className={th}>{t("table.category")}</th>
-            <th className={th}>{t("table.recurrence")}</th>
-            <th className={th}>{t("table.dueDate")}</th>
-            <th className={cn(th, "text-right")}>{t("table.amount")}</th>
-            <th className={th}>{t("table.status")}</th>
-            {actions.canManage && (
-              <th className={cn(th, "text-right")}>
-                <span className="sr-only">{t("table.actions")}</span>
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {expenses.map((exp) => {
-            const status = effectiveStatus(exp, today);
-            const busy = actions.busyId === exp.id;
-            return (
-              <tr key={exp.id} className="transition-colors hover:bg-muted/40">
-                <td className="p-3">
-                  <p className="font-medium leading-snug text-foreground">{exp.description}</p>
-                  {exp.supplierName && (
-                    <p className="text-[11px] text-muted-foreground">{exp.supplierName}</p>
-                  )}
-                </td>
-                {actions.showStore && (
-                  <td className="whitespace-nowrap p-3 text-muted-foreground">
-                    {actions.storeName(exp.locationId)}
+    <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-x-auto">
+        <table className="data-table text-left">
+          <thead>
+            <tr>
+              <SortableTh
+                label={t("table.description")}
+                sortKey="description"
+                sort={sort}
+                onSort={onSort}
+              />
+              {actions.showStore && (
+                <SortableTh label={t("table.store")} sortKey="store" sort={sort} onSort={onSort} />
+              )}
+              <SortableTh
+                label={t("table.category")}
+                sortKey="category"
+                sort={sort}
+                onSort={onSort}
+              />
+              <SortableTh
+                label={t("table.recurrence")}
+                sortKey="recurrence"
+                sort={sort}
+                onSort={onSort}
+              />
+              <SortableTh label={t("table.dueDate")} sortKey="due" sort={sort} onSort={onSort} />
+              <SortableTh
+                label={t("table.amount")}
+                sortKey="amount"
+                sort={sort}
+                onSort={onSort}
+                align="right"
+              />
+              <SortableTh label={t("table.status")} sortKey="status" sort={sort} onSort={onSort} />
+              {actions.canManage && (
+                <th className="text-right">
+                  <span className="sr-only">{t("table.actions")}</span>
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((exp) => {
+              const status = effectiveStatus(exp, today);
+              const busy = actions.busyId === exp.id;
+              return (
+                <tr key={exp.id}>
+                  <td>
+                    <p className="font-medium leading-snug text-foreground">{exp.description}</p>
+                    {exp.supplierName && (
+                      <p className="text-[11px] text-muted-foreground">{exp.supplierName}</p>
+                    )}
                   </td>
-                )}
-                <td className="p-3 text-muted-foreground">{t(`categories.${exp.category}`)}</td>
-                <td className="p-3 text-muted-foreground">{t(`recurrence.${exp.recurrence}`)}</td>
-                <td className="tabular whitespace-nowrap p-3 text-muted-foreground">
-                  {fmtDate(exp.dueDate, lng, longDate)}
-                </td>
-                <td className="tabular whitespace-nowrap p-3 text-right font-medium text-foreground">
-                  {fmtMoneyCents(exp.amountCents, lng)}
-                </td>
-                <td className="p-3">
-                  <StatusBadge status={status} />
-                </td>
-                {actions.canManage && (
-                  <td className="p-3">
-                    <div className="flex items-center justify-end gap-0.5">
-                      {status !== "paid" && (
+                  {actions.showStore && (
+                    <td className="whitespace-nowrap text-muted-foreground">
+                      {actions.storeName(exp.locationId)}
+                    </td>
+                  )}
+                  <td className="text-muted-foreground">{t(`categories.${exp.category}`)}</td>
+                  <td className="text-muted-foreground">{t(`recurrence.${exp.recurrence}`)}</td>
+                  <td className="tabular whitespace-nowrap text-muted-foreground">
+                    {fmtDate(exp.dueDate, lng, longDate)}
+                  </td>
+                  <td className="tabular whitespace-nowrap text-right font-medium text-foreground">
+                    {fmtMoneyCents(exp.amountCents, lng)}
+                  </td>
+                  <td>
+                    <StatusBadge status={status} />
+                  </td>
+                  {actions.canManage && (
+                    <td>
+                      <div className="flex items-center justify-end gap-0.5">
+                        {status !== "paid" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={busy}
+                            aria-busy={busy}
+                            aria-label={t("bills.markPaidAria", { description: exp.description })}
+                            title={t("bills.markPaid")}
+                            onClick={() => actions.onMarkPaid(exp)}
+                          >
+                            <CheckCircle2 />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
                           disabled={busy}
-                          aria-busy={busy}
-                          aria-label={t("bills.markPaidAria", { description: exp.description })}
-                          title={t("bills.markPaid")}
-                          onClick={() => actions.onMarkPaid(exp)}
+                          aria-label={t("table.edit", { description: exp.description })}
+                          onClick={() => actions.onEdit(exp)}
                         >
-                          <CheckCircle2 />
+                          <Edit2 />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={busy}
-                        aria-label={t("table.edit", { description: exp.description })}
-                        onClick={() => actions.onEdit(exp)}
-                      >
-                        <Edit2 />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={busy}
-                        aria-label={t("table.delete", { description: exp.description })}
-                        onClick={() => actions.onDelete(exp)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={busy}
+                          aria-label={t("table.delete", { description: exp.description })}
+                          onClick={() => actions.onDelete(exp)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <Pager
+        page={current}
+        pageCount={pageCount}
+        pageSize={EXPENSE_PAGE_SIZE}
+        total={sorted.length}
+        onPage={setPage}
+      />
     </div>
   );
 }
@@ -511,7 +575,7 @@ function GroupTable({
   const th = "p-3 font-medium";
   return (
     <div className="overflow-x-auto rounded-md border">
-      <table className="w-full text-left text-xs">
+      <table className="data-table text-left">
         <thead className="border-b bg-muted text-[11px] text-muted-foreground">
           <tr>
             <th className={th}>{t("table.groupName")}</th>
@@ -524,7 +588,7 @@ function GroupTable({
         <tbody className="divide-y">
           {groups.map((g) => (
             <tr key={g.key}>
-              <td className="p-3">
+              <td>
                 <p className="font-medium text-foreground">{label(g.key)}</p>
                 <div
                   className="mt-1.5 h-1 w-full max-w-[220px] overflow-hidden rounded-full bg-muted"
@@ -536,14 +600,14 @@ function GroupTable({
                   />
                 </div>
               </td>
-              <td className="tabular p-3 text-right text-muted-foreground">{g.count}</td>
-              <td className="tabular whitespace-nowrap p-3 text-right font-medium text-foreground">
+              <td className="tabular text-right text-muted-foreground">{g.count}</td>
+              <td className="tabular whitespace-nowrap text-right font-medium text-foreground">
                 {fmtMoneyCents(g.totalCents, lng)}
               </td>
-              <td className="tabular whitespace-nowrap p-3 text-right text-muted-foreground">
+              <td className="tabular whitespace-nowrap text-right text-muted-foreground">
                 {fmtMoneyCents(g.openCents, lng)}
               </td>
-              <td className="tabular whitespace-nowrap p-3 text-right">
+              <td className="tabular whitespace-nowrap text-right">
                 {g.overdueCents > 0 ? (
                   <span className="inline-flex items-center gap-1.5 text-foreground">
                     <span aria-hidden className="size-1.5 rounded-full bg-destructive" />
@@ -620,6 +684,16 @@ export function PnlPanel({
   const lng = i18n.language;
   const money = (c: number) => fmtMoneyCents(c, lng);
   const empty = revenueCents === 0 && cogsCents === 0 && summary.totalCents === 0;
+  const groups = pnlExpenseGroups(summary);
+  const categoryRows = (rows: typeof groups.personnel) =>
+    rows.map((c) => (
+      <StatementRow
+        key={c.category}
+        indent
+        label={<span className="pl-4">{t(`categories.${c.category}`)}</span>}
+        value={money(-c.cents)}
+      />
+    ));
   return (
     <Panel title={t("pnl.title")} subtitle={t("pnl.subtitle")}>
       {empty ? (
@@ -647,16 +721,11 @@ export function PnlPanel({
             value={money(grossProfitCents)}
           />
           <StatementRow label={t("pnl.expenses")} value={money(-summary.totalCents)} />
+          {/* Each category under its own parent, exactly once (personnel vs other operating). */}
           <StatementRow indent label={t("pnl.personnel")} value={money(-summary.personnelCents)} />
+          {categoryRows(groups.personnel)}
           <StatementRow indent label={t("pnl.operating")} value={money(-summary.operatingCents)} />
-          {summary.byCategory.map((c) => (
-            <StatementRow
-              key={c.category}
-              indent
-              label={<span className="pl-4">{t(`categories.${c.category}`)}</span>}
-              value={money(-c.cents)}
-            />
-          ))}
+          {categoryRows(groups.operating)}
           <StatementRow
             emphasis
             label={t("pnl.result")}
@@ -748,7 +817,7 @@ export function CashflowSection({
               ariaLabel={t("cashflow.title")}
             />
             <div className="mt-4 overflow-x-auto rounded-md border">
-              <table className="w-full text-left text-xs">
+              <table className="data-table text-left">
                 <thead className="border-b bg-muted text-[11px] text-muted-foreground">
                   <tr>
                     <th className="p-3 font-medium">{t("cashflow.weekStart")}</th>
@@ -758,10 +827,10 @@ export function CashflowSection({
                 <tbody className="divide-y">
                   {forecast.map((w) => (
                     <tr key={w.weekStart}>
-                      <td className="p-3 text-muted-foreground">
+                      <td className="text-muted-foreground">
                         {t("cashflow.week", { date: fmtDate(w.weekStart, lng, longDate) })}
                       </td>
-                      <td className="tabular p-3 text-right font-medium text-foreground">
+                      <td className="tabular text-right font-medium text-foreground">
                         {fmtMoneyCents(w.cents, lng)}
                       </td>
                     </tr>
@@ -817,7 +886,7 @@ export function StoresPanel({ stores }: { stores: StoreResult[] }) {
           />
           <ChartLegend series={series} />
           <div className="mt-5 overflow-x-auto rounded-md border">
-            <table className="w-full text-left text-xs">
+            <table className="data-table text-left">
               <thead className="border-b bg-muted text-[11px] text-muted-foreground">
                 <tr>
                   <th className={th}>{t("stores.store")}</th>
@@ -833,7 +902,7 @@ export function StoresPanel({ stores }: { stores: StoreResult[] }) {
               <tbody className="divide-y">
                 {stores.map((s) => (
                   <tr key={s.locationId}>
-                    <td className="p-3 font-medium text-foreground">
+                    <td className="font-medium text-foreground">
                       <span className="flex items-center gap-2">
                         {s.locationName}
                         {!s.hasData && (
@@ -843,25 +912,25 @@ export function StoresPanel({ stores }: { stores: StoreResult[] }) {
                         )}
                       </span>
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right">
+                    <td className="tabular whitespace-nowrap text-right">
                       {money(s.revenueCents)}
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right text-muted-foreground">
+                    <td className="tabular whitespace-nowrap text-right text-muted-foreground">
                       {money(s.cogsCents)}
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right">
+                    <td className="tabular whitespace-nowrap text-right">
                       {money(s.grossProfitCents)}
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right text-muted-foreground">
+                    <td className="tabular whitespace-nowrap text-right text-muted-foreground">
                       {s.grossMargin === null ? "—" : fmtPercent(s.grossMargin, lng)}
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right text-muted-foreground">
+                    <td className="tabular whitespace-nowrap text-right text-muted-foreground">
                       {money(s.expensesCents)}
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right text-muted-foreground">
+                    <td className="tabular whitespace-nowrap text-right text-muted-foreground">
                       {money(s.personnelCents)}
                     </td>
-                    <td className="tabular whitespace-nowrap p-3 text-right font-semibold text-foreground">
+                    <td className="tabular whitespace-nowrap text-right font-semibold text-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         {s.hasData && (
                           <span

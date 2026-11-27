@@ -17,7 +17,8 @@
     "descriptionRequired": "Informe a descrição da despesa.",
     "amountPositive": "Informe um valor maior que zero.",
     "storeRequired": "Escolha a loja à qual esta despesa pertence.",
-    "dueDateRequired": "Escolha a data de vencimento."
+    "dueDateRequired": "Escolha a data de vencimento.",
+    "competencyDateRequired": "Escolha a data de competência."
   },
   "tabs": {
     "label": "Visões financeiras",
@@ -140,7 +141,7 @@
   },
   "pnl": {
     "title": "Demonstrativo de resultado (DRE)",
-    "subtitle": "Mesmas definições do Dashboard e da Inteligência: resultado = receita − CMV − despesas operacionais",
+    "subtitle": "Mesmas definições do Dashboard e dos Insights: resultado = receita − CMV − despesas operacionais",
     "revenue": "Receita (líquida de impostos)",
     "revenueHint": "Vendas do PDV líquidas de impostos, menos estornos",
     "cogs": "(−) Custo das mercadorias vendidas (CMV)",
@@ -212,7 +213,9 @@
     "responsiblePlaceholder": "Quem aprova esta conta",
     "cancel": "Cancelar",
     "save": "Salvar despesa",
-    "saving": "Salvando…"
+    "saving": "Salvando…",
+    "competencyDate": "Data de competência",
+    "competencyHint": "O dia a que este custo pertence. O resultado só o considera quando essa data chega; o padrão é a data de vencimento."
   },
   "deleteConfirm": {
     "title": "Excluir esta despesa?",
@@ -308,6 +311,22 @@
       "colStatus": "Status",
       "colNotes": "Observações",
       "sheetName": "Relatório financeiro"
-    }
-  }
+    },
+    "rowsLoading": "Carregando todos os lançamentos do livro para este relatório…",
+    "rowsError": "Não foi possível carregar os lançamentos do livro, então este relatório não pode ser exibido nem exportado. Tente novamente mais tarde."
+  },
+  "periodLabel": "Período",
+  "periods": {
+    "month": "Este mês",
+    "30d": "30 dias",
+    "90d": "90 dias",
+    "all": "Tudo"
+  },
+  "periodCaption": {
+    "month": "Este mês até hoje",
+    "30d": "Últimos 30 dias",
+    "90d": "Últimos 90 dias",
+    "all": "Todos os dados registrados"
+  },
+  "recognitionNote": "As despesas contam a partir da data de competência, nunca antes dela. Contas vencidas e a vencer aparecem na posição de hoje."
 }

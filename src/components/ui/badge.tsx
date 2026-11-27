@@ -3,25 +3,30 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Status pills (Ember & Sand). Soft tone + ink mixed toward the foreground so every pair stays ≥ 4.5:1;
+ * status meaning must also be carried by the label (and an icon where it helps), never color alone.
+ * `default` (solid brand) and `destructive` (solid crimson) are for counts/emphasis, not status.
+ */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex h-[22px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_svg]:size-3 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
-        outline: "text-foreground",
-        // Soft status tones (semantic tokens only; ink is mixed toward foreground for AA contrast).
+        default: "border-transparent bg-primary text-primary-foreground",
+        secondary: "border-transparent bg-secondary text-secondary-foreground",
+        destructive: "border-transparent bg-destructive text-destructive-foreground",
+        outline: "border-border bg-card text-foreground",
+        brand:
+          "border-[color-mix(in_oklab,var(--primary)_22%,transparent)] bg-primary-soft text-[color-mix(in_oklab,var(--primary)_82%,var(--foreground))]",
         success:
-          "border-success/25 bg-success/12 font-medium text-[color-mix(in_oklab,var(--success)_70%,var(--foreground))]",
+          "border-success/20 bg-success/10 text-[color-mix(in_oklab,var(--success)_80%,var(--foreground))]",
         warning:
-          "border-warning/35 bg-warning/15 font-medium text-[color-mix(in_oklab,var(--warning)_45%,var(--foreground))]",
+          "border-warning/25 bg-warning/10 text-[color-mix(in_oklab,var(--warning)_80%,var(--foreground))]",
         danger:
-          "border-destructive/25 bg-destructive/10 font-medium text-[color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
-        neutral: "border-border bg-muted font-medium text-muted-foreground",
+          "border-destructive/20 bg-destructive/8 text-[color-mix(in_oklab,var(--destructive)_82%,var(--foreground))]",
+        info: "border-info/20 bg-info/10 text-[color-mix(in_oklab,var(--info)_82%,var(--foreground))]",
+        neutral: "border-border bg-muted text-muted-foreground",
       },
     },
     defaultVariants: {

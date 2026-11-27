@@ -1,20 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ledgerMetrics } from "../lib/operational-metrics";
-import type { Resources } from "../lib/operational-mappers";
-function entry(kind: string, amount: number): Resources["finance"][number] {
-  return {
-    id: kind,
-    org_id: "org",
-    location_id: "store",
-    order_id: "order",
-    kind,
-    amount_cents: amount,
-    client_event_id: kind,
-    reverses_id: null,
-    description: "test",
-    actor_id: "actor",
-    created_at: "2026-10-29T00:00:00Z",
-  };
+function entry(kind: string, amount: number) {
+  return { kind, amount_cents: amount };
 }
 describe("Recorded financial ledger", () => {
   it("keeps revenue and configured COGS separate", () => {

@@ -62,7 +62,9 @@
       "0": "Save a logo or brand colors first.",
       "2": "Add an address, opening hours and the sales tax rate to at least one store first.",
       "4": "Finish branding and store setup first."
-    }
+    },
+    "previewTitle": "Access by invitation",
+    "previewSubtitle": "This workspace is opened by invitation from its owner."
   },
   "common": {
     "cancel": "Cancel",
@@ -104,7 +106,7 @@
     "pendingHint": "Invitation links are not emailed — share them yourself.",
     "noPending": "No pending invitations.",
     "you": "You",
-    "unnamed": "Unnamed member",
+    "unnamed": "Member (name not set)",
     "expires": "Expires {{date}}",
     "expiredShort": "Expired",
     "revoke": "Withdraw",
@@ -256,7 +258,8 @@
       "activity": "Activity log",
       "locations": "Stores",
       "branding": "Branding",
-      "billing": "Billing"
+      "billing": "Billing",
+      "resolve_pending": "Resolve pending sales"
     }
   },
   "profiles": {
@@ -362,7 +365,8 @@
         "removed": "Member removed",
         "role_changed": "Tier changed",
         "access_changed": "Access changed",
-        "locations_changed": "Store access changed"
+        "locations_changed": "Store access changed",
+        "extras_pruned": "Grants outside the tier removed"
       },
       "invitation": {
         "created": "Invitation created",
@@ -383,7 +387,10 @@
         "item_ready": "Order item marked ready"
       },
       "pos": {
-        "finalized": "Sale completed"
+        "finalized": "Sale completed",
+        "pending_sale_resolved": "Pending sale closed as not recorded",
+        "pending_sale_recovered": "Pending sale recovered (already recorded)",
+        "pending_reasons_moved": "Pending sale justifications moved to restricted storage"
       },
       "inventory": {
         "moved": "Stock movement recorded",
@@ -425,6 +432,7 @@
     "forbidden": "You don't have permission to make this change.",
     "permission_denied": "Your access doesn't allow this action.",
     "permission_exceeds_own": "You can't give someone permissions you don't have yourself.",
+    "permission_outside_role": "One of these permissions can't be held at this member's tier.",
     "invalid_permission": "One of the permissions isn't valid for this tier.",
     "invalid_profile": "That permission profile is no longer available. Reload and try again.",
     "profile_tier_mismatch": "The profile belongs to a different tier than the one selected.",

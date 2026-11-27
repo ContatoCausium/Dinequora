@@ -15,6 +15,7 @@ import {
 } from "@/components/auth/auth-layout";
 import { isPlatformAdmin } from "@/lib/admin-service";
 import { auth, AuthError, pendingRedirect, safeRedirect, sessionPersistence } from "@/lib/auth";
+import { isClientPreview } from "@/lib/deployment-profile";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: z.object({ redirect: z.string().optional() }),
@@ -38,6 +39,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function toPath(href: string | undefined) {
   if (!href) return null;
@@ -161,33 +163,31 @@ function LoginPage() {
           trailing={
             <Link
               to="/forgot-password"
-              className="text-xs font-medium text-primary hover:underline"
+              className="-my-1 inline-flex min-h-6 items-center rounded px-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {t("login.forgot")}
             </Link>
           }
         />
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="size-4 rounded border accent-[var(--primary)]"
-          />
+          <Checkbox checked={remember} onCheckedChange={(v) => setRemember(v === true)} />
           {t("fields.remember")}
         </label>
         <SubmitButton loading={loading}>{t("login.submit")}</SubmitButton>
       </form>
-      <p className="mt-8 text-center text-sm text-muted-foreground">
-        {t("login.noAccount")}{" "}
-        <Link
-          to="/signup"
-          search={redirect ? { redirect } : {}}
-          className="font-medium text-foreground hover:underline"
-        >
-          {t("login.createAccount")}
-        </Link>
-      </p>
+      {/* Client preview: accounts are provisioned, never self-created. */}
+      {!isClientPreview() && (
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          {t("login.noAccount")}{" "}
+          <Link
+            to="/signup"
+            search={redirect ? { redirect } : {}}
+            className="font-medium text-foreground hover:underline"
+          >
+            {t("login.createAccount")}
+          </Link>
+        </p>
+      )}
     </AuthLayout>
   );
 }

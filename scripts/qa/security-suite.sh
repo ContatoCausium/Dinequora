@@ -16,8 +16,21 @@
 #   0b. claim: the new, empty database is marked disposable (bound to its cluster and database)
 #   0c. target guard self-test on probe databases of this cluster: remote and closed targets, copied
 #      and tampered markers, populated databases, adopt confirmations, concurrent claims
+#   0d. privilege model (QA_PRIVILEGE_MODEL, default "hosted"): BEFORE the migrations, role postgres
+#      gets the default privileges of the hosted projects (scripts/qa/hosted-default-privileges.sql:
+#      nothing for anon, authenticated and service_role), so every table, function and sequence the
+#      migrations create has only its explicit GRANTs (and, for functions, PUBLIC's built-in EXECUTE until
+#      revoked), exactly as on the Client Preview and production.
+#      QA_PRIVILEGE_MODEL=cli keeps the Supabase CLI defaults (the API roles get everything postgres
+#      creates): the model of older projects and of the local demo/QA stacks. CI runs both. See
+#      docs/operations/privilege-models.md
 #   1. apply every migration from zero with the same tool as production (drizzle-kit migrate)
 #   2. journal/tracker/hash integrity and SQL-first policy (scripts/qa/check-migrations.mjs)
+#   2c. API privileges (scripts/security/api_privileges.mjs): hosted model: the effective privileges of
+#      anon, authenticated and service_role are EXACTLY scripts/qa/api-privileges.hosted.json, plus
+#      invariants (anon reads no table, the only direct write is the own profile, retired and trigger
+#      functions executable by nobody); cli model: every privilege of the manifest is present and the
+#      extra ones this model adds are counted. Run again at the very end (after the rehearsals)
 #   2b. the new database holds no organization at all: no fictional tenants (migration 0021)
 #   3. SQL fixtures: prices/tax/stock/COGS/idempotence/reversal/RLS/store scope/anon,
 #      movement idempotence/consent/auth, purchase receipts/transfer conservation,
@@ -46,18 +59,58 @@
 #      archive, update x archive, update x reactivate, reactivate x reactivate, archive x product
 #      activation): no overwrite, no implicit re-activation, the audit trail holds exactly the
 #      committed operations (own isolated organization, removed at the end)
+#   5g. 0032 concurrency: a POS sale and the manual resolution of a pending sale in two PostgreSQL
+#      sessions, both orders, with COMMIT and ROLLBACK: the same advisory lock serializes them; a
+#      recorded sale is recovered (nothing closed), a closed key refuses any later sale
+#      (sale_key_voided), the audit trail holds exactly the committed closures (own isolated
+#      organization, removed at the end); 0033: the API default is READ COMMITTED, the same
+#      interleavings are correct in READ COMMITTED and refused (isolation_unsupported, nothing written)
+#      in REPEATABLE READ and SERIALIZABLE, in both orders
+#   5h. 0033 member grant integrity (direct RPC calls as each role): owners and managers grant only
+#      what the tier can hold and, for managers, what they hold themselves (extras, profiles and
+#      invitations); staff never hold orders.resolve_pending; managers never act on managers, on
+#      themselves or outside their stores; other tenants and platform admins refused; a demotion
+#      drops what the lower tier cannot hold (audited) so a promotion reactivates nothing
+#   5i. 0034 platform owner assignment (direct RPC calls, two PostgreSQL sessions): only an
+#      organization without an active owner, never the caller or a platform account, never touching
+#      an existing owner; concurrent assignments (both orders, COMMIT and ROLLBACK) and an owner
+#      invitation accepted meanwhile are serialized by the per-organization lock; isolation levels
+#      above READ COMMITTED refused; the assigned owner sees nothing of another tenant; operators never
+#      own customer organizations (a platform role is refused for an owner, and an account with a
+#      platform role never becomes owner by any path: role change, transfer, invitation, new
+#      organization; test restaurants exempt)
+#   5j. 0035 justification privacy (every role, direct reads and RPC): the text only in the private
+#      store, never through the API (closed keys, private store, audit); the reader answers the owner,
+#      the organization admin and granted managers at their stores only; the activity log is scoped to
+#      the reader's stores; staff, other tenants, platform admins and anon refused
+#   5k. POS sale flow (0025/0032/0033/0036, direct RPC calls, real sessions): a sale and an open order;
+#      a lost reply replayed is the same order; a closed key refused by every v2 entry point; two and ten
+#      simultaneous sends are one order; the basis-point RPCs retired by 0036 refused for every API role
+#      and, for their owner, still delegating to v2 (closed key refused, same idempotency); who may sell
+#      where; no direct write of orders, payments, ledger, audit or closed keys
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
 #      >100 newer orders, realtime events of the own organization only (each file in its own
 #      isolated organization, fixed timestamps, run in parallel); menu categories archived through
 #      PostgREST by signed-in members (0026)
+#   8. LAST (changes the schema, leaves it re-applied): M2 rollback and re-application
+#      (docs/operations/m2-rollback): rollback in one transaction, nobody keeps the permission, custom
+#      profiles stripped, revocations and closed keys kept; re-application restores functions,
+#      policies and triggers exactly as after 0033 without reactivating custom profiles or individual
+#      grants; idempotent
+#   9. LAST (changes the schema, leaves it re-applied): 0034/0035/0036 rollback and re-application
+#      (docs/operations/security-closure): previous bodies restored, private store and column
+#      privilege kept; texts written the 0033 way during the window are moved exactly on
+#      re-application (audited); schema identical afterwards; idempotent
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 eval "$(supabase status --workdir scripts/qa -o env 2>/dev/null | grep -E '^(API_URL|DB_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
 [[ -n "${API_URL:-}" && -n "${DB_URL:-}" && -n "${SERVICE_ROLE_KEY:-}" ]] || { echo "Refusing: the scripts/qa stack is not running (supabase start --workdir scripts/qa)"; exit 2; }
 GUARD="node scripts/guard/target-guard.mjs"
+PRIVILEGE_MODEL="${QA_PRIVILEGE_MODEL:-hosted}"
+[[ "$PRIVILEGE_MODEL" == "hosted" || "$PRIVILEGE_MODEL" == "cli" ]] || { echo "Refusing: QA_PRIVILEGE_MODEL must be hosted or cli"; exit 2; }
 
 ARTIFACTS="${QA_ARTIFACTS:-$(mktemp -d)}"
 mkdir -p "$ARTIFACTS"
@@ -104,6 +157,14 @@ must_refuse "QA seed" env SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SER
 must_refuse "permission matrix with ALLOW_DEMO_WRITES" env ALLOW_DEMO_WRITES=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" node scripts/security/permission_matrix.mjs
 must_refuse "API check with the anon key" env SB_SERVICE="$ANON_KEY" $GUARD check-api --api-url "$API_URL" --operation test:x
 must_refuse "race script" env QA_DB_URL="$DB_URL" node scripts/security/tax_rate_concurrency.mjs
+must_refuse "member grant integrity" env QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs
+must_refuse "M2 rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs
+must_refuse "platform owner assignment" env QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs
+must_refuse "justification privacy" env QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs
+must_refuse "security closure rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs
+must_refuse "POS sale flow" env QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs
+must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
+must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
 must_refuse "fixture with the PR #22 opt-in" with_opts "-c dinequora.fixture_target=disposable" run_sql scripts/security/reconstructed_operations.sql
 must_refuse "demo seed" run_sql scripts/seeds/demo/seed-demo-orgs.sql
@@ -120,6 +181,14 @@ echo "::group::0c. target guard self-test (probe databases of this cluster)"
 DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" bash scripts/guard/selftest.sh
 echo "::endgroup::"
 
+echo "::group::0d. privilege model: $PRIVILEGE_MODEL"
+if [[ "$PRIVILEGE_MODEL" == "hosted" ]]; then
+  run_check scripts/qa/hosted-default-privileges.sql
+else
+  echo "  Supabase CLI default privileges kept (the API roles get every privilege on what postgres creates)"
+fi
+echo "::endgroup::"
+
 echo "::group::1. migrations from zero"
 $GUARD check --db-url "$DB_URL" --operation suite:migrate --new-empty
 LOVABLE_DB_MIGRATION_URL="$DB_URL" npx --no-install drizzle-kit migrate 2>&1 | grep -E "applied|error|Error" || true
@@ -127,6 +196,10 @@ echo "::endgroup::"
 
 echo "::group::2. migration integrity"
 DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
+echo "::endgroup::"
+
+echo "::group::2c. API privileges ($PRIVILEGE_MODEL model)"
+QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs --expect "$PRIVILEGE_MODEL" | tee "$ARTIFACTS/api-privileges.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::2b. new database without fictional organizations"
@@ -192,6 +265,26 @@ echo "::group::5f. category intents concurrency (0029, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/menu_category_intent_race.mjs | tee "$ARTIFACTS/menu-category-intent-race.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
+echo "::group::5g. pending POS sale resolution concurrency (0032/0033, two PostgreSQL sessions, isolation levels)"
+QA_DB_URL="$DB_URL" node scripts/security/pos_pending_resolution_race.mjs | tee "$ARTIFACTS/pos-pending-resolution-race.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5h. member grant integrity (0033, direct RPC calls as each role)"
+QA_DB_URL="$DB_URL" node scripts/security/member_grant_integrity.mjs | tee "$ARTIFACTS/member-grant-integrity.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5i. platform owner assignment (0034, direct RPC calls, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/admin_assign_owner_integrity.mjs | tee "$ARTIFACTS/admin-assign-owner.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5j. justification privacy (0035, every role, direct reads and RPC)"
+QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs | tee "$ARTIFACTS/pending-reason-privacy.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5k. POS sale flow (0025/0032/0033/0036, direct RPC calls, real sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs | tee "$ARTIFACTS/pos-sale-flow.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
 echo "::group::6. demo reconstruction"
 for run in 1 2; do
   out=$(run_sql scripts/seeds/demo/seed-demo-orgs.sql 2>&1) || { echo "$out" | tail -5; echo "FAIL demo seed run $run"; exit 1; }
@@ -206,6 +299,21 @@ QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_K
   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run \
   src/test/integration/orders-paging.db.test.ts src/test/integration/kds-board.db.test.ts \
   src/test/integration/menu-archive.db.test.ts
+# pending-sale resolution through PostgREST as signed-in members (0032/0033/0035)
+QA_PENDING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$CREDS_FILE" QA_DB_URL="$DB_URL"   QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/pos-pending-resolution.db.test.ts
+echo "::endgroup::"
+
+echo "::group::8. M2 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
+QA_DB_URL="$DB_URL" node scripts/security/m2_rollback_reapply.mjs | tee "$ARTIFACTS/m2-rollback-reapply.txt" | grep -v "^PASS"
+DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
+echo "::endgroup::"
+
+echo "::group::9. 0034/0035/0036 rollback and re-application (LAST: changes the schema, leaves it re-applied)"
+QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs | tee "$ARTIFACTS/security-closure-rollback.txt" | grep -v "^PASS"
+DB_URL="$DB_URL" node scripts/qa/check-migrations.mjs
+echo "::endgroup::"
+echo "::group::9b. API privileges after the rehearsals (unchanged)"
+QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs --expect "$PRIVILEGE_MODEL" | tee "$ARTIFACTS/api-privileges-final.txt" | grep -v "^PASS"
 echo "::endgroup::"
 rm -f "$CREDS_FILE"
-echo "Security suite passed."
+echo "Security suite passed (privilege model: $PRIVILEGE_MODEL)."

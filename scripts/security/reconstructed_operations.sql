@@ -59,9 +59,10 @@ SELECT public.save_operational_menu(:'org_a','category','{"op":"create","id":"fo
 SELECT public.save_operational_menu(:'org_a','product','{"id":"burger","name":"Burger","category":"food","priceCents":1500,"prepTimeMinutes":10,"locationIds":[],"modifierGroups":[{"id":"extras","name":"Extras","required":false,"minSelections":0,"maxSelections":1,"options":[{"id":"cheese","name":"Cheese","priceCents":250}]}]}');
 SELECT public.save_operational_record(:'org_a',:'loc_a1','inventory','{"name":"Beef","category":"meat","unit":"lb","quantity":10,"costCents":400}') AS inventory_id \gset
 SELECT public.save_operational_record(:'org_a',:'loc_a1','recipe',jsonb_build_object('productId','burger','servings',1,'yieldQuantity',1,'ingredients',jsonb_build_array(jsonb_build_object('inventoryItemId',:'inventory_id','quantity',0.5,'unit','lb','wastePercentage',0)))) AS recipe_id \gset
--- 0025: the store's configured rate is what the sale charges; 825 bp below confirms it (8.25% = 82,500 ppm).
+-- 0025: the store's configured rate is what the sale charges; the sales below send it (8.25% = 82,500 ppm).
+-- 0036: the sales use the current signatures (_v2); the basis-point ones are retired from the API (below).
 SELECT public.set_location_tax_rate(:'loc_a1', 82500);
-SELECT public.persist_finalized_pos_sale_atomic(:'org_a',:'loc_a1','dine_in','Test',_discount_cents=>400,_tax_rate_basis_points=>825,_items=>'[{"product_id":"burger","unit_price_cents":1,"quantity":2,"modifiers":[{"group_id":"extras","option_id":"cheese","price_cents":1}]}]',_client_order_id=>'tx1',_payment_method=>'cash') AS sale_id \gset
+SELECT public.persist_finalized_pos_sale_atomic_v2(:'org_a',:'loc_a1','dine_in','Test',_discount_cents=>400,_tax_rate_ppm=>82500,_items=>'[{"product_id":"burger","unit_price_cents":1,"quantity":2,"modifiers":[{"group_id":"extras","option_id":"cheese","price_cents":1}]}]',_client_order_id=>'tx1',_payment_method=>'cash') AS sale_id \gset
 -- As owner A (a user this run created, member of organization A only), RLS limits the reads below
 -- to organization A.
 DO $$ BEGIN
@@ -69,21 +70,26 @@ DO $$ BEGIN
  IF (SELECT quantity FROM public.inventory_items WHERE name='Beef')<>9 THEN RAISE EXCEPTION 'FAIL consumption'; END IF;
  IF (SELECT sum(amount_cents) FROM public.finance_entries WHERE kind='cogs')<>400 THEN RAISE EXCEPTION 'FAIL cogs'; END IF;
 END $$;
-SELECT public.persist_finalized_pos_sale_atomic(:'org_a',:'loc_a1','dine_in','Test',_discount_cents=>400,_tax_rate_basis_points=>825,_items=>'[{"product_id":"burger","unit_price_cents":1,"quantity":2,"modifiers":[{"group_id":"extras","option_id":"cheese","price_cents":1}]}]',_client_order_id=>'tx1',_payment_method=>'cash');
+SELECT public.persist_finalized_pos_sale_atomic_v2(:'org_a',:'loc_a1','dine_in','Test',_discount_cents=>400,_tax_rate_ppm=>82500,_items=>'[{"product_id":"burger","unit_price_cents":1,"quantity":2,"modifiers":[{"group_id":"extras","option_id":"cheese","price_cents":1}]}]',_client_order_id=>'tx1',_payment_method=>'cash');
 DO $$ BEGIN IF (SELECT count(*) FROM public.orders WHERE client_order_id='tx1')<>1 OR (SELECT quantity FROM public.inventory_items WHERE name='Beef')<>9 THEN RAISE EXCEPTION 'FAIL idempotence'; END IF; END $$;
 SELECT public.update_order_status(:'sale_id','in_prep'); SELECT public.update_order_status(:'sale_id','ready');
 SELECT public.cancel_order_with_reversal(:'sale_id','test'); SELECT public.cancel_order_with_reversal(:'sale_id','test');
 DO $$ BEGIN IF (SELECT quantity FROM public.inventory_items WHERE name='Beef')<>10 THEN RAISE EXCEPTION 'FAIL reversal'; END IF; IF (SELECT sum(CASE WHEN kind='revenue' THEN amount_cents WHEN kind='reversal_revenue' THEN -amount_cents ELSE 0 END) FROM public.finance_entries)<>0 THEN RAISE EXCEPTION 'FAIL finance reversal'; END IF; END $$;
 DO $$ DECLARE org_a uuid := current_setting('fx.org_a')::uuid; org_b uuid := current_setting('fx.org_b')::uuid; loc_a1 uuid := current_setting('fx.loc_a1')::uuid; BEGIN
- BEGIN PERFORM public.create_pos_sale(org_b,loc_a1,'dine_in','bad',_client_order_id=>'cross'); RAISE EXCEPTION 'FAIL cross org accepted'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
- BEGIN PERFORM public.create_pos_sale(org_a,loc_a1,'dine_in','bad',_items=>'[{"product_id":"burger","quantity":1}]',_is_simulation=>true,_client_order_id=>'demo'); RAISE EXCEPTION 'FAIL simulated real org'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'simulation_forbidden' THEN RAISE; END IF; END;
- BEGIN PERFORM public.create_pos_sale(org_a,loc_a1,'dine_in','bad',_items=>'[{"product_id":"burger","quantity":1}]',_client_order_id=>'tx1'); RAISE EXCEPTION 'FAIL reused different payload'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'idempotency_conflict' THEN RAISE; END IF; END;
- BEGIN PERFORM public.persist_finalized_pos_sale_atomic(org_a,loc_a1,'dine_in','bad',_tax_rate_basis_points=>825,_items=>'[{"product_id":"burger","quantity":100}]',_client_order_id=>'insufficient'); RAISE EXCEPTION 'FAIL insufficient accepted'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'insufficient_stock' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_pos_sale_v2(org_b,loc_a1,'dine_in','bad',_tax_rate_ppm=>82500,_client_order_id=>'cross'); RAISE EXCEPTION 'FAIL cross org accepted'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_pos_sale_v2(org_a,loc_a1,'dine_in','bad',_tax_rate_ppm=>82500,_items=>'[{"product_id":"burger","quantity":1}]',_is_simulation=>true,_client_order_id=>'demo'); RAISE EXCEPTION 'FAIL simulated real org'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'simulation_forbidden' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_pos_sale_v2(org_a,loc_a1,'dine_in','bad',_tax_rate_ppm=>82500,_items=>'[{"product_id":"burger","quantity":1}]',_client_order_id=>'tx1'); RAISE EXCEPTION 'FAIL reused different payload'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'idempotency_conflict' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.persist_finalized_pos_sale_atomic_v2(org_a,loc_a1,'dine_in','bad',_tax_rate_ppm=>82500,_items=>'[{"product_id":"burger","quantity":100}]',_client_order_id=>'insufficient'); RAISE EXCEPTION 'FAIL insufficient accepted'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'insufficient_stock' THEN RAISE; END IF; END;
  IF EXISTS(SELECT 1 FROM public.orders WHERE client_order_id='insufficient') THEN RAISE EXCEPTION 'FAIL atomic rollback'; END IF;
+ -- 0036: the basis-point signatures are not callable through the API any more (owner of the organization included)
+ BEGIN PERFORM public.create_pos_sale(org_a,loc_a1,'dine_in','legacy',_tax_rate_basis_points=>825,_items=>'[{"product_id":"burger","quantity":1}]',_client_order_id=>'legacy-1'); RAISE EXCEPTION 'FAIL retired create_pos_sale is callable'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.finalize_pos_sale_atomic(org_a,loc_a1,'dine_in','legacy',_tax_rate_basis_points=>825,_items=>'[{"product_id":"burger","quantity":1}]',_client_order_id=>'legacy-2'); RAISE EXCEPTION 'FAIL retired finalize_pos_sale_atomic is callable'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.persist_finalized_pos_sale_atomic(org_a,loc_a1,'dine_in','legacy',_tax_rate_basis_points=>825,_items=>'[{"product_id":"burger","quantity":1}]',_client_order_id=>'legacy-3'); RAISE EXCEPTION 'FAIL retired persist_finalized_pos_sale_atomic is callable'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF EXISTS(SELECT 1 FROM public.orders WHERE client_order_id LIKE 'legacy-%') THEN RAISE EXCEPTION 'FAIL a retired signature recorded an order'; END IF;
 END $$;
 SELECT set_config('request.jwt.claim.sub',:'staff_a',false);
 DO $$ DECLARE org_a uuid := current_setting('fx.org_a')::uuid; org_b uuid := current_setting('fx.org_b')::uuid; loc_a1 uuid := current_setting('fx.loc_a1')::uuid; loc_a2 uuid := current_setting('fx.loc_a2')::uuid; staff_a uuid := current_setting('fx.staff_a')::uuid; BEGIN
- BEGIN PERFORM public.create_pos_sale(org_a,loc_a2,'dine_in','bad',_client_order_id=>'cross-store'); RAISE EXCEPTION 'FAIL unauthorized store'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
+ BEGIN PERFORM public.create_pos_sale_v2(org_a,loc_a2,'dine_in','bad',_tax_rate_ppm=>82500,_client_order_id=>'cross-store'); RAISE EXCEPTION 'FAIL unauthorized store'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END;
  BEGIN PERFORM public.cancel_order_with_reversal((SELECT id FROM public.orders LIMIT 1),'staff'); RAISE EXCEPTION 'FAIL staff cancel'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'permission_denied' THEN RAISE; END IF; END;
  IF EXISTS(SELECT 1 FROM public.orders WHERE org_id=org_b) THEN RAISE EXCEPTION 'FAIL tenant RLS'; END IF;
  BEGIN INSERT INTO public.orders(org_id,location_id,order_number,type,client_order_id,request_hash,created_by) VALUES(org_a,loc_a1,'hack','dine_in','hack','hack',staff_a); RAISE EXCEPTION 'FAIL direct insert'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
@@ -108,7 +114,7 @@ DO $$ DECLARE org_a uuid := current_setting('fx.org_a')::uuid; loc_a1 uuid := cu
  BEGIN PERFORM public.save_operational_record(org_a,'00000000-0000-0000-0000-000000000000','whatsapp','{"kind":"message","status":"sent"}'); RAISE EXCEPTION 'FAIL fake delivery'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'provider_unavailable' THEN RAISE; END IF; END;
 END $$;
 SELECT set_config('request.jwt.claim.sub','',false);
-DO $$ DECLARE org_a uuid := current_setting('fx.org_a')::uuid; loc_a1 uuid := current_setting('fx.loc_a1')::uuid; BEGIN BEGIN PERFORM public.create_pos_sale(org_a,loc_a1,'dine_in','none',_client_order_id=>'no-auth'); RAISE EXCEPTION 'FAIL missing auth'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END; END $$;
+DO $$ DECLARE org_a uuid := current_setting('fx.org_a')::uuid; loc_a1 uuid := current_setting('fx.loc_a1')::uuid; BEGIN BEGIN PERFORM public.create_pos_sale_v2(org_a,loc_a1,'dine_in','none',_tax_rate_ppm=>82500,_client_order_id=>'no-auth'); RAISE EXCEPTION 'FAIL missing auth'; EXCEPTION WHEN raise_exception THEN IF SQLERRM<>'forbidden' THEN RAISE; END IF; END; END $$;
 RESET ROLE;
 
 -- ===================================================================== purchases

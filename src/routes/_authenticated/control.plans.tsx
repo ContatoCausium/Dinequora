@@ -18,7 +18,8 @@ import {
   Clock,
 } from "lucide-react";
 
-import { Section, Tag, inputCls, LoadingRows } from "@/components/control/control-ui";
+import { Section, Tag, LoadingRows } from "@/components/control/control-ui";
+import { inputCls } from "@/components/control/control-styles";
 import {
   FullPlanDef,
   PlanChangeEntry,
@@ -36,6 +37,15 @@ import {
   togglePlanActive,
 } from "@/lib/admin-service";
 import { fmtCurrency, fmtDate } from "@/lib/format";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/control/plans")({
@@ -175,17 +185,21 @@ function ControlPlansPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <header className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
             {t("plansPage.title")}
           </h1>
-          <p className="text-sm text-muted-foreground">{t("plansPage.subtitle")}</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">{t("plansPage.subtitle")}</p>
         </div>
-        <Tag tone="warning" className="w-fit">
-          <ShieldAlert className="mr-1 size-3.5" />
-          {t("plansPage.simBanner")}
-        </Tag>
+        {/* Wave 0: plan edits are a local preview only — say so where the actions are. */}
+        <div
+          role="note"
+          className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground"
+        >
+          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+          <p>{t("plansPage.simBanner")}</p>
+        </div>
       </header>
 
       {loading ? (
@@ -309,8 +323,14 @@ function ControlPlansPage() {
             hint={t("plansPage.comparisonHint")}
             className="overflow-hidden"
           >
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            {/* Scrolls sideways on phones: a named, focusable region so keyboards can scroll it. */}
+            <div
+              role="region"
+              tabIndex={0}
+              aria-label={t("plansPage.comparison")}
+              className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <table className="data-table text-left">
                 <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
                   <tr>
                     <th className="p-3.5 font-medium">{t("plansPage.features")}</th>
@@ -361,8 +381,13 @@ function ControlPlansPage() {
                 {t("plansPage.historyEmpty")}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div
+                role="region"
+                tabIndex={0}
+                aria-label={t("plansPage.history")}
+                className="overflow-x-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                <table className="data-table text-left">
                   <thead className="border-b bg-muted/40 text-muted-foreground">
                     <tr>
                       <th className="p-3 font-medium">{t("plansPage.when")}</th>
@@ -415,126 +440,120 @@ function ControlPlansPage() {
       )}
 
       {/* Modal de Edição com Validação e Simulação */}
-      {editingPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-xl border bg-card p-6 shadow-xl">
-            <h3 className="text-lg font-bold tracking-tight">
-              {t("plansPage.editTitle", { name: editingPlan.name })}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t("plansPage.editDescription")}</p>
+      <Dialog open={!!editingPlan} onOpenChange={(open) => !open && setEditingPlan(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          {editingPlan && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t("plansPage.editTitle", { name: editingPlan.name })}</DialogTitle>
+                <DialogDescription>{t("plansPage.editDescription")}</DialogDescription>
+              </DialogHeader>
 
-            <div className="my-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-xs font-medium">
-                  {t("plansPage.priceMonthly")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.priceMonthlyUsd ?? 0}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, priceMonthlyUsd: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-                <label className="text-xs font-medium">
-                  {t("plansPage.priceAnnual")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.priceAnnualUsd ?? 0}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, priceAnnualUsd: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-xs font-medium">
-                  {t("plansPage.maxLocations")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.maxLocations ?? 1}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, maxLocations: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-                <label className="text-xs font-medium">
-                  {t("plansPage.maxEmployees")}
-                  <input
-                    type="number"
-                    className={inputCls}
-                    value={editForm.maxEmployees ?? 10}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, maxEmployees: Number(e.target.value) }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <label className="block text-xs font-medium">
-                {t("plansPage.description")}
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={editForm.description ?? ""}
-                  onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                />
-              </label>
-
-              {/* Simulação de Impacto */}
-              <div className="rounded-lg border bg-muted/30 p-3 text-xs">
-                <p className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <Sparkles className="size-3.5 text-primary" />
-                  {t("plansPage.impact")}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {t("plansPage.impactHint")}
-                </p>
-                <div className="mt-2 flex gap-4 text-muted-foreground">
-                  <span>
-                    {t("plansPage.affectedOrgs")}: <strong>{impact?.affectedOrgs ?? 0}</strong>
-                  </span>
-                  <span>
-                    {t("plansPage.affectedLocations")}:{" "}
-                    <strong>{impact?.affectedLocations ?? 0}</strong>
-                  </span>
+              <div className="my-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs font-medium">
+                    {t("plansPage.priceMonthly")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.priceMonthlyUsd ?? 0}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, priceMonthlyUsd: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs font-medium">
+                    {t("plansPage.priceAnnual")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.priceAnnualUsd ?? 0}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, priceAnnualUsd: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs font-medium">
+                    {t("plansPage.maxLocations")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.maxLocations ?? 1}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, maxLocations: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs font-medium">
+                    {t("plansPage.maxEmployees")}
+                    <input
+                      type="number"
+                      className={inputCls}
+                      value={editForm.maxEmployees ?? 10}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, maxEmployees: Number(e.target.value) }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <label className="block text-xs font-medium">
+                  {t("plansPage.description")}
+                  <input
+                    type="text"
+                    className={inputCls}
+                    value={editForm.description ?? ""}
+                    onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                  />
+                </label>
+
+                {/* Simulação de Impacto */}
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+                  <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <Sparkles className="size-3.5 text-primary" />
+                    {t("plansPage.impact")}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {t("plansPage.impactHint")}
+                  </p>
+                  <div className="mt-2 flex gap-4 text-muted-foreground">
+                    <span>
+                      {t("plansPage.affectedOrgs")}: <strong>{impact?.affectedOrgs ?? 0}</strong>
+                    </span>
+                    <span>
+                      {t("plansPage.affectedLocations")}:{" "}
+                      <strong>{impact?.affectedLocations ?? 0}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Justificativa Obrigatória */}
+                <label className="block text-xs font-medium text-foreground">
+                  {t("plansPage.reasonLabel")}
+                  <textarea
+                    rows={2}
+                    required
+                    className={cn(inputCls, "h-auto py-1.5")}
+                    placeholder={t("plansPage.reasonPlaceholder")}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+                </label>
               </div>
 
-              {/* Justificativa Obrigatória */}
-              <label className="block text-xs font-medium text-foreground">
-                {t("plansPage.reasonLabel")}
-                <textarea
-                  rows={2}
-                  required
-                  className={cn(inputCls, "h-auto py-1.5")}
-                  placeholder={t("plansPage.reasonPlaceholder")}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t pt-4">
-              <button
-                onClick={() => setEditingPlan(null)}
-                className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-              >
-                {t("plansPage.cancel")}
-              </button>
-              <button
-                onClick={() => void handleSaveDraft()}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-              >
-                {t("plansPage.saveDraft")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingPlan(null)}>
+                  {t("plansPage.cancel")}
+                </Button>
+                <Button onClick={() => void handleSaveDraft()}>{t("plansPage.saveDraft")}</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

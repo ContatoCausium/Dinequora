@@ -6,6 +6,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { menuItemSchema, recipePayloadSchema, saleInputSchema } from "./operational-contracts";
 import { orderListQuery } from "./orders-query";
 import { toMenuReadModel } from "./menu-read-model";
+import { readNavCounts } from "./nav-counts";
+import { lookupSaleByKey } from "./pos-sale-lookup";
+import { readLedgerSummaryAggregated } from "./ledger-aggregate";
+import {
+  LedgerReadError,
+  readLedgerRows,
+  readLedgerSummary,
+  type LedgerClient,
+} from "./ledger-reader";
 
 /** UI slugs are not UUIDs. Resolve them through user-scoped reads, never admin access. */
 async function scope(client: SupabaseClient<Database>, orgId: string, locationId?: string) {
@@ -17,7 +26,7 @@ async function scope(client: SupabaseClient<Database>, orgId: string, locationId
   if (error || !org) throw new Error("forbidden");
   const { data: locations, error: le } = await client
     .from("locations")
-    .select("id,slug")
+    .select("id,slug,timezone")
     .eq("org_id", org.id);
   if (le) throw new Error("forbidden");
   const location =
@@ -189,13 +198,25 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       );
     const { data: order, error } = await context.supabase
       .from("orders")
-      .select("order_number,total_cents,tax_cents,subtotal_cents,is_simulation")
+      .select("order_number,total_cents,tax_cents,subtotal_cents,is_simulation,status")
       .eq("id", result.data)
       .eq("org_id", s.org.id)
       .eq("location_id", s.location.id)
       .single();
-    if (error || !order) throw new Error("sale_readback_failed");
+    // The sale IS recorded (the RPC committed and returned its id): a failed read-back must never
+    // be reported as a failed sale, or the operator would charge again (wave 0). The receipt
+    // details are then fetched by the client through findSaleByClientOrderId.
+    if (error || !order)
+      return {
+        success: true,
+        orderId: result.data,
+        readback: false as const,
+      };
+    // A resend of a ticket whose sale was recorded and later cancelled returns that order's id:
+    // it must not be shown as a new recorded sale.
+    if (order.status === "cancelled") throw new Error("order_cancelled");
     return {
+      readback: true as const,
       success: true,
       orderId: result.data,
       orderNumber: order.order_number,
@@ -205,6 +226,91 @@ export const submitOperationalSale = createServerFn({ method: "POST" })
       // What was actually recorded: the receipt must describe the stored order, not the org type.
       isSimulation: order.is_simulation,
     };
+  });
+
+/**
+ * Looks up a POS sale by the idempotency key the register sent (wave 0). Used to reconcile a sale
+ * whose response was lost (timeout, network failure, reload): "found" is definitive; "not_found"
+ * only means no sale with this key is visible NOW (the original request may still be on its way),
+ * so the client keeps the sale pending and may resend it with the SAME key — the database returns
+ * the existing order instead of creating a second one. RLS applies (the caller's own access).
+ */
+export const findSaleByClientOrderId = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      clientOrderId: z.string().min(1).max(160),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    if (!s.location) throw new Error("location_required");
+    return lookupSaleByKey(context.supabase, {
+      orgId: s.org.id,
+      locationId: s.location.id,
+      clientOrderId: data.clientOrderId,
+    });
+  });
+
+/**
+ * Manual resolution of a pending POS sale (migration 0032, permission orders.resolve_pending).
+ * The database takes the SAME advisory lock as the sale, looks the order up by its key and:
+ *   - "recorded": the sale exists — nothing is closed; its details are returned for the receipt;
+ *   - "resolved" / "already_resolved": no sale exists under the lock — the key is closed for good
+ *     (create_pos_sale_v2 refuses it) and the operation is audited.
+ * Any error (timeout, network, permission) is thrown: the register keeps the sale pending.
+ */
+export const resolvePendingSale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      clientOrderId: z.string().min(1).max(160),
+      reason: z.string().trim().min(10).max(500),
+      amountCents: z.number().int().min(0).optional(),
+      attempts: z.number().int().min(0).optional(),
+      lastAttemptAt: z.string().datetime({ offset: true }).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    if (!s.location) throw new Error("location_required");
+    const { data: res, error } = await context.supabase.rpc("resolve_pending_pos_sale", {
+      _org_id: s.org.id,
+      _location_id: s.location.id,
+      _client_order_id: data.clientOrderId,
+      _reason: data.reason,
+      ...(data.amountCents === undefined ? {} : { _amount_cents: data.amountCents }),
+      ...(data.attempts === undefined ? {} : { _attempts: data.attempts }),
+      ...(data.lastAttemptAt === undefined ? {} : { _last_attempt_at: data.lastAttemptAt }),
+    });
+    if (error || !res)
+      throw await refused(
+        context.supabase,
+        error,
+        s.org.id,
+        "pos.resolve_pending",
+        s.location.id,
+        "resolve_failed",
+      );
+    const status = (res as { status?: string }).status;
+    if (status === "recorded") {
+      const found = await lookupSaleByKey(context.supabase, {
+        orgId: s.org.id,
+        locationId: s.location.id,
+        clientOrderId: data.clientOrderId,
+      });
+      return { status: "recorded" as const, order: found };
+    }
+    if (status === "resolved" || status === "already_resolved")
+      return {
+        status,
+        resolvedAt: String((res as { resolved_at?: string }).resolved_at ?? ""),
+      };
+    throw new Error("resolve_failed");
   });
 
 export const fetchOperationalOrders = createServerFn({ method: "POST" })
@@ -353,31 +459,109 @@ const INVENTORY_COLUMNS =
 const MOVEMENT_COLUMNS =
   "id,org_id,location_id,inventory_item_id,order_id,delta,kind,client_event_id,reverses_id,reason,actor_id,created_at";
 
+/**
+ * Sidebar counters (open orders, late kitchen tickets, low stock) in one small request, so the
+ * 30 s refresh never pulls the full operational resources. Permission checks, RLS and the counting
+ * rules live in nav-counts.ts. An unknown store is rejected by scope(), like every other read.
+ */
+export const fetchNavCounts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ orgId: z.string().min(1), locationId: z.string().optional() }))
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    return readNavCounts(context.supabase, { orgId: s.org.id, locationId: s.location?.id });
+  });
+
+/** Stores of the request scope with their zones (database ids), for the ledger reader. */
+function ledgerStores(s: Awaited<ReturnType<typeof scope>>) {
+  return (s.location ? [s.location] : s.locations).map((l) => ({
+    id: l.id,
+    timeZone: l.timezone || "America/New_York",
+  }));
+}
+
+/**
+ * Financial ledger summary: day totals per store and kind for the last `days` local days of each
+ * store (null = whole history). M2: aggregated by the database in one snapshot
+ * (ledger_day_totals, migration 0031, SECURITY INVOKER). Where that function does not exist yet,
+ * the wave-0 paged reader (ledger-reader.ts) reads every row or marks the result incomplete. RLS
+ * still decides what the caller may read (finance_read: finance/dashboard/reports).
+ */
+export const fetchLedgerSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().optional(),
+      days: z.number().int().min(1).max(3700).nullable(),
+      sameTimeYesterday: z.boolean().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    const input = {
+      orgId: s.org.id,
+      stores: ledgerStores(s),
+      days: data.days,
+      sameTimeYesterday: data.sameTimeYesterday,
+    };
+    const aggregated = await readLedgerSummaryAggregated(context.supabase, input);
+    if (aggregated) return aggregated;
+    try {
+      return await readLedgerSummary(context.supabase as unknown as LedgerClient, input);
+    } catch (e) {
+      if (e instanceof LedgerReadError) throw new Error("ledger_read_failed");
+      throw e;
+    }
+  });
+
+/**
+ * Every ledger row (whole history) for the Finance export, read completely with keyset pagination
+ * or marked incomplete when the export ceiling (50,000 rows) is reached.
+ */
+export const fetchLedgerRows = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ orgId: z.string().min(1), locationId: z.string().optional() }))
+  .handler(async ({ data, context }) => {
+    const s = await scope(context.supabase, data.orgId, data.locationId);
+    try {
+      return await readLedgerRows(context.supabase as unknown as LedgerClient, {
+        orgId: s.org.id,
+        stores: ledgerStores(s),
+      });
+    } catch (e) {
+      if (e instanceof LedgerReadError) throw new Error("ledger_read_failed");
+      throw e;
+    }
+  });
+
 export const fetchOperationalResources = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ orgId: z.string().min(1), locationId: z.string().optional() }))
   .handler(async ({ data, context }) => {
     const s = await scope(context.supabase, data.orgId, data.locationId);
     const c = context.supabase;
-    // RLS scopes each query, including organization-wide reads by managers.
-    const [inventory, recipes, suppliers, purchases, movements, finance, expenses] =
-      await Promise.all([
-        c.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", s.org.id),
-        c.from("product_recipes").select("*,recipe_ingredients(*)").eq("org_id", s.org.id),
-        c.from("suppliers").select("*").eq("org_id", s.org.id),
-        c.from("purchase_orders").select("*,purchase_order_items(*)").eq("org_id", s.org.id),
-        c
-          .from("inventory_movements")
-          .select(MOVEMENT_COLUMNS)
-          .eq("org_id", s.org.id)
-          .order("created_at", { ascending: false })
-          .limit(200),
-        c.from("finance_entries").select("*").eq("org_id", s.org.id),
-        c.from("finance_expenses").select("*").eq("org_id", s.org.id).eq("active", true),
-      ]);
-    if (
-      [inventory, recipes, suppliers, purchases, movements, finance, expenses].some((r) => r.error)
-    )
+    // RLS scopes each query, including organization-wide reads by managers. The financial ledger
+    // is NOT read here any more (wave 0): fetchLedgerSummary/fetchLedgerRows read it completely.
+    const [inventory, recipes, suppliers, purchases, movements, expenses] = await Promise.all([
+      c.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", s.org.id),
+      // The linked menu product (FK org_id, product_id) is the single source of the selling price
+      // and the product name; recipe metadata only keeps a legacy copy.
+      c
+        .from("product_recipes")
+        .select("*,recipe_ingredients(*),menu_products(name,price_cents)")
+        .eq("org_id", s.org.id),
+      c.from("suppliers").select("*").eq("org_id", s.org.id),
+      c.from("purchase_orders").select("*,purchase_order_items(*)").eq("org_id", s.org.id),
+      c
+        .from("inventory_movements")
+        .select(MOVEMENT_COLUMNS)
+        .eq("org_id", s.org.id)
+        .order("created_at", { ascending: false })
+        .limit(200),
+      c.from("finance_expenses").select("*").eq("org_id", s.org.id).eq("active", true),
+    ]);
+    if ([inventory, recipes, suppliers, purchases, movements, expenses].some((r) => r.error))
       throw new Error("resources_read_failed");
     // Costs are not readable through the table (migration 0020); they come only from the gated
     // function. Without inventory.costs the answer is "not visible" (null), never a fake zero.
@@ -401,7 +585,6 @@ export const fetchOperationalResources = createServerFn({ method: "POST" })
       suppliers: suppliers.data ?? [],
       purchases: filter(purchases.data ?? []),
       movements: filter(movements.data ?? []),
-      finance: filter(finance.data ?? []),
       expenses: filter(expenses.data ?? []),
     };
   });

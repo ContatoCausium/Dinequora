@@ -905,6 +905,8 @@ export const defaultReportFormatters: ReportFormatters = {
 export interface ReportLedgerEntry {
   id: string;
   createdAt: string;
+  /** The store's local calendar day of the entry (wave 0); falls back to the UTC date. */
+  localDay?: string | undefined;
   kind: string;
   amountCents: number;
   locationName: string;
@@ -987,8 +989,8 @@ export function generateFinancialReport(options: {
       totalInflowCents += signed;
       rows.push({
         id: `${asCashFlow ? "in-" : ""}${entry.id}`,
-        dateOrKey: day(entry.createdAt),
-        isoDate: day(entry.createdAt),
+        dateOrKey: entry.localDay ?? day(entry.createdAt),
+        isoDate: entry.localDay ?? day(entry.createdAt),
         title: asCashFlow
           ? f.text("cashIn")
           : f.text(reversal ? "revenueReversal" : "revenueEntry"),

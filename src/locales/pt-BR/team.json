@@ -62,7 +62,9 @@
       "0": "Salve um logo ou as cores da marca primeiro.",
       "2": "Adicione endereço, horários e a alíquota de imposto sobre vendas a pelo menos uma loja primeiro.",
       "4": "Conclua o branding e a configuração da loja primeiro."
-    }
+    },
+    "previewTitle": "Acesso por convite",
+    "previewSubtitle": "Este ambiente é aberto por convite do proprietário."
   },
   "common": {
     "cancel": "Cancelar",
@@ -104,7 +106,7 @@
     "pendingHint": "Os links de convite não são enviados por e-mail — compartilhe você mesmo.",
     "noPending": "Nenhum convite pendente.",
     "you": "Você",
-    "unnamed": "Membro sem nome",
+    "unnamed": "Membro (nome não definido)",
     "expires": "Expira em {{date}}",
     "expiredShort": "Expirado",
     "revoke": "Cancelar convite",
@@ -256,7 +258,8 @@
       "activity": "Histórico de atividades",
       "locations": "Unidades",
       "branding": "Marca",
-      "billing": "Cobrança"
+      "billing": "Cobrança",
+      "resolve_pending": "Resolver vendas pendentes"
     }
   },
   "profiles": {
@@ -362,7 +365,8 @@
         "removed": "Membro removido",
         "role_changed": "Nível alterado",
         "access_changed": "Acesso alterado",
-        "locations_changed": "Acesso às unidades alterado"
+        "locations_changed": "Acesso às unidades alterado",
+        "extras_pruned": "Permissões fora do nível removidas"
       },
       "invitation": {
         "created": "Convite criado",
@@ -383,7 +387,10 @@
         "item_ready": "Item do pedido marcado como pronto"
       },
       "pos": {
-        "finalized": "Venda concluída"
+        "finalized": "Venda concluída",
+        "pending_sale_resolved": "Venda pendente encerrada como não registrada",
+        "pending_sale_recovered": "Venda pendente recuperada (já registrada)",
+        "pending_reasons_moved": "Justificativas de vendas pendentes movidas para armazenamento restrito"
       },
       "inventory": {
         "moved": "Movimentação de estoque registrada",
@@ -425,6 +432,7 @@
     "forbidden": "Você não tem permissão para fazer essa alteração.",
     "permission_denied": "Seu acesso não permite essa ação.",
     "permission_exceeds_own": "Você não pode conceder permissões que você mesmo não tem.",
+    "permission_outside_role": "Uma dessas permissões não pode ser concedida no nível deste membro.",
     "invalid_permission": "Uma das permissões não é válida para este nível.",
     "invalid_profile": "Esse perfil de permissões não está mais disponível. Recarregue e tente novamente.",
     "profile_tier_mismatch": "O perfil pertence a um nível diferente do selecionado.",

@@ -12,7 +12,10 @@ import type { Location } from "@/lib/tenants";
  * (create_pos_sale_v2 -> assert_operational_scope -> can_operate_location) are covered by
  * scripts/security/reconstructed_operations.sql and the permission matrix.
  */
-const api = vi.hoisted(() => ({ fetchOperationalMenu: vi.fn() }));
+const api = vi.hoisted(() => ({
+  fetchOperationalMenu: vi.fn(),
+  findSaleByClientOrderId: vi.fn(),
+}));
 const persistence = vi.hoisted(() => ({
   persistFinalizedPOSSaleAtomic: vi.fn(),
   cancelOrderWithReversal: vi.fn(),
@@ -26,12 +29,13 @@ vi.mock("sonner", () => ({ toast }));
 vi.mock("@/components/app/workspace-context", () => ({ useWorkspace: () => workspace.current }));
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: unknown) => options,
+  useNavigate: () => vi.fn(),
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => (
     <a href={to}>{children}</a>
   ),
 }));
 
-import { POSPage } from "@/routes/_authenticated/_app/pos";
+import { POSPage } from "@/components/pages/pos-page";
 
 type Lifecycle = "active" | "inactive" | "placeholder";
 const store = (id: string, lifecycle: Lifecycle = "active", over: Partial<Location> = {}) =>
@@ -99,10 +103,10 @@ const saleArg = () => persistence.persistFinalizedPOSSaleAtomic.mock.calls[0]?.[
 const ticketStore = () => screen.getByTestId("pos-store").textContent;
 const addBurger = async () =>
   fireEvent.click(await screen.findByRole("button", { name: /^Add Classic Burger,/ }));
-const chargeButton = () => screen.getByRole("button", { name: /^Charge / });
+const chargeButton = () => screen.getByRole("button", { name: /^Record payment \$/ });
 async function charge() {
   fireEvent.click(chargeButton());
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm payment" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Record payment" }));
 }
 const confirmed = (n: number) => ({
   success: true,
@@ -339,7 +343,7 @@ describe("store changes while the POS is open", () => {
       },
     ]);
     expect(refresh).toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Confirm payment" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Record payment" })).toBeNull();
     // the ticket is kept (nothing was charged)
     expect(screen.getByRole("button", { name: /^Remove Classic Burger/ })).toBeInTheDocument();
   });
@@ -390,5 +394,28 @@ describe("organization switch", () => {
     expect(screen.getByText("Choose the store for this register")).toBeInTheDocument();
     expect(toast.info).not.toHaveBeenCalled();
     expect(localStorage.getItem("servora.pos.suspended.org-1")).toBeNull();
+  });
+});
+
+describe("register feedback (redesign phase 5)", () => {
+  it("each tap shows on the tile and is announced, without a toast per item", async () => {
+    setWorkspace("owner", [store("downtown")], "downtown");
+    render(<POSPage />);
+    await addBurger();
+    await addBurger();
+    const tile = screen.getByRole("button", { name: /^Add Classic Burger,/ });
+    // Quantity on the ticket, shown on the product tile.
+    expect(tile).toHaveTextContent("2");
+    expect(screen.getByText("Classic Burger added. 2 items on the ticket.")).toBeInTheDocument();
+    expect(toast.success).not.toHaveBeenCalled();
+    // The ticket count and the charge button follow.
+    expect(chargeButton()).toBeEnabled();
+  });
+
+  it("offers focus mode only through the shell (no shell, no button)", async () => {
+    setWorkspace("owner", [store("downtown")], "downtown");
+    render(<POSPage />);
+    await screen.findByRole("button", { name: /^Add Classic Burger,/ });
+    expect(screen.queryByRole("button", { name: "Full screen" })).toBeNull();
   });
 });

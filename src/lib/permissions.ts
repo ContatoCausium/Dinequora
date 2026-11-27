@@ -1,14 +1,14 @@
 import type { OrgRole } from "./access-rules";
 
 /**
- * Permission catalog — mirrors public.permission_catalog() (migrations 0018, 0020).
+ * Permission catalog — mirrors public.permission_catalog() (migrations 0018, 0020, 0032).
  * The DATABASE is the authority (has_permission / RLS / RPC asserts); this module only drives UI
  * (what to show, previews in the permission matrix). A test checks both stay in sync.
  */
 export const PERMISSION_MODULES = [
   { module: "dashboard", actions: ["view", "financials"] },
   { module: "pos", actions: ["view", "sell", "discount"] },
-  { module: "orders", actions: ["view", "update", "refund"] },
+  { module: "orders", actions: ["view", "update", "refund", "resolve_pending"] },
   { module: "kds", actions: ["view", "operate"] },
   { module: "menu", actions: ["view", "create", "edit", "delete"] },
   { module: "inventory", actions: ["view", "create", "edit", "adjust", "transfer", "costs"] },
@@ -46,7 +46,8 @@ export const ACTION_COLUMN: Record<string, (typeof STANDARD_ACTIONS)[number] | "
 const isTierLimited = (p: Permission, role: OrgRole) => {
   if (role === "owner") return false;
   if (role === "manager") return p === "settings.branding" || p === "settings.billing";
-  return p.startsWith("team.") || p.startsWith("settings.");
+  // Staff can never resolve a pending POS sale (0032): not even through a profile or extra grant.
+  return p.startsWith("team.") || p.startsWith("settings.") || p === "orders.resolve_pending";
 };
 
 /** Highest set a tier may ever hold (mirrors public.role_ceiling). */
@@ -57,7 +58,11 @@ export function roleCeiling(role: OrgRole): Permission[] {
 /** Capabilities of members without a profile (mirrors public.role_default_permissions). */
 export function roleDefaults(role: OrgRole): Permission[] {
   if (role === "owner") return [...PERMISSION_CATALOG];
-  if (role === "manager") return roleCeiling("manager").filter((p) => p !== "suppliers.edit");
+  // Managers may be granted orders.resolve_pending explicitly; they do not hold it by default (0032).
+  if (role === "manager")
+    return roleCeiling("manager").filter(
+      (p) => p !== "suppliers.edit" && p !== "orders.resolve_pending",
+    );
   return [
     "dashboard.view",
     "pos.view",

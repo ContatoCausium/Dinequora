@@ -16,24 +16,43 @@ import {
 import { useScopedLocations, useWorkspace } from "./workspace-context";
 import { PageHeader, Panel, Segmented } from "./page";
 import { StatTile } from "./stat-tile";
-import { Skeleton, StateCard } from "./states";
+import { MetricCard } from "./metric-card";
+import { LedgerIncompleteNotice, Skeleton, StateCard } from "./states";
 import { ColumnSeries, RankedBars } from "./charts";
 import { Button } from "@/components/ui/button";
-import { fetchOperationalResources } from "@/lib/operational.functions";
+import { fetchLedgerSummary, fetchOperationalResources } from "@/lib/operational.functions";
 import { mapResources } from "@/lib/operational-mappers";
-import { ledgerMetrics } from "@/lib/operational-metrics";
-import { fetchAllOrders, OPEN_STATUSES, periodStart } from "@/lib/recorded-data";
-import { buildReport, dayKey, isRecordedSale } from "@/lib/report-metrics";
+import { fetchAllOrders, OPEN_STATUSES } from "@/lib/recorded-data";
+import {
+  buildPreviousReport,
+  buildReport,
+  dayKey,
+  isRecordedSale,
+  ordersReadSince,
+} from "@/lib/report-metrics";
+import { PERIOD, readSpanDays, type PeriodSpec } from "@/lib/financial-period";
+import {
+  periodFigures,
+  recognizedInStoreWindows,
+  storeWindows,
+  summaryToday,
+} from "@/lib/financial-summary";
 import { prepStats } from "@/lib/kitchen-metrics";
 import { netSalesCents, type RecordedOrder } from "@/lib/recorded-data";
 import { displayAmount, fmtDateTime } from "@/lib/format";
 import { financialResult, summarizeExpenses, todayIso } from "@/lib/expense-metrics";
 import { fmtDate, fmtMoneyCents, fmtNumber, fmtPercent, fmtQuantity } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { kpiDelta } from "@/lib/period-compare";
+import { completedDayStats } from "@/lib/series-stats";
 import { averageCents, multiplyQuantityCents, sumCents } from "@/lib/money";
 
 type Period = "today" | "7d" | "30d";
-const DAYS: Record<Period, number> = { today: 1, "7d": 7, "30d": 30 };
+const SPEC: Record<Period, PeriodSpec> = {
+  today: PERIOD.today,
+  "7d": PERIOD.days(7),
+  "30d": PERIOD.days(30),
+};
 
 /** Executive overview for real (non-demo) organizations — every figure is read from the backend. */
 export function RecordedOverview() {
@@ -42,7 +61,7 @@ export function RecordedOverview() {
   const { org, locationId, user, role, can, canAny } = useWorkspace();
   const scopedStores = useScopedLocations();
   const [period, setPeriod] = useState<Period>("7d");
-  const since = periodStart(period);
+  const spec = SPEC[period];
   // Every block is gated by the member's permissions (RLS already limits the rows returned).
   const seeFinancials = canAny(["dashboard.financials", "finance.view"]);
   const seeSales = canAny(["dashboard.financials", "reports.view"]);
@@ -61,42 +80,55 @@ export function RecordedOverview() {
     locationId === "all"
       ? org.locations[0]?.timezone
       : org.locations.find((l) => l.id === locationId)?.timezone;
+  const reportStores = useMemo(
+    () =>
+      scopedStores.map((l) => ({
+        slug: l.id,
+        dbId: l.dbId,
+        timeZone: l.timezone || "America/New_York",
+      })),
+    [scopedStores],
+  );
 
   const query = useQuery({
     queryKey: ["overview", org.id, locationId, period],
     queryFn: async () => {
-      const [orders, resources] = await Promise.all([
-        fetchAllOrders(org.id, locationId, since),
+      // One complete ledger read covers the period, its comparison and the month to date.
+      const days = Math.max(readSpanDays(spec, true) ?? 31, 31);
+      const [orders, resources, ledger] = await Promise.all([
+        fetchAllOrders(org.id, locationId, ordersReadSince(reportStores, spec)),
         fetchOperationalResources({ data: { orgId: org.id, locationId } }),
+        fetchLedgerSummary({
+          data: { orgId: org.id, locationId, days, sameTimeYesterday: spec.kind === "today" },
+        }),
       ]);
-      return { orders: orders.orders, resources, mapped: mapResources(resources) };
+      return { orders: orders.orders, resources, ledger, mapped: mapResources(resources) };
     },
   });
 
   const view = useMemo(() => {
     if (!query.data) return null;
-    const { orders, resources, mapped } = query.data;
-    const today = todayIso();
-    const report = buildReport({
-      orders,
-      ledger: resources.finance,
-      since,
-      days: DAYS[period],
-      timeZone,
-    });
+    const { orders, ledger, mapped } = query.data;
+    const today = summaryToday(ledger, todayIso());
+    const report = buildReport({ orders, summary: ledger, spec, stores: reportStores });
+    const previous = buildPreviousReport(ledger, spec);
     const gross = financialResult({
       revenueCents: report.revenueCents,
       cogsCents: report.cogsCents,
       expensesCents: 0,
     });
-    // Month-to-date result: ledger since the 1st + expenses whose competency is this month.
-    const monthStart = `${today.slice(0, 7)}-01`;
-    const monthLedger = ledgerMetrics(
-      resources.finance.filter((e) => dayKey(e.created_at, timeZone) >= monthStart),
-    );
-    const monthExpenses = mapped.expenses
-      .filter((e) => !e.isSimulation && e.competencyDate.slice(0, 7) === today.slice(0, 7))
-      .reduce((s, e) => s + e.amountCents, 0);
+    // Month-to-date result: ledger from the 1st to today and the expenses recognized in the same
+    // days (competency date already arrived — a bill scheduled for later is never anticipated).
+    // Same rule as Finance, Reports and Insights.
+    // Each store's own month (its local days), the same selectors as Finance.
+    const monthLedger = periodFigures(ledger, PERIOD.month);
+    const monthWindows = storeWindows(ledger, PERIOD.month);
+    const dbIdOf = new Map(reportStores.map((st) => [st.slug, st.dbId]));
+    const monthRecognized = recognizedInStoreWindows(mapped.expenses, (e) => {
+      const id = dbIdOf.get(e.locationId);
+      return id ? monthWindows.get(id) : null;
+    });
+    const monthExpenses = monthRecognized.reduce((sum, e) => sum + e.amountCents, 0);
     const month = financialResult({
       revenueCents: monthLedger.revenueCents,
       cogsCents: monthLedger.cogsCents,
@@ -107,9 +139,15 @@ export function RecordedOverview() {
       .sort((a, b) => a.quantity / (a.minQuantity || 1) - b.quantity / (b.minQuantity || 1));
     return {
       report,
+      previous,
+      ledger,
+      today,
       gross,
       month,
+      // Bills (due soon, overdue, paid) are obligations as of today; the cost breakdown below them
+      // uses the costs recognized this month, the same days as the month-to-date result.
       expenses: summarizeExpenses(mapped.expenses, today),
+      monthCosts: summarizeExpenses(monthRecognized, today),
       low,
       kitchen: orders.filter((o) => OPEN_STATUSES.includes(o.status) && !o.isSimulated).length,
       receiving: mapped.purchases.filter(
@@ -117,11 +155,32 @@ export function RecordedOverview() {
       ).length,
       ...roleViews(orders, mapped, user.id, timeZone),
     };
-  }, [query.data, since, period, timeZone, user.id]);
+  }, [query.data, spec, reportStores, timeZone, user.id]);
+
+  // Previous-period comparison from the same complete ledger read (no second query); none when
+  // the read was partial, so a partial period is never compared as if complete.
+  const { t: tc } = useTranslation();
+  const prev = view && view.ledger.complete ? view.previous : null;
+  const delta = (current: number, previous: number | undefined, goodWhen?: "up" | "none") =>
+    !view
+      ? undefined
+      : kpiDelta(current, previous, {
+          lng,
+          caption: tc(`compare.vs.${period}`),
+          unavailable: tc(`compare.none.${period}`),
+          ...(goodWhen ? { goodWhen } : {}),
+        });
 
   const money = (c: number) => fmtMoneyCents(c, lng);
+  const shortDay = (day: string) => fmtDate(day, lng, { day: "numeric", month: "short" });
+  // Highest / lowest / average of the same daily series the chart draws (no extra query), over
+  // completed days only: today is still in progress in the store's time zone.
+  const dayStats =
+    view && period !== "today" ? completedDayStats(view.report.daily, view.today) : null;
   const storeName = (slug: string) => org.locations.find((l) => l.id === slug)?.name ?? slug;
-  const monthName = fmtDate(`${todayIso().slice(0, 7)}-01`, lng, { month: "long" });
+  const monthName = fmtDate(`${(view?.today ?? todayIso()).slice(0, 7)}-01`, lng, {
+    month: "long",
+  });
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-6">
@@ -181,15 +240,19 @@ export function RecordedOverview() {
       ) : !view ? (
         <div className="space-y-6">
           <Skeleton className="h-16 rounded-xl" />
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            {Array.from({ length: 5 }, (_, i) => (
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+            <Skeleton className="h-[26rem] rounded-xl" />
+            <Skeleton className="hidden h-[26rem] rounded-xl lg:block" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-[92px] rounded-xl" />
             ))}
           </div>
-          <Skeleton className="h-72 rounded-xl" />
         </div>
       ) : (
         <>
+          {(seeFinancials || seeSales) && <LedgerIncompleteNotice summary={view.ledger} />}
           <AttentionStrip
             items={[
               seeExpenses &&
@@ -256,76 +319,72 @@ export function RecordedOverview() {
           {seeSales && (
             <>
               <h2 className="eyebrow">{t("home.salesSection")}</h2>
-              <div
-                className={cn(
-                  "grid grid-cols-2 gap-4",
-                  canSeeFinance ? "lg:grid-cols-5" : "lg:grid-cols-3",
-                )}
-              >
-                <StatTile
+              {/* DOM (and reading) order: hero → indicators → stores. Wide screens place the stores
+                  beside the hero and the indicators below both. */}
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+                <MetricCard
                   label={t("home.kpi.netSales")}
                   value={money(view.report.revenueCents)}
+                  delta={delta(view.report.revenueCents, prev?.revenueCents)}
                   hint={
                     view.report.revenueCents ? t("home.kpi.netSalesHint") : t("home.kpi.noSales")
                   }
-                />
-                <StatTile
-                  label={t("home.kpi.orders")}
-                  value={fmtNumber(view.report.orderCount, lng)}
-                  hint={t("home.kpi.avgTicket", { value: money(view.report.avgTicketCents) })}
-                />
-                <StatTile
-                  label={t("home.kpi.cogs")}
-                  value={money(view.report.cogsCents)}
-                  hint={
-                    view.gross.cogsRate == null
-                      ? t("home.kpi.noSales")
-                      : t("home.kpi.cogsHint", { value: fmtPercent(view.gross.cogsRate, lng) })
+                  stats={
+                    dayStats && view.report.daysWithSales > 0
+                      ? [
+                          {
+                            key: "highest",
+                            label: t("home.hero.highest"),
+                            value: money(dayStats.highest.cents),
+                            detail: shortDay(dayStats.highest.day),
+                          },
+                          {
+                            key: "lowest",
+                            label: t("home.hero.lowest"),
+                            value: money(dayStats.lowest.cents),
+                            detail: shortDay(dayStats.lowest.day),
+                          },
+                          {
+                            key: "average",
+                            label: t("home.hero.average"),
+                            value: money(dayStats.averageCents),
+                            detail: t("home.hero.days", { count: dayStats.days }),
+                          },
+                        ]
+                      : undefined
                   }
-                />
-                {canSeeFinance && (
-                  <>
-                    <StatTile
-                      label={t("home.kpi.gross")}
-                      value={money(view.gross.grossProfitCents)}
-                      hint={
-                        view.gross.grossMargin == null
-                          ? t("home.kpi.noSales")
-                          : t("home.kpi.grossHint", {
-                              value: fmtPercent(view.gross.grossMargin, lng),
-                            })
-                      }
-                    />
-                    <StatTile
-                      label={t("home.kpi.month")}
-                      value={money(view.month.resultCents)}
-                      hint={t("home.kpi.monthHint", { month: monthName })}
-                      tone={view.month.resultCents < 0 ? "negative" : "positive"}
-                    />
-                  </>
-                )}
-              </div>
-
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-                <Panel title={t("home.sales.title")}>
+                  statsNote={t("home.hero.statsNote")}
+                >
                   {view.report.daysWithSales === 0 ? (
-                    <p className="py-12 text-center text-sm text-muted-foreground">
+                    <p className="py-10 text-center text-sm text-muted-foreground">
                       {t("home.sales.empty")}
                     </p>
                   ) : period === "today" ? (
-                    <p className="tabular py-8 text-center text-3xl font-semibold tracking-tight">
-                      {money(view.report.revenueCents)}
-                    </p>
+                    <p className="py-4 text-sm text-muted-foreground">{t("home.hero.todayNote")}</p>
                   ) : (
                     <>
                       <ColumnSeries
+                        animate
+                        height={184}
                         caption={t("home.sales.title")}
                         format={money}
+                        formatAxis={(c) => fmtMoneyCents(c, lng, { compact: true })}
                         points={view.report.daily.map((d) => ({
                           key: d.day,
-                          label: fmtDate(d.day, lng, { day: "numeric", month: "short" }),
+                          label: shortDay(d.day),
                           value: d.cents,
                         }))}
+                        previous={
+                          prev && prev.daysWithSales > 0
+                            ? {
+                                values: prev.daily.map((d) => d.cents),
+                                labels: prev.daily.map((d) => shortDay(d.day)),
+                                currentLabel: tc("compare.thisPeriod"),
+                                previousLabel: tc("compare.previousPeriod"),
+                                tableLabel: tc("compare.previousPeriod"),
+                              }
+                            : undefined
+                        }
                       />
                       {view.report.daysWithSales === 1 && (
                         <p className="mt-3 text-xs text-muted-foreground">
@@ -334,7 +393,61 @@ export function RecordedOverview() {
                       )}
                     </>
                   )}
-                </Panel>
+                </MetricCard>
+
+                <div
+                  className={cn(
+                    "grid grid-cols-2 gap-4 lg:order-last lg:col-span-2",
+                    canSeeFinance && "xl:grid-cols-4",
+                  )}
+                >
+                  <StatTile
+                    label={t("home.kpi.orders")}
+                    value={fmtNumber(view.report.orderCount, lng)}
+                    delta={delta(view.report.orderCount, prev?.orderCount)}
+                    hint={t("home.kpi.avgTicket", { value: money(view.report.avgTicketCents) })}
+                  />
+                  <StatTile
+                    label={t("home.kpi.cogs")}
+                    value={money(view.report.cogsCents)}
+                    delta={delta(view.report.cogsCents, prev?.cogsCents, "none")}
+                    hint={
+                      view.gross.cogsRate == null
+                        ? t("home.kpi.noSales")
+                        : t("home.kpi.cogsHint", { value: fmtPercent(view.gross.cogsRate, lng) })
+                    }
+                  />
+                  {canSeeFinance && (
+                    <>
+                      {/* Phones: the two finance tiles take a full row each, so the month hint is
+                          never clamped and the grid keeps no gap. */}
+                      <StatTile
+                        className="max-sm:col-span-2"
+                        label={t("home.kpi.gross")}
+                        value={money(view.gross.grossProfitCents)}
+                        delta={delta(
+                          view.gross.grossProfitCents,
+                          prev ? prev.revenueCents - prev.cogsCents : undefined,
+                        )}
+                        hint={
+                          view.gross.grossMargin == null
+                            ? t("home.kpi.noSales")
+                            : t("home.kpi.grossHint", {
+                                value: fmtPercent(view.gross.grossMargin, lng),
+                              })
+                        }
+                      />
+                      <StatTile
+                        className="max-sm:col-span-2"
+                        label={t("home.kpi.month")}
+                        value={money(view.month.resultCents)}
+                        hint={t("home.kpi.monthHint", { month: monthName })}
+                        tone={view.month.resultCents < 0 ? "negative" : "positive"}
+                      />
+                    </>
+                  )}
+                </div>
+
                 <Panel title={t("home.sales.stores")}>
                   <RankedBars
                     caption={t("home.sales.stores")}
@@ -355,9 +468,13 @@ export function RecordedOverview() {
           <div
             className={cn(
               "grid gap-6",
-              ["hidden", "lg:grid-cols-1", "lg:grid-cols-2", "lg:grid-cols-3"][
-                [seeSales, seeExpenses, seeStock].filter(Boolean).length
-              ],
+              // Three panels share a row only when each gets enough width (no cut names at 1180).
+              [
+                "hidden",
+                "lg:grid-cols-1",
+                "lg:grid-cols-2",
+                "md:grid-cols-2 min-[1320px]:grid-cols-3",
+              ][[seeSales, seeExpenses, seeStock].filter(Boolean).length],
             )}
           >
             {seeSales && (
@@ -376,8 +493,8 @@ export function RecordedOverview() {
                     {view.report.products.slice(0, 5).map((p, i) => (
                       <li key={p.name} className="flex items-baseline gap-3">
                         <span className="tabular w-4 text-xs text-muted-foreground">{i + 1}</span>
-                        <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                        <span className="tabular text-xs text-muted-foreground">
+                        <span className="min-w-0 flex-1 break-words">{p.name}</span>
+                        <span className="tabular shrink-0 text-xs text-muted-foreground">
                           {t("home.products.units", { count: p.qty })}
                         </span>
                         <span className="tabular w-24 text-right font-medium">
@@ -407,14 +524,18 @@ export function RecordedOverview() {
                     danger={view.expenses.overdueCents > 0}
                   />
                   <MoneyRow label={t("home.finance.paid")} value={money(view.expenses.paidCents)} />
-                  <div className="border-t pt-2.5" />
+                </dl>
+                <p className="mt-2.5 border-t pt-2.5 text-xs text-muted-foreground">
+                  {t("home.finance.monthCosts")}
+                </p>
+                <dl className="mt-2.5 space-y-2.5 text-sm">
                   <MoneyRow
                     label={t("home.finance.personnel")}
-                    value={money(view.expenses.personnelCents)}
+                    value={money(view.monthCosts.personnelCents)}
                   />
                   <MoneyRow
                     label={t("home.finance.operating")}
-                    value={money(view.expenses.operatingCents)}
+                    value={money(view.monthCosts.operatingCents)}
                   />
                 </dl>
               </Panel>
@@ -423,6 +544,10 @@ export function RecordedOverview() {
             {seeStock && (
               <Panel
                 title={t("home.stock.title")}
+                className={cn(
+                  [seeSales, seeExpenses, seeStock].every(Boolean) &&
+                    "md:col-span-2 min-[1320px]:col-span-1",
+                )}
                 action={<PanelLink to="/inventory" label={t("home.stock.openInventory")} />}
               >
                 {view.low.length === 0 ? (
@@ -433,7 +558,7 @@ export function RecordedOverview() {
                   <ul className="space-y-2.5 text-sm">
                     {view.low.slice(0, 5).map((i) => (
                       <li key={i.id} className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 truncate">
+                        <span className="min-w-0 break-words">
                           {i.name}
                           {locationId === "all" && (
                             <span className="ml-1.5 text-xs text-muted-foreground">
@@ -522,7 +647,7 @@ function PanelLink({
   return (
     <Link
       to={to}
-      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+      className="-my-1 inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {label} <ArrowRight className="size-3.5" />
     </Link>
@@ -689,7 +814,7 @@ function KitchenSection({
             {v.oldest.map((o) => (
               <li key={o.id} className="flex items-center justify-between gap-3 py-2">
                 <span className="font-mono text-[13px] font-medium">{o.orderNumber}</span>
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                <span className="min-w-0 flex-1 break-words text-muted-foreground">
                   {o.items.map((i) => `${i.quantity}× ${i.productName}`).join(", ")}
                 </span>
                 <span
@@ -765,7 +890,7 @@ function StockSection({
           <ul className="divide-y text-sm">
             {v.recent.map((m) => (
               <li key={m.id} className="flex items-center justify-between gap-3 py-2">
-                <span className="min-w-0 flex-1 truncate">
+                <span className="min-w-0 flex-1 break-words">
                   {m.itemName}
                   {showStore && (
                     <span className="ml-1.5 text-xs text-muted-foreground">

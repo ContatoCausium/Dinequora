@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { CreditCard, Loader2, ReceiptText, ShieldAlert } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock,
+  CreditCard,
+  Info,
+  Loader2,
+  ReceiptText,
+  ShieldAlert,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel } from "@/components/app/page";
@@ -10,6 +20,7 @@ import { fetchBilling } from "@/lib/org-service";
 import { countBillableStores } from "@/lib/access-rules";
 import { fmtCurrency, fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { isClientPreview } from "@/lib/deployment-profile";
 
 export const Route = createFileRoute("/_authenticated/_app/settings/billing")({
   head: () => ({
@@ -35,6 +46,9 @@ function BillingPage() {
   const { t, i18n } = useTranslation("settings");
   const lng = i18n.language;
   const { role, orgDbId, org, storeLimit } = useWorkspace();
+  // Client preview: billing is arranged directly with Dinequora, so no placeholder price list or
+  // "payments not connected" warning is shown — only the subscription the workspace actually has.
+  const preview = isClientPreview();
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["billing", orgDbId],
     queryFn: () => fetchBilling(orgDbId),
@@ -61,22 +75,30 @@ function BillingPage() {
     d ? fmtDate(d, lng, { month: "short", day: "numeric", year: "numeric" }) : "—";
 
   return (
-    <div className="mx-auto max-w-[1100px]">
+    // Same container as every other app page, so the title never shifts when switching screens.
+    <div className="mx-auto max-w-[1440px]">
       <PageHeader
         eyebrow={<span className="eyebrow">{t("billing.eyebrow")}</span>}
         title={t("billing.title")}
         description={t("billing.subtitle", { org: org.name })}
       />
 
-      <div className="surface mb-6 flex items-start gap-3 border-warning/40 bg-warning/10 p-4 text-sm">
-        <CreditCard className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
-        <p>{t("billing.notConnected")}</p>
-      </div>
+      {preview ? (
+        <div className="surface mb-6 flex items-start gap-3 p-4 text-sm text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
+          <p>{t("billing.previewManaged")}</p>
+        </div>
+      ) : (
+        <div className="surface mb-6 flex items-start gap-3 border-warning/40 bg-warning/10 p-4 text-sm">
+          <CreditCard className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
+          <p>{t("billing.notConnected")}</p>
+        </div>
+      )}
 
       {isLoading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className={cn("grid gap-6", !preview && "lg:grid-cols-[minmax(0,1fr)_340px]")}>
           <div className="flex min-w-0 flex-col gap-6">
             <Panel title={t("billing.subscription")}>
               {!sub ? (
@@ -110,7 +132,9 @@ function BillingPage() {
                     value={
                       sub.cancel_at_period_end
                         ? t("billing.cancelsAtEnd")
-                        : date(sub.current_period_end)
+                        : preview && !sub.current_period_end
+                          ? t("billing.renewsManaged")
+                          : date(sub.current_period_end)
                     }
                   />
                 </dl>
@@ -142,52 +166,57 @@ function BillingPage() {
               )}
             </Panel>
           </div>
-          <Panel title={t("billing.plans")} subtitle={t("billing.plansNote")}>
-            <ul className="flex flex-col gap-2">
-              {/* Smallest plan first. Prices are the placeholder per-location values stored in
+          {!preview && (
+            <Panel title={t("billing.plans")} subtitle={t("billing.plansNote")}>
+              <ul className="flex flex-col gap-2">
+                {/* Smallest plan first. Prices are the placeholder per-location values stored in
                   billing_plans; the monthly figure below is derived from them, never invented. */}
-              {[...(data?.plans ?? [])]
-                .sort(
-                  (a, b) =>
-                    (a.default_store_limit ?? 0) - (b.default_store_limit ?? 0) ||
-                    a.name.localeCompare(b.name),
-                )
-                .map((p) => (
-                  <li
-                    key={p.id}
-                    className={cn(
-                      "rounded-lg border p-3.5",
-                      p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
-                    )}
-                  >
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-sm font-semibold">{p.name}</span>
-                      <span className="tabular text-sm">
-                        {p.price_per_location_cents
-                          ? t("billing.perLocation", {
-                              price: fmtCurrency(p.price_per_location_cents / 100, lng),
-                            })
-                          : t("billing.custom")}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("billing.planMeta", { count: p.default_store_limit, days: p.trial_days })}
-                    </p>
-                    {p.price_per_location_cents > 0 && (p.default_store_limit ?? 0) > 1 && (
-                      <p className="tabular mt-0.5 text-xs text-muted-foreground">
-                        {t("billing.planUpTo", {
+                {[...(data?.plans ?? [])]
+                  .sort(
+                    (a, b) =>
+                      (a.default_store_limit ?? 0) - (b.default_store_limit ?? 0) ||
+                      a.name.localeCompare(b.name),
+                  )
+                  .map((p) => (
+                    <li
+                      key={p.id}
+                      className={cn(
+                        "rounded-lg border p-3.5",
+                        p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
+                      )}
+                    >
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm font-semibold">{p.name}</span>
+                        <span className="tabular text-sm">
+                          {p.price_per_location_cents
+                            ? t("billing.perLocation", {
+                                price: fmtCurrency(p.price_per_location_cents / 100, lng),
+                              })
+                            : t("billing.custom")}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("billing.planMeta", {
                           count: p.default_store_limit,
-                          total: fmtCurrency(
-                            (p.price_per_location_cents * p.default_store_limit) / 100,
-                            lng,
-                          ),
+                          days: p.trial_days,
                         })}
                       </p>
-                    )}
-                  </li>
-                ))}
-            </ul>
-          </Panel>
+                      {p.price_per_location_cents > 0 && (p.default_store_limit ?? 0) > 1 && (
+                        <p className="tabular mt-0.5 text-xs text-muted-foreground">
+                          {t("billing.planUpTo", {
+                            count: p.default_store_limit,
+                            total: fmtCurrency(
+                              (p.price_per_location_cents * p.default_store_limit) / 100,
+                              lng,
+                            ),
+                          })}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            </Panel>
+          )}
         </div>
       )}
     </div>
@@ -208,15 +237,15 @@ function StatusPill({ status }: { status: string }) {
   const good = status === "active" || status === "trialing";
   const bad = status === "unpaid" || status === "canceled" || status === "past_due";
   return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[11px] font-medium",
-        good && "bg-success/12 text-success",
-        bad && "bg-destructive/12 text-destructive",
-        !good && !bad && "bg-warning/15",
+    <Badge variant={good ? "success" : bad ? "danger" : "warning"}>
+      {good ? (
+        <CheckCircle2 aria-hidden />
+      ) : bad ? (
+        <CircleAlert aria-hidden />
+      ) : (
+        <Clock aria-hidden />
       )}
-    >
       {t(`billing.statuses.${status}`, { defaultValue: status })}
-    </span>
+    </Badge>
   );
 }

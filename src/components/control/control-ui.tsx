@@ -14,15 +14,12 @@ import {
 import { assignOwner, updateOrganization, type PlanId } from "@/lib/admin-service";
 import type { OrgStatus } from "@/lib/org-service";
 import { cn } from "@/lib/utils";
+import { btnGhost, btnPrimary, inputCls } from "./control-styles";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const STATUS: OrgStatus[] = ["trial", "active", "suspended"];
 export const PLANS: PlanId[] = ["starter", "growth", "enterprise"];
-export const inputCls =
-  "h-9 min-w-0 w-full rounded-md border bg-card px-3 text-sm shadow-xs outline-none focus:border-ring focus:ring-3 focus:ring-ring/15";
-export const btnPrimary =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60";
-export const btnGhost =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium hover:bg-muted";
+
 export const btnOutline =
   "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border bg-card px-2.5 text-xs font-medium shadow-xs hover:bg-muted";
 
@@ -63,7 +60,7 @@ export function Tag({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded border px-1.5 text-[10px] font-medium leading-4",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded border px-1.5 text-[10px] font-medium leading-4",
         tone === "warning"
           ? "border-warning/40 text-warning"
           : tone === "danger"
@@ -129,7 +126,7 @@ export function Metric({
       >
         {value}
       </dd>
-      {note && <p className="mt-2 text-xs text-muted-foreground">{note}</p>}
+      {note && <dd className="mt-2 text-xs text-muted-foreground">{note}</dd>}
     </div>
   );
 }
@@ -224,7 +221,7 @@ export function EditOrgDialog({
       <div className="grid grid-cols-2 gap-3">
         <label className="grid gap-1.5 text-sm font-medium">
           {t("orgs.plan")}
-          <select
+          <FormSelect
             className={inputCls}
             value={plan}
             onChange={(e) => setPlan(e.target.value as PlanId)}
@@ -234,7 +231,7 @@ export function EditOrgDialog({
                 {t(`plans.${p}`)}
               </option>
             ))}
-          </select>
+          </FormSelect>
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
           {t("edit.storeLimit")}

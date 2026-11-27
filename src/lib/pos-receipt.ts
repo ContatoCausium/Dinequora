@@ -1,5 +1,3 @@
-import type { ConfirmedSale } from "./orders-persistence-service";
-
 interface ReceiptTotals {
   subtotalCents: number;
   taxCents: number;
@@ -13,7 +11,12 @@ interface ReceiptTotals {
  */
 export function confirmedReceipt<T extends ReceiptTotals>(
   paid: T,
-  confirmed: Pick<ConfirmedSale, "subtotalCents" | "taxCents" | "totalCents" | "isSimulation">,
+  confirmed: {
+    subtotalCents?: number | undefined;
+    taxCents?: number | undefined;
+    totalCents?: number | undefined;
+    isSimulation?: boolean | undefined;
+  },
 ): T & { isSimulation: boolean } {
   return {
     ...paid,

@@ -36,6 +36,18 @@ banco recém-criado).
 1. Próximo número livre, nome descritivo em inglês: `NNNN_descricao_curta.sql`.
 2. Acrescentar a entrada no fim de `meta/_journal.json` (`idx` seguinte, `when` maior que o
    anterior, mesmo formato das existentes).
+   - **Nunca use a hora atual.** O migrator do drizzle-orm só aplica uma entrada cujo `when` seja
+     maior que o `created_at` da **última** linha aplicada no banco; uma entrada com `when` menor ou
+     igual é **pulada em silêncio, para sempre**.
+   - Desde a 0031 os `when` estão adiantados em relação ao calendário (a 0035 é
+     2026-11-24T11:01:19.812Z). Um `drizzle-kit generate`, que é proibido, carimbaria a hora atual,
+     menor que a última entrada.
+   - Use **o `when` da entrada anterior + 86 400 000** (um dia), como as entradas desde a 0030.
+   - O `check-migrations` falha em modo arquivos se o `when` não crescer. Com `DB_URL`, falha com
+     "would be skipped by the migrator" para qualquer entrada não aplicada cujo `when` não supere a
+     última linha aplicada.
+   - Antes de publicar, `DB_URL=<destino> node scripts/qa/check-migrations.mjs --preflight`
+     (somente leitura) aceita as entradas pendentes que o migrator **vai** aplicar e as lista.
 3. Registrar o hash: `node scripts/qa/check-migrations.mjs --add-new-hashes` (só acrescenta; nunca
    reescreve um hash existente).
 4. Regenerar `src/integrations/supabase/types.ts` no mesmo commit, **sempre pelo script** e só
@@ -54,6 +66,14 @@ banco recém-criado).
    demonstração e nunca na CI, porque o dump contém dados de usuários).
 
 ## Regras de conteúdo
+
+- **Privilégios sempre explícitos.** Os projetos hospedados novos (Client Preview, produção) não dão
+  nada aos papéis da API por padrão: toda tabela ou sequência nova que o app usa precisa de `GRANT`
+  explícito. Funções são o contrário: `PUBLIC` recebe `EXECUTE` em toda função nova, nos dois
+  modelos, então toda função começa com `REVOKE ALL … FROM PUBLIC, anon` e só então recebe o `GRANT`
+  de quem deve chamá-la (as stacks locais do CLI ainda concedem tudo por omissão). A suíte roda nos dois modelos e a etapa 2c compara os privilégios
+  efetivos com `scripts/qa/api-privileges.hosted.json`; uma migration que muda privilégios regenera
+  esse manifesto no mesmo commit (`docs/operations/privilege-models.md`).
 
 - **Aditiva por padrão**: colunas novas nulas ou com padrão seguro; constraints novas com
   `NOT VALID` seguido de `VALIDATE CONSTRAINT` quando houver dados; remoção de coluna/constraint só

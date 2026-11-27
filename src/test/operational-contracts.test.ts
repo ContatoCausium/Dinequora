@@ -58,10 +58,8 @@ describe("Reconstructed operational boundary (local contracts, not live RLS)", (
         subtotalCents: 100,
       },
     ];
-    const result = await persistFinalizedPOSSaleAtomic(session);
-    expect(result.success).toBe(false);
-    expect(result.orderId).toBeUndefined();
-    expect(result.error).toBe("forbidden");
+    // Wave 0: a failure is thrown (the POS classifies it: definitive refusal or unknown outcome).
+    await expect(persistFinalizedPOSSaleAtomic(session, "pos-key-1")).rejects.toThrow("forbidden");
     expect(localStorage.getItem("servora.pos.history.org-a")).toBeNull();
   });
   it("rejects cross-organization order before calling server", async () => {
@@ -129,7 +127,7 @@ describe("Store sales tax (0025) and recipe payload (0024) contracts", () => {
         subtotalCents: 100,
       },
     ];
-    const result = await persistFinalizedPOSSaleAtomic(session);
+    const result = await persistFinalizedPOSSaleAtomic(session, "pos-key-2");
     expect(result).toEqual({ success: false, error: "tax_rate_not_configured" });
     expect(server.submit).not.toHaveBeenCalled();
   });

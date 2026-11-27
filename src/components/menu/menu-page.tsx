@@ -5,7 +5,6 @@ import {
   AlertCircle,
   Archive,
   BookOpenText,
-  ChefHat,
   Clock,
   Copy,
   Edit3,
@@ -17,7 +16,12 @@ import {
   Search,
   Store,
   Trash2,
+  CheckCircle2,
+  CircleSlash,
+  LayoutGrid,
+  List,
 } from "lucide-react";
+import { categoryColorMap, initials } from "@/lib/category-colors";
 
 import {
   archiveOperationalMenu,
@@ -26,8 +30,8 @@ import {
 } from "@/lib/operational.functions";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
-import { DemoBadge } from "@/components/app/brand-mark";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +59,7 @@ import {
 import { cn } from "@/lib/utils";
 import { fmtMoneyCents } from "@/lib/format";
 import { centsFromNumberInput, centsToDecimalString } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 type LoadState = "loading" | "ready" | "error";
 type StatusFilter = "all" | "active" | "inactive";
@@ -73,6 +78,17 @@ type MenuData = Awaited<ReturnType<typeof fetchOperationalMenu>>;
  * (permissions, store scope, owner-only categories and category_in_use, migrations 0018-0028);
  * this screen only offers what the member's role allows and explains every refusal.
  */
+type MenuView = "list" | "grid";
+const MENU_VIEW_KEY = "dinequora.menu.view";
+function readMenuView(): MenuView | null {
+  try {
+    const v = localStorage.getItem(MENU_VIEW_KEY);
+    return v === "list" || v === "grid" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function MenuPage() {
   const { t, i18n } = useTranslation("menu");
   const { org, locationId, role, can } = useWorkspace();
@@ -89,6 +105,20 @@ export function MenuPage() {
   // ---------------------------------------------------------------- data
   const [state, setState] = useState<LoadState>("loading");
   const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const categoryColors = useMemo(
+    () => categoryColorMap(categories, i18n.language),
+    [categories, i18n.language],
+  );
+  // Grid shows photos best; a list scans faster. Default follows the menu; the choice is remembered.
+  const [viewChoice, setViewChoice] = useState<MenuView | null>(() => readMenuView());
+  const chooseView = (mode: MenuView) => {
+    setViewChoice(mode);
+    try {
+      localStorage.setItem(MENU_VIEW_KEY, mode);
+    } catch {
+      // Private mode: the choice is simply not remembered.
+    }
+  };
   const [archived, setArchived] = useState<ArchivedCategoryRef[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -184,6 +214,7 @@ export function MenuPage() {
   }, [categories, activeCategory]);
 
   const usage = useMemo(() => categoryUsage(items), [items]);
+  const view: MenuView = viewChoice ?? (items.some((i) => !!i.imageUrl) ? "grid" : "list");
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -481,7 +512,6 @@ export function MenuPage() {
         eyebrow={
           <div className="flex items-center gap-2">
             <span className="eyebrow">{org.name}</span>
-            {org.fictional && <DemoBadge label={t("interactiveBadge")} />}
           </div>
         }
         title={t("title")}
@@ -535,8 +565,8 @@ export function MenuPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative w-full sm:w-80">
             <Search
               className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground"
@@ -550,6 +580,36 @@ export function MenuPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
             />
+          </div>
+          <div
+            role="radiogroup"
+            aria-label={t("view.label")}
+            className="flex shrink-0 self-start rounded-lg border bg-muted/50 p-1 sm:self-auto"
+          >
+            {(
+              [
+                ["list", List],
+                ["grid", LayoutGrid],
+              ] as const
+            ).map(([mode, Icon]) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={view === mode}
+                aria-label={t(`view.${mode}`)}
+                title={t(`view.${mode}`)}
+                onClick={() => chooseView(mode)}
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  view === mode
+                    ? "raised bg-card text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" aria-hidden />
+              </button>
+            ))}
           </div>
           <Segmented<StatusFilter>
             label={t("filters.status")}
@@ -565,29 +625,34 @@ export function MenuPage() {
         <div
           role="group"
           aria-label={t("categoryFilterLabel")}
-          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0"
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none lg:flex-wrap lg:overflow-visible lg:pb-0"
         >
-          <Button
-            variant={activeCategory === "all" ? "default" : "secondary"}
-            size="sm"
-            aria-pressed={activeCategory === "all"}
-            onClick={() => setActiveCategory("all")}
-            className="h-8 shrink-0 text-xs"
-          >
-            {t("allCategories")}
-          </Button>
-          {categories.map((c) => (
-            <Button
-              key={c.id}
-              variant={activeCategory === c.id ? "default" : "secondary"}
-              size="sm"
-              aria-pressed={activeCategory === c.id}
-              onClick={() => setActiveCategory(c.id)}
-              className="h-8 shrink-0 text-xs"
-            >
-              {c.name}
-            </Button>
-          ))}
+          {[{ id: "all", name: t("allCategories") }, ...categories].map((c) => {
+            const on = activeCategory === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setActiveCategory(c.id)}
+                className={cn(
+                  "inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:active:scale-[0.97]",
+                  on
+                    ? "border-primary bg-primary-soft text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:border-input hover:text-foreground",
+                )}
+              >
+                {c.id !== "all" && (
+                  <span
+                    aria-hidden
+                    className="size-2.5 rounded-full"
+                    style={{ background: categoryColors.get(c.id) }}
+                  />
+                )}
+                {c.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -657,7 +722,11 @@ export function MenuPage() {
         </Panel>
       ) : (
         <ul
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          className={cn(
+            view === "grid"
+              ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "surface divide-y overflow-hidden",
+          )}
           aria-label={t("products")}
         >
           {filteredItems.map((item) => {
@@ -667,141 +736,216 @@ export function MenuPage() {
             const touchable = access === "ok";
             const storeCount = item.locationIds.length + (item.otherStoreCount ?? 0);
             const working = busy !== null;
+            const color = categoryColors.get(item.category) ?? "var(--border)";
+
+            const thumb = item.imageUrl ? (
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                loading="lazy"
+                decoding="async"
+                className="size-12 shrink-0 rounded-lg border object-cover"
+              />
+            ) : (
+              <span
+                aria-hidden
+                className="flex size-12 shrink-0 items-center justify-center rounded-lg text-[15px] font-semibold text-foreground"
+                style={{ background: `color-mix(in oklab, ${color} 18%, var(--card))` }}
+              >
+                {initials(item.name)}
+              </span>
+            );
+            const status = (
+              <Badge variant={item.active ? "success" : "neutral"} className="shrink-0">
+                {item.active ? <CheckCircle2 aria-hidden /> : <CircleSlash aria-hidden />}
+                {item.active ? t("item.available") : t("item.unavailable")}
+              </Badge>
+            );
+            const category = cat ? (
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ background: color }}
+                />
+                <span className="truncate">{cat.name}</span>
+              </span>
+            ) : (
+              <Badge variant="warning" className="w-fit">
+                {t("item.categoryArchived")}
+              </Badge>
+            );
+            const price = (
+              <span className="tabular shrink-0 text-[15px] font-semibold">
+                {fmtMoneyCents(item.priceCents, i18n.language)}
+              </span>
+            );
+            const meta = (
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="size-3.5" aria-hidden />
+                  {t("item.prepTime", { min: item.prepTimeMinutes })}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Store className="size-3.5" aria-hidden />
+                  {storeCount === 0 ? t("item.allStores") : t("item.stores", { count: storeCount })}
+                </span>
+              </span>
+            );
+            const notes = (
+              <>
+                {!categoryOk && ability.anyWrite && touchable && (
+                  <p className="text-xs text-muted-foreground">{t("item.categoryArchivedHint")}</p>
+                )}
+                {ability.anyWrite && !touchable && (
+                  <p className="text-xs text-muted-foreground">
+                    {access === "allStores"
+                      ? t("item.ownerOnlyAllStores")
+                      : access === "inactiveStore"
+                        ? t("item.inactiveStore")
+                        : t("item.notInYourStores")}
+                  </p>
+                )}
+              </>
+            );
+            const actions = ability.anyWrite && touchable && (
+              <div
+                className={cn(
+                  "flex items-center gap-1.5",
+                  view === "grid" ? "justify-between" : "justify-end",
+                )}
+              >
+                {ability.editProducts ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10"
+                    disabled={working || !categoryOk}
+                    onClick={() => toggleItemActive(item)}
+                  >
+                    {item.active ? t("item.markUnavailable") : t("item.markAvailable")}
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                <div className="flex items-center gap-0.5">
+                  {ability.createProducts && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-10"
+                      aria-label={t("item.duplicateLabel", { name: item.name })}
+                      title={t("item.duplicate")}
+                      disabled={working || !categoryOk}
+                      onClick={() => handleDuplicateItem(item)}
+                    >
+                      <Copy className="size-4" aria-hidden />
+                    </Button>
+                  )}
+                  {ability.editProducts && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-10"
+                      aria-label={t("item.editLabel", { name: item.name })}
+                      title={t("item.edit")}
+                      disabled={working}
+                      onClick={() => openEditItem(item)}
+                    >
+                      <Edit3 className="size-4" aria-hidden />
+                    </Button>
+                  )}
+                  {ability.archiveProducts && item.active && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      // Quiet at rest (it repeats on every row); turns destructive on hover/focus. The
+                      // confirmation dialog is unchanged.
+                      className="size-10 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:text-destructive"
+                      aria-label={t("item.deleteLabel", { name: item.name })}
+                      title={t("item.delete")}
+                      disabled={working}
+                      onClick={() => setRemoveItem(item)}
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+
+            if (view === "list")
+              return (
+                <li
+                  key={item.id}
+                  className={cn(
+                    "flex flex-col gap-3 p-3 transition-colors hover:bg-muted/30 md:flex-row md:items-center md:gap-4 md:px-4",
+                    !item.active && "bg-muted/25",
+                  )}
+                >
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    {thumb}
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                        <h3 className="font-semibold leading-snug">{item.name}</h3>
+                        {category}
+                      </div>
+                      {item.description && (
+                        <p className="line-clamp-1 text-xs text-muted-foreground">
+                          {item.description}
+                        </p>
+                      )}
+                      {meta}
+                      {notes}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 md:flex-nowrap md:justify-end">
+                    <span className="flex items-center gap-3">
+                      {price}
+                      {status}
+                    </span>
+                    {actions}
+                  </div>
+                </li>
+              );
+
             return (
               <li
                 key={item.id}
                 className={cn(
                   "surface group flex flex-col overflow-hidden transition-shadow hover:shadow-pop",
-                  !item.active && "opacity-80",
+                  !item.active && "bg-muted/25",
                 )}
               >
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-                  {item.imageUrl ? (
+                {item.imageUrl && (
+                  <div className="aspect-[16/10] w-full overflow-hidden bg-muted">
                     <img
                       src={item.imageUrl}
                       alt={item.name}
                       loading="lazy"
                       decoding="async"
-                      className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.03]"
                     />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-muted-foreground/40">
-                      <ChefHat className="size-8" strokeWidth={1.5} aria-hidden />
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col gap-3 p-4">
+                  <div className="flex items-start gap-3">
+                    {!item.imageUrl && thumb}
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      {category}
+                      <h3 className="font-semibold leading-snug">{item.name}</h3>
                     </div>
-                  )}
-                  <Badge
-                    variant={item.active ? "success" : "neutral"}
-                    className="absolute left-3 top-3 bg-card/90 backdrop-blur-sm"
-                  >
-                    {item.active ? t("item.available") : t("item.unavailable")}
-                  </Badge>
-                </div>
-
-                <div className="flex flex-1 flex-col p-4">
-                  {cat ? (
-                    <p className="eyebrow mb-1 truncate">{cat.name}</p>
-                  ) : (
-                    <Badge variant="warning" className="mb-1.5 w-fit">
-                      {t("item.categoryArchived")}
-                    </Badge>
-                  )}
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-semibold leading-snug">{item.name}</h3>
-                    <span className="tabular shrink-0 font-semibold">
-                      {fmtMoneyCents(item.priceCents, i18n.language)}
-                    </span>
+                    {price}
                   </div>
                   {item.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {item.description}
-                    </p>
+                    <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
                   )}
-
-                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-3 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="size-3.5" aria-hidden />
-                      {t("item.prepTime", { min: item.prepTimeMinutes })}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Store className="size-3.5" aria-hidden />
-                      {storeCount === 0
-                        ? t("item.allStores")
-                        : t("item.stores", { count: storeCount })}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {status}
+                    {meta}
                   </div>
-
-                  {!categoryOk && ability.anyWrite && touchable && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t("item.categoryArchivedHint")}
-                    </p>
-                  )}
-                  {ability.anyWrite && !touchable && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {access === "allStores"
-                        ? t("item.ownerOnlyAllStores")
-                        : access === "inactiveStore"
-                          ? t("item.inactiveStore")
-                          : t("item.notInYourStores")}
-                    </p>
-                  )}
-
-                  {ability.anyWrite && touchable && (
-                    <div className="mt-3 flex items-center justify-between gap-1.5 border-t pt-3">
-                      {ability.editProducts ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={working || !categoryOk}
-                          onClick={() => toggleItemActive(item)}
-                        >
-                          {item.active ? t("item.markUnavailable") : t("item.markAvailable")}
-                        </Button>
-                      ) : (
-                        <span />
-                      )}
-                      <div className="flex items-center gap-0.5">
-                        {ability.createProducts && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            aria-label={t("item.duplicateLabel", { name: item.name })}
-                            title={t("item.duplicate")}
-                            disabled={working || !categoryOk}
-                            onClick={() => handleDuplicateItem(item)}
-                          >
-                            <Copy className="size-4" aria-hidden />
-                          </Button>
-                        )}
-                        {ability.editProducts && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            aria-label={t("item.editLabel", { name: item.name })}
-                            title={t("item.edit")}
-                            disabled={working}
-                            onClick={() => openEditItem(item)}
-                          >
-                            <Edit3 className="size-4" aria-hidden />
-                          </Button>
-                        )}
-                        {ability.archiveProducts && item.active && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            aria-label={t("item.deleteLabel", { name: item.name })}
-                            title={t("item.delete")}
-                            disabled={working}
-                            onClick={() => setRemoveItem(item)}
-                          >
-                            <Trash2 className="size-4" aria-hidden />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  {notes}
+                  {actions && <div className="mt-auto border-t pt-3">{actions}</div>}
                 </div>
               </li>
             );
@@ -1074,7 +1218,7 @@ export function MenuPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="menu-item-category">{t("form.category")}</Label>
-                <select
+                <FormSelect
                   id="menu-item-category"
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
@@ -1088,7 +1232,7 @@ export function MenuPage() {
                       {c.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="menu-item-price">{t("form.price")}</Label>
@@ -1164,14 +1308,13 @@ export function MenuPage() {
                       <Trash2 className="size-3.5" aria-hidden />
                     </Button>
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox
                       checked={group.required}
-                      onChange={(e) => {
+                      onCheckedChange={(v) => {
                         const next = [...formModifiers];
                         const g = next[gIdx];
-                        if (g) next[gIdx] = { ...g, required: e.target.checked };
+                        if (g) next[gIdx] = { ...g, required: v === true };
                         setFormModifiers(next);
                       }}
                     />

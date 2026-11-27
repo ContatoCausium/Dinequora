@@ -24,13 +24,14 @@
     "new": "New",
     "inPrep": "In preparation",
     "ready": "Ready for pickup",
-    "done": "Completed (recent)"
+    "done": "Completed · last 2 hours",
+    "doneShort": "Done"
   },
   "empty": {
     "new": "No new tickets in the queue",
     "inPrep": "Nothing on the line right now",
     "ready": "No orders waiting for pickup",
-    "done": "Completed tickets show here"
+    "done": "Nothing completed in the last 2 hours"
   },
   "actions": {
     "start": "Start cooking",
@@ -63,7 +64,8 @@
     "placedAt": "Placed at {{time}}",
     "note": "Note: {{text}}",
     "itemReadyAria": "{{name}}: ready. Tap to mark as not ready.",
-    "itemPendingAria": "{{name}}: not ready. Tap to mark as ready."
+    "itemPendingAria": "{{name}}: not ready. Tap to mark as ready.",
+    "table": "Table {{table}}"
   },
   "toast": {
     "moved": "Ticket {{number}} moved to {{status}}",
@@ -77,5 +79,22 @@
     "body_other": "Showing the {{shown}} oldest open tickets of {{total}} (all stations). The {{count}} newest tickets are not on screen until earlier tickets are completed.",
     "station_one": "{{count}} of the tickets on the board belongs to the selected station.",
     "station_other": "{{count}} of the tickets on the board belong to the selected station."
+  },
+  "columnsLabel": "Board column",
+  "recall": {
+    "button": "Completed",
+    "description": "Tickets fulfilled in the last 2 hours. Reopen one to send it back to the line."
+  },
+  "textSize": {
+    "label": "Ticket text size",
+    "standard": "Standard text",
+    "large": "Large text"
+  },
+  "board": {
+    "open_one": "{{count}} open ticket",
+    "open_other": "{{count}} open tickets",
+    "late_one": "{{count}} late",
+    "late_other": "{{count}} late",
+    "fresh": "New"
   }
 }

@@ -132,7 +132,7 @@
       "gross": "Gross profit",
       "grossHint": "Margin {{value}}",
       "month": "Result · month to date",
-      "monthHint": "Gross profit since the 1st − expenses with {{month}} competency",
+      "monthHint": "Gross profit since the 1st − expenses recognized through today",
       "noSales": "No sales yet"
     },
     "sales": {
@@ -140,6 +140,15 @@
       "empty": "No sales recorded in this period.",
       "singleDay": "All sales so far fall on one day — the trend fills in as more days are recorded.",
       "stores": "By store"
+    },
+    "hero": {
+      "highest": "Highest day",
+      "lowest": "Lowest day",
+      "average": "Daily average",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "statsNote": "Completed days only — today is still in progress.",
+      "todayNote": "The day-by-day chart appears in the 7- and 30-day views."
     },
     "products": {
       "title": "Best sellers",
@@ -150,13 +159,14 @@
     },
     "finance": {
       "title": "Bills & costs",
-      "subtitle": "Operating expenses on record",
+      "subtitle": "Bills as of today · costs recognized this month",
       "dueSoon": "Due in 7 days",
       "overdue": "Overdue",
       "paid": "Paid",
       "personnel": "Personnel (payroll + benefits)",
       "operating": "Other operating costs",
-      "open": "Open finance"
+      "open": "Open finance",
+      "monthCosts": "Costs recognized this month to date"
     },
     "stock": {
       "title": "Stock",

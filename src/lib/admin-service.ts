@@ -39,15 +39,28 @@ export type PlatformAdmin = {
   role: PlatformRole;
 };
 
-const code = (msg: string) =>
-  [
-    "forbidden",
-    "reason_required",
-    "verification_required",
-    "user_not_found",
-    "last_admin",
-    "not_found",
-  ].find((c) => msg.includes(c)) ?? "unknown";
+/** Refusal codes of the admin_* functions; the specific ones before the codes they contain. */
+const ADMIN_ERROR_CODES = [
+  "self_assignment_forbidden",
+  "platform_user_forbidden",
+  "platform_role_owner_conflict",
+  "user_ambiguous",
+  "user_not_found",
+  "owner_exists",
+  "isolation_unsupported",
+  "reason_required",
+  "verification_required",
+  "last_admin",
+  "not_found",
+  "forbidden",
+] as const;
+
+/** The refusal code in a database error message (an exact code first), or "unknown". */
+export const adminErrorCode = (msg: string) =>
+  ADMIN_ERROR_CODES.find((c) => msg.trim() === c) ??
+  ADMIN_ERROR_CODES.find((c) => msg.includes(c)) ??
+  "unknown";
+const code = adminErrorCode;
 
 /** Names come from the generated schema, so a renamed/removed SQL function fails type-checking. */
 type RpcName = keyof Database["public"]["Functions"];

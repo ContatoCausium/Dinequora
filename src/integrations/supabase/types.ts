@@ -1212,6 +1212,113 @@ export type Database = {
         };
         Relationships: [];
       };
+      pos_pending_resolution_reasons: {
+        Row: {
+          actor_id: string | null;
+          client_order_id: string;
+          created_at: string;
+          id: string;
+          location_id: string;
+          order_id: string | null;
+          org_id: string;
+          outcome: string;
+          reason: string;
+          redacted_at: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id?: string | null;
+          client_order_id: string;
+          created_at?: string;
+          id?: string;
+          location_id: string;
+          order_id?: string | null;
+          org_id: string;
+          outcome: string;
+          reason: string;
+          redacted_at?: string | null;
+        };
+        Update: {
+          actor_id?: string | null;
+          client_order_id?: string;
+          created_at?: string;
+          id?: string;
+          location_id?: string;
+          order_id?: string | null;
+          org_id?: string;
+          outcome?: string;
+          reason?: string;
+          redacted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pos_pending_resolution_reasons_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pos_pending_resolution_reasons_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      pos_sale_key_voids: {
+        Row: {
+          actor_id: string;
+          amount_cents: number | null;
+          attempts: number | null;
+          client_order_id: string;
+          created_at: string;
+          last_attempt_at: string | null;
+          location_id: string;
+          org_id: string;
+          reason: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id: string;
+          amount_cents?: number | null;
+          attempts?: number | null;
+          client_order_id: string;
+          created_at?: string;
+          last_attempt_at?: string | null;
+          location_id: string;
+          org_id: string;
+          reason: string;
+        };
+        Update: {
+          actor_id?: string;
+          amount_cents?: number | null;
+          attempts?: number | null;
+          client_order_id?: string;
+          created_at?: string;
+          last_attempt_at?: string | null;
+          location_id?: string;
+          org_id?: string;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pos_sale_key_voids_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pos_sale_key_voids_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       product_recipes: {
         Row: {
           id: string;
@@ -1705,6 +1812,7 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { _token: string }; Returns: string };
+      accessible_location_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       active_store_count: { Args: { _org_id: string }; Returns: number };
       admin_assign_owner: {
         Args: { _email: string; _org_id: string; _verification_note: string };
@@ -1813,6 +1921,7 @@ export type Database = {
         Args: { _location_id?: string; _org_id: string; _perm: string };
         Returns: undefined;
       };
+      audit_visible_location_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       billing_apply_stripe_event: {
         Args: {
           _amount_cents: number;
@@ -2015,6 +2124,28 @@ export type Database = {
       is_org_member: { Args: { _org_id: string }; Returns: boolean };
       is_org_owner: { Args: { _org_id: string }; Returns: boolean };
       is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      ledger_day_totals: {
+        Args: {
+          _days?: number;
+          _location_ids?: string[];
+          _org_id: string;
+          _same_time_yesterday?: boolean;
+        };
+        Returns: Json;
+      };
+      list_pending_sale_reasons: {
+        Args: { _client_order_id?: string; _limit?: number; _location_id: string; _org_id: string };
+        Returns: {
+          actor_id: string;
+          client_order_id: string;
+          created_at: string;
+          order_id: string;
+          outcome: string;
+          reason: string;
+          reason_id: string;
+          redacted_at: string;
+        }[];
+      };
       location_in_org: { Args: { _location_id: string; _org_id: string }; Returns: boolean };
       log_access_denied: {
         Args: { _action: string; _detail?: string; _location_id?: string; _org_id: string };
@@ -2119,6 +2250,18 @@ export type Database = {
         Returns: string;
       };
       remove_member: { Args: { _member_id: string }; Returns: undefined };
+      resolve_pending_pos_sale: {
+        Args: {
+          _amount_cents?: number;
+          _attempts?: number;
+          _client_order_id: string;
+          _last_attempt_at?: string;
+          _location_id: string;
+          _org_id: string;
+          _reason: string;
+        };
+        Returns: Json;
+      };
       revoke_invitation: { Args: { _id: string }; Returns: undefined };
       role_ceiling: { Args: { _role: Database["public"]["Enums"]["org_role"] }; Returns: string[] };
       role_default_permissions: {

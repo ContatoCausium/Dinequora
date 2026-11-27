@@ -211,6 +211,55 @@
       "when": 1794452221851,
       "tag": "0029_save_operational_menu_category_intent",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794826879812,
+      "tag": "0030_permission_profiles_table_privileges",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795172479812,
+      "tag": "0031_ledger_day_totals",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795258879812,
+      "tag": "0032_pos_pending_sale_resolution",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795345279812,
+      "tag": "0033_member_grant_integrity_and_pending_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795431679812,
+      "tag": "0034_platform_owner_assignment_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795518079812,
+      "tag": "0035_pending_sale_reason_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795604479812,
+      "tag": "0036_retire_legacy_pos_sale_rpcs",
+      "breakpoints": true
     }
   ]
 }

@@ -82,7 +82,10 @@ function ResetPage() {
       {state === "invalid" && (
         <>
           <AuthHeading title={t("reset.invalidTitle")} subtitle={t("reset.invalidBody")} />
-          <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+          <Link
+            to="/forgot-password"
+            className="inline-flex min-h-6 items-center text-sm font-medium text-primary hover:underline"
+          >
             {t("reset.requestNew")}
           </Link>
         </>

@@ -18,6 +18,7 @@ import {
 } from "@/lib/i18n";
 import { auth, SOCIAL_PROVIDERS, type SocialProvider, AuthError } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { AuthBackButton } from "@/components/auth/back-button";
 
 /** Applies the platform (or invited tenant) theme on auth screens. */
@@ -66,7 +67,7 @@ export function AuthLayout({
                 onClick={() => setLanguage(l.code as LanguageCode)}
                 aria-pressed={i18n.language === l.code}
                 className={cn(
-                  "rounded px-2 py-1 font-medium transition-colors",
+                  "min-h-7 rounded px-2 py-1 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   i18n.language === l.code
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -91,10 +92,16 @@ export function AuthLayout({
           className="absolute inset-0 opacity-[0.5] [background-image:radial-gradient(var(--border)_1px,transparent_1px)] [background-size:22px_22px]"
           aria-hidden
         />
+        {/* Ember glow: warmth from the brand, never behind text that needs contrast. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-32 -top-32 size-[28rem] rounded-full opacity-60 blur-3xl [background:radial-gradient(closest-side,color-mix(in_oklab,var(--primary)_22%,transparent),transparent)]"
+        />
         <div className="relative">
           <p className="eyebrow">{orgName ?? t("brand.tagline")}</p>
         </div>
         <div className="relative max-w-md">
+          <ProductGlimpse />
           <p className="text-[2rem] font-semibold leading-[1.15] tracking-tight text-balance">
             {t("brand.statement")}
           </p>
@@ -111,6 +118,60 @@ export function AuthLayout({
         </div>
         <p className="relative text-xs text-muted-foreground">{t("brand.footer")}</p>
       </aside>
+    </div>
+  );
+}
+
+/**
+ * A small, decorative glimpse of the product (aria-hidden): one KPI and one kitchen ticket drawn
+ * with the real design tokens. Illustrative values, labelled as such.
+ */
+function ProductGlimpse() {
+  const { t } = useTranslation("auth");
+  return (
+    <div aria-hidden className="relative mb-16 h-44 select-none">
+      <div className="surface absolute left-0 top-0 w-60 -rotate-2 p-4 shadow-raised">
+        <p className="text-[12px] font-medium text-muted-foreground">{t("glimpse.netSales")}</p>
+        <p className="tabular mt-1 text-2xl font-semibold tracking-tight">$12,480</p>
+        <p className="mt-1 flex items-center gap-1 text-[12px]">
+          <span className="font-semibold text-success">↗ +12.4%</span>
+          <span className="text-muted-foreground">{t("glimpse.vsPrevious")}</span>
+        </p>
+        <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="mt-2 block h-7 w-full">
+          <polyline
+            points="0,18 14,16 28,19 42,12 56,14 70,8 84,10 100,4"
+            fill="none"
+            stroke="var(--chart-1)"
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
+      <div className="surface absolute left-52 top-8 w-56 rotate-2 overflow-hidden shadow-raised">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
+          <span className="tabular text-base font-bold">#A1042</span>
+          <span className="tabular rounded-md border bg-card px-1.5 py-0.5 text-xs font-semibold">
+            6 min
+          </span>
+        </div>
+        <ul className="divide-y px-3 text-[13px]">
+          <li className="flex items-center gap-2 py-1.5">
+            <span className="tabular flex size-5 items-center justify-center rounded border text-[11px] font-bold">
+              2
+            </span>
+            {t("glimpse.item1")}
+          </li>
+          <li className="flex items-center gap-2 py-1.5">
+            <span className="tabular flex size-5 items-center justify-center rounded border text-[11px] font-bold">
+              1
+            </span>
+            {t("glimpse.item2")}
+          </li>
+        </ul>
+      </div>
+      <p className="absolute -bottom-6 left-0 text-[11px] text-muted-foreground">
+        {t("glimpse.caption")}
+      </p>
     </div>
   );
 }
@@ -161,9 +222,10 @@ export function Field({
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-err` : undefined}
         className={cn(
-          "h-10 rounded-md border bg-card px-3 text-sm shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/70",
-          "focus:border-ring focus:ring-3 focus:ring-ring/15",
-          error && "border-destructive focus:border-destructive focus:ring-destructive/15",
+          "h-11 rounded-lg border border-input bg-card px-3 text-base shadow-xs outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground md:text-sm",
+          "focus-visible:focus-field",
+          error &&
+            "border-destructive shadow-[0_0_0_3px_color-mix(in_oklab,var(--destructive)_18%,transparent)]",
           className,
         )}
         {...props}
@@ -189,7 +251,7 @@ export function PasswordField(props: Omit<Parameters<typeof Field>[0], "type">) 
         type="button"
         onClick={() => setShow((s) => !s)}
         aria-label={show ? t("fields.hide") : t("fields.show")}
-        className="absolute right-1.5 top-[30px] inline-flex size-8 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+        className="absolute right-1.5 top-[32px] inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
       </button>
@@ -207,10 +269,8 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={loading || props.disabled}
-      className={cn(
-        "inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs transition-[background-color,transform] hover:bg-primary/90 active:scale-[0.99] disabled:opacity-60",
-        className,
-      )}
+      aria-busy={loading || undefined}
+      className={cn(buttonVariants({ variant: "default" }), "h-11 w-full text-[15px]", className)}
       {...props}
     >
       {loading && <Loader2 className="size-4 animate-spin" />}
@@ -297,7 +357,7 @@ export function SocialButtons({ onError }: { onError: (code: string) => void }) 
           type="button"
           onClick={() => go(id)}
           disabled={busy !== null}
-          className="inline-flex h-10 items-center justify-center gap-2.5 rounded-md border bg-card text-sm font-medium shadow-xs transition-colors hover:bg-muted disabled:opacity-60"
+          className={cn(buttonVariants({ variant: "outline" }), "h-11 gap-2.5")}
         >
           {busy === id ? (
             <Loader2 className="size-4 animate-spin" />

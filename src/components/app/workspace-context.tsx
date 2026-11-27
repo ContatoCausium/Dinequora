@@ -9,7 +9,12 @@ import {
 } from "react";
 
 import { setObservabilityScope } from "@/lib/observability";
-import { generateTheme, themeToCssVars, type BrandColors } from "@/lib/theme-engine";
+import {
+  FALLBACK_BRAND,
+  generateTheme,
+  themeToCssVars,
+  type BrandColors,
+} from "@/lib/theme-engine";
 import type { Organization } from "@/lib/tenants";
 import {
   saveOrganizationBrand,
@@ -169,7 +174,11 @@ export function WorkspaceProvider({
         onRefresh?.();
       }),
     resetBrand: async () => {
-      const b = { primary: "#b5502f", accent: "#e0a23a", logoUrl: undefined };
+      const b = {
+        primary: FALLBACK_BRAND.primary,
+        accent: FALLBACK_BRAND.accent,
+        logoUrl: undefined,
+      };
       await saveOrganizationBrand(membership.dbId, b);
       persist(org.id, { current: b, previous: brand });
       onRefresh?.();

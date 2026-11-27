@@ -161,7 +161,7 @@ export function ActivityTab({ members }: { members: TeamMember[] }) {
       ) : (
         <>
           <div className="max-h-[640px] overflow-auto" aria-busy={q.isFetching}>
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="data-table min-w-[720px]">
               <thead className="sticky top-0 z-10 bg-card">
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th scope="col" className="px-5 py-2.5 font-medium">

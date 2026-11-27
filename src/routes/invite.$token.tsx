@@ -5,6 +5,7 @@ import { Loader2, MailOpen } from "lucide-react";
 
 import { AuthHeading, AuthLayout, FormAlert, SubmitButton } from "@/components/auth/auth-layout";
 import { auth, pendingRedirect, type AuthUser } from "@/lib/auth";
+import { isClientPreview } from "@/lib/deployment-profile";
 import { acceptInvitation, getInvitation, type InvitationInfo } from "@/lib/org-service";
 import { FALLBACK_BRAND } from "@/lib/theme-engine";
 
@@ -131,14 +132,16 @@ function InvitePage() {
         </div>
       ) : (
         <div className="flex flex-col gap-2.5">
-          <Link
-            to="/signup"
-            search={{ redirect: here, email: inv.email }}
-            onClick={() => pendingRedirect.set(here)}
-            className="inline-flex h-10 items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            {t("invite.createToJoin")}
-          </Link>
+          {!isClientPreview() && (
+            <Link
+              to="/signup"
+              search={{ redirect: here, email: inv.email }}
+              onClick={() => pendingRedirect.set(here)}
+              className="inline-flex h-10 items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              {t("invite.createToJoin")}
+            </Link>
+          )}
           <Link
             to="/auth"
             search={{ redirect: here }}

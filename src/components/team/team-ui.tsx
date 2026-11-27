@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { OrgRole } from "./team-types";
 
 export function TierBadge({ role }: { role: OrgRole }) {
@@ -65,16 +66,14 @@ export function StoreChecklist({
                 htmlFor={`${id}-${l.id}`}
                 className="flex min-h-10 cursor-pointer items-center gap-2.5 rounded-md border px-3 text-sm hover:bg-muted/60 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
               >
-                <input
+                <Checkbox
                   id={`${id}-${l.id}`}
-                  type="checkbox"
-                  className="size-4 accent-[var(--primary)]"
                   checked={value.includes(dbId)}
-                  onChange={(e) =>
-                    onChange(e.target.checked ? [...value, dbId] : value.filter((x) => x !== dbId))
+                  onCheckedChange={(v) =>
+                    onChange(v === true ? [...value, dbId] : value.filter((x) => x !== dbId))
                   }
                 />
-                <span className="truncate">{l.name}</span>
+                <span className="min-w-0 break-words">{l.name}</span>
               </label>
             );
           })}

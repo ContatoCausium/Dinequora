@@ -63,6 +63,27 @@ export async function disposableQa(apiUrl: string | undefined, operation: string
 }
 
 /**
+ * qaSql() is synchronous: a long fixture blocks the event loop, and meanwhile the local Docker port
+ * forward may silently drop the idle keep-alive connections of the HTTP client (the supabase clients
+ * use the global fetch, whose pool keeps several connections per origin). A request written to such
+ * a connection then fails with "fetch failed" / ECONNRESET although the database answered every
+ * query (observed in the 1,000,000-row ledger test and in a sign-in after the POS fixtures).
+ * Call this after such a fixture and before the requests the test asserts on: it replaces the
+ * global fetch dispatcher (undici's global-dispatcher symbol) with a new one and closes the old one
+ * gracefully, so the next requests open fresh connections. It sends nothing and absorbs no error:
+ * a real failure still fails the test. Reproduced deterministically with a proxy that resets idle
+ * connections: 8/8 rounds failed as is, 0/8 after this call.
+ */
+export function dropPooledConnections(): void {
+  const key = Symbol.for("undici.globalDispatcher.1");
+  const pool = globalThis as unknown as Record<symbol, { close(): Promise<void> } | undefined>;
+  const old = pool[key];
+  if (!old) return; // no request made yet: nothing pooled
+  pool[key] = new (old.constructor as new () => { close(): Promise<void> })();
+  void old.close().catch(() => undefined);
+}
+
+/**
  * Fixed reference instant for synthetic orders: the tests never depend on the wall clock, so the
  * same data always sorts the same way, whatever else exists in the database.
  */

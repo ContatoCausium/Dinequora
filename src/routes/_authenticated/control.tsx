@@ -1,5 +1,13 @@
-import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
+import { revealActiveTab } from "@/lib/reveal-active-tab";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
@@ -87,6 +95,18 @@ function ControlLayout() {
   const { user } = Route.useRouteContext();
   const { hasWorkspace } = Route.useLoaderData();
   const navigate = useNavigate();
+  // Phones: the section list is a horizontal bar; keep the current section in view on arrival.
+  const navRef = useRef<HTMLElement>(null);
+  // The resolved location changes once the new section has rendered (its tab is then "active").
+  const pathname = useRouterState({
+    select: (s) => (s.resolvedLocation ?? s.location).pathname,
+  });
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (navRef.current) revealActiveTab(navRef.current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
 
   useEffect(() => {
     void applyUserLanguage(user.id).catch(() => {});
@@ -118,8 +138,9 @@ function ControlLayout() {
           </div>
         </div>
         <nav
+          ref={navRef}
           aria-label={t("title")}
-          className="flex gap-1 overflow-x-auto px-3 pb-2 md:flex-col md:gap-0.5 md:overflow-visible md:pb-0"
+          className="flex scroll-px-3 gap-1 overflow-x-auto px-3 pb-2 md:flex-col md:gap-0.5 md:overflow-visible md:pb-0"
         >
           {NAV.map(({ to, key, icon: Icon, ...rest }) => (
             <Link
@@ -144,7 +165,7 @@ function ControlLayout() {
             >
               <Icon className="size-4" strokeWidth={1.75} />
               {t(`nav.${key}`)}
-              <span className="ml-auto text-[10px] uppercase tracking-wide">
+              <span className="ml-auto whitespace-nowrap text-[10px] uppercase tracking-wide">
                 {t("nav.comingNext", { ns: "common" })}
               </span>
             </span>
@@ -177,11 +198,17 @@ function ControlLayout() {
         <Outlet />
         <div className="mt-10 flex flex-wrap items-center gap-3 border-t pt-4 text-xs text-muted-foreground md:hidden">
           {hasWorkspace && (
-            <Link to="/" className="font-medium hover:text-foreground">
+            <Link
+              to="/"
+              className="inline-flex min-h-6 items-center font-medium hover:text-foreground"
+            >
               {t("back")}
             </Link>
           )}
-          <button onClick={signOut} className="font-medium hover:text-foreground">
+          <button
+            onClick={signOut}
+            className="inline-flex min-h-6 items-center font-medium hover:text-foreground"
+          >
             {t("signOut")}
           </button>
           <span className="ml-auto truncate">{user.email}</span>

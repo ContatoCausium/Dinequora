@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { centsFromNumberInput } from "@/lib/money";
+import { FormSelect } from "@/components/ui/form-select";
 
 /** Backend error codes the inventory screens explain in plain language (inventory:errors.*). */
 const KNOWN_ERROR_CODES = [
@@ -168,7 +169,7 @@ export function OperationalCreateDialog({
           {pickStore && (
             <div>
               <Label htmlFor={`new-${kind}-store`}>{t("inventory:createDialog.store")}</Label>
-              <select
+              <FormSelect
                 id={`new-${kind}-store`}
                 className="h-9 w-full rounded-md border bg-background px-3"
                 value={effectiveLocationId ?? ""}
@@ -182,7 +183,7 @@ export function OperationalCreateDialog({
                     {l.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
           )}
           {kind !== "purchase" && (
@@ -209,7 +210,7 @@ export function OperationalCreateDialog({
             <>
               <div>
                 <Label htmlFor="po-supplier">{t("supplier")}</Label>
-                <select
+                <FormSelect
                   id="po-supplier"
                   className="h-9 w-full rounded-md border bg-background px-3"
                   value={supplierId || suppliers[0]?.id || ""}
@@ -222,11 +223,11 @@ export function OperationalCreateDialog({
                         {s.name}
                       </option>
                     ))}
-                </select>
+                </FormSelect>
               </div>
               <div>
                 <Label htmlFor="po-item">{t("item")}</Label>
-                <select
+                <FormSelect
                   id="po-item"
                   className="h-9 w-full rounded-md border bg-background px-3"
                   value={itemId || storeItems[0]?.id || ""}
@@ -237,7 +238,7 @@ export function OperationalCreateDialog({
                       {i.name}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
             </>
           )}
@@ -270,7 +271,7 @@ export function OperationalCreateDialog({
           {kind === "inventory" && (
             <div>
               <Label htmlFor="op-unit">{t("unit")}</Label>
-              <select
+              <FormSelect
                 id="op-unit"
                 className="h-9 w-full rounded-md border bg-background px-3"
                 value={unit}
@@ -281,7 +282,7 @@ export function OperationalCreateDialog({
                     {t(`inventory:units.${u}`)}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </div>
           )}
           {kind === "purchase" && (

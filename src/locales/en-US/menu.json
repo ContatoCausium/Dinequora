@@ -181,5 +181,10 @@
     "selectUpTo": "Choose up to {{max}}",
     "close": "Close Preview",
     "empty": "No available products yet."
+  },
+  "view": {
+    "label": "View",
+    "list": "List view",
+    "grid": "Grid view"
   }
 }

@@ -92,6 +92,7 @@ describe("E2E Integrated Operational Flow — Menu -> POS -> Orders -> KDS", () 
       subtotalCents: 1500,
       taxCents: 124,
       isSimulation: false,
+      readback: true,
     });
 
     const testOrder: Order = {

@@ -14,7 +14,7 @@
     "inventory": "Estoque e Suprimentos",
     "employees": "Equipe e acessos",
     "finance": "Financeiro",
-    "intelligence": "Dinequora Intelligence",
+    "intelligence": "Insights",
     "whatsapp": "Central WhatsApp",
     "analytics": "Relatórios",
     "controlCenter": "Central de Controle",
@@ -24,7 +24,15 @@
     "reports": "Relatórios",
     "groupOperations": "Operação",
     "groupManagement": "Gestão",
-    "groupAccount": "Conta"
+    "groupAccount": "Conta",
+    "counts": {
+      "openOrders_one": "{{formatted}} pedido aberto",
+      "openOrders_other": "{{formatted}} pedidos abertos",
+      "lateTickets_one": "{{formatted}} pedido atrasado na cozinha",
+      "lateTickets_other": "{{formatted}} pedidos atrasados na cozinha",
+      "lowStock_one": "{{formatted}} item com estoque baixo",
+      "lowStock_other": "{{formatted}} itens com estoque baixo"
+    }
   },
   "a11y": {
     "mainNav": "Navegação principal",
@@ -73,7 +81,17 @@
   "demo": {
     "badge": "Dados de demonstração",
     "fictional": "Fictícia",
-    "disclaimer": "Todos os valores de vendas, pedidos, estoque e alertas exibidos são dados sintéticos de demonstração. Eles não representam resultados reais, e nenhum sistema de PDV, pagamento ou delivery está conectado."
+    "disclaimer": "Modo apresentação: todos os valores de vendas, pedidos, estoque e alertas exibidos neste painel são ilustrativos e não representam resultados desta organização. As vendas registradas no PDV, os pagamentos, o estoque e o financeiro continuam reais e aparecem ao sair do modo apresentação.",
+    "workspace": "Ambiente de demonstração · dados fictícios",
+    "workspaceShort": "Demo",
+    "workspaceHint": "Um grupo de restaurantes de exemplo, com dados fictícios, para demonstração. Não é um negócio real."
+  },
+  "presentation": {
+    "start": "Modo apresentação",
+    "startHint": "Mostrar dados ilustrativos para uma demonstração (não altera nenhum registro)",
+    "stop": "Sair do modo apresentação",
+    "bannerTitle": "Modo apresentação ativo: dados ilustrativos",
+    "bannerBody": "Dashboard, notificações, unidades e tela da cozinha mostram números fictícios para demonstração. Vendas, pagamentos, estoque e financeiro continuam reais e não são alterados por este modo."
   },
   "states": {
     "loading": "Carregando…",
@@ -92,12 +110,46 @@
     "notFoundBody": "Esta página não existe ou foi movida.",
     "home": "Ir para o início",
     "controlDenied": "A Central de Controle está disponível apenas para administradores da plataforma.",
-    "ordersTruncated": "Estes números incluem os {{shown}} pedidos mais recentes de um total de {{total}}. Pedidos mais antigos ainda não estão incluídos."
+    "ordersTruncated": "Estes números incluem os {{shown}} pedidos mais recentes de um total de {{total}}. Pedidos mais antigos ainda não estão incluídos.",
+    "ledgerIncomplete": "Números parciais: o livro financeiro não pôde ser lido por completo ({{reason}}). Os totais abaixo NÃO estão completos — atualize para tentar de novo.",
+    "ledgerIncompleteRowCap": "registros demais para uma leitura",
+    "ledgerIncompleteChanged": "os registros mudaram durante a leitura"
   },
   "access": {
     "noModuleTitle": "Você não tem acesso a este módulo",
     "noModuleBody": "Suas permissões nesta organização não incluem esta área. Peça ao proprietário se precisar dela.",
     "backHome": "Voltar para a visão geral",
     "denied": "Você não tem permissão para esta ação."
+  },
+  "table": {
+    "pagination": "Páginas da tabela",
+    "range": "{{from}}–{{to}} de {{total}}",
+    "pageOf": "Página {{page}} de {{count}}",
+    "previous": "Página anterior",
+    "next": "Próxima página",
+    "sortBy": "Ordenar por {{column}}"
+  },
+  "compare": {
+    "vs": {
+      "today": "vs ontem, mesmo horário",
+      "7d": "vs 7 dias anteriores",
+      "30d": "vs 30 dias anteriores",
+      "90d": "vs 90 dias anteriores"
+    },
+    "thisPeriod": "Este período",
+    "previousPeriod": "Período anterior",
+    "none": {
+      "today": "Sem vendas ontem para comparar",
+      "7d": "Sem vendas nos 7 dias anteriores para comparar",
+      "30d": "Sem vendas nos 30 dias anteriores para comparar",
+      "90d": "Sem vendas nos 90 dias anteriores para comparar"
+    }
+  },
+  "focus": {
+    "enter": "Tela cheia",
+    "exit": "Sair da tela cheia"
+  },
+  "chart": {
+    "keyboardHint": "Use as setas para a esquerda e para a direita para ler cada dia."
   }
 }

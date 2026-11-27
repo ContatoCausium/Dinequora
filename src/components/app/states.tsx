@@ -47,7 +47,7 @@ export function StateCard({
     <div className="mx-auto flex max-w-md flex-col items-center px-6 py-16 text-center">
       <span
         className={cn(
-          "mb-4 inline-flex size-11 items-center justify-center rounded-full border",
+          "mb-4 inline-flex size-12 items-center justify-center rounded-xl border bg-secondary [&_svg]:size-5",
           tone === "danger"
             ? "border-destructive/25 text-destructive"
             : tone === "warning"
@@ -144,6 +144,32 @@ export function OrdersTruncatedNotice({
     >
       <CircleAlert className="size-4 shrink-0 text-warning" />
       <span>{t("states.ordersTruncated", { shown, total })}</span>
+    </div>
+  );
+}
+
+/**
+ * Shown whenever the financial ledger summary is incomplete (wave 0): the figures on screen are
+ * partial and must never be read as complete totals.
+ */
+export function LedgerIncompleteNotice({
+  summary,
+}: {
+  summary: { complete: boolean; reason?: string | undefined } | null | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!summary || summary.complete) return null;
+  const reason =
+    summary.reason === "row_cap"
+      ? t("states.ledgerIncompleteRowCap")
+      : t("states.ledgerIncompleteChanged");
+  return (
+    <div
+      role="alert"
+      className="surface flex items-center gap-2 border-warning/40 px-4 py-2.5 text-xs text-foreground"
+    >
+      <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+      <span>{t("states.ledgerIncomplete", { reason })}</span>
     </div>
   );
 }

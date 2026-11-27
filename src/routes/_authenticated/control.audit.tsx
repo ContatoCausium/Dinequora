@@ -5,7 +5,8 @@ import { ChevronLeft, ChevronRight, FileJson, History, Search, X } from "lucide-
 
 import { LoadFailure } from "@/components/control/load-failure";
 import { EmptyState } from "@/components/app/states";
-import { inputCls, LoadingRows, Tag } from "@/components/control/control-ui";
+import { LoadingRows, Tag } from "@/components/control/control-ui";
+import { inputCls } from "@/components/control/control-styles";
 import { useControlData } from "@/components/control/use-control-data";
 import { fmtDate } from "@/lib/format";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { PlatformAudit } from "@/lib/admin-service";
+import { FormSelect } from "@/components/ui/form-select";
 
 export const Route = createFileRoute("/_authenticated/control/audit")({
   head: () => ({
@@ -110,7 +112,7 @@ function Audit() {
             </button>
           )}
         </div>
-        <select
+        <FormSelect
           aria-label={t("audit.org")}
           className={`${inputCls} max-w-[200px]`}
           value={org}
@@ -125,8 +127,8 @@ function Audit() {
               {o.name}
             </option>
           ))}
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("auditPage.actionFilter")}
           className={`${inputCls} max-w-[200px]`}
           value={actionFilter}
@@ -141,8 +143,8 @@ function Audit() {
               {t(`actions.${act}`, { defaultValue: act })}
             </option>
           ))}
-        </select>
-        <select
+        </FormSelect>
+        <FormSelect
           aria-label={t("auditPage.scope")}
           className={`${inputCls} max-w-[160px]`}
           value={scope}
@@ -153,7 +155,7 @@ function Audit() {
         >
           <option value="all">{t("auditPage.allEvents")}</option>
           <option value="platform">{t("auditPage.platformOnly")}</option>
-        </select>
+        </FormSelect>
       </div>
       {error && <LoadFailure kind={error} retry={() => void reload()} />}
       {loading ? (
@@ -162,7 +164,7 @@ function Audit() {
         <EmptyState icon={<History className="size-5" />} title={t("audit.empty")} />
       ) : (
         <div className="surface min-w-0 max-w-full overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
+          <table className="data-table min-w-[680px]">
             <thead className="border-b text-left text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
               <tr>
                 {["when", "action", "org", "reason"].map((h) => (

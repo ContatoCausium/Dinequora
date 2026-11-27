@@ -17,8 +17,10 @@ import { Panel, Segmented } from "@/components/app/page";
 import { EmptyState } from "@/components/app/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FormSelect } from "@/components/ui/form-select";
 
 const TEMPLATE_KINDS = [
   "financial_summary",
@@ -208,6 +210,7 @@ export function WhatsAppPreviewCard({
 
         <TabsContent value="preview" className="mt-4 space-y-4">
           <Segmented<PreviewTemplate>
+            fill
             label={t("whatsapp.templateLabel")}
             value={template}
             onChange={setTemplate}
@@ -301,7 +304,7 @@ export function WhatsAppPreviewCard({
                     onChange={(e) => setNewContactPhone(e.target.value)}
                     className="h-9"
                   />
-                  <select
+                  <FormSelect
                     aria-label={t("whatsapp.contactRole")}
                     value={newContactRole}
                     onChange={(e) => setNewContactRole(e.target.value as RecipientRole)}
@@ -312,14 +315,13 @@ export function WhatsAppPreviewCard({
                         {t(`whatsapp.roles.${r}`)}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
-                <label className="flex items-start gap-2 text-xs">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-start gap-2.5 text-xs">
+                  <Checkbox
                     className="mt-0.5"
                     checked={consent}
-                    onChange={(e) => setConsent(e.target.checked)}
+                    onCheckedChange={(v) => setConsent(v === true)}
                   />
                   {t("operations:consent")}
                 </label>

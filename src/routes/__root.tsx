@@ -18,8 +18,10 @@ import {
   setObservabilityScope,
 } from "../lib/observability";
 import { applyClientLanguageAfterHydration } from "../lib/i18n";
+import { isClientPreview } from "../lib/deployment-profile";
 import { auth } from "@/lib/auth";
 import { clearTemporaryDeviceData } from "@/lib/session-cleanup";
+import { stopPresentation } from "@/lib/presentation-mode";
 import { Toaster } from "@/components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -93,13 +95,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      ...(isClientPreview() ? [{ name: "robots", content: "noindex, nofollow, noarchive" }] : []),
     ],
     links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      // Geist is self-hosted (src/styles.css @font-face); preload the Latin face used on first paint.
       {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap",
+        rel: "preload",
+        href: "/fonts/geist/geist-latin.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
       },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -143,6 +148,7 @@ function RootComponent() {
         if (event === "signed_out") {
           queryClient.clear();
           clearTemporaryDeviceData();
+          stopPresentation(); // the illustrative showcase never survives a session
           setObservabilityScope({});
         }
         if (event === "signed_in" || event === "signed_out" || event === "user_updated")
