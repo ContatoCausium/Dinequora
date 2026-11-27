@@ -350,5 +350,28 @@
       "total": "Total com imposto"
     },
     "note": "Vendas tributáveis = subtotal − descontos. Mês pelo fuso da loja. Gorjeta não é venda. Confira os números com o contador antes de declarar: o Dinequora aplica uma alíquota por loja."
+  },
+  "tips": {
+    "title": "Gorjetas por garçom",
+    "subtitle": "Gorjetas registradas nas comandas do salão, pelo garçom de cada mesa. Gorjeta é da equipe; não é receita.",
+    "daysLabel": "Período",
+    "days_one": "{{count}} dia",
+    "days_other": "{{count}} dias",
+    "csv": "CSV",
+    "loadFailed": "Não foi possível carregar o relatório de gorjetas. Tente de novo.",
+    "emptyTitle": "Nenhuma gorjeta registrada no período",
+    "emptyBody": "As gorjetas recebidas ao pagar uma comanda no salão aparecem aqui por garçom.",
+    "tableLabel": "Gorjetas por garçom e loja",
+    "unknownServer": "Garçom desconhecido",
+    "cols": {
+      "server": "Garçom",
+      "store": "Loja",
+      "tenders": "Pagamentos",
+      "tips": "Gorjetas",
+      "cash": "Gorjetas em dinheiro",
+      "nonCash": "Gorjetas em cartão e carteira",
+      "paid": "Pago (com imposto, sem gorjeta)"
+    },
+    "note": "Pagamentos estornados ficam de fora. Gorjeta em dinheiro e em cartão ficam separadas porque a folha trata cada uma de um jeito; confirme as regras com o contador."
   }
 }
