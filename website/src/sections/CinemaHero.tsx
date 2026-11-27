@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ButtonLink } from "../components/ui";
+import { ButtonLink, cx } from "../components/ui";
 import { FilmScene, Moment, segment, type FrameSet } from "../components/cinema/scene";
 import { DEMO_ANCHOR } from "../config/site";
 import { formatUsd, PRICES } from "../config/pricing";
@@ -12,20 +12,20 @@ const ease = (x: number) => x * x * (3 - 2 * x);
 /**
  * The film plays inside the letters of the name. Scrolling dives into the stem of the "I"
  * until the picture fills the screen. Built as an SVG mask so the letters stay sharp at any zoom.
+ * Two fixed versions (one line on wide screens, two lines on phones) are both in the HTML and CSS
+ * shows the right one, so the page is correct before any JavaScript runs.
  */
-function MaskedName({ p }: { p: number }) {
+function MaskedName({ p, narrow }: { p: number; narrow: boolean }) {
   const svg = useRef<SVGSVGElement>(null);
   const text = useRef<SVGTextElement>(null);
   const [origin, setOrigin] = useState("50% 50%");
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
 
   // Find the centre of the "I" stem in screen space, so the zoom lands inside the letter.
   useEffect(() => {
     const place = () => {
-      setNarrow(window.innerWidth < 760);
       const el = svg.current;
       const t = text.current;
-      if (!el || !t || typeof t.getExtentOfChar !== "function") return;
+      if (!el || !t || typeof t.getExtentOfChar !== "function" || el.getBoundingClientRect().width === 0) return;
       try {
         const box = t.getExtentOfChar(1); // "I"
         const ctm = t.getScreenCTM();
@@ -47,15 +47,20 @@ function MaskedName({ p }: { p: number }) {
       window.clearTimeout(id);
       window.removeEventListener("resize", place);
     };
-  }, [narrow]);
+  }, []);
 
   const z = ease(segment(p, 0.03, 0.2));
   const scale = 1 + Math.pow(z, 3) * 90;
   const gone = segment(p, 0.17, 0.21);
   const view = narrow ? { w: 900, h: 1600, size: 190, y: 430, x: 450 } : { w: 1600, h: 900, size: 218, y: 500, x: 800 };
+  const maskId = narrow ? "dq-name-mask-narrow" : "dq-name-mask";
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[1]" style={{ opacity: 1 - gone, visibility: gone >= 1 ? "hidden" : "visible" }} aria-hidden>
+    <div
+      className={cx("pointer-events-none absolute inset-0 z-[1]", narrow ? "md:hidden" : "hidden md:block")}
+      style={{ opacity: 1 - gone, visibility: gone >= 1 ? "hidden" : "visible" }}
+      aria-hidden
+    >
       <svg
         ref={svg}
         className="h-full w-full will-change-transform"
@@ -64,7 +69,7 @@ function MaskedName({ p }: { p: number }) {
         style={{ transform: `scale(${scale})`, transformOrigin: origin } as CSSProperties}
       >
         <defs>
-          <mask id="dq-name-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={view.w} height={view.h}>
+          <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width={view.w} height={view.h}>
             <rect width={view.w} height={view.h} fill="white" />
             <text
               ref={text}
@@ -74,7 +79,7 @@ function MaskedName({ p }: { p: number }) {
               fontFamily="Inter Variable, Inter, system-ui, sans-serif"
               fontWeight={850}
               fontSize={view.size}
-              letterSpacing={narrow ? -6 : -6}
+              letterSpacing={-6}
               fill="black"
             >
               {narrow ? (
@@ -92,7 +97,7 @@ function MaskedName({ p }: { p: number }) {
             </text>
           </mask>
         </defs>
-        <rect width={view.w} height={view.h} fill="#070c15" mask="url(#dq-name-mask)" />
+        <rect width={view.w} height={view.h} fill="#070c15" mask={`url(#${maskId})`} />
       </svg>
     </div>
   );
@@ -105,12 +110,13 @@ export function CinemaHero() {
   const from = formatUsd(PRICES.starter.monthlyUsd, locale);
 
   return (
-    <FilmScene id="top" frames={OPENING} poster="/frames/abertura/d/001.webp" height={520} label={t("Opening film", "Filme de abertura")}>
+    <FilmScene id="top" frames={OPENING} poster="/frames/abertura/d/001.webp" priority height={520} label={t("Opening film", "Filme de abertura")}>
       {(p) => (
         <>
           {/* Legibility veils for the copy over the film. */}
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(7_12_21/0.7)_0%,transparent_22%,transparent_55%,rgb(7_12_21/0.85)_100%)]" />
-          <MaskedName p={p} />
+          <MaskedName p={p} narrow={false} />
+          <MaskedName p={p} narrow />
 
           {/* First beat: sits under the name while the film is still inside the letters. */}
           <div className="container-page relative z-[2] flex h-full items-end pb-[9vh]">

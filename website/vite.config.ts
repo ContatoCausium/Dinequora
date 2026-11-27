@@ -19,6 +19,29 @@ function englishHead(siteUrl: string): Plugin {
 }
 
 /**
+ * Preloads the Latin subset of Inter Variable, the face of the opening's name and headline, so the
+ * first screen does not wait for the stylesheet to discover it. The file name is hashed, so it is
+ * read from the bundle.
+ */
+function preloadHeadlineFont(): Plugin {
+  return {
+    name: "dinequora-preload-headline-font",
+    apply: (_config, env) => env.command === "build" && !env.isSsrBuild,
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        const file = Object.keys(ctx.bundle ?? {}).find((name) => /inter-latin-wght-normal-[\w-]+\.woff2$/.test(name));
+        if (!file) return html;
+        return html.replace(
+          "</head>",
+          `    <link rel="preload" as="font" type="font/woff2" href="/${file}" crossorigin />\n  </head>`,
+        );
+      },
+    },
+  };
+}
+
+/**
  * Build output beyond the bundle:
  *  - pt/index.html: the Portuguese page with its own static head (lang, title, description,
  *    canonical /pt/, hreflang), derived from the built English page;
@@ -28,7 +51,8 @@ function englishHead(siteUrl: string): Plugin {
 function languagePagesAndSeoFiles(siteUrl: string, demoEndpoint: string): Plugin {
   return {
     name: "dinequora-language-pages-seo",
-    apply: "build",
+    // Not in the server build of src/entry-server.tsx (it has no index.html).
+    apply: (_config, env) => env.command === "build" && !env.isSsrBuild,
     enforce: "post",
     buildStart() {
       const headers = readFileSync(new URL("./public/_headers", import.meta.url), "utf8");
@@ -54,6 +78,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       englishHead(siteUrl),
+      preloadHeadlineFont(),
       languagePagesAndSeoFiles(siteUrl, env["VITE_DEMO_REQUEST_ENDPOINT"] ?? ""),
     ],
     server: { port: 5180, strictPort: true },

@@ -102,7 +102,7 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="mt-16 flex flex-col gap-3 border-t border-line-dark pt-8 text-xs text-mist/60 sm:flex-row sm:justify-between">
+        <div className="mt-16 flex flex-col gap-3 border-t border-line-dark pt-8 text-xs text-mist/80 sm:flex-row sm:justify-between">
           <p>© {year} Dinequora. {t("All rights reserved.", "Todos os direitos reservados.")}</p>
           <p>
             {t(

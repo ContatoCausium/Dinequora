@@ -101,7 +101,9 @@ function Screen({ id }: { id: View["id"] }) {
 
 /** 0 while the stage is below the screen, 1 once its top reaches the upper fifth. */
 function useTilt(ref: React.RefObject<HTMLDivElement | null>) {
-  const [still] = useState(() => typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [still] = useState(
+    () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
   const [p, setP] = useState(0);
   useEffect(() => {
     if (still) return;

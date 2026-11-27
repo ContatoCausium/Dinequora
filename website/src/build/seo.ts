@@ -4,6 +4,10 @@
  * come from VITE_SITE_URL so nothing is hard-coded per deploy.
  */
 import { htmlLang, localePath, ogLocale, pageMeta, type Locale } from "../i18n/meta";
+import { PRICES } from "../config/pricing";
+
+/** Sales line shown on the page (WHATSAPP in config/site.ts; a test keeps the two equal). */
+export const SALES_PHONE = "+1-508-714-9654";
 
 const LOCALES: readonly Locale[] = ["en", "pt"];
 
@@ -40,6 +44,61 @@ function seoTags(locale: Locale, base: string): string {
     .join("\n");
 }
 
+/**
+ * Structured data (schema.org JSON-LD) built only from facts the page shows: the company name and
+ * site, the logo, the sales phone, and the Starter and Growth monthly prices (from PRICES, so the
+ * two never disagree). Enterprise is priced by contract, so it carries no price. No address,
+ * rating or review is claimed.
+ */
+export function structuredData(locale: Locale, siteUrl: string): string {
+  const base = trimBase(siteUrl);
+  const url = `${base}${localePath[locale]}`;
+  const meta = pageMeta[locale];
+  const monthly = (name: string, price: number) => ({
+    "@type": "Offer",
+    name,
+    price: price.toFixed(2),
+    priceCurrency: "USD",
+    priceSpecification: { "@type": "UnitPriceSpecification", price: price.toFixed(2), priceCurrency: "USD", unitText: "MONTH" },
+    url: `${url}#pricing`,
+  });
+  const data = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${base}/#organization`,
+        name: "Dinequora",
+        url: `${base}/`,
+        logo: `${base}/apple-touch-icon.png`,
+        contactPoint: [
+          { "@type": "ContactPoint", telephone: SALES_PHONE, contactType: "sales", availableLanguage: ["English", "Portuguese"] },
+        ],
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${base}/#website`,
+        name: "Dinequora",
+        url: `${base}/`,
+        inLanguage: htmlLang[locale],
+        publisher: { "@id": `${base}/#organization` },
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: "Dinequora",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        description: meta.description,
+        url,
+        publisher: { "@id": `${base}/#organization` },
+        offers: [monthly("Starter", PRICES.starter.monthlyUsd), monthly("Growth", PRICES.growth.monthlyUsd)],
+      },
+    ],
+  };
+  // "<" escaped so the JSON can never close the script element.
+  return `    <script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`;
+}
+
 /** Replaces exactly one match, so a change in index.html cannot silently skip a translation. */
 function replaceOne(html: string, pattern: RegExp, value: string, what: string): string {
   const all = html.match(new RegExp(pattern.source, "g"));
@@ -66,7 +125,7 @@ export function englishIndexHtml(html: string, siteUrl: string): string {
   if (!base) return html;
   return html
     .replace(/content="\/og-image\.jpg"/g, `content="${base}/og-image.jpg"`)
-    .replace("</head>", `${seoTags("en", base)}\n  </head>`);
+    .replace("</head>", `${seoTags("en", base)}\n${structuredData("en", base)}\n  </head>`);
 }
 
 /**
@@ -92,7 +151,10 @@ export function portugueseIndexHtml(englishHtml: string, siteUrl: string): strin
   swap(/(<meta property="og:image:alt" content=")[^"]*(")/, `$1${escapeAttr(pt.imageAlt)}$2`, "og:image:alt");
   swap(/<meta property="og:locale" content="en_US" \/>/, `<meta property="og:locale" content="${ogLocale.pt}" />`, "og:locale");
   swap(new RegExp(escapeRegExp(en.noscript)), pt.noscript, "noscript text");
-  if (base) swap(new RegExp(escapeRegExp(seoTags("en", base))), seoTags("pt", base), "canonical/hreflang block");
+  if (base) {
+    swap(new RegExp(escapeRegExp(seoTags("en", base))), seoTags("pt", base), "canonical/hreflang block");
+    swap(new RegExp(escapeRegExp(structuredData("en", base))), structuredData("pt", base), "structured data");
+  }
   return html;
 }
 
