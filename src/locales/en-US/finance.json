@@ -328,5 +328,27 @@
     "90d": "Last 90 days",
     "all": "All recorded data"
   },
-  "recognitionNote": "Expenses count from their competency date, never before it arrives. Overdue and upcoming bills are shown as of today."
+  "recognitionNote": "Expenses count from their competency date, never before it arrives. Overdue and upcoming bills are shown as of today.",
+  "salesTax": {
+    "title": "Sales tax",
+    "subtitle": "Tax collected per store and month, from the orders recorded (cancelled and demo orders left out).",
+    "monthsLabel": "Period",
+    "months_one": "{{count}} month",
+    "months_other": "{{count}} months",
+    "csv": "CSV",
+    "loadFailed": "The sales tax report could not be loaded. Try again.",
+    "emptyTitle": "No taxable sales in the period",
+    "emptyBody": "Orders recorded at the POS or sent from the floor show up here by month.",
+    "tableLabel": "Sales tax by store and month",
+    "cols": {
+      "month": "Month",
+      "store": "Store",
+      "orders": "Orders",
+      "taxable": "Taxable sales",
+      "tax": "Tax collected",
+      "rate": "Effective rate",
+      "total": "Total with tax"
+    },
+    "note": "Taxable sales = subtotal − discounts. Month by the store's time zone. Tips are not sales. Check the figures with your accountant before filing: Dinequora applies one rate per store."
+  }
 }

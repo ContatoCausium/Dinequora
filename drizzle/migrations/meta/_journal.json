@@ -316,6 +316,13 @@
       "when": 1796295679812,
       "tag": "0044_inventory_consumption",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1796382079812,
+      "tag": "0045_sales_tax_summary",
+      "breakpoints": true
     }
   ]
 }

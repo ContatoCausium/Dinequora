@@ -328,5 +328,27 @@
     "90d": "Últimos 90 dias",
     "all": "Todos os dados registrados"
   },
-  "recognitionNote": "As despesas contam a partir da data de competência, nunca antes dela. Contas vencidas e a vencer aparecem na posição de hoje."
+  "recognitionNote": "As despesas contam a partir da data de competência, nunca antes dela. Contas vencidas e a vencer aparecem na posição de hoje.",
+  "salesTax": {
+    "title": "Imposto sobre vendas (sales tax)",
+    "subtitle": "Imposto cobrado por loja e por mês, a partir dos pedidos registrados (cancelados e pedidos de demonstração ficam de fora).",
+    "monthsLabel": "Período",
+    "months_one": "{{count}} mês",
+    "months_other": "{{count}} meses",
+    "csv": "CSV",
+    "loadFailed": "Não foi possível carregar o relatório de imposto. Tente de novo.",
+    "emptyTitle": "Nenhuma venda tributável no período",
+    "emptyBody": "Pedidos registrados no PDV ou enviados pelo salão aparecem aqui por mês.",
+    "tableLabel": "Imposto por loja e por mês",
+    "cols": {
+      "month": "Mês",
+      "store": "Loja",
+      "orders": "Pedidos",
+      "taxable": "Vendas tributáveis",
+      "tax": "Imposto cobrado",
+      "rate": "Alíquota efetiva",
+      "total": "Total com imposto"
+    },
+    "note": "Vendas tributáveis = subtotal − descontos. Mês pelo fuso da loja. Gorjeta não é venda. Confira os números com o contador antes de declarar: o Dinequora aplica uma alíquota por loja."
+  }
 }
