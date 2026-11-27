@@ -107,5 +107,35 @@
     "planUpTo_other": "Até {{total}} / mês com {{count}} unidades",
     "previewManaged": "Durante o preview, a cobrança deste ambiente é combinada diretamente com o seu contato na Dinequora. Nenhum cartão é guardado ou cobrado aqui.",
     "renewsManaged": "Gerenciado pela Dinequora"
+  },
+  "security": {
+    "title": "Segurança",
+    "description": "Proteja sua conta com uma segunda etapa no login.",
+    "mfaTitle": "Verificação em duas etapas",
+    "statusOn": "Ativada: cada login também pede um código do seu app.",
+    "statusOff": "Desativada: só a senha protege esta conta.",
+    "mfaBody": "Use um app autenticador (Google Authenticator, Microsoft Authenticator, 1Password, Authy…). Depois da senha, o Dinequora pede o código de 6 dígitos que o app mostra.",
+    "appName": "App autenticador",
+    "since": "adicionado em {{date}}",
+    "enable": "Ativar verificação em duas etapas",
+    "remove": "Remover",
+    "setupTitle": "Conecte seu app autenticador",
+    "setupBody": "Escaneie o QR code com o app e digite o código de 6 dígitos que ele mostrar.",
+    "qrAlt": "QR code para conectar o app autenticador",
+    "secretHint": "Não consegue escanear? Digite esta chave no app:",
+    "code": "Código do app",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar e ativar",
+    "enabled": "Verificação em duas etapas ativada.",
+    "removeTitle": "Remover este autenticador?",
+    "removeBody": "O login vai pedir só a senha. Você pode conectar um app de novo quando quiser.",
+    "removeConfirm": "Remover autenticador",
+    "removed": "Autenticador removido.",
+    "errors": {
+      "format": "Digite os 6 dígitos que aparecem no app.",
+      "invalid": "Esse código não é válido ou expirou. Use o código atual.",
+      "reauth": "Por segurança, entre de novo com o código e tente outra vez.",
+      "unknown": "Algo deu errado. Nada foi alterado."
+    }
   }
 }

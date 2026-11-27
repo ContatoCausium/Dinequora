@@ -25,6 +25,7 @@ import {
   ReceiptText,
   MonitorSmartphone,
   CookingPot,
+  ShieldCheck,
   Armchair,
   BookOpenText,
   Boxes,
@@ -113,7 +114,8 @@ type NavTo =
   | "/locations"
   | "/team"
   | "/settings/branding"
-  | "/settings/billing";
+  | "/settings/billing"
+  | "/settings/security";
 type NavItem = { to: NavTo; key: string; icon: typeof Store };
 // Curated icon set: one stroke weight, restaurant-operations semantics. Grouped by intent.
 const NAV_GROUPS: { key: string; items: NavItem[] }[] = [
@@ -144,6 +146,7 @@ const NAV_GROUPS: { key: string; items: NavItem[] }[] = [
     items: [
       { to: "/settings/branding", key: "branding", icon: SwatchBook },
       { to: "/settings/billing", key: "billing", icon: CreditCard },
+      { to: "/settings/security", key: "security", icon: ShieldCheck },
     ],
   },
 ];
