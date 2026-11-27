@@ -17,13 +17,25 @@ const MIGRATION = migration("0018_member_permissions.sql");
 const COSTS_MIGRATION = migration("0020_inventory_cost_permission.sql");
 /** Latest definition of the catalog (0032 added orders.resolve_pending). */
 const PENDING_MIGRATION = migration("0032_pos_pending_sale_resolution.sql");
-/** Latest definition of the catalog (0037 added the tables module). */
+/** 0037 added the tables module. */
 const TABLES_MIGRATION = migration("0037_dining_room_tables.sql");
+/** 0038 added tables.serve (sessions, checks, rounds). */
+const CHECKS_MIGRATION = migration("0038_dining_sessions_checks_rounds.sql");
+/** Latest definition of the catalog: the last migration of the journal that defines it. */
+const LATEST_CATALOG_MIGRATION = (() => {
+  const journal = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "../../drizzle/migrations/meta/_journal.json"), "utf8"),
+  ) as { entries: { tag: string }[] };
+  const tags = journal.entries
+    .map((e) => e.tag)
+    .filter((tag) => migration(`${tag}.sql`).includes("function public.permission_catalog()"));
+  return migration(`${tags.at(-1)}.sql`);
+})();
 
 describe("permission catalog parity with the database", () => {
-  it("TS catalog equals the latest public.permission_catalog() (migration 0037)", () => {
-    const body = TABLES_MIGRATION.slice(
-      TABLES_MIGRATION.indexOf("function public.permission_catalog()"),
+  it("TS catalog equals the latest public.permission_catalog() (last migration defining it)", () => {
+    const body = LATEST_CATALOG_MIGRATION.slice(
+      LATEST_CATALOG_MIGRATION.indexOf("function public.permission_catalog()"),
     );
     const literal = body.slice(body.indexOf("array["), body.indexOf("]::text[]"));
     const sqlCatalog = [...literal.matchAll(/'([a-z]+\.[a-z_]+)'/g)].map((m) => m[1]);
@@ -86,6 +98,22 @@ describe("pending POS sale resolution permission (migration 0032)", () => {
     );
     expect(PENDING_MIGRATION).toMatch(/where is_system and key = 'org_admin'/);
     expect(PENDING_MIGRATION).not.toMatch(/key in \(/);
+  });
+});
+
+describe("tables.serve (migration 0038)", () => {
+  it("is behind table_service; managers by default, staff by grant only", () => {
+    expect(CHECKS_MIGRATION).toContain("('tables.serve', 'table_service')");
+    expect(roleDefaults("manager")).toContain("tables.serve");
+    expect(roleDefaults("staff")).not.toContain("tables.serve");
+    expect(roleCeiling("staff")).toContain("tables.serve");
+  });
+  it("system profiles org_admin, manager and cashier; no tier ceiling or default redefined", () => {
+    expect(CHECKS_MIGRATION).toMatch(
+      /array\['tables\.serve'\]\) p order by p\)\s+where is_system and key in \('org_admin','manager','cashier'\)/,
+    );
+    expect(CHECKS_MIGRATION).not.toMatch(/function public\.role_ceiling/);
+    expect(CHECKS_MIGRATION).not.toMatch(/function public\.role_default_permissions/);
   });
 });
 

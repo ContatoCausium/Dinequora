@@ -95,6 +95,11 @@
 #      sections of another store, archive rules, status history, store-scoped audit, suspended
 #      organization; two status changes from the same screen state (the second refused, never
 #      overwritten) and section archive vs table save in both orders, with COMMIT and ROLLBACK
+#   5m. 0038 dining sessions, checks and rounds (direct RPC calls, two PostgreSQL sessions): opening a
+#      table (who, replay, one party per table, the table locked occupied), rounds at server prices and
+#      store tax, ingredients consumed at once with no payment and no revenue, pos.sell required,
+#      refusals write nothing, a voided round returns the stock, move and close-empty; two parties for
+#      one table, a round vs closing the session in both orders, the same round sent twice at once
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -171,6 +176,7 @@ must_refuse "justification privacy" env QA_DB_URL="$DB_URL" node scripts/securit
 must_refuse "security closure rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs
 must_refuse "POS sale flow" env QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs
 must_refuse "dining room tables" env QA_DB_URL="$DB_URL" node scripts/security/dining_tables_integrity.mjs
+must_refuse "dining room checks" env QA_DB_URL="$DB_URL" node scripts/security/dining_checks_integrity.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -295,6 +301,10 @@ echo "::endgroup::"
 
 echo "::group::5l. dining room tables (0037, direct RPC calls as each role, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/dining_tables_integrity.mjs | tee "$ARTIFACTS/dining-tables.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5m. dining sessions, checks and rounds (0038, direct RPC calls, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/dining_checks_integrity.mjs | tee "$ARTIFACTS/dining-checks.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

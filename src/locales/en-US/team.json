@@ -261,6 +261,7 @@
       "branding": "Branding",
       "billing": "Billing",
       "status": "Change status",
+      "serve": "Serve tables",
       "resolve_pending": "Resolve pending sales"
     },
     "moduleActions": {

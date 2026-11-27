@@ -10,6 +10,7 @@ import {
   groupFloor,
   seatsByStatus,
   toDiningRoom,
+  toOpenSessions,
   type DiningRoom,
 } from "@/lib/dining-room";
 
@@ -27,6 +28,14 @@ const api = vi.hoisted(() => ({
   saveDiningTable: vi.fn(),
   archiveDiningTable: vi.fn(),
   setDiningTableStatus: vi.fn(),
+  fetchOperationalMenu: vi.fn(),
+  openDiningSession: vi.fn(),
+  openDiningCheck: vi.fn(),
+  fireCheckRound: vi.fn(),
+  moveDiningSession: vi.fn(),
+  closeEmptyDiningSession: vi.fn(),
+  updateDiningSession: vi.fn(),
+  changeOperationalOrder: vi.fn(),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const workspace = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -171,8 +180,13 @@ describe("dining room read model", () => {
     expect(diningErrorKey(new Error("boom"))).toBe("unknown");
   });
 
-  it("the route is open to any of the three tables permissions", () => {
-    expect(requiredFor("/tables")).toEqual(["tables.view", "tables.status", "tables.manage"]);
+  it("the route is open to any of the tables permissions", () => {
+    expect(requiredFor("/tables")).toEqual([
+      "tables.view",
+      "tables.status",
+      "tables.serve",
+      "tables.manage",
+    ]);
   });
 });
 
@@ -311,5 +325,179 @@ describe("Tables screen", () => {
     } finally {
       await i18n.changeLanguage("en-US");
     }
+  });
+});
+
+/* ---------------------------------------------------------------- checks (0038) */
+const SESSION = UUID(50);
+const CHECK1 = UUID(51);
+const CHECK_ANA = UUID(52);
+const ORDER1 = UUID(60);
+/** T2 is seated (3 guests) with check 1 (one round, 2 sodas) and Ana's empty check. */
+const seatedRoom = (): DiningRoom =>
+  toDiningRoom(
+    "store-1",
+    [sectionRow(PATIO, "Patio", 1)],
+    [
+      tableRow(UUID(10), "T10", { section_id: PATIO }),
+      tableRow(UUID(11), "T2", { section_id: PATIO, status: "occupied" }),
+    ],
+    {
+      taxRatePpm: 62500,
+      sessions: toOpenSessions({
+        sessions: [{ id: SESSION, table_id: UUID(11), guests: 3, server_id: "u1", opened_at: NOW }],
+        checks: [
+          { id: CHECK1, session_id: SESSION, status: "open", number: 1, label: null },
+          { id: CHECK_ANA, session_id: SESSION, status: "open", number: 2, label: "Ana" },
+        ],
+        rounds: [{ check_id: CHECK1, order_id: ORDER1, round_no: 1, fired_at: NOW }],
+        orders: [{ id: ORDER1, status: "new", total_cents: 584 }],
+        items: [
+          {
+            order_id: ORDER1,
+            product_name: "QA Soda",
+            quantity: 2,
+            subtotal_cents: 550,
+            notes: null,
+            order_item_modifiers: [],
+          },
+        ],
+        profiles: [{ id: "u1", full_name: "Sam Server" }],
+      }),
+    },
+  );
+const MENU = {
+  categories: [],
+  archivedCategories: [],
+  items: [
+    {
+      id: "prod-soda",
+      name: "QA Soda",
+      priceCents: 275,
+      active: true,
+      locationIds: [],
+      modifierGroups: [],
+      category: "",
+    },
+  ],
+};
+
+describe("open sessions read model", () => {
+  it("keeps each check with its own rounds and totals, and the table total", () => {
+    const [s] = seatedRoom().sessions;
+    expect(s!.checks.map((c) => [c.number, c.label, c.liveTotalCents])).toEqual([
+      [1, null, 584],
+      [2, "Ana", 0],
+    ]);
+    expect(s!.liveTotalCents).toBe(584);
+    expect(s!.serverName).toBe("Sam Server");
+  });
+});
+
+describe("Tables screen: checks", () => {
+  beforeEach(() => {
+    api.fetchDiningRoom.mockImplementation(async () => seatedRoom());
+    api.fetchOperationalMenu.mockResolvedValue(MENU);
+  });
+
+  it("a seated table shows the party and offers its check, never a manual status change", async () => {
+    setWorkspace(roleDefaults("manager"));
+    renderPage();
+    const menu = await openTable(/^Table T2, Occupied, 3 guests · \$5\.84/);
+    expect(within(menu).getByRole("menuitem", { name: "Open check" })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: /Mark as/ })).toBeNull();
+  });
+
+  it("a free table offers to seat guests; seating sends the table, guests and a key", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.openDiningSession.mockResolvedValue({ id: UUID(70) });
+    renderPage();
+    const menu = await openTable(/^Table T10, Available/);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Seat guests…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Seat guests at T10" });
+    fireEvent.change(within(dialog).getByLabelText("Guests"), { target: { value: "4" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Seat and open check" }));
+    await waitFor(() => expect(api.openDiningSession).toHaveBeenCalledTimes(1));
+    const arg = api.openDiningSession.mock.calls[0]![0].data;
+    expect(arg).toMatchObject({
+      orgId: "org-1",
+      locationId: "store-1",
+      tableId: UUID(10),
+      guests: 4,
+    });
+    expect(typeof arg.clientKey).toBe("string");
+  });
+
+  it("each check keeps its own round: Ana's round goes to Ana's check; a retry reuses the key", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.fireCheckRound
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({ id: UUID(80) });
+    renderPage();
+    const menu = await openTable(/^Table T2,/);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Open check" }));
+    const sheet = await screen.findByRole("dialog", { name: "Check · T2" });
+    expect(within(sheet).getByRole("button", { name: /^Check 1/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(sheet).getByText("2 × QA Soda")).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("button", { name: /^Ana/ }));
+    expect(within(sheet).getByText("Nothing sent yet.")).toBeInTheDocument();
+    expect(within(sheet).getByText("Total of the table")).toBeInTheDocument();
+    fireEvent.click(await within(sheet).findByRole("button", { name: /QA Soda/ }));
+    const send = within(sheet).getByRole("button", { name: "Send 1 item to the kitchen" });
+    fireEvent.click(send);
+    await waitFor(() => expect(api.fireCheckRound).toHaveBeenCalledTimes(1));
+    expect(
+      await within(sheet).findByText("Something went wrong. Nothing was changed."),
+    ).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Send 1 item to the kitchen" }));
+    await waitFor(() => expect(api.fireCheckRound).toHaveBeenCalledTimes(2));
+    const [first, second] = api.fireCheckRound.mock.calls.map((c) => c[0].data);
+    expect(first).toMatchObject({
+      checkId: CHECK_ANA,
+      taxRatePpm: 62500,
+      items: [{ productId: "prod-soda", quantity: 1, modifiers: [] }],
+    });
+    expect(second.clientKey).toBe(first.clientKey);
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Round sent to the kitchen for T2 · Ana."),
+    );
+  });
+
+  it("opens another check with an optional name", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.openDiningCheck.mockResolvedValue({ id: UUID(90) });
+    renderPage();
+    const menu = await openTable(/^Table T2,/);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Open check" }));
+    const sheet = await screen.findByRole("dialog", { name: "Check · T2" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "New check" }));
+    const dialog = await screen.findByRole("dialog", { name: "New check at T2" });
+    fireEvent.change(within(dialog).getByLabelText("Name (optional)"), {
+      target: { value: "Bia" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Open check" }));
+    await waitFor(() => expect(api.openDiningCheck).toHaveBeenCalledTimes(1));
+    expect(api.openDiningCheck.mock.calls[0]![0].data).toMatchObject({
+      sessionId: SESSION,
+      label: "Bia",
+    });
+  });
+
+  it("without pos.sell the round cannot be sent (the server also refuses)", async () => {
+    setWorkspace(["tables.view", "tables.serve"]);
+    renderPage();
+    const menu = await openTable(/^Table T2,/);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Open check" }));
+    const sheet = await screen.findByRole("dialog", { name: "Check · T2" });
+    fireEvent.click(await within(sheet).findByRole("button", { name: /QA Soda/ }));
+    expect(
+      within(sheet).getByRole("button", { name: "Send 1 item to the kitchen" }),
+    ).toBeDisabled();
+    expect(
+      within(sheet).getByText("Sending to the kitchen also needs permission to sell at the POS."),
+    ).toBeInTheDocument();
   });
 });
