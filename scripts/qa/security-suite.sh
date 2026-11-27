@@ -115,6 +115,10 @@
 #      another tenant and anon refused
 #   5q. 0042 menu item sales (SECURITY INVOKER read): units, sales and orders per product and store,
 #      cancelled orders left out, the store's last N local days; another tenant and anon get nothing
+#   5r. tenant isolation sweep, driven by the catalog: EVERY public table and view with an org_id
+#      column (new ones included without editing the script), every organization with rows in it: the
+#      owner of another organization reads none, and (rolled back) updates and deletes none; a view
+#      that is not security_invoker shows up as a leak; tables with no rows are listed as not exercised
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -196,6 +200,7 @@ must_refuse "dining room payments" env QA_DB_URL="$DB_URL" node scripts/security
 must_refuse "assistant usage" env QA_DB_URL="$DB_URL" node scripts/security/assistant_usage_integrity.mjs
 must_refuse "reversal reasons" env QA_DB_URL="$DB_URL" node scripts/security/check_reversal_reason_privacy.mjs
 must_refuse "menu item sales" env QA_DB_URL="$DB_URL" node scripts/security/menu_item_sales_integrity.mjs
+must_refuse "tenant isolation sweep" env QA_DB_URL="$DB_URL" node scripts/security/tenant_isolation_sweep.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -340,6 +345,10 @@ echo "::endgroup::"
 
 echo "::group::5q. menu item sales (0042, SECURITY INVOKER read as each role)"
 QA_DB_URL="$DB_URL" node scripts/security/menu_item_sales_integrity.mjs | tee "$ARTIFACTS/menu-item-sales.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5r. tenant isolation sweep (every table and view with org_id, as another tenant's owner)"
+QA_DB_URL="$DB_URL" node scripts/security/tenant_isolation_sweep.mjs | tee "$ARTIFACTS/tenant-isolation-sweep.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
