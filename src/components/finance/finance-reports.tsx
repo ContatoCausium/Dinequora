@@ -62,6 +62,8 @@ interface FinanceReportsProps {
     createdAt: string;
     locationId?: string;
   }>;
+  /** true while the order history is still being read: the exports wait for it. */
+  ordersLoading?: boolean | undefined;
   stores: StoreResult[];
   currentMonth: string;
 }
@@ -79,6 +81,7 @@ export function FinanceReports({
   orgId,
   trendEntries,
   orders,
+  ordersLoading = false,
   stores,
   currentMonth,
 }: FinanceReportsProps) {
@@ -187,7 +190,8 @@ export function FinanceReports({
   // Revenue and cash-flow listings are built from individual ledger rows: until every row is read
   // (or if the read failed) they are not shown nor exported as if they were complete.
   const needsRows = reportType === "revenue" || reportType === "cash_flow";
-  const rowsBlocked = needsRows && rowsState.status !== "ready";
+  // The order history arrives after the figures (finance-page): no export of a partial history.
+  const rowsBlocked = (needsRows && rowsState.status !== "ready") || ordersLoading;
 
   const handleExportCsv = () => {
     const csv = exportReportToCsv(report);
