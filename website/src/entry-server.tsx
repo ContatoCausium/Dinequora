@@ -6,8 +6,8 @@
  */
 import { renderToString } from "react-dom/server";
 import { App } from "./App";
-import type { Locale } from "./i18n/meta";
+import type { Locale, PageId } from "./i18n/meta";
 
-export function render(locale: Locale): string {
-  return renderToString(<App initialLocale={locale} />);
+export function render(locale: Locale, page: PageId = "home"): string {
+  return renderToString(<App initialLocale={locale} page={page} />);
 }

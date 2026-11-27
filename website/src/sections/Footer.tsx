@@ -4,10 +4,18 @@ import { Logo } from "../components/ui";
 import { UnavailableAction } from "../components/appAccess";
 import { WhatsAppIcon } from "../components/whatsapp";
 import { pick, useLocale, type Locale } from "../i18n/locale";
+import { pagePath, type PageId } from "../i18n/meta";
 
-function getColumns(locale: Locale) {
+/** Links to the legal pages, shown in the bottom bar of every page. */
+export function getLegalLinks(locale: Locale) {
+  return [{ label: pick(locale, "Privacy policy", "Política de privacidade"), href: pagePath("privacy", locale) }];
+}
+
+function getColumns(locale: Locale, page: PageId) {
   const t = <T,>(en: T, pt: T) => pick(locale, en, pt);
-  return [
+  // On a legal page the sections live on the home page, so in-page anchors point there.
+  const home = page === "home" ? "" : pagePath("home", locale);
+  const columns = [
     {
       title: t("Product", "Produto"),
       links: [
@@ -34,12 +42,17 @@ function getColumns(locale: Locale) {
       ],
     },
   ] satisfies Array<{ title: string; links: Array<{ label: string; href: string | null }> }>;
+  return columns.map((col) => ({
+    ...col,
+    links: col.links.map((l) => ({ ...l, href: l.href?.startsWith("#") ? `${home}${l.href}` : l.href })),
+  }));
 }
 
 export function Footer() {
-  const { locale } = useLocale();
+  const { locale, page } = useLocale();
   const t = <T,>(en: T, pt: T) => pick(locale, en, pt);
-  const columns = getColumns(locale);
+  const columns = getColumns(locale, page);
+  const legalLinks = getLegalLinks(locale);
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-line-dark bg-navy">
@@ -103,7 +116,20 @@ export function Footer() {
         </div>
 
         <div className="mt-16 flex flex-col gap-3 border-t border-line-dark pt-8 text-xs text-mist/80 sm:flex-row sm:justify-between">
-          <p>© {year} Dinequora. {t("All rights reserved.", "Todos os direitos reservados.")}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+            <p>© {year} Dinequora. {t("All rights reserved.", "Todos os direitos reservados.")}</p>
+            <nav aria-label={t("Legal", "Jurídico")}>
+              <ul className="flex flex-wrap gap-x-5 gap-y-2">
+                {legalLinks.map((l) => (
+                  <li key={l.href}>
+                    <a href={l.href} className="text-mist underline-offset-4 transition-colors hover:text-offwhite hover:underline">
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </div>
           <p>
             {t(
               "Product images show illustrative sample data. Photography via Unsplash.",

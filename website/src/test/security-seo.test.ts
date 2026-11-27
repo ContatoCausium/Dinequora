@@ -183,19 +183,28 @@ describe("language pages: static head of / (English) and /pt/ (Portuguese)", () 
 });
 
 describe("sitemap.xml and robots.txt", () => {
-  it("builds a valid sitemap with / and /pt/ and reciprocal hreflang alternates", () => {
+  it("builds a valid sitemap with every page in both languages and reciprocal hreflang alternates", () => {
     const xml = sitemapXml("https://dinequora.com/");
     const doc = new DOMParser().parseFromString(xml, "application/xml");
     expect(doc.getElementsByTagName("parsererror")).toHaveLength(0);
     expect(doc.documentElement.namespaceURI).toBe("http://www.sitemaps.org/schemas/sitemap/0.9");
     const urls = [...doc.getElementsByTagName("url")];
-    expect(urls.map((u) => u.getElementsByTagName("loc")[0]!.textContent)).toEqual(["https://dinequora.com/", "https://dinequora.com/pt/"]);
-    for (const u of urls) {
-      const links = [...u.getElementsByTagNameNS("http://www.w3.org/1999/xhtml", "link")];
-      expect(links.map((l) => `${l.getAttribute("hreflang")} ${l.getAttribute("href")}`)).toEqual([
-        "en-US https://dinequora.com/",
-        "pt-BR https://dinequora.com/pt/",
-        "x-default https://dinequora.com/",
+    expect(urls.map((u) => u.getElementsByTagName("loc")[0]!.textContent)).toEqual([
+      "https://dinequora.com/",
+      "https://dinequora.com/pt/",
+      "https://dinequora.com/privacy/",
+      "https://dinequora.com/pt/privacy/",
+    ]);
+    const alternatesOf = (u: Element) =>
+      [...u.getElementsByTagNameNS("http://www.w3.org/1999/xhtml", "link")].map((l) => `${l.getAttribute("hreflang")} ${l.getAttribute("href")}`);
+    for (const u of urls.slice(0, 2)) {
+      expect(alternatesOf(u)).toEqual(["en-US https://dinequora.com/", "pt-BR https://dinequora.com/pt/", "x-default https://dinequora.com/"]);
+    }
+    for (const u of urls.slice(2)) {
+      expect(alternatesOf(u)).toEqual([
+        "en-US https://dinequora.com/privacy/",
+        "pt-BR https://dinequora.com/pt/privacy/",
+        "x-default https://dinequora.com/privacy/",
       ]);
     }
     expect(xml).not.toContain("?lang=");

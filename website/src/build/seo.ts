@@ -3,7 +3,7 @@
  * robots.txt, and the check that the demo-request endpoint is allowed by the CSP. Absolute URLs
  * come from VITE_SITE_URL so nothing is hard-coded per deploy.
  */
-import { htmlLang, localePath, ogLocale, pageMeta, type Locale } from "../i18n/meta";
+import { htmlLang, LEGAL_PAGES, legalMeta, localePath, ogLocale, pageMeta, pagePath, type LegalPageId, type Locale, type PageId } from "../i18n/meta";
 import { PRICES } from "../config/pricing";
 
 /** Sales line shown on the page (WHATSAPP in config/site.ts; a test keeps the two equal). */
@@ -23,22 +23,22 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Absolute URL of each language version (English `/`, Portuguese `/pt/`). */
-export function pageVersions(siteUrl: string) {
+/** Absolute URL of each language version of a page (home: English `/`, Portuguese `/pt/`). */
+export function pageVersions(siteUrl: string, page: PageId = "home") {
   const base = trimBase(siteUrl);
-  return LOCALES.map((locale) => ({ locale, hreflang: htmlLang[locale], href: `${base}${localePath[locale]}` }));
+  return LOCALES.map((locale) => ({ locale, hreflang: htmlLang[locale], href: `${base}${pagePath(page, locale)}` }));
 }
 
 /** canonical + og:url of one version, and the reciprocal hreflang alternates (x-default = English). */
-function seoTags(locale: Locale, base: string): string {
-  const self = `${base}${localePath[locale]}`;
+function seoTags(locale: Locale, base: string, page: PageId = "home"): string {
+  const self = `${base}${pagePath(page, locale)}`;
   const other: Locale = locale === "en" ? "pt" : "en";
   return [
     `<link rel="canonical" href="${self}" />`,
     `<meta property="og:url" content="${self}" />`,
     `<meta property="og:locale:alternate" content="${ogLocale[other]}" />`,
-    ...pageVersions(base).map((v) => `<link rel="alternate" hreflang="${v.hreflang}" href="${v.href}" />`),
-    `<link rel="alternate" hreflang="x-default" href="${base}${localePath.en}" />`,
+    ...pageVersions(base, page).map((v) => `<link rel="alternate" hreflang="${v.hreflang}" href="${v.href}" />`),
+    `<link rel="alternate" hreflang="x-default" href="${base}${pagePath(page, "en")}" />`,
   ]
     .map((t) => `    ${t}`)
     .join("\n");
@@ -158,15 +158,49 @@ export function portugueseIndexHtml(englishHtml: string, siteUrl: string): strin
   return html;
 }
 
-/** sitemap.xml listing both language versions, each with reciprocal hreflang alternates. */
+/**
+ * A legal page (`/privacy/`, `/pt/privacy/`), derived from the built English home page: the
+ * language of the page, its own title, description and social tags, the canonical and hreflang of
+ * the legal page, and none of the home page's extras (the opening-image preload, structured data).
+ */
+export function legalIndexHtml(englishHtml: string, siteUrl: string, page: LegalPageId, locale: Locale): string {
+  const base = trimBase(siteUrl);
+  const home = pageMeta[locale];
+  const meta = legalMeta[page][locale];
+  let html = locale === "pt" ? portugueseIndexHtml(englishHtml, siteUrl) : englishHtml;
+  const swap = (pattern: RegExp, value: string, what: string) => {
+    html = replaceOne(html, pattern, value, `${what} (${page}, ${locale})`);
+  };
+  const attr = (value: string) => escapeRegExp(escapeAttr(value));
+  const title = escapeAttr(meta.title);
+  const description = escapeAttr(meta.description);
+  swap(new RegExp(`<title>${escapeRegExp(home.title)}</title>`), `<title>${meta.title}</title>`, "title");
+  swap(new RegExp(`(<meta\\s+name="description"\\s+content=")${attr(home.description)}(")`), `$1${description}$2`, "meta description");
+  swap(new RegExp(`(<meta property="og:title" content=")${attr(home.title)}(")`), `$1${title}$2`, "og:title");
+  swap(new RegExp(`(<meta name="twitter:title" content=")${attr(home.title)}(")`), `$1${title}$2`, "twitter:title");
+  swap(new RegExp(`(<meta\\s+property="og:description"\\s+content=")${attr(home.social)}(")`), `$1${description}$2`, "og:description");
+  swap(new RegExp(`(<meta\\s+name="twitter:description"\\s+content=")${attr(home.social)}(")`), `$1${description}$2`, "twitter:description");
+  swap(/\n\s*<link\s+rel="preload"\s+as="image"[^>]*\/>/, "", "opening-image preload");
+  if (base) {
+    swap(new RegExp(escapeRegExp(seoTags(locale, base))), seoTags(locale, base, page), "canonical/hreflang block");
+    swap(new RegExp(`\\n${escapeRegExp(structuredData(locale, base))}`), "", "structured data");
+  }
+  return html;
+}
+
+/** sitemap.xml listing every page in both languages, each with reciprocal hreflang alternates. */
 export function sitemapXml(siteUrl: string): string {
   const base = trimBase(siteUrl);
-  const versions = pageVersions(base);
-  const alternates = [
-    ...versions.map((v) => `    <xhtml:link rel="alternate" hreflang="${v.hreflang}" href="${escapeAttr(v.href)}"/>`),
-    `    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeAttr(`${base}${localePath.en}`)}"/>`,
-  ].join("\n");
-  const urls = versions.map((v) => `  <url>\n    <loc>${escapeAttr(v.href)}</loc>\n${alternates}\n  </url>`).join("\n");
+  const urls = (["home", ...LEGAL_PAGES] as const)
+    .map((page) => {
+      const versions = pageVersions(base, page);
+      const alternates = [
+        ...versions.map((v) => `    <xhtml:link rel="alternate" hreflang="${v.hreflang}" href="${escapeAttr(v.href)}"/>`),
+        `    <xhtml:link rel="alternate" hreflang="x-default" href="${escapeAttr(`${base}${pagePath(page, "en")}`)}"/>`,
+      ].join("\n");
+      return versions.map((v) => `  <url>\n    <loc>${escapeAttr(v.href)}</loc>\n${alternates}\n  </url>`).join("\n");
+    })
+    .join("\n");
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">`,

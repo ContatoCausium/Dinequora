@@ -18,6 +18,17 @@ describe("build-time pre-render", () => {
     expect(pt).toContain("Perguntas");
   });
 
+  it("renders the privacy policy in each language, with the footer link and the missing-fact markers", () => {
+    const en = render("en", "privacy");
+    const pt = render("pt", "privacy");
+    expect(en).toMatch(/<h1[^>]*>Privacy Policy<\/h1>/);
+    expect(pt).toMatch(/<h1[^>]*>Política de Privacidade<\/h1>/);
+    expect(en).toContain('href="/privacy/"');
+    expect(pt).toContain('href="/pt/privacy/"');
+    expect(en).toContain("[preencher: ");
+    expect(en).not.toContain('id="dq-name-mask"');
+  });
+
   it("puts both versions of the masked name in the HTML (CSS picks one per screen)", () => {
     const en = render("en");
     expect(en).toContain('id="dq-name-mask"');
