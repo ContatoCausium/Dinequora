@@ -404,12 +404,20 @@ export interface DaySummary {
   tipsCents: number;
   /** Tips by the server of the table (who owns the tip), highest first. */
   byServer: { serverId: string; name: string | null; tipsCents: number; tenders: number }[];
+  /** Recorded tenders by method (cash, card, digital), for closing the drawer: amount and tips. */
+  byMethod: { method: string; amountCents: number; tipsCents: number; tenders: number }[];
 }
 
 /** Today's tenders and closed checks of one store, summed for the floor's "Today" panel. */
 export function summarizeDay(input: {
   day: string;
-  tenders: readonly { amount_cents: number; tip_cents: number; status: string; check_id: string }[];
+  tenders: readonly {
+    amount_cents: number;
+    tip_cents: number;
+    status: string;
+    check_id: string;
+    method?: string;
+  }[];
   checks: readonly { id: string; session_id: string; status: string }[];
   sessions: readonly { id: string; server_id: string }[];
   closedToday: number;
@@ -428,9 +436,26 @@ export function summarizeDay(input: {
     cur.tenders += 1;
     by.set(server, cur);
   }
+  const methods = new Map<string, { amountCents: number; tipsCents: number; tenders: number }>();
+  for (const t of live) {
+    const m = t.method ?? "unknown";
+    const cur = methods.get(m) ?? { amountCents: 0, tipsCents: 0, tenders: 0 };
+    cur.amountCents += t.amount_cents;
+    cur.tipsCents += t.tip_cents;
+    cur.tenders += 1;
+    methods.set(m, cur);
+  }
+  const ORDER = ["cash", "card", "digital"];
   return {
     day: input.day,
     checksClosed: input.closedToday,
+    byMethod: [...methods.entries()]
+      .map(([method, v]) => ({ method, ...v }))
+      .sort(
+        (a, b) =>
+          (ORDER.indexOf(a.method) + 1 || 99) - (ORDER.indexOf(b.method) + 1 || 99) ||
+          a.method.localeCompare(b.method),
+      ),
     receivedCents: live.reduce((n, t) => n + t.amount_cents, 0),
     tipsCents: live.reduce((n, t) => n + t.tip_cents, 0),
     byServer: [...by.entries()]

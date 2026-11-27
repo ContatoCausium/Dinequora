@@ -1247,7 +1247,7 @@ export const fetchDiningDaySummary = createServerFn({ method: "POST" })
     const [tenders, closed] = await Promise.all([
       c
         .from("dining_check_payments")
-        .select("amount_cents,tip_cents,status,check_id")
+        .select("amount_cents,tip_cents,status,check_id,method")
         .eq("org_id", sc.org.id)
         .eq("location_id", sc.location.id)
         .gte("created_at", since),
