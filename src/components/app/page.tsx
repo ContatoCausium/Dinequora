@@ -98,7 +98,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           title={fill ? o.label : undefined}
           className={cn(
-            "h-full rounded-md px-3 text-[13px] font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "h-full whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             fill && "min-w-0 flex-auto truncate whitespace-nowrap px-2.5 text-xs",
             value === o.value
               ? "raised text-foreground"
