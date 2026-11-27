@@ -168,6 +168,8 @@ for (const name of PINNED) {
 // 0011_create_pos_sale_and_idempotency.sql silently REPLACES create_pos_sale (same signature)
 // with an unchecked SECURITY DEFINER version; this catches that and any similar downgrade.
 const GUARDED = [
+  "archive_dining_section",
+  "archive_dining_table",
   "archive_operational_menu",
   "cancel_operational_purchase",
   "cancel_order_with_reversal",
@@ -183,8 +185,11 @@ const GUARDED = [
   "remove_member",
   "resolve_pending_pos_sale",
   "revoke_invitation",
+  "save_dining_section",
+  "save_dining_table",
   "save_operational_menu",
   "save_operational_record",
+  "set_dining_table_status",
   "set_member_access",
   "set_location_tax_rate",
   "set_member_locations",

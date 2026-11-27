@@ -32,7 +32,7 @@ describe("matrix layout", () => {
       ...r.other,
     ]);
     expect(placed.sort()).toEqual([...PERMISSION_CATALOG].sort());
-    expect(matrixRows()).toHaveLength(14);
+    expect(matrixRows()).toHaveLength(15);
     expect(MATRIX_COLUMNS).toEqual(["view", "create", "edit", "delete", "approve", "other"]);
   });
 

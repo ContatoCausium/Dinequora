@@ -22,7 +22,7 @@ set local lock_timeout = '5s';
 drop function if exists public.resolve_pending_pos_sale(uuid, uuid, text, text, integer, integer, timestamptz);
 -- ...and the reader of the justifications (0035); their private store and its rows are kept
 drop function if exists public.list_pending_sale_reasons(uuid, uuid, text, integer);
--- catalog (0020), tier ceiling and defaults (0018)
+-- catalog (as at the tip, without orders.resolve_pending), tier ceiling and defaults (0018)
 create or replace function public.permission_catalog()
 returns text[] language sql immutable set search_path = public as $$
   select array[
@@ -30,6 +30,7 @@ returns text[] language sql immutable set search_path = public as $$
     'pos.view','pos.sell','pos.discount',
     'orders.view','orders.update','orders.refund',
     'kds.view','kds.operate',
+    'tables.view','tables.status','tables.manage',
     'menu.view','menu.create','menu.edit','menu.delete',
     'inventory.view','inventory.create','inventory.edit','inventory.adjust','inventory.transfer','inventory.costs',
     'recipes.view','recipes.edit',

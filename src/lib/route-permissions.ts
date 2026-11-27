@@ -8,6 +8,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; any: readonly Permission[] }[]
   { prefix: "/pos", any: ["pos.view"] },
   { prefix: "/orders", any: ["orders.view"] },
   { prefix: "/kds", any: ["kds.view"] },
+  { prefix: "/tables", any: ["tables.view", "tables.status", "tables.manage"] },
   { prefix: "/menu", any: ["menu.view"] },
   {
     prefix: "/inventory",

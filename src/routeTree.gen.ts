@@ -28,6 +28,7 @@ import { Route as AuthenticatedAppMenuRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAppOrdersRouteImport } from './routes/_authenticated/_app/orders'
 import { Route as AuthenticatedAppPosRouteImport } from './routes/_authenticated/_app/pos'
 import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/_app/reports'
+import { Route as AuthenticatedAppTablesRouteImport } from './routes/_authenticated/_app/tables'
 import { Route as AuthenticatedAppTeamRouteImport } from './routes/_authenticated/_app/team'
 import { Route as AuthenticatedControlIndexRouteImport } from './routes/_authenticated/control.index'
 import { Route as AuthenticatedControlAdminsRouteImport } from './routes/_authenticated/control.admins'
@@ -136,6 +137,11 @@ const AuthenticatedAppReportsRoute = AuthenticatedAppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
+const AuthenticatedAppTablesRoute = AuthenticatedAppTablesRouteImport.update({
+  id: '/tables',
+  path: '/tables',
+  getParentRoute: () => AuthenticatedAppRouteRoute,
+} as any)
 const AuthenticatedAppTeamRoute = AuthenticatedAppTeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/orders': typeof AuthenticatedAppOrdersRoute
   '/pos': typeof AuthenticatedAppPosRoute
   '/reports': typeof AuthenticatedAppReportsRoute
+  '/tables': typeof AuthenticatedAppTablesRoute
   '/team': typeof AuthenticatedAppTeamRoute
   '/control/admins': typeof AuthenticatedControlAdminsRoute
   '/control/audit': typeof AuthenticatedControlAuditRoute
@@ -249,6 +256,7 @@ export interface FileRoutesByTo {
   '/orders': typeof AuthenticatedAppOrdersRoute
   '/pos': typeof AuthenticatedAppPosRoute
   '/reports': typeof AuthenticatedAppReportsRoute
+  '/tables': typeof AuthenticatedAppTablesRoute
   '/team': typeof AuthenticatedAppTeamRoute
   '/control/admins': typeof AuthenticatedControlAdminsRoute
   '/control/audit': typeof AuthenticatedControlAuditRoute
@@ -281,6 +289,7 @@ export interface FileRoutesById {
   '/_authenticated/_app/orders': typeof AuthenticatedAppOrdersRoute
   '/_authenticated/_app/pos': typeof AuthenticatedAppPosRoute
   '/_authenticated/_app/reports': typeof AuthenticatedAppReportsRoute
+  '/_authenticated/_app/tables': typeof AuthenticatedAppTablesRoute
   '/_authenticated/_app/team': typeof AuthenticatedAppTeamRoute
   '/_authenticated/control/admins': typeof AuthenticatedControlAdminsRoute
   '/_authenticated/control/audit': typeof AuthenticatedControlAuditRoute
@@ -314,6 +323,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/pos'
     | '/reports'
+    | '/tables'
     | '/team'
     | '/control/admins'
     | '/control/audit'
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/pos'
     | '/reports'
+    | '/tables'
     | '/team'
     | '/control/admins'
     | '/control/audit'
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_app/orders'
     | '/_authenticated/_app/pos'
     | '/_authenticated/_app/reports'
+    | '/_authenticated/_app/tables'
     | '/_authenticated/_app/team'
     | '/_authenticated/control/admins'
     | '/_authenticated/control/audit'
@@ -532,6 +544,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppReportsRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/tables': {
+      id: '/_authenticated/_app/tables'
+      path: '/tables'
+      fullPath: '/tables'
+      preLoaderRoute: typeof AuthenticatedAppTablesRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/_app/team': {
       id: '/_authenticated/_app/team'
       path: '/team'
@@ -622,6 +641,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppOrdersRoute: typeof AuthenticatedAppOrdersRoute
   AuthenticatedAppPosRoute: typeof AuthenticatedAppPosRoute
   AuthenticatedAppReportsRoute: typeof AuthenticatedAppReportsRoute
+  AuthenticatedAppTablesRoute: typeof AuthenticatedAppTablesRoute
   AuthenticatedAppTeamRoute: typeof AuthenticatedAppTeamRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppSettingsBillingRoute: typeof AuthenticatedAppSettingsBillingRoute
@@ -638,6 +658,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppOrdersRoute: AuthenticatedAppOrdersRoute,
   AuthenticatedAppPosRoute: AuthenticatedAppPosRoute,
   AuthenticatedAppReportsRoute: AuthenticatedAppReportsRoute,
+  AuthenticatedAppTablesRoute: AuthenticatedAppTablesRoute,
   AuthenticatedAppTeamRoute: AuthenticatedAppTeamRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppSettingsBillingRoute: AuthenticatedAppSettingsBillingRoute,

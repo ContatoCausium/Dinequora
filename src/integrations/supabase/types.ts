@@ -136,6 +136,168 @@ export type Database = {
         };
         Relationships: [];
       };
+      dining_sections: {
+        Row: {
+          archived_at: string | null;
+          created_at: string;
+          id: string;
+          location_id: string;
+          name: string;
+          org_id: string;
+          sort_order: number;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          archived_at?: string | null;
+          created_at?: string;
+          id?: string;
+          location_id: string;
+          name: string;
+          org_id: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          created_at?: string;
+          id?: string;
+          location_id?: string;
+          name?: string;
+          org_id?: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_sections_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_sections_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dining_table_status_events: {
+        Row: {
+          actor_id: string;
+          created_at: string;
+          from_status: string;
+          id: string;
+          location_id: string;
+          org_id: string;
+          table_id: string;
+          to_status: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          actor_id: string;
+          created_at?: string;
+          from_status: string;
+          id?: string;
+          location_id: string;
+          org_id: string;
+          table_id: string;
+          to_status: string;
+        };
+        Update: {
+          actor_id?: string;
+          created_at?: string;
+          from_status?: string;
+          id?: string;
+          location_id?: string;
+          org_id?: string;
+          table_id?: string;
+          to_status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_table_status_events_org_id_location_id_table_id_fkey";
+            columns: ["org_id", "location_id", "table_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_tables";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
+      dining_tables: {
+        Row: {
+          archived_at: string | null;
+          created_at: string;
+          id: string;
+          label: string;
+          location_id: string;
+          org_id: string;
+          seats: number;
+          section_id: string | null;
+          sort_order: number;
+          status: string;
+          status_changed_at: string;
+          status_changed_by: string | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          archived_at?: string | null;
+          created_at?: string;
+          id?: string;
+          label: string;
+          location_id: string;
+          org_id: string;
+          seats?: number;
+          section_id?: string | null;
+          sort_order?: number;
+          status?: string;
+          status_changed_at?: string;
+          status_changed_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          created_at?: string;
+          id?: string;
+          label?: string;
+          location_id?: string;
+          org_id?: string;
+          seats?: number;
+          section_id?: string | null;
+          sort_order?: number;
+          status?: string;
+          status_changed_at?: string;
+          status_changed_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_tables_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_tables_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_tables_org_id_location_id_section_id_fkey";
+            columns: ["org_id", "location_id", "section_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_sections";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
       feature_catalog: {
         Row: {
           created_at: string;
@@ -1907,6 +2069,14 @@ export type Database = {
         };
         Returns: undefined;
       };
+      archive_dining_section: {
+        Args: { _location_id: string; _org_id: string; _section_id: string };
+        Returns: undefined;
+      };
+      archive_dining_table: {
+        Args: { _location_id: string; _org_id: string; _table_id: string };
+        Returns: undefined;
+      };
       archive_operational_menu: {
         Args: { _client_id: string; _kind: string; _org_id: string };
         Returns: undefined;
@@ -2268,6 +2438,28 @@ export type Database = {
         Args: { _role: Database["public"]["Enums"]["org_role"] };
         Returns: string[];
       };
+      save_dining_section: {
+        Args: {
+          _location_id: string;
+          _name: string;
+          _org_id: string;
+          _section_id?: string;
+          _sort_order?: number;
+        };
+        Returns: string;
+      };
+      save_dining_table: {
+        Args: {
+          _label: string;
+          _location_id: string;
+          _org_id: string;
+          _seats: number;
+          _section_id?: string;
+          _sort_order?: number;
+          _table_id?: string;
+        };
+        Returns: string;
+      };
       save_location_with_managers: {
         Args: {
           _address: string;
@@ -2300,6 +2492,16 @@ export type Database = {
           _org_id: string;
           _permissions: string[];
           _tier: Database["public"]["Enums"]["org_role"];
+        };
+        Returns: string;
+      };
+      set_dining_table_status: {
+        Args: {
+          _expected_status?: string;
+          _location_id: string;
+          _org_id: string;
+          _status: string;
+          _table_id: string;
         };
         Returns: string;
       };

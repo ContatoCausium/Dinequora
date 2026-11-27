@@ -6,7 +6,7 @@ O teste `src/test/m2-rollback-files.test.ts` falha se eles divergirem das migrat
 | Arquivo | O que faz |
 |---|---|
 | `rollback.sql` | Desfaz a 0032 e a 0031, nessa ordem; a 0033 fica. Remove também o leitor de justificativas da 0035 (`list_pending_sale_reasons`), mantendo o armazenamento privado e seus textos |
-| `reapply.sql` | Reaplica 0031, 0032, 0033 e **0035** depois desse rollback, de forma idempotente onde o rollback manteve objetos. A 0035 vem depois da 0033 porque a função da 0033 gravaria o texto na chave e na auditoria |
+| `reapply.sql` | Reaplica 0031, 0032 (com o catálogo de permissões como está na ponta), 0033 e **0035** depois desse rollback, de forma idempotente onde o rollback manteve objetos. A 0035 vem depois da 0033 porque a função da 0033 gravaria o texto na chave e na auditoria |
 
 Nenhum dos dois é uma migration. Num rollback real, cada um vira o conteúdo de uma migration **nova**
 e revisada (0036, 0037…), aplicada pelo runner normal, que usa uma transação única. Por isso eles não
@@ -18,7 +18,9 @@ têm `BEGIN`/`COMMIT` e começam com `set local lock_timeout = '5s';`.
   - `ledger_day_totals` e `accessible_location_ids`;
   - `resolve_pending_pos_sale`.
 - **Restaura:**
-  - catálogo, teto e padrões de permissão da 0020/0018;
+  - catálogo de permissões **como está na ponta**, sem `orders.resolve_pending` (até a 0036 é igual
+    ao da 0020; desde a 0037 inclui as permissões de mesas, que o rollback do M2 não remove), e teto
+    e padrões de permissão da 0018, que derivam do catálogo;
   - a `finance_read` da 0019.
 - **Nunca usa `DROP ... CASCADE`:** a política depende de `accessible_location_ids`, e o
   `CASCADE` a removeria, deixando o ledger ilegível.

@@ -223,6 +223,7 @@
       "pos": "PDV",
       "orders": "Pedidos",
       "kds": "Tela da cozinha",
+      "tables": "Mesas",
       "menu": "Cardápio",
       "inventory": "Estoque",
       "recipes": "Fichas técnicas",
@@ -259,7 +260,11 @@
       "locations": "Unidades",
       "branding": "Marca",
       "billing": "Cobrança",
+      "status": "Mudar status",
       "resolve_pending": "Resolver vendas pendentes"
+    },
+    "moduleActions": {
+      "tables": { "manage": "Gerenciar mesas" }
     }
   },
   "profiles": {

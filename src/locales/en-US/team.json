@@ -223,6 +223,7 @@
       "pos": "POS",
       "orders": "Orders",
       "kds": "Kitchen display",
+      "tables": "Tables",
       "menu": "Menu",
       "inventory": "Inventory",
       "recipes": "Recipes",
@@ -259,7 +260,11 @@
       "locations": "Stores",
       "branding": "Branding",
       "billing": "Billing",
+      "status": "Change status",
       "resolve_pending": "Resolve pending sales"
+    },
+    "moduleActions": {
+      "tables": { "manage": "Manage tables" }
     }
   },
   "profiles": {

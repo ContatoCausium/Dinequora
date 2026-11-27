@@ -17,11 +17,13 @@ const MIGRATION = migration("0018_member_permissions.sql");
 const COSTS_MIGRATION = migration("0020_inventory_cost_permission.sql");
 /** Latest definition of the catalog (0032 added orders.resolve_pending). */
 const PENDING_MIGRATION = migration("0032_pos_pending_sale_resolution.sql");
+/** Latest definition of the catalog (0037 added the tables module). */
+const TABLES_MIGRATION = migration("0037_dining_room_tables.sql");
 
 describe("permission catalog parity with the database", () => {
-  it("TS catalog equals the latest public.permission_catalog() (migration 0032)", () => {
-    const body = PENDING_MIGRATION.slice(
-      PENDING_MIGRATION.indexOf("function public.permission_catalog()"),
+  it("TS catalog equals the latest public.permission_catalog() (migration 0037)", () => {
+    const body = TABLES_MIGRATION.slice(
+      TABLES_MIGRATION.indexOf("function public.permission_catalog()"),
     );
     const literal = body.slice(body.indexOf("array["), body.indexOf("]::text[]"));
     const sqlCatalog = [...literal.matchAll(/'([a-z]+\.[a-z_]+)'/g)].map((m) => m[1]);
@@ -84,6 +86,33 @@ describe("pending POS sale resolution permission (migration 0032)", () => {
     );
     expect(PENDING_MIGRATION).toMatch(/where is_system and key = 'org_admin'/);
     expect(PENDING_MIGRATION).not.toMatch(/key in \(/);
+  });
+});
+
+describe("tables permissions (migration 0037)", () => {
+  const TABLES = ["tables.view", "tables.status", "tables.manage"] as const;
+  it("are behind the table_service feature", () => {
+    for (const p of TABLES) expect(TABLES_MIGRATION).toContain(`('${p}', 'table_service')`);
+  });
+  it("owner and manager hold all three by default; staff none by default, all three grantable", () => {
+    for (const p of TABLES) {
+      expect(roleDefaults("owner")).toContain(p);
+      expect(roleDefaults("manager")).toContain(p);
+      expect(roleDefaults("staff")).not.toContain(p);
+      expect(roleCeiling("staff")).toContain(p);
+    }
+  });
+  it("0037 does not redefine the tier ceiling or the defaults (they derive from the catalog)", () => {
+    expect(TABLES_MIGRATION).not.toMatch(/function public\.role_ceiling/);
+    expect(TABLES_MIGRATION).not.toMatch(/function public\.role_default_permissions/);
+  });
+  it("system profiles: org_admin and manager all three, cashier view + status", () => {
+    expect(TABLES_MIGRATION).toMatch(
+      /array\['tables\.view','tables\.status','tables\.manage'\]\) p order by p\)\s+where is_system and key in \('org_admin','manager'\)/,
+    );
+    expect(TABLES_MIGRATION).toMatch(
+      /array\['tables\.view','tables\.status'\]\) p order by p\)\s+where is_system and key = 'cashier'/,
+    );
   });
 });
 

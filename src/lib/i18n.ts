@@ -16,6 +16,7 @@ import enOrders from "@/locales/en-US/orders.json";
 import enPos from "@/locales/en-US/pos.json";
 import enReports from "@/locales/en-US/reports.json";
 import enSettings from "@/locales/en-US/settings.json";
+import enTables from "@/locales/en-US/tables.json";
 import enTeam from "@/locales/en-US/team.json";
 import ptAuth from "@/locales/pt-BR/auth.json";
 import ptCommon from "@/locales/pt-BR/common.json";
@@ -32,6 +33,7 @@ import ptOrders from "@/locales/pt-BR/orders.json";
 import ptPos from "@/locales/pt-BR/pos.json";
 import ptReports from "@/locales/pt-BR/reports.json";
 import ptSettings from "@/locales/pt-BR/settings.json";
+import ptTables from "@/locales/pt-BR/tables.json";
 import ptTeam from "@/locales/pt-BR/team.json";
 
 export const LANGUAGES = [
@@ -59,6 +61,7 @@ const RESOURCES = {
     orders: enOrders,
     pos: enPos,
     kds: enKds,
+    tables: enTables,
     reports: enReports,
     intelligence: enIntelligence,
   },
@@ -77,6 +80,7 @@ const RESOURCES = {
     orders: ptOrders,
     pos: ptPos,
     kds: ptKds,
+    tables: ptTables,
     reports: ptReports,
     intelligence: ptIntelligence,
   },

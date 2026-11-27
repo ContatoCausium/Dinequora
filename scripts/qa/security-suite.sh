@@ -88,6 +88,13 @@
 #      simultaneous sends are one order; the basis-point RPCs retired by 0036 refused for every API role
 #      and, for their owner, still delegating to v2 (closed key refused, same idempotency); who may sell
 #      where; no direct write of orders, payments, ledger, audit or closed keys
+#   5l. 0037 dining room tables (direct RPC calls and reads as each role, two PostgreSQL sessions): the
+#      table_service feature off by default (nothing readable or writable, owners included) and on for
+#      one organization only; owner, manager with and without the store, cashier profile, staff with
+#      and without a grant, a second store, another tenant, anon; no direct writes; labels, seats,
+#      sections of another store, archive rules, status history, store-scoped audit, suspended
+#      organization; two status changes from the same screen state (the second refused, never
+#      overwritten) and section archive vs table save in both orders, with COMMIT and ROLLBACK
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -163,6 +170,7 @@ must_refuse "platform owner assignment" env QA_DB_URL="$DB_URL" node scripts/sec
 must_refuse "justification privacy" env QA_DB_URL="$DB_URL" node scripts/security/pending_reason_privacy.mjs
 must_refuse "security closure rollback rehearsal" env QA_DB_URL="$DB_URL" node scripts/security/security_closure_rollback.mjs
 must_refuse "POS sale flow" env QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs
+must_refuse "dining room tables" env QA_DB_URL="$DB_URL" node scripts/security/dining_tables_integrity.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -283,6 +291,10 @@ echo "::endgroup::"
 
 echo "::group::5k. POS sale flow (0025/0032/0033/0036, direct RPC calls, real sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/pos_sale_flow_integrity.mjs | tee "$ARTIFACTS/pos-sale-flow.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5l. dining room tables (0037, direct RPC calls as each role, two PostgreSQL sessions)"
+QA_DB_URL="$DB_URL" node scripts/security/dining_tables_integrity.mjs | tee "$ARTIFACTS/dining-tables.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"
