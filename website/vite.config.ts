@@ -46,7 +46,8 @@ function preloadHeadlineFont(): Plugin {
  * Build output beyond the bundle:
  *  - pt/index.html: the Portuguese page with its own static head (lang, title, description,
  *    canonical /pt/, hreflang), derived from the built English page;
- *  - privacy/index.html and pt/privacy/index.html: the legal pages, with their own static head;
+ *  - privacy/, pt/privacy/, terms/ and pt/terms/ (index.html): the legal pages, with their own
+ *    static head;
  *  - robots.txt (always) and sitemap.xml (when VITE_SITE_URL is set);
  *  - stops the build if the demo-request endpoint would be blocked by the CSP in public/_headers.
  */

@@ -19,7 +19,7 @@ import { LegalPage } from "./sections/LegalPage";
 import { pick, useLocale, type Locale } from "./i18n/locale";
 import type { PageId } from "./i18n/meta";
 
-/** The site: the home page, or a legal page (privacy policy) when `page` names one. */
+/** The site: the home page, or a legal page (privacy policy, terms of use) when `page` names one. */
 export function App({ initialLocale, page = "home" }: { initialLocale?: Locale; page?: PageId }) {
   return (
     <LocaleProvider page={page} {...(initialLocale ? { initial: initialLocale } : {})}>

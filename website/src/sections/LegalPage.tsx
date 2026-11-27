@@ -6,22 +6,27 @@ import { Footer } from "./Footer";
 import { pick, useLocale, type Locale } from "../i18n/locale";
 import { pagePath, type LegalPageId } from "../i18n/meta";
 import { privacyPolicy } from "../legal/privacy";
+import { termsOfUse } from "../legal/terms";
 import type { Block, Inline, LegalDocument } from "../legal/types";
 
 const documents: Record<LegalPageId, Record<Locale, LegalDocument>> = {
   privacy: privacyPolicy,
+  terms: termsOfUse,
 };
+
+/** The visible marker of something the owner still has to give or decide. */
+function Missing({ label, ...data }: { label: string; "data-missing-fact"?: string; "data-pending-rule"?: string }) {
+  return (
+    <mark {...data} className="rounded bg-amber/15 px-1 font-semibold text-amber ring-1 ring-inset ring-amber/40">
+      {`[preencher: ${label}]`}
+    </mark>
+  );
+}
 
 /** A company fact, or a visible "[preencher: …]" marker while the owner has not given it. */
 function Fact({ name, locale }: { name: keyof CompanyFacts; locale: Locale }) {
   const value = COMPANY[name];
-  if (value === null) {
-    return (
-      <mark data-missing-fact={name} className="rounded bg-amber/15 px-1 font-semibold text-amber ring-1 ring-inset ring-amber/40">
-        {`[preencher: ${MISSING_FACT_LABELS[name]}]`}
-      </mark>
-    );
-  }
+  if (value === null) return <Missing label={MISSING_FACT_LABELS[name]} data-missing-fact={name} />;
   if (typeof value === "object") return <>{value[locale]}</>;
   if (name === "contactEmail") {
     return (
@@ -39,6 +44,7 @@ function Inlines({ items, locale }: { items: Inline[]; locale: Locale }) {
       {items.map((item, i) => {
         if (typeof item === "string") return <span key={i}>{item}</span>;
         if ("fact" in item) return <Fact key={i} name={item.fact} locale={locale} />;
+        if ("pending" in item) return <Missing key={i} label={item.pending} data-pending-rule={item.pending} />;
         if ("strong" in item) return <strong key={i} className="font-semibold text-offwhite">{item.strong}</strong>;
         return (
           <a
@@ -74,7 +80,7 @@ function BlockView({ block, locale }: { block: Block; locale: Locale }) {
   );
 }
 
-/** A legal page (privacy policy): its own light header, the document, and the site footer. */
+/** A legal page (privacy policy, terms of use): its own light header, the document, and the site footer. */
 export function LegalPage({ page }: { page: LegalPageId }) {
   const { locale } = useLocale();
   const t = <T,>(en: T, pt: T) => pick(locale, en, pt);

@@ -194,18 +194,22 @@ describe("sitemap.xml and robots.txt", () => {
       "https://dinequora.com/pt/",
       "https://dinequora.com/privacy/",
       "https://dinequora.com/pt/privacy/",
+      "https://dinequora.com/terms/",
+      "https://dinequora.com/pt/terms/",
     ]);
     const alternatesOf = (u: Element) =>
       [...u.getElementsByTagNameNS("http://www.w3.org/1999/xhtml", "link")].map((l) => `${l.getAttribute("hreflang")} ${l.getAttribute("href")}`);
     for (const u of urls.slice(0, 2)) {
       expect(alternatesOf(u)).toEqual(["en-US https://dinequora.com/", "pt-BR https://dinequora.com/pt/", "x-default https://dinequora.com/"]);
     }
-    for (const u of urls.slice(2)) {
-      expect(alternatesOf(u)).toEqual([
-        "en-US https://dinequora.com/privacy/",
-        "pt-BR https://dinequora.com/pt/privacy/",
-        "x-default https://dinequora.com/privacy/",
-      ]);
+    for (const page of ["privacy", "terms"]) {
+      for (const u of urls.filter((u) => u.getElementsByTagName("loc")[0]!.textContent!.endsWith(`/${page}/`))) {
+        expect(alternatesOf(u)).toEqual([
+          `en-US https://dinequora.com/${page}/`,
+          `pt-BR https://dinequora.com/pt/${page}/`,
+          `x-default https://dinequora.com/${page}/`,
+        ]);
+      }
     }
     expect(xml).not.toContain("?lang=");
   });
