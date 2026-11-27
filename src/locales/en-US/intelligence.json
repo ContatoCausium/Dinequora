@@ -41,7 +41,9 @@
       "sales": "How much revenue did we record?",
       "inventory": "Which items are at risk of running out?",
       "margin": "How are gross margin and expenses?",
-      "suppliers": "How many purchase orders are open?"
+      "suppliers": "How many purchase orders are open?",
+      "purchase": "What do I need to buy this week?",
+      "menu": "Which dishes should I promote?"
     },
     "deterministic": "Calculated",
     "answeredAt": "Answered {{time}}",
@@ -58,7 +60,9 @@
       "inventory": "Inventory",
       "waste": "Waste",
       "suppliers": "Purchasing",
-      "store_performance": "Store performance"
+      "store_performance": "Store performance",
+      "purchase_forecast": "Purchase forecast",
+      "menu_engineering": "Menu engineering"
     },
     "headlines": {
       "noRevenue": "No revenue was recorded in the last {{days}} days.",
@@ -69,20 +73,31 @@
       "waste": "Waste is not recorded yet. {{count}} items are at or below minimum stock.",
       "suppliers": "{{open}} of {{total}} recorded purchase orders are still open.",
       "stores": "Recorded revenue by store in the last {{days}} days.",
-      "noStores": "No stores are available in your current scope."
+      "noStores": "No stores are available in your current scope.",
+      "menu": "Stars: {{stars}}. Worth promoting (good margin, sells little): {{puzzles}}.",
+      "menuTooFew": "At least two dishes with a recipe cost and sales are needed to classify them.",
+      "menuUnavailable": "Sales per dish are not available yet. Try again in a moment.",
+      "purchase_one": "{{count}} item needs buying to cover the next 7 days.",
+      "purchase_other": "{{count}} items need buying to cover the next 7 days.",
+      "purchaseNone": "Nothing needs buying for the next 7 days at the current pace.",
+      "purchaseUnavailable": "Stock use is not available yet. Try again in a moment."
     },
     "methods": {
       "cmv": "Food cost = recorded recipe cost (COGS ledger entries, net of reversals) ÷ recorded revenue.",
       "finance": "Gross margin = (revenue − recipe cost) ÷ revenue. Net result also subtracts active recorded expenses.",
       "inventory": "An item is low when its recorded quantity is at or below its minimum quantity.",
       "suppliers": "A purchase order is open while it is not received or cancelled.",
-      "stores": "Revenue per store from recorded ledger entries, net of reversals."
+      "stores": "Revenue per store from recorded ledger entries, net of reversals.",
+      "menu": "Kasavana & Smith menu engineering: popularity = share of units sold (70% of an even share or more); margin = average price sold − current recipe cost, against the average.",
+      "purchase": "Use per day = what sales consumed in the last 30 days ÷ 30; buy = use per day × 7 + minimum − on hand, rounded up."
     },
     "limits": {
       "ledger": "Only orders that reached the ledger are counted; external sales channels are not connected.",
       "waste": "Waste and spoilage are not tracked as separate records yet.",
       "inventory": "Depends on minimum quantities being set for each item.",
-      "suppliers": "Delivery punctuality needs receiving to be recorded in Dinequora."
+      "suppliers": "Delivery punctuality needs receiving to be recorded in Dinequora.",
+      "menu": "Dishes without a recipe cost are not classified; option ingredients are not in the recipe.",
+      "purchase": "Items with no sales use get no quantity; adjustments and losses are not counted as use."
     },
     "labels": {
       "revenue": "Gross revenue",
@@ -96,7 +111,13 @@
       "tracked": "Items tracked",
       "purchasesTotal": "Purchase orders",
       "purchasesOpen": "Open purchase orders",
-      "suppliers": "Suppliers"
+      "suppliers": "Suppliers",
+      "stars": "Stars (keep)",
+      "puzzles": "Puzzles (promote)",
+      "plowhorses": "Plowhorses (review cost or price)",
+      "dogs": "Dogs (rework or remove)",
+      "noRecipeCost": "Sold without a recipe cost (not classified)",
+      "buyLine": "buy {{buy}} {{unit}} · lasts {{days}} days"
     }
   },
   "insights": {
