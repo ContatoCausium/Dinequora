@@ -26,6 +26,7 @@ import { AssistantPanel } from "@/components/intelligence/assistant-panel";
 import { MenuEngineeringPanel } from "@/components/intelligence/menu-engineering-panel";
 import { mapResources } from "@/lib/operational-mappers";
 import type { RecipeCost } from "@/lib/menu-engineering";
+import { salesDrop, supplierPriceIncreases, type PriceIncrease } from "@/lib/smart-alerts";
 import { StatTile } from "@/components/app/stat-tile";
 import { EmptyState, LedgerIncompleteNotice, Skeleton, StateCard } from "@/components/app/states";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
@@ -128,8 +129,55 @@ function buildInsights(
   periodDays: number,
   t: TFunction,
   lng: string,
+  alerts: { previousRevenueCents: number; priceIncreases: PriceIncrease[] } = {
+    previousRevenueCents: 0,
+    priceIncreases: [],
+  },
 ): Insight[] {
   const out: Insight[] = [];
+  // Sales drop against the period before (complete ledger only: 0 means "no comparison").
+  const drop = salesDrop(summary.grossRevenueCents, alerts.previousRevenueCents);
+  if (drop) {
+    out.push({
+      id: "sales-drop",
+      category: "sales",
+      level: drop.change <= -0.3 ? "high" : "medium",
+      title: t("insights.salesDrop.title", {
+        rate: fmtPercent(-drop.change, lng),
+        days: periodDays,
+      }),
+      body: t("insights.salesDrop.body", {
+        now: fmtMoneyCents(summary.grossRevenueCents, lng),
+        before: fmtMoneyCents(alerts.previousRevenueCents, lng),
+        days: periodDays,
+      }),
+      action: t("insights.salesDrop.action"),
+      link: "/finance",
+    });
+  }
+  if (alerts.priceIncreases.length > 0) {
+    const top = alerts.priceIncreases.slice(0, 3);
+    out.push({
+      id: "supplier-price",
+      category: "cmv",
+      level: alerts.priceIncreases.some((p) => p.change >= 0.25) ? "high" : "medium",
+      title: t("insights.supplierPrice.title", { count: alerts.priceIncreases.length }),
+      body: t("insights.supplierPrice.body"),
+      detail: top
+        .map((p) =>
+          t("insights.supplierPrice.line", {
+            item: p.itemName,
+            supplier: p.supplierName ?? t("insights.supplierPrice.unknownSupplier"),
+            before: fmtMoneyCents(p.previousCents, lng),
+            now: fmtMoneyCents(p.latestCents, lng),
+            rate: fmtPercent(p.change, lng),
+          }),
+        )
+        .join(" · "),
+      action: t("insights.supplierPrice.action"),
+      link: "/inventory",
+    });
+  }
   const range = {
     min: fmtPercent(CMV_REFERENCE.min, lng),
     max: fmtPercent(CMV_REFERENCE.max, lng),
@@ -413,9 +461,21 @@ export function IntelligencePage() {
     });
   }, [resources, ledger, scopedLocations, spec]);
 
+  // The last purchase price of each stock item against the one before it, in the scope.
+  const priceIncreases = useMemo(() => {
+    if (!scoped) return [];
+    return supplierPriceIncreases(scoped.purchases, {
+      items: new Map(scoped.inventory.map((i) => [i.id, i.name])),
+      suppliers: new Map(scoped.suppliers.map((x) => [x.id, x.name])),
+    });
+  }, [scoped]);
   const insights = useMemo(
-    () => buildInsights(summary, stores, isAll, periodDays, t, lng),
-    [summary, stores, isAll, periodDays, t, lng],
+    () =>
+      buildInsights(summary, stores, isAll, periodDays, t, lng, {
+        previousRevenueCents: previousRevenue,
+        priceIncreases,
+      }),
+    [summary, stores, isAll, periodDays, t, lng, previousRevenue, priceIncreases],
   );
   const visibleInsights =
     filter === "all" ? insights : insights.filter((i) => i.category === filter);

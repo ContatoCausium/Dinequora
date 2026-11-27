@@ -143,6 +143,19 @@
       "title": "No recipes registered",
       "body": "Without recipes, sales do not generate recipe cost and food cost stays at zero.",
       "action": "Register recipes for your best-selling items."
+    },
+    "salesDrop": {
+      "title": "Sales down {{rate}} against the previous {{days}} days",
+      "body": "{{now}} in the last {{days}} days, against {{before}} in the {{days}} days before.",
+      "action": "Compare by store and by day in Finance, and check which dishes sold less."
+    },
+    "supplierPrice": {
+      "title_one": "{{count}} item got more expensive in the last purchase",
+      "title_other": "{{count}} items got more expensive in the last purchase",
+      "body": "The unit price in the latest purchase order is 10% or more above the order before it. It raises the recipe cost of the dishes that use it.",
+      "line": "{{item}} ({{supplier}}): {{before}} → {{now}}, +{{rate}}",
+      "unknownSupplier": "supplier not visible",
+      "action": "Negotiate, quote another supplier or review the price of the dishes that use it."
     }
   },
   "stores": {
@@ -229,6 +242,7 @@
     "status": {
       "not_configured": "The assistant is not set up for this workspace yet.",
       "limit_reached": "Your organization used this month's assistant allowance.",
+      "rate_limited": "You asked several questions in a row. Wait a minute and ask again.",
       "refused": "The assistant could not answer this question. Try asking it another way.",
       "busy": "The assistant is busy right now. Try again in a minute.",
       "unavailable": "The assistant is unavailable right now. Nothing was changed."

@@ -143,6 +143,19 @@
       "title": "Nenhuma ficha técnica cadastrada",
       "body": "Sem fichas técnicas, as vendas não geram custo e o CMV fica zerado.",
       "action": "Cadastre fichas técnicas para os itens mais vendidos."
+    },
+    "salesDrop": {
+      "title": "Vendas {{rate}} menores que nos {{days}} dias anteriores",
+      "body": "{{now}} nos últimos {{days}} dias, contra {{before}} nos {{days}} dias antes.",
+      "action": "Compare por loja e por dia no Financeiro e veja quais pratos venderam menos."
+    },
+    "supplierPrice": {
+      "title_one": "{{count}} item ficou mais caro na última compra",
+      "title_other": "{{count}} itens ficaram mais caros na última compra",
+      "body": "O preço unitário no pedido de compra mais recente está 10% ou mais acima do pedido anterior. Isso sobe o custo da ficha dos pratos que usam o item.",
+      "line": "{{item}} ({{supplier}}): {{before}} → {{now}}, +{{rate}}",
+      "unknownSupplier": "fornecedor não visível",
+      "action": "Negocie, faça cotação com outro fornecedor ou reveja o preço dos pratos que usam o item."
     }
   },
   "stores": {
@@ -229,6 +242,7 @@
     "status": {
       "not_configured": "O assistente ainda não foi configurado neste ambiente.",
       "limit_reached": "Sua organização usou a franquia do assistente deste mês.",
+      "rate_limited": "Você fez várias perguntas seguidas. Espere um minuto e pergunte de novo.",
       "refused": "O assistente não conseguiu responder a esta pergunta. Tente perguntar de outro jeito.",
       "busy": "O assistente está ocupado agora. Tente de novo em um minuto.",
       "unavailable": "O assistente está indisponível agora. Nada foi alterado."

@@ -241,4 +241,15 @@ describe("assistant panel", () => {
       ),
     );
   });
+
+  it("asks the member to wait after a burst of questions", async () => {
+    api.askAssistant.mockResolvedValue({ status: "rate_limited" });
+    render(<AssistantPanel orgId="org-1" locationId="all" />);
+    fireEvent.click(screen.getByRole("button", { name: "How did sales go in the last 7 days?" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "You asked several questions in a row. Wait a minute and ask again.",
+      ),
+    );
+  });
 });
