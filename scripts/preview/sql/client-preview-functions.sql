@@ -140,8 +140,9 @@ END $$;
 REVOKE ALL ON FUNCTION public.client_preview_backdate(uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.client_preview_backdate(uuid, jsonb) TO service_role;
 
--- client_preview_purge_operational(_org_id): what a reset replaces — orders, payments, ledger, stock,
--- recipes, menu, suppliers, purchases, expenses. The organization, its stores, members (the personal
+-- client_preview_purge_operational(_org_id): what a reset replaces — the dining room (tables, checks,
+-- rounds, tenders), assistant usage, orders, payments, ledger, stock, recipes, menu, suppliers,
+-- purchases, expenses. The organization, its stores, members (the personal
 -- owners and the demo accounts), store assignments, invitations, subscription and audit trail stay, so
 -- every person keeps their own access across resets without a new invitation.
 CREATE OR REPLACE FUNCTION public.client_preview_purge_operational(_org_id uuid) RETURNS jsonb
@@ -149,6 +150,16 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE t text; n bigint; removed jsonb := '{}'::jsonb;
 BEGIN
   PERFORM public.client_preview_assert_target(_org_id);
+  -- The dining room first (0037-0040): its rounds point at orders and its tenders at checks, so
+  -- orders cannot go while they stay. Children before parents.
+  FOREACH t IN ARRAY ARRAY[
+    'dining_check_payments', 'dining_check_rounds', 'dining_checks', 'dining_sessions',
+    'dining_table_status_events', 'dining_tables', 'dining_sections', 'assistant_usage'
+  ] LOOP
+    EXECUTE format('DELETE FROM public.%I WHERE org_id = $1', t) USING _org_id;
+    GET DIAGNOSTICS n = ROW_COUNT;
+    removed := removed || jsonb_build_object(t, n);
+  END LOOP;
   -- Children before parents. order_item_modifiers has no org_id: reached through the order lines.
   DELETE FROM public.order_item_modifiers m USING public.order_items i
     WHERE m.order_item_id = i.id AND i.org_id = _org_id;
@@ -182,6 +193,20 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.client_preview_purge(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.client_preview_purge(uuid) TO service_role;
+
+-- client_preview_enable_feature(_org_id, _feature): turns a module on for the demo organization (the
+-- seed shows today's dining room), as a platform admin would from the Control Center. Only modules the
+-- dataset uses; the destination check first; service_role only.
+CREATE OR REPLACE FUNCTION public.client_preview_enable_feature(_org_id uuid, _feature text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  PERFORM public.client_preview_assert_target(_org_id);
+  IF _feature IS DISTINCT FROM 'table_service' THEN RAISE EXCEPTION 'feature_not_in_dataset'; END IF;
+  INSERT INTO public.org_features (org_id, feature, enabled) VALUES (_org_id, _feature, true)
+  ON CONFLICT (org_id, feature) DO UPDATE SET enabled = true, updated_at = now();
+END $$;
+REVOKE ALL ON FUNCTION public.client_preview_enable_feature(uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.client_preview_enable_feature(uuid, text) TO service_role;
 
 COMMIT;
 NOTIFY pgrst, 'reload schema';

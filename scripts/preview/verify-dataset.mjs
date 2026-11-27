@@ -25,6 +25,7 @@ import {
   exitOnTargetRefusal,
   resolvePreviewTarget,
 } from "./client-preview-target.mjs";
+import { floorExpectations } from "./seed-dining.mjs";
 import {
   ACCOUNTS,
   convertQuantity,
@@ -205,6 +206,20 @@ const history = group(
   "order_id",
 );
 const ppmOf = Object.fromEntries(locations.map((l) => [l.id, l.tax_rate_ppm]));
+// Rounds of the dining room (0038/0039) are orders too, with two rules of their own: while the check is
+// open a round has its stock movements (taken when it was sent) but no payment, revenue or COGS yet;
+// when the check closes, its payment, revenue and COGS are written at that moment, after the round.
+const checkStatus = new Map(
+  (await all(svc, "dining_checks", "id,status", (q) => q.eq("org_id", org.id))).map((c) => [
+    c.id,
+    c.status,
+  ]),
+);
+const diningOf = new Map(
+  (
+    await all(svc, "dining_check_rounds", "id,order_id,check_id", (q) => q.eq("org_id", org.id))
+  ).map((r) => [r.order_id, checkStatus.get(r.check_id)]),
+);
 
 const bad = {
   math: [],
@@ -234,10 +249,18 @@ for (const o of orders) {
     (m) => -Number(m.delta) * m.unit_cost_cents,
   );
   const ps = payments.get(o.id) ?? [];
-  if (k("revenue") !== o.total_cents - o.tax_cents) bad.revenue.push(o.id);
-  if (Math.abs(k("cogs") - saleCost) > ms.length)
-    bad.cogs.push(`${o.id}:${k("cogs")}~${saleCost.toFixed(2)}`);
-  if (ps.length !== 1 || ps[0].amount_cents !== o.total_cents) bad.payment.push(o.id);
+  const dining = diningOf.get(o.id);
+  if (dining === "open") {
+    // sent to the kitchen, not paid: nothing in the ledger or payments yet
+    if (k("revenue") !== 0) bad.revenue.push(o.id);
+    if (k("cogs") !== 0) bad.cogs.push(`${o.id}:open check with COGS ${k("cogs")}`);
+    if (ps.length) bad.payment.push(o.id);
+  } else {
+    if (k("revenue") !== o.total_cents - o.tax_cents) bad.revenue.push(o.id);
+    if (Math.abs(k("cogs") - saleCost) > ms.length)
+      bad.cogs.push(`${o.id}:${k("cogs")}~${saleCost.toFixed(2)}`);
+    if (ps.length !== 1 || ps[0].amount_cents !== o.total_cents) bad.payment.push(o.id);
+  }
   if (o.status === "cancelled") {
     const restored = Math.abs(sum(ms, (m) => Number(m.delta))) < 1e-6;
     // Reversal entries carry positive amounts; the kind gives the sign (as finance-service reads them).
@@ -250,12 +273,13 @@ for (const o of orders) {
       bad.cancel.push(o.id);
   }
   const t = Date.parse(o.created_at);
+  // A POS sale is recorded at once; a dining round's ledger and payment come when its check closes.
+  const onTime = (at) => (dining ? Date.parse(at) >= t : Date.parse(at) === t);
   for (const e of es)
-    if (!e.kind.startsWith("reversal") && Date.parse(e.created_at) !== t)
-      bad.time.push(`entry ${e.id}`);
+    if (!e.kind.startsWith("reversal") && !onTime(e.created_at)) bad.time.push(`entry ${e.id}`);
   for (const m of ms)
     if (m.kind === "sale" && Date.parse(m.created_at) !== t) bad.time.push(`move ${m.id}`);
-  for (const p of ps) if (Date.parse(p.created_at) !== t) bad.time.push(`payment ${p.id}`);
+  for (const p of ps) if (!onTime(p.created_at)) bad.time.push(`payment ${p.id}`);
   const hs = (history.get(o.id) ?? []).map((h) => Date.parse(h.created_at)).sort((a, b) => a - b);
   if (hs.some((h) => h < t) || hs.some((h) => h > Date.now())) bad.steps.push(o.id);
 }
@@ -266,14 +290,18 @@ check(
 );
 check("every order taxed at its store rate", !bad.tax.length, bad.tax.length);
 check("every order: subtotal = sum of its lines", !bad.lines.length, bad.lines.length);
-check("ledger: revenue = total - tax for every order", !bad.revenue.length, bad.revenue.length);
+check(
+  "ledger: revenue = total - tax for every order (none yet for a round of an open check)",
+  !bad.revenue.length,
+  bad.revenue.length,
+);
 check(
   "ledger: COGS = recipe consumption cost for every order",
   !bad.cogs.length,
   bad.cogs.slice(0, 3).join(" "),
 );
 check(
-  "payments: exactly one per order, for the order total",
+  "payments: exactly one per order, for the order total (none yet for a round of an open check)",
   !bad.payment.length,
   bad.payment.length,
 );
@@ -658,6 +686,87 @@ const figures = {
   stockValue: Math.round(sum(items, (i) => Number(i.quantity) * i.cost_cents)) / 100,
   receipts: receipts.length,
 };
+
+// ---- today's dining room (seed-dining.mjs, 0037-0039) ------------------------------------------
+{
+  const expect = floorExpectations();
+  const { data: feat } = await svc
+    .from("org_features")
+    .select("enabled")
+    .eq("org_id", org.id)
+    .eq("feature", "table_service");
+  check("dining room: the Tables module is on for the demo", feat?.[0]?.enabled === true);
+  const dTables = await all(svc, "dining_tables", "id,location_id,status", (q) =>
+    q.eq("org_id", org.id).is("archived_at", null),
+  );
+  check(
+    "dining room: the planned tables in the three stores",
+    dTables.length === expect.tables,
+    `${dTables.length}/${expect.tables}`,
+  );
+  const dChecks = await all(svc, "dining_checks", "id,status", (q) => q.eq("org_id", org.id));
+  const closedChecks = dChecks.filter((c) => c.status === "closed");
+  const openChecks = dChecks.filter((c) => c.status === "open");
+  check(
+    "dining room: checks closed today and checks still open, as planned",
+    closedChecks.length === expect.closed && openChecks.length === expect.open,
+    `closed ${closedChecks.length}/${expect.closed}, open ${openChecks.length}/${expect.open}`,
+  );
+  const tenders = await all(
+    svc,
+    "dining_check_payments",
+    "check_id,amount_cents,tip_cents,status",
+    (q) => q.eq("org_id", org.id),
+  );
+  const rounds = await all(svc, "dining_check_rounds", "check_id,order_id", (q) =>
+    q.eq("org_id", org.id),
+  );
+  const roundOrders = rounds.length
+    ? await all(svc, "orders", "id,total_cents,status", (q) =>
+        q.in(
+          "id",
+          rounds.map((r) => r.order_id),
+        ),
+      )
+    : [];
+  const orderTotal = new Map(roundOrders.map((o) => [o.id, o.total_cents]));
+  const unbalanced = closedChecks.filter((c) => {
+    const paid = sum(
+      tenders.filter((t) => t.check_id === c.id && t.status === "recorded"),
+      (t) => t.amount_cents,
+    );
+    const due = sum(
+      rounds.filter((r) => r.check_id === c.id),
+      (r) => orderTotal.get(r.order_id) ?? 0,
+    );
+    return paid !== due;
+  });
+  check(
+    "dining room: every closed check was paid exactly its rounds' total",
+    !unbalanced.length && tenders.length === expect.payments,
+    `${unbalanced.length} unbalanced, ${tenders.length}/${expect.payments} payments`,
+  );
+  check("dining room: tips were recorded (never as revenue)", sum(tenders, (t) => t.tip_cents) > 0);
+  const openRoundOrders = rounds
+    .filter((r) => openChecks.some((c) => c.id === r.check_id))
+    .map((r) => r.order_id);
+  const earlyRevenue = openRoundOrders.length
+    ? await all(svc, "finance_entries", "id", (q) =>
+        q.in("order_id", openRoundOrders).eq("kind", "revenue"),
+      )
+    : [];
+  check(
+    "dining room: an open check has no revenue yet (it is recognized when the check closes)",
+    !earlyRevenue.length,
+    earlyRevenue.length,
+  );
+  figures.dining = {
+    tables: dTables.length,
+    closedChecks: closedChecks.length,
+    openChecks: openChecks.length,
+    tipsCents: sum(tenders, (t) => t.tip_cents),
+  };
+}
 
 const failed = results.filter((r) => !r.ok);
 for (const r of results)
