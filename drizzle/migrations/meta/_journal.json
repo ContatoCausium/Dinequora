@@ -323,6 +323,13 @@
       "when": 1796382079812,
       "tag": "0045_sales_tax_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1796468479812,
+      "tag": "0046_tips_by_server",
+      "breakpoints": true
     }
   ]
 }
