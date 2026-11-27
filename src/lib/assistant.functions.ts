@@ -21,7 +21,7 @@ const DEFAULT_MONTHLY_TOKEN_CAP = 2_000_000;
 
 const SYSTEM_PROMPT = `You are the management assistant of Dinequora, a restaurant operations platform used by restaurants in the United States.
 
-You answer questions from a restaurant owner or manager about their own business, using ONLY the data snapshot included in their message (sales and costs from the ledger, best sellers, menu engineering per dish, stock below its minimum, open orders, stores). The snapshot was read with the asking person's permissions: if a part is empty or missing, say that this information is not available to them or not recorded yet. Never invent numbers, periods, products or causes.
+You answer questions from a restaurant owner or manager about their own business, using ONLY the data snapshot included in their message (sales and costs from the ledger, best sellers, menu engineering per dish, stock below its minimum, a purchase forecast for the next 7 days, open orders, stores). The snapshot was read with the asking person's permissions: if a part is empty or missing, say that this information is not available to them or not recorded yet. Never invent numbers, periods, products or causes.
 
 How to answer:
 - Answer in the language of the question (Portuguese or English).
@@ -29,6 +29,7 @@ How to answer:
 - Money is in US dollars; the snapshot gives cents, so convert (12345 cents = $123.45).
 - When you suggest something (a purchase, a price review, a promotion), say it is a suggestion and what in the data supports it.
 - For questions about which dishes to promote, reprice or remove, use menuEngineeringLast30Days (its method field explains the classes). A dish listed under soldWithoutRecipeCost has no known cost: say so instead of guessing its margin.
+- For questions about what to buy or order, use purchaseForecastNext7Days (its method field explains the numbers). Items under atOrBelowMinimumWithoutSalesUse have no sales use to project from: mention them without inventing a quantity.
 - Keep it short: a few sentences or a short list. No tables unless asked.
 - You cannot change anything in the system. If asked to act (sell, refund, change a price, adjust stock), explain where in Dinequora the person can do it.`;
 
@@ -86,11 +87,11 @@ export const askAssistant = createServerFn({ method: "POST" })
 
     // The snapshot, read through RLS as the asking member.
     const storeIds = s.store ? [s.store.id] : s.stores.map((x) => x.id);
-    const [ledger, lowStock, sold, open, recipeCosts] = await Promise.all([
+    const [ledger, lowStock, sold, open, recipeCosts, consumption] = await Promise.all([
       c.rpc("ledger_day_totals", { _org_id: s.org.id, _location_ids: storeIds, _days: 30 }),
       c
         .from("inventory_items")
-        .select("name,unit,quantity,min_quantity,location_id")
+        .select("id,name,unit,quantity,min_quantity,location_id,supplier")
         .eq("org_id", s.org.id)
         .in("location_id", storeIds)
         .eq("active", true)
@@ -105,6 +106,8 @@ export const askAssistant = createServerFn({ method: "POST" })
         .in("status", ["new", "confirmed", "in_prep", "ready"]),
       // Recipe costs need inventory.costs; without it menu engineering is "not available" (null).
       readRecipeCosts(c, s.org.id).catch(() => null),
+      // What sales consumed of each stock item (0044), under the member's RLS.
+      c.rpc("inventory_consumption", { _org_id: s.org.id, _location_ids: storeIds, _days: 30 }),
     ]);
     const rows: AssistantSnapshotRows = {
       organization: s.org.name,
@@ -121,6 +124,12 @@ export const askAssistant = createServerFn({ method: "POST" })
             sales_cents: Number(r.sales_cents),
           })),
       recipeCosts,
+      consumption: consumption.error
+        ? null
+        : (consumption.data ?? []).map((r) => ({
+            inventory_item_id: r.inventory_item_id,
+            consumed: Number(r.consumed),
+          })),
       openOrders: open.error ? null : (open.count ?? 0),
       now: new Date().toISOString(),
     };
