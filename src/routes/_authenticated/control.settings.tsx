@@ -202,7 +202,21 @@ function Settings() {
                         {t(`plans.${p.id}`, { defaultValue: p.name })}
                       </td>
                       <td className="tabular px-5 py-2.5">
-                        {fmtCurrency(p.price_per_location_cents / 100, i18n.language)}
+                        {p.monthly_price_cents != null
+                          ? fmtCurrency(p.monthly_price_cents / 100, i18n.language)
+                          : t("settings.custom")}
+                        {p.implementation_fee_cents > 0 && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {t(
+                              p.implementation_fee_is_minimum
+                                ? "settings.implementationFrom"
+                                : "settings.implementation",
+                              {
+                                price: fmtCurrency(p.implementation_fee_cents / 100, i18n.language),
+                              },
+                            )}
+                          </span>
+                        )}
                         {p.is_placeholder_pricing && (
                           <span className="ml-2">
                             <Tag tone="warning">{t("settings.placeholder")}</Tag>

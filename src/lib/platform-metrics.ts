@@ -27,7 +27,10 @@ export type OrgInsight = {
 export type PlanDef = {
   id: string;
   name: string;
-  price_per_location_cents: number;
+  /** Flat monthly subscription; null = priced by contract (0047). */
+  monthly_price_cents: number | null;
+  implementation_fee_cents: number;
+  implementation_fee_is_minimum: boolean;
   currency: string;
   default_store_limit: number;
   trial_store_limit: number;
@@ -68,20 +71,21 @@ export function onboardingSteps(o: OrgInsight) {
 export function computeOverview(orgs: OrgInsight[], plans: PlanDef[], now = Date.now()) {
   const customers = orgs.filter((o) => !o.is_demo);
   const demos = orgs.filter((o) => o.is_demo);
-  const price = new Map(plans.map((p) => [p.id, p.price_per_location_cents]));
+  // A plan is a flat monthly subscription (0047), not a price per location; contract plans count 0.
+  const price = new Map(plans.map((p) => [p.id, p.monthly_price_cents ?? 0]));
   const billingConnected = customers.some((o) => o.billing_connected);
 
   // Paying = a real subscription synced from the billing provider. Nothing else counts.
   const paying = customers.filter((o) => o.billing_connected && o.sub_status === "active");
   const actualMrrCents = billingConnected
-    ? paying.reduce((a, o) => a + (o.billed_locations ?? 0) * (price.get(o.plan) ?? 0), 0)
+    ? paying.reduce((a, o) => a + (price.get(o.plan) ?? 0), 0)
     : null;
   // Projection at list prices for customers that would be billed today (never shown as revenue).
   const projectedMrrCents = customers
     .filter(
       (o) => o.status !== "suspended" && o.sub_status !== "trialing" && o.sub_status !== "canceled",
     )
-    .reduce((a, o) => a + Math.max(o.active_store_count, 1) * (price.get(o.plan) ?? 0), 0);
+    .reduce((a, o) => a + (price.get(o.plan) ?? 0), 0);
 
   const trialing = customers.filter((o) => o.sub_status === "trialing");
   const expired = trialing.filter(

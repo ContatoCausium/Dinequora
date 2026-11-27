@@ -72,7 +72,7 @@
     "eyebrow": "Settings",
     "title": "Billing",
     "subtitle": "Subscription and billing for {{org}}.",
-    "notConnected": "Online payments aren't connected yet, so no card is charged. Plans and prices shown here are placeholders and are changed by the Dinequora team for now.",
+    "notConnected": "Online payments aren't connected yet, so no card is charged here. For now, billing is handled by the Dinequora team.",
     "subscription": "Subscription",
     "noSubscription": "No subscription on file.",
     "plan": "Plan",
@@ -85,8 +85,7 @@
     "history": "Billing history",
     "noHistory": "No invoices or payments yet.",
     "plans": "Plans",
-    "plansNote": "Monthly, billed per active location. Placeholder pricing.",
-    "perLocation": "{{price}} / location / mo",
+    "plansNote": "A monthly subscription per plan, with a location limit, plus a one-time implementation fee. Semiannual (8% off) and annual (15% off) are paid upfront; the implementation fee is never discounted.",
     "custom": "Custom",
     "planMeta_one": "Up to {{count}} location · {{days}}-day trial",
     "planMeta_other": "Up to {{count}} locations · {{days}}-day trial",
@@ -103,10 +102,11 @@
     },
     "activeLocations": "Active locations / allowed",
     "billedPendingSync": "{{count}} — not synced yet: online payments aren’t connected",
-    "planUpTo_one": "Up to {{total}} / mo with {{count}} location",
-    "planUpTo_other": "Up to {{total}} / mo with {{count}} locations",
     "previewManaged": "During the preview, billing for this workspace is arranged directly with your Dinequora contact. No card is stored or charged here.",
-    "renewsManaged": "Managed by Dinequora"
+    "renewsManaged": "Managed by Dinequora",
+    "perMonth": "{{price}} / month",
+    "implementation": "+ {{price}} one-time implementation",
+    "implementationFrom": "Implementation from {{price}}"
   },
   "security": {
     "title": "Security",

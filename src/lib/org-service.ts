@@ -366,7 +366,10 @@ export type BillingSummary = {
   plans: {
     id: string;
     name: string;
-    price_per_location_cents: number;
+    /** Flat monthly subscription; null = priced by contract (0047). */
+    monthly_price_cents: number | null;
+    implementation_fee_cents: number;
+    implementation_fee_is_minimum: boolean;
     default_store_limit: number;
     trial_days: number;
     is_placeholder_pricing: boolean;
@@ -393,9 +396,9 @@ export async function fetchBilling(orgDbId: string): Promise<BillingSummary> {
     supabase
       .from("billing_plans")
       .select(
-        "id, name, price_per_location_cents, default_store_limit, trial_days, is_placeholder_pricing",
+        "id, name, monthly_price_cents, implementation_fee_cents, implementation_fee_is_minimum, default_store_limit, trial_days, is_placeholder_pricing",
       )
-      .order("price_per_location_cents"),
+      .order("default_store_limit"),
     supabase
       .from("billing_events")
       .select("id, kind, amount_cents, status, description, occurred_at")

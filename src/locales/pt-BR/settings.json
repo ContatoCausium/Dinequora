@@ -72,7 +72,7 @@
     "eyebrow": "Configurações",
     "title": "Cobrança",
     "subtitle": "Assinatura e cobrança de {{org}}.",
-    "notConnected": "Os pagamentos online ainda não estão conectados, então nenhum cartão é cobrado. Os planos e preços aqui são provisórios e, por enquanto, alterados pela equipe Dinequora.",
+    "notConnected": "Os pagamentos online ainda não estão conectados, então nenhum cartão é cobrado aqui. Por enquanto, a cobrança é feita pela equipe Dinequora.",
     "subscription": "Assinatura",
     "noSubscription": "Nenhuma assinatura registrada.",
     "plan": "Plano",
@@ -85,8 +85,7 @@
     "history": "Histórico de cobrança",
     "noHistory": "Ainda não há faturas ou pagamentos.",
     "plans": "Planos",
-    "plansNote": "Mensal, cobrado por unidade ativa. Preços provisórios.",
-    "perLocation": "{{price}} / unidade / mês",
+    "plansNote": "Mensalidade por plano, com limite de unidades, mais a implantação cobrada uma vez. Semestral (8% de desconto) e anual (15%) são pagos adiantado; a implantação não tem desconto.",
     "custom": "Sob consulta",
     "planMeta_one": "Até {{count}} unidade · teste de {{days}} dias",
     "planMeta_other": "Até {{count}} unidades · teste de {{days}} dias",
@@ -103,10 +102,11 @@
     },
     "activeLocations": "Unidades ativas / permitidas",
     "billedPendingSync": "{{count}} — ainda sem sincronização: os pagamentos online não estão conectados",
-    "planUpTo_one": "Até {{total}} / mês com {{count}} unidade",
-    "planUpTo_other": "Até {{total}} / mês com {{count}} unidades",
     "previewManaged": "Durante o preview, a cobrança deste ambiente é combinada diretamente com o seu contato na Dinequora. Nenhum cartão é guardado ou cobrado aqui.",
-    "renewsManaged": "Gerenciado pela Dinequora"
+    "renewsManaged": "Gerenciado pela Dinequora",
+    "perMonth": "{{price}} / mês",
+    "implementation": "+ {{price}} de implantação (uma vez)",
+    "implementationFrom": "Implantação a partir de {{price}}"
   },
   "security": {
     "title": "Segurança",
