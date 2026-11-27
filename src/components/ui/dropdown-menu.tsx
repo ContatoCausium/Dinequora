@@ -6,7 +6,18 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
+/**
+ * Menus are non-modal by default. A modal Radix menu marks the rest of the page `aria-hidden` while its
+ * links and buttons stay focusable, which axe reports as aria-hidden-focus (the account menu). A
+ * non-modal menu still moves focus into the menu, closes on Escape and on an outside click, and returns
+ * focus to its trigger. Pass `modal` to opt back in.
+ */
+function DropdownMenu({
+  modal = false,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  return <DropdownMenuPrimitive.Root modal={modal} {...props} />;
+}
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 

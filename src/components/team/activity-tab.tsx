@@ -160,7 +160,14 @@ export function ActivityTab({ members }: { members: TeamMember[] }) {
         />
       ) : (
         <>
-          <div className="max-h-[640px] overflow-auto" aria-busy={q.isFetching}>
+          {/* Scrolls on its own: focusable and named so keyboards can scroll it (WCAG 2.1.1). */}
+          <div
+            role="region"
+            tabIndex={0}
+            aria-label={t("tabs.activity")}
+            aria-busy={q.isFetching}
+            className="max-h-[640px] overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <table className="data-table min-w-[720px]">
               <thead className="sticky top-0 z-10 bg-card">
                 <tr className="border-b text-left text-xs text-muted-foreground">

@@ -41,7 +41,8 @@
     "expandSidebar": "Expandir menu lateral",
     "collapseSidebar": "Recolher menu lateral",
     "openMenu": "Abrir menu",
-    "close": "Fechar"
+    "close": "Fechar",
+    "required": "Obrigatório"
   },
   "shell": {
     "switchOrg": "Trocar organização",

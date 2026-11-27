@@ -41,7 +41,8 @@
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "openMenu": "Open menu",
-    "close": "Close"
+    "close": "Close",
+    "required": "Required"
   },
   "shell": {
     "switchOrg": "Switch organization",
