@@ -44,6 +44,9 @@ O retrato tem:
   custo de ficha. Só vai quando a pessoa pode ver custos (`inventory.costs`); senão vai como "não
   disponível".
 - **Estoque** no mínimo ou abaixo dele.
+- **Previsão de compras para 7 dias** (a mesma conta da aba Pedidos de compra, 0044): item, loja, estoque,
+  uso por dia, quantos dias dura, quanto comprar e fornecedor; mais os itens no mínimo sem uso em vendas,
+  sem quantidade inventada.
 - **Pedidos abertos agora.**
 - **Lojas e fusos.**
 

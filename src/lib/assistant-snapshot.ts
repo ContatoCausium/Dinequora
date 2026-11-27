@@ -4,6 +4,7 @@
  * A part the member cannot read arrives as null and stays null ("not available"), never as zero.
  */
 import { analyzeMenu, type MenuSalesRow, type RecipeCost } from "./menu-engineering";
+import { purchaseForecast, type ConsumptionRow } from "./purchase-forecast";
 
 type LedgerRaw = {
   stores?: { id: string; today: string }[];
@@ -17,13 +18,17 @@ export interface AssistantSnapshotRows {
   ledger: unknown | null;
   inventory:
     | readonly {
+        id?: string;
         name: string;
         unit: string;
         quantity: number;
         min_quantity: number;
         location_id: string;
+        supplier?: string | null;
       }[]
     | null;
+  /** inventory_consumption (0044) for the last 30 local days; null when not readable. */
+  consumption?: readonly ConsumptionRow[] | null;
   /** menu_item_sales (0042) for the last 30 local days: aggregated, never truncated. */
   itemSales: readonly MenuSalesRow[] | null;
   /** Current recipe cost per product and store; null when the member cannot see costs. */
@@ -143,6 +148,56 @@ export function buildAssistantSnapshot(rows: AssistantSnapshotRows) {
             unit: i.unit,
           }));
 
+  // What to buy for the next 7 days, from what sales consumed in the last 30 (same as Inventory).
+  let forecast: null | {
+    method: string;
+    buy: {
+      item: string;
+      store: string;
+      unit: string;
+      onHand: number;
+      usePerDay: number;
+      lastsDays: number;
+      buy: number;
+      supplier: string | null;
+    }[];
+    atOrBelowMinimumWithoutSalesUse: string[];
+  } = null;
+  if (rows.inventory && rows.consumption) {
+    const f = purchaseForecast(
+      rows.inventory
+        .filter((i) => i.id)
+        .map((i) => ({
+          id: i.id as string,
+          name: i.name,
+          unit: i.unit,
+          locationId: i.location_id,
+          quantity: Number(i.quantity),
+          minQuantity: Number(i.min_quantity),
+          supplier: i.supplier ?? "",
+          active: true,
+        })),
+      rows.consumption,
+      30,
+      7,
+    );
+    forecast = {
+      method:
+        "usePerDay = what sales consumed in the last 30 days / 30 (adjustments and losses excluded); buy = usePerDay x 7 + minimum - on hand, rounded up; items with no sales use get no quantity.",
+      buy: f.lines.slice(0, 25).map((l) => ({
+        item: l.name,
+        store: storeName.get(l.locationId) ?? l.locationId,
+        unit: l.unit,
+        onHand: l.quantity,
+        usePerDay: Math.round(l.dailyUse * 100) / 100,
+        lastsDays: Math.floor(l.coverDays),
+        buy: l.suggested,
+        supplier: l.supplier || null,
+      })),
+      atOrBelowMinimumWithoutSalesUse: f.belowMinimumNoUse.slice(0, 20).map((i) => i.name),
+    };
+  }
+
   return {
     organization: rows.organization,
     generatedAt: rows.now,
@@ -152,6 +207,7 @@ export function buildAssistantSnapshot(rows: AssistantSnapshotRows) {
     bestSellersLast30Days: bestSellers,
     menuEngineeringLast30Days: menuEngineering,
     stockAtOrBelowMinimum: lowStock,
+    purchaseForecastNext7Days: forecast,
     openOrdersNow: rows.openOrders,
   };
 }
