@@ -393,3 +393,48 @@ export function parseMoneyInput(v: string): number | null {
   if (!/^\d+(\.\d{0,2})?$/.test(s)) return null;
   return Math.round(Number(s) * 100);
 }
+
+/* ---------------------------------------------------------------- day summary (0039) */
+export interface DaySummary {
+  /** The store's local calendar day (YYYY-MM-DD). */
+  day: string;
+  checksClosed: number;
+  /** What recorded tenders applied to checks today (tax included, tips excluded). */
+  receivedCents: number;
+  tipsCents: number;
+  /** Tips by the server of the table (who owns the tip), highest first. */
+  byServer: { serverId: string; name: string | null; tipsCents: number; tenders: number }[];
+}
+
+/** Today's tenders and closed checks of one store, summed for the floor's "Today" panel. */
+export function summarizeDay(input: {
+  day: string;
+  tenders: readonly { amount_cents: number; tip_cents: number; status: string; check_id: string }[];
+  checks: readonly { id: string; session_id: string; status: string }[];
+  sessions: readonly { id: string; server_id: string }[];
+  closedToday: number;
+  profiles: readonly { id: string; full_name: string | null }[];
+}): DaySummary {
+  const sessionOf = new Map(input.checks.map((c) => [c.id, c.session_id]));
+  const serverOf = new Map(input.sessions.map((s) => [s.id, s.server_id]));
+  const names = new Map(input.profiles.map((p) => [p.id, p.full_name?.trim() || null]));
+  const live = input.tenders.filter((t) => t.status === "recorded");
+  const by = new Map<string, { tipsCents: number; tenders: number }>();
+  for (const t of live) {
+    const server = serverOf.get(sessionOf.get(t.check_id) ?? "") ?? "";
+    if (!server) continue;
+    const cur = by.get(server) ?? { tipsCents: 0, tenders: 0 };
+    cur.tipsCents += t.tip_cents;
+    cur.tenders += 1;
+    by.set(server, cur);
+  }
+  return {
+    day: input.day,
+    checksClosed: input.closedToday,
+    receivedCents: live.reduce((n, t) => n + t.amount_cents, 0),
+    tipsCents: live.reduce((n, t) => n + t.tip_cents, 0),
+    byServer: [...by.entries()]
+      .map(([serverId, v]) => ({ serverId, name: names.get(serverId) ?? null, ...v }))
+      .sort((a, b) => b.tipsCents - a.tipsCents),
+  };
+}

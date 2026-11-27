@@ -64,6 +64,7 @@ import {
   type TableStatus,
 } from "@/lib/dining-room";
 import { CheckSheet, SeatDialog } from "@/components/tables/check-sheet";
+import { DaySummaryPanel } from "@/components/tables/day-summary";
 import {
   archiveDiningSection,
   archiveDiningTable,
@@ -398,6 +399,11 @@ function Floor({
         />
       ) : (
         <>
+          {(canServe || canManage) && (
+            <div className="mb-3">
+              <DaySummaryPanel orgId={orgId} storeId={storeId} />
+            </div>
+          )}
           <section aria-label={t("summary.label")} className="mb-5 space-y-3">
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {TABLE_STATUSES.map((s) => {
