@@ -311,13 +311,16 @@
       "dailyUse": "Use / day",
       "cover": "Lasts",
       "buy": "Buy",
-      "supplier": "Supplier"
+      "supplier": "Supplier",
+      "order": "Order"
     },
     "days_one": "{{formatted}} day",
     "days_other": "{{formatted}} days",
     "noUse_one": "{{count}} item at or below its minimum had no sales use to project from: {{names}}.",
     "noUse_other": "{{count}} items at or below their minimum had no sales use to project from: {{names}}.",
     "method_one": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} day + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use.",
-    "method_other": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} days + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use."
+    "method_other": "Use / day = what sales took (minus voided sales) in the last {{days}} days ÷ {{days}}. Buy = use / day × {{count}} days + minimum − on hand, rounded up. Adjustments, losses and transfers are not counted as use.",
+    "order": "Order",
+    "orderItem": "Start a purchase order for {{item}}"
   }
 }

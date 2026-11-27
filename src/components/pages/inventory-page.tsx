@@ -247,6 +247,14 @@ export function InventoryPage() {
   // Other dialogs
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [poModalOpen, setPOModalOpen] = useState(false);
+  /** A purchase forecast line the new purchase order starts from (null = a blank order). */
+  const [poInitial, setPOInitial] = useState<{
+    itemId: string;
+    quantity: number;
+    unitPriceCents?: number | undefined;
+    supplierId?: string | undefined;
+    locationId?: string | undefined;
+  } | null>(null);
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [selectedPOForReceive, setSelectedPOForReceive] = useState<PurchaseOrder | null>(null);
@@ -1436,6 +1444,24 @@ export function InventoryPage() {
           items={items}
           storeName={showStore ? storeName : null}
           unitLabel={unitLabel}
+          onOrder={
+            canBuy
+              ? (l) => {
+                  const item = items.find((i) => i.id === l.id);
+                  const supplier = suppliers.find(
+                    (s) => s.name.trim().toLowerCase() === l.supplier.trim().toLowerCase(),
+                  );
+                  setPOInitial({
+                    itemId: l.id,
+                    quantity: l.suggested,
+                    unitPriceCents: item?.costCents,
+                    supplierId: supplier?.id,
+                    locationId: l.locationId,
+                  });
+                  setPOModalOpen(true);
+                }
+              : undefined
+          }
         />
         {renderPurchases()}
       </div>
@@ -1529,7 +1555,11 @@ export function InventoryPage() {
       <OperationalCreateDialog
         kind="purchase"
         open={poModalOpen}
-        onOpenChange={setPOModalOpen}
+        onOpenChange={(o) => {
+          setPOModalOpen(o);
+          if (!o) setPOInitial(null);
+        }}
+        initial={poInitial}
         orgId={org.id}
         locationId={locationId === "all" ? undefined : locationId}
         locations={org.locations}

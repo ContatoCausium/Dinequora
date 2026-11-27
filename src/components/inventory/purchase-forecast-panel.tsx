@@ -7,7 +7,8 @@ import { Panel, Segmented } from "@/components/app/page";
 import { EmptyState, Skeleton } from "@/components/app/states";
 import { fmtNumber, fmtQuantity } from "@/lib/format";
 import { fetchInventoryConsumption } from "@/lib/operational.functions";
-import { purchaseForecast, type ForecastItem } from "@/lib/purchase-forecast";
+import { purchaseForecast, type ForecastItem, type ForecastLine } from "@/lib/purchase-forecast";
+import { Button } from "@/components/ui/button";
 
 const WINDOW_DAYS = 30;
 type Cover = "7" | "14";
@@ -22,12 +23,15 @@ export function PurchaseForecastPanel({
   items,
   storeName,
   unitLabel,
+  onOrder,
 }: {
   orgId: string;
   locationId: string;
   items: readonly ForecastItem[];
   storeName: ((locationId: string) => string) | null;
   unitLabel: (unit: string, count?: number) => string;
+  /** When the member may create purchase orders: start one from a suggested line. */
+  onOrder?: ((line: ForecastLine) => void) | undefined;
 }) {
   const { t, i18n } = useTranslation("inventory");
   const lng = i18n.language;
@@ -106,6 +110,11 @@ export function PurchaseForecastPanel({
                     <th scope="col" className="pb-2 font-medium">
                       {t("forecast.cols.supplier")}
                     </th>
+                    {onOrder && (
+                      <th scope="col" className="pb-2">
+                        <span className="sr-only">{t("forecast.cols.order")}</span>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -131,6 +140,18 @@ export function PurchaseForecastPanel({
                         {qty(l.suggested, l.unit)}
                       </td>
                       <td className="py-2.5 text-muted-foreground">{l.supplier || "—"}</td>
+                      {onOrder && (
+                        <td className="py-2.5 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={t("forecast.orderItem", { item: l.name })}
+                            onClick={() => onOrder(l)}
+                          >
+                            {t("forecast.order")}
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
