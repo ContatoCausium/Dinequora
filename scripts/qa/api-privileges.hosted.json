@@ -111,6 +111,7 @@
     "function|has_platform_role(_user_id uuid, _role public.platform_role)|anon|EXECUTE",
     "function|has_platform_role(_user_id uuid, _role public.platform_role)|authenticated|EXECUTE",
     "function|has_platform_role(_user_id uuid, _role public.platform_role)|service_role|EXECUTE",
+    "function|inventory_consumption(_org_id uuid, _location_ids uuid[], _days integer)|authenticated|EXECUTE",
     "function|inventory_item_costs(_org_id uuid)|authenticated|EXECUTE",
     "function|inventory_movement_costs(_org_id uuid, _movement_ids uuid[])|authenticated|EXECUTE",
     "function|is_org_member(_org_id uuid)|anon|EXECUTE",

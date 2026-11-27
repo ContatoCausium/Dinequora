@@ -2596,6 +2596,14 @@ export type Database = {
         Args: { _role: Database["public"]["Enums"]["platform_role"]; _user_id: string };
         Returns: boolean;
       };
+      inventory_consumption: {
+        Args: { _days?: number; _location_ids?: string[]; _org_id: string };
+        Returns: {
+          consumed: number;
+          inventory_item_id: string;
+          location_id: string;
+        }[];
+      };
       inventory_item_costs: {
         Args: { _org_id: string };
         Returns: {
