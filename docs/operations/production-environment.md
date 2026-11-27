@@ -303,6 +303,25 @@ não serve para migrations. A conexão direta exige IPv6 ou o complemento de IPv
 
 6. **Registro** (sem segredos): data, commit aplicado, operador e resultado de cada verificação.
 
+## 9a. Build e deploy do aplicativo (Cloudflare Workers)
+
+Hospedagem decidida em 2026-11-27: **Cloudflare Workers**, o mesmo alvo da Client Preview, num Worker
+próprio, `dinequora-app`, servido **só** no domínio `app.dinequora.com` (sem `workers.dev` e sem URLs de
+prévia de versão). O login com Google fica desligado (Opção A da seção 6).
+
+1. Numa worktree limpa do commit aprovado, crie `.env.production.local` (ignorado pelo git) só com
+   valores públicos: `VITE_SUPABASE_URL=https://<ref>.supabase.co`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…`, `VITE_AUTH_SOCIAL_PROVIDERS=` (vazio) e,
+   opcional, `VITE_SUPPORT_EMAIL=`.
+2. `npm run build:production -- --expect-ref <ref>`: perfil `production` (cadastro público, planos na
+   tela de cobrança, cabeçalhos de segurança e no-index ligados), Worker `dinequora-app`, rota
+   `app.dinequora.com` como domínio próprio, e o verificador do bundle com o alvo `production`.
+   Recusa `.env`, `.env.local`, `.env.production` na worktree e variáveis `VITE_*`/`SUPABASE_*` no
+   shell.
+3. Deploy com `wrangler deploy` a partir de `.output`, com as variáveis públicas de execução
+   (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `OBSERVABILITY_ENVIRONMENT=production`). O domínio
+   próprio exige que `app.dinequora.com` não tenha outro registro DNS. Autorização própria (seção 13).
+
 ## 10. Depois das migrations
 
 1. **SMTP funcionando** (seção 8.1): o primeiro administrador precisa confirmar o e-mail.
