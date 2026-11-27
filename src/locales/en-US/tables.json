@@ -1,0 +1,122 @@
+{
+  "title": "Tables",
+  "description": "See which tables are free at {{store}} and keep their status up to date.",
+  "status": {
+    "available": "Available",
+    "occupied": "Occupied",
+    "reserved": "Reserved",
+    "cleaning": "Cleaning"
+  },
+  "filter": {
+    "label": "Show tables",
+    "all": "All ({{count}})",
+    "status": "{{label}} ({{count}})"
+  },
+  "summary": {
+    "label": "Floor summary",
+    "seats_one": "{{count}} seat",
+    "seats_other": "{{count}} seats"
+  },
+  "card": {
+    "seats_one": "{{count}} seat",
+    "seats_other": "{{count}} seats",
+    "since": "for {{time}}",
+    "justNow": "just now",
+    "minutes": "{{count}} min",
+    "hours": "{{hours}}h {{minutes}}m",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "actions": "Table {{label}}, {{status}}, {{seats}}. Open actions",
+    "readOnly": "Table {{label}}, {{status}}, {{seats}}"
+  },
+  "menu": {
+    "changeStatus": "Change status",
+    "markAs": "Mark as {{status}}",
+    "current": "{{status}} (current)",
+    "edit": "Edit table",
+    "archive": "Archive table"
+  },
+  "section": {
+    "none": "No section",
+    "count_one": "{{count}} table",
+    "count_other": "{{count}} tables",
+    "empty": "No tables in this section yet.",
+    "emptyFiltered": "No table here matches the filter.",
+    "actions": "Section {{name}}: actions",
+    "rename": "Rename section",
+    "archive": "Archive section"
+  },
+  "actions": {
+    "newTable": "New table",
+    "newSection": "New section",
+    "refresh": "Refresh"
+  },
+  "form": {
+    "newTable": "New table",
+    "editTable": "Edit table {{label}}",
+    "tableHint": "Labels are unique in this store, for example 12 or Patio 3.",
+    "label": "Label",
+    "seats": "Seats",
+    "section": "Section",
+    "noSection": "No section",
+    "newSection": "New section",
+    "editSection": "Rename section {{name}}",
+    "sectionHint": "Group tables the way the team talks about the floor: Patio, Bar, Main room.",
+    "name": "Name",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "create": "Create"
+  },
+  "archiveTable": {
+    "title": "Archive table {{label}}?",
+    "body": "It leaves the floor. Its history is kept and the label can be used again.",
+    "confirm": "Archive table"
+  },
+  "archiveSection": {
+    "title": "Archive section {{name}}?",
+    "body": "Only empty sections can be archived. Move or archive its tables first.",
+    "confirm": "Archive section"
+  },
+  "toast": {
+    "tableSaved": "Table {{label}} saved.",
+    "tableArchived": "Table {{label}} archived.",
+    "sectionSaved": "Section {{name}} saved.",
+    "sectionArchived": "Section {{name}} archived.",
+    "statusChanged": "Table {{label}} is now {{status}}.",
+    "conflict": "Table {{label}} was already changed to {{status}} by someone else. Nothing was overwritten; check the floor and try again.",
+    "conflictUnknown": "Table {{label}} was changed by someone else. Nothing was overwritten; check the floor and try again."
+  },
+  "states": {
+    "chooseStoreTitle": "Choose a store",
+    "chooseStoreBody": "Tables belong to a store. Pick one in the store switcher at the top of the page.",
+    "noStoreTitle": "No store yet",
+    "noStoreBody": "You have no store to work in. Ask an owner to give you access to one.",
+    "loading": "Loading the floor…",
+    "errorTitle": "The floor could not be loaded",
+    "errorBody": "Nothing was changed. Try again in a moment.",
+    "retry": "Try again",
+    "emptyTitle": "No tables yet",
+    "emptyManage": "Add the tables of this store to see who is seated, what is reserved and what needs cleaning.",
+    "emptyReadOnly": "A manager has not set up the floor of this store yet."
+  },
+  "errors": {
+    "permission_denied": "You don't have permission to do that here.",
+    "forbidden": "This store isn't available to you, or it is not active.",
+    "location_forbidden": "This store isn't available to you.",
+    "subscription_inactive": "The organization's subscription does not allow changes right now.",
+    "invalid_name": "Enter a name of up to 60 characters.",
+    "invalid_label": "Enter a label of up to 20 characters.",
+    "invalid_seats": "Seats must be a whole number from 1 to 99.",
+    "invalid_sort_order": "Invalid order.",
+    "invalid_status": "Invalid status.",
+    "section_not_found": "That section no longer exists. Refresh and try again.",
+    "section_name_taken": "There is already a section with this name in this store.",
+    "section_not_empty": "This section still has tables. Move or archive them first.",
+    "table_not_found": "That table no longer exists. Refresh and try again.",
+    "table_label_taken": "There is already a table with this label in this store.",
+    "table_occupied": "An occupied table cannot be archived. Mark it available first.",
+    "status_conflict": "Someone else changed this table. Check the floor and try again.",
+    "unknown": "Something went wrong. Nothing was changed."
+  }
+}

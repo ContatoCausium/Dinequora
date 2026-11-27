@@ -213,7 +213,7 @@ function PermToggle({
             unavailable ? "text-muted-foreground line-through" : "text-foreground",
           )}
         >
-          {actionLabel(permissionAction(perm))}
+          {actionLabel(permissionAction(perm), perm.slice(0, perm.indexOf(".")))}
         </span>
       )}
       {!plain && <Marker state={state} />}

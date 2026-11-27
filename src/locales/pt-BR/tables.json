@@ -1,0 +1,122 @@
+{
+  "title": "Mesas",
+  "description": "Veja quais mesas estão livres em {{store}} e mantenha o status delas em dia.",
+  "status": {
+    "available": "Disponível",
+    "occupied": "Ocupada",
+    "reserved": "Reservada",
+    "cleaning": "Limpeza"
+  },
+  "filter": {
+    "label": "Mostrar mesas",
+    "all": "Todas ({{count}})",
+    "status": "{{label}} ({{count}})"
+  },
+  "summary": {
+    "label": "Resumo do salão",
+    "seats_one": "{{count}} lugar",
+    "seats_other": "{{count}} lugares"
+  },
+  "card": {
+    "seats_one": "{{count}} lugar",
+    "seats_other": "{{count}} lugares",
+    "since": "há {{time}}",
+    "justNow": "agora",
+    "minutes": "{{count}} min",
+    "hours": "{{hours}}h {{minutes}}min",
+    "days_one": "{{count}} dia",
+    "days_other": "{{count}} dias",
+    "actions": "Mesa {{label}}, {{status}}, {{seats}}. Abrir ações",
+    "readOnly": "Mesa {{label}}, {{status}}, {{seats}}"
+  },
+  "menu": {
+    "changeStatus": "Mudar status",
+    "markAs": "Marcar como {{status}}",
+    "current": "{{status}} (atual)",
+    "edit": "Editar mesa",
+    "archive": "Arquivar mesa"
+  },
+  "section": {
+    "none": "Sem setor",
+    "count_one": "{{count}} mesa",
+    "count_other": "{{count}} mesas",
+    "empty": "Ainda não há mesas neste setor.",
+    "emptyFiltered": "Nenhuma mesa daqui corresponde ao filtro.",
+    "actions": "Setor {{name}}: ações",
+    "rename": "Renomear setor",
+    "archive": "Arquivar setor"
+  },
+  "actions": {
+    "newTable": "Nova mesa",
+    "newSection": "Novo setor",
+    "refresh": "Atualizar"
+  },
+  "form": {
+    "newTable": "Nova mesa",
+    "editTable": "Editar mesa {{label}}",
+    "tableHint": "O nome é único nesta loja, por exemplo 12 ou Varanda 3.",
+    "label": "Nome",
+    "seats": "Lugares",
+    "section": "Setor",
+    "noSection": "Sem setor",
+    "newSection": "Novo setor",
+    "editSection": "Renomear setor {{name}}",
+    "sectionHint": "Agrupe as mesas do jeito que a equipe fala do salão: Varanda, Bar, Salão principal.",
+    "name": "Nome",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "create": "Criar"
+  },
+  "archiveTable": {
+    "title": "Arquivar a mesa {{label}}?",
+    "body": "Ela sai do salão. O histórico fica guardado e o nome pode ser usado de novo.",
+    "confirm": "Arquivar mesa"
+  },
+  "archiveSection": {
+    "title": "Arquivar o setor {{name}}?",
+    "body": "Só setores vazios podem ser arquivados. Mova ou arquive as mesas dele antes.",
+    "confirm": "Arquivar setor"
+  },
+  "toast": {
+    "tableSaved": "Mesa {{label}} salva.",
+    "tableArchived": "Mesa {{label}} arquivada.",
+    "sectionSaved": "Setor {{name}} salvo.",
+    "sectionArchived": "Setor {{name}} arquivado.",
+    "statusChanged": "A mesa {{label}} agora está: {{status}}.",
+    "conflict": "Outra pessoa já mudou a mesa {{label}} para {{status}}. Nada foi sobrescrito; confira o salão e tente de novo.",
+    "conflictUnknown": "Outra pessoa mudou a mesa {{label}}. Nada foi sobrescrito; confira o salão e tente de novo."
+  },
+  "states": {
+    "chooseStoreTitle": "Escolha uma loja",
+    "chooseStoreBody": "As mesas pertencem a uma loja. Escolha uma no seletor de lojas no topo da página.",
+    "noStoreTitle": "Nenhuma loja ainda",
+    "noStoreBody": "Você não tem uma loja para trabalhar. Peça a um proprietário acesso a uma delas.",
+    "loading": "Carregando o salão…",
+    "errorTitle": "Não foi possível carregar o salão",
+    "errorBody": "Nada foi alterado. Tente de novo em instantes.",
+    "retry": "Tentar de novo",
+    "emptyTitle": "Ainda não há mesas",
+    "emptyManage": "Cadastre as mesas desta loja para ver quem está sentado, o que está reservado e o que precisa de limpeza.",
+    "emptyReadOnly": "Um gerente ainda não montou o salão desta loja."
+  },
+  "errors": {
+    "permission_denied": "Você não tem permissão para fazer isso aqui.",
+    "forbidden": "Esta loja não está disponível para você, ou não está ativa.",
+    "location_forbidden": "Esta loja não está disponível para você.",
+    "subscription_inactive": "A assinatura da organização não permite alterações agora.",
+    "invalid_name": "Informe um nome de até 60 caracteres.",
+    "invalid_label": "Informe um nome de até 20 caracteres.",
+    "invalid_seats": "Lugares deve ser um número inteiro de 1 a 99.",
+    "invalid_sort_order": "Ordem inválida.",
+    "invalid_status": "Status inválido.",
+    "section_not_found": "Esse setor não existe mais. Atualize e tente de novo.",
+    "section_name_taken": "Já existe um setor com esse nome nesta loja.",
+    "section_not_empty": "Este setor ainda tem mesas. Mova ou arquive as mesas antes.",
+    "table_not_found": "Essa mesa não existe mais. Atualize e tente de novo.",
+    "table_label_taken": "Já existe uma mesa com esse nome nesta loja.",
+    "table_occupied": "Uma mesa ocupada não pode ser arquivada. Marque como disponível antes.",
+    "status_conflict": "Outra pessoa mudou esta mesa. Confira o salão e tente de novo.",
+    "unknown": "Algo deu errado. Nada foi alterado."
+  }
+}

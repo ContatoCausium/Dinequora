@@ -25,6 +25,7 @@ import {
   ReceiptText,
   MonitorSmartphone,
   CookingPot,
+  Armchair,
   BookOpenText,
   Boxes,
   UsersRound,
@@ -103,6 +104,7 @@ type NavTo =
   | "/pos"
   | "/orders"
   | "/kds"
+  | "/tables"
   | "/menu"
   | "/inventory"
   | "/finance"
@@ -122,6 +124,7 @@ const NAV_GROUPS: { key: string; items: NavItem[] }[] = [
       { to: "/pos", key: "pos", icon: MonitorSmartphone },
       { to: "/orders", key: "orders", icon: ReceiptText },
       { to: "/kds", key: "kds", icon: CookingPot },
+      { to: "/tables", key: "tables", icon: Armchair },
       { to: "/menu", key: "menu", icon: BookOpenText },
       { to: "/inventory", key: "inventory", icon: Boxes },
     ],

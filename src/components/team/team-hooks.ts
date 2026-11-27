@@ -17,11 +17,17 @@ export function useTeamError() {
 export function usePermissionLabels() {
   const { t } = useTranslation("team");
   const moduleLabel = useCallback((m: string) => t(`perm.modules.${m}`), [t]);
-  const actionLabel = useCallback((a: string) => t(`perm.actions.${a}`), [t]);
+  // A module may word a shared action its own way (tables.manage is not team.manage's "Manage
+  // access"): perm.moduleActions.<module>.<action> first, then the shared perm.actions.<action>.
+  const actionLabel = useCallback(
+    (a: string, m?: string) =>
+      m ? t([`perm.moduleActions.${m}.${a}`, `perm.actions.${a}`]) : t(`perm.actions.${a}`),
+    [t],
+  );
   const permLabel = useCallback(
     (p: string) => {
       const i = p.indexOf(".");
-      return `${moduleLabel(p.slice(0, i))} · ${actionLabel(p.slice(i + 1))}`;
+      return `${moduleLabel(p.slice(0, i))} · ${actionLabel(p.slice(i + 1), p.slice(0, i))}`;
     },
     [moduleLabel, actionLabel],
   );

@@ -9,6 +9,7 @@ import { toMenuReadModel } from "./menu-read-model";
 import { readNavCounts } from "./nav-counts";
 import { lookupSaleByKey } from "./pos-sale-lookup";
 import { readLedgerSummaryAggregated } from "./ledger-aggregate";
+import { TABLE_STATUSES, isTableStatus, toDiningRoom } from "./dining-room";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -792,4 +793,154 @@ export const fetchOperationalWhatsApp = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false });
     if (error) throw new Error("whatsapp_read_failed");
     return records ?? [];
+  });
+
+// ---------------------------------------------------------------- dining room (migration 0037)
+// Reads go through RLS (tables.* permission at the store, feature table_service on); every write is
+// one audited RPC that checks store, organization, permission and feature. A status change sends the
+// status the screen showed: if someone changed the table meanwhile, nothing is written and the
+// current status comes back (conflict) so the screen can refresh instead of overwriting it.
+const DINING_SECTION_COLUMNS = "id,name,sort_order,archived_at";
+const DINING_TABLE_COLUMNS =
+  "id,label,seats,status,section_id,sort_order,status_changed_at,archived_at";
+const diningStore = z.object({ orgId: z.string().min(1), locationId: z.string().min(1) });
+async function diningScope(
+  client: SupabaseClient<Database>,
+  data: { orgId: string; locationId: string },
+) {
+  if (data.locationId === "all") throw new Error("location_required");
+  const s = await scope(client, data.orgId, data.locationId);
+  if (!s.location) throw new Error("location_required");
+  return { orgId: s.org.id, locationId: s.location.id };
+}
+
+export const fetchDiningRoom = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore)
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const [sections, tables] = await Promise.all([
+      context.supabase
+        .from("dining_sections")
+        .select(DINING_SECTION_COLUMNS)
+        .eq("org_id", s.orgId)
+        .eq("location_id", s.locationId)
+        .is("archived_at", null),
+      context.supabase
+        .from("dining_tables")
+        .select(DINING_TABLE_COLUMNS)
+        .eq("org_id", s.orgId)
+        .eq("location_id", s.locationId)
+        .is("archived_at", null),
+    ]);
+    if (sections.error || tables.error) throw new Error("dining_read_failed");
+    return toDiningRoom(s.locationId, sections.data ?? [], tables.data ?? []);
+  });
+
+export const saveDiningSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      id: z.string().uuid().nullable(),
+      name: z.string().trim().min(1).max(60),
+      sortOrder: z.number().int().min(0).max(9999).default(0),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: id, error } = await context.supabase.rpc("save_dining_section", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      ...(data.id ? { _section_id: data.id } : {}),
+      _name: data.name,
+      _sort_order: data.sortOrder,
+    });
+    if (error || !id)
+      throw await refused(context.supabase, error, s.orgId, "tables.section_save", s.locationId);
+    return { id };
+  });
+
+export const archiveDiningSection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore.extend({ id: z.string().uuid() }))
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("archive_dining_section", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _section_id: data.id,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.section_archive", s.locationId);
+    return { success: true };
+  });
+
+export const saveDiningTable = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      id: z.string().uuid().nullable(),
+      label: z.string().trim().min(1).max(20),
+      seats: z.number().int().min(1).max(99),
+      sectionId: z.string().uuid().nullable(),
+      sortOrder: z.number().int().min(0).max(9999).default(0),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: id, error } = await context.supabase.rpc("save_dining_table", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      ...(data.id ? { _table_id: data.id } : {}),
+      _label: data.label,
+      _seats: data.seats,
+      ...(data.sectionId ? { _section_id: data.sectionId } : {}),
+      _sort_order: data.sortOrder,
+    });
+    if (error || !id)
+      throw await refused(context.supabase, error, s.orgId, "tables.table_save", s.locationId);
+    return { id };
+  });
+
+export const archiveDiningTable = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore.extend({ id: z.string().uuid() }))
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("archive_dining_table", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _table_id: data.id,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.table_archive", s.locationId);
+    return { success: true };
+  });
+
+export const setDiningTableStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      id: z.string().uuid(),
+      status: z.enum(TABLE_STATUSES),
+      expected: z.enum(TABLE_STATUSES),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: status, error } = await context.supabase.rpc("set_dining_table_status", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _table_id: data.id,
+      _status: data.status,
+      _expected_status: data.expected,
+    });
+    if (error?.message === "status_conflict")
+      return {
+        conflict: true as const,
+        status: isTableStatus(error.details) ? error.details : null,
+      };
+    if (error || !isTableStatus(status))
+      throw await refused(context.supabase, error, s.orgId, "tables.status", s.locationId);
+    return { conflict: false as const, status };
   });

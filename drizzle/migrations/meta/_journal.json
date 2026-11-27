@@ -260,6 +260,13 @@
       "when": 1795604479812,
       "tag": "0036_retire_legacy_pos_sale_rpcs",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795690879812,
+      "tag": "0037_dining_room_tables",
+      "breakpoints": true
     }
   ]
 }

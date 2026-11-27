@@ -1,7 +1,7 @@
 import type { OrgRole } from "./access-rules";
 
 /**
- * Permission catalog — mirrors public.permission_catalog() (migrations 0018, 0020, 0032).
+ * Permission catalog — mirrors public.permission_catalog() (migrations 0018, 0020, 0032, 0037).
  * The DATABASE is the authority (has_permission / RLS / RPC asserts); this module only drives UI
  * (what to show, previews in the permission matrix). A test checks both stay in sync.
  */
@@ -10,6 +10,7 @@ export const PERMISSION_MODULES = [
   { module: "pos", actions: ["view", "sell", "discount"] },
   { module: "orders", actions: ["view", "update", "refund", "resolve_pending"] },
   { module: "kds", actions: ["view", "operate"] },
+  { module: "tables", actions: ["view", "status", "manage"] },
   { module: "menu", actions: ["view", "create", "edit", "delete"] },
   { module: "inventory", actions: ["view", "create", "edit", "adjust", "transfer", "costs"] },
   { module: "recipes", actions: ["view", "edit"] },

@@ -37,18 +37,29 @@ function replaceOnce(src, from, to, label) {
 export function buildM2RollbackFiles() {
   const m0018 = M("0018_member_permissions.sql");
   const m0019 = M("0019_permission_performance.sql");
-  const m0020 = M("0020_inventory_cost_permission.sql");
   const m0031 = M("0031_ledger_day_totals.sql");
   const m0032 = M("0032_pos_pending_sale_resolution.sql");
   const m0033 = M("0033_member_grant_integrity_and_pending_hardening.sql");
   const m0035 = M("0035_pending_sale_reason_privacy.sql");
 
-  const catalog0020 = block(
-    m0020,
-    "create or replace function public.permission_catalog()",
-    "$$;",
-    "0020 catalog",
+  // The permission catalog as it stands at the tip: the LAST migration of the journal that defines it
+  // (0032, or a later module such as 0037 tables). The rollback keeps that catalog minus
+  // orders.resolve_pending, and the re-application restores it as is, so rolling M2 back never
+  // removes a permission of a module that came after it.
+  const CATALOG_START = "create or replace function public.permission_catalog()";
+  const journal = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "drizzle/migrations/meta/_journal.json"), "utf8"),
+  ).entries.map((e) => e.tag);
+  const catalogTag = journal.filter((tag) => M(`${tag}.sql`).includes(CATALOG_START)).at(-1);
+  const catalogTip = block(M(`${catalogTag}.sql`), CATALOG_START, "$$;", `${catalogTag} catalog`);
+  const catalog0032 = block(m0032, CATALOG_START, "$$;", "0032 catalog");
+  const catalogRollback = replaceOnce(
+    catalogTip,
+    ",'orders.resolve_pending'",
+    "",
+    "rollback catalog",
   );
+
   const ceiling0018 = block(
     m0018,
     "create or replace function public.role_ceiling(",
@@ -92,8 +103,8 @@ set local lock_timeout = '5s';
 drop function if exists public.resolve_pending_pos_sale(uuid, uuid, text, text, integer, integer, timestamptz);
 -- ...and the reader of the justifications (0035); their private store and its rows are kept
 drop function if exists public.list_pending_sale_reasons(uuid, uuid, text, integer);
--- catalog (0020), tier ceiling and defaults (0018)
-${catalog0020}
+-- catalog (as at the tip, without orders.resolve_pending), tier ceiling and defaults (0018)
+${catalogRollback}
 ${ceiling0018}
 ${defaults0018}
 -- the permission leaves every profile, system and custom (custom ones audited; the profile trigger
@@ -125,8 +136,10 @@ drop function if exists public.ledger_day_totals(uuid, uuid[], integer, boolean)
 drop function if exists public.accessible_location_ids();
 `;
 
-  let again0032 = replaceOnce(
-    m0032,
+  // 0032 again, with the catalog as it stands at the tip (identical to 0032's while 0032 is the last).
+  let again0032 = replaceOnce(m0032, catalog0032, catalogTip, "0032 catalog at the tip");
+  again0032 = replaceOnce(
+    again0032,
     "create table public.pos_sale_key_voids (",
     "create table if not exists public.pos_sale_key_voids (",
     "0032 table",

@@ -31,7 +31,9 @@ describe("0036 retire the basis-point sale RPCs", () => {
     const i = journal.entries.findIndex((e) => e.tag === "0036_retire_legacy_pos_sale_rpcs");
     expect(journal.entries[i - 1]!.tag).toBe("0035_pending_sale_reason_privacy");
     expect(journal.entries[i]!.when).toBeGreaterThan(journal.entries[i - 1]!.when);
-    expect(i).toBe(journal.entries.length - 1);
+    // later migrations (0037 dining room…) keep the order: each `when` above the previous one
+    for (const next of journal.entries.slice(i + 1))
+      expect(next.when).toBeGreaterThan(journal.entries[journal.entries.indexOf(next) - 1]!.when);
   });
 
   it("is plain ASCII and sets the lock wait limit first", () => {
