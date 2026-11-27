@@ -27,6 +27,11 @@ dar o papel → promover de novo" agora para já na concessão (`platform_role_m
   `_reason` de `admin_update_organization`/`admin_set_subscription` vão para a auditoria da organização,
   que membros com `team.activity` leem. Opção: guardar notas da plataforma em auditoria com `org_id` nulo.
 
+**Ensaio de rollback da 0034:** reaplicar o arquivo 0034 traz de volta o corpo antigo de
+`admin_set_platform_role` e do gatilho de separação; numa reaplicação real, rode a 0043 de novo em seguida
+(tudo nela é reexecutável). `scripts/security/security_closure_rollback.mjs` faz isso sozinho: acha pelo
+journal toda migration posterior a 0036 que redefine uma função de 0034–0036 e a reexecuta.
+
 Rollback (migration NOVA): restaurar `admin_set_platform_role` (0034), `admin_set_subscription` e
 `admin_update_organization` (0004), `trg_platform_role_separation` (0034); remover o gatilho
 `member_platform_separation` e a função `trg_member_platform_separation()`.
