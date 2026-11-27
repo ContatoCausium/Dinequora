@@ -311,13 +311,16 @@
       "dailyUse": "Uso / dia",
       "cover": "Dura",
       "buy": "Comprar",
-      "supplier": "Fornecedor"
+      "supplier": "Fornecedor",
+      "order": "Pedir"
     },
     "days_one": "{{formatted}} dia",
     "days_other": "{{formatted}} dias",
     "noUse_one": "{{count}} item no mínimo ou abaixo não teve uso em vendas para projetar: {{names}}.",
     "noUse_other": "{{count}} itens no mínimo ou abaixo não tiveram uso em vendas para projetar: {{names}}.",
     "method_one": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dia + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso.",
-    "method_other": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dias + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso."
+    "method_other": "Uso / dia = o que as vendas consumiram (menos vendas canceladas) nos últimos {{days}} dias ÷ {{days}}. Comprar = uso / dia × {{count}} dias + mínimo − estoque, arredondado para cima. Ajustes, perdas e transferências não contam como uso.",
+    "order": "Pedir",
+    "orderItem": "Criar pedido de compra de {{item}}"
   }
 }

@@ -13,6 +13,12 @@ Os itens que acabam primeiro aparecem no topo, com o fornecedor cadastrado. Um i
 no período **não recebe sugestão** (não há de onde projetar). Se estiver no mínimo ou abaixo dele, aparece
 numa linha à parte para não ser esquecido. **Nenhuma quantidade é inventada.**
 
+**Pedir:** quem pode criar pedidos de compra (`purchases.create`) vê um botão em cada linha. Ele abre o
+**Novo pedido de compra** já preenchido com a loja, o insumo, a quantidade sugerida, o custo atual do item
+(quando a pessoa pode ver custos; senão 0, para preencher) e o fornecedor cujo nome é igual ao cadastrado no
+item. Tudo editável; nada é salvo sem clicar em **Salvar**, e o pedido segue as regras de sempre
+(rascunho para quem não pode aprovar).
+
 Código: `src/lib/purchase-forecast.ts` (cálculo), `src/components/inventory/purchase-forecast-panel.tsx`
 (tela), `fetchInventoryConsumption` em `src/lib/operational.functions.ts`.
 
