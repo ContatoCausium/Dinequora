@@ -51,3 +51,8 @@ site_url = "http://localhost:8081"
 [auth.email]
 enable_signup = true
 enable_confirmations = false
+
+# Two-step verification with an authenticator app (Settings > Security, /mfa).
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true

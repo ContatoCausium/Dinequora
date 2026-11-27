@@ -13,6 +13,13 @@ function mapError(
   const code = e?.code ?? "";
   let c: AuthErrorCode = requestErrorKind(e);
   if (code === "invalid_credentials" || msg.includes("invalid login")) c = "invalid_credentials";
+  else if (
+    code === "mfa_verification_failed" ||
+    code === "mfa_challenge_expired" ||
+    msg.includes("invalid totp")
+  )
+    c = "invalid_code";
+  else if (code === "insufficient_aal") c = "mfa_required";
   else if (code === "email_not_confirmed" || msg.includes("not confirmed"))
     c = "email_not_verified";
   else if (code === "user_already_exists" || msg.includes("already registered")) c = "email_taken";
@@ -96,5 +103,56 @@ export const supabaseAuth: AuthService = {
   },
   async signOut() {
     await supabase.auth.signOut();
+  },
+  mfa: {
+    async assurance() {
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error) throw mapError(error);
+      return {
+        current: data.currentLevel === "aal2" ? "aal2" : "aal1",
+        next: data.nextLevel === "aal2" ? "aal2" : "aal1",
+      };
+    },
+    async listFactors() {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw mapError(error);
+      return data.all
+        .filter((f) => f.factor_type === "totp")
+        .map((f) => ({
+          id: f.id,
+          name: f.friendly_name ?? null,
+          verified: f.status === "verified",
+          createdAt: f.created_at,
+        }));
+    },
+    async enroll(name) {
+      // An unverified factor left by an abandoned attempt would block a new one with the same name.
+      const existing = await supabase.auth.mfa.listFactors();
+      for (const f of existing.data?.all ?? [])
+        if (f.factor_type === "totp" && f.status !== "verified")
+          await supabase.auth.mfa.unenroll({ factorId: f.id });
+      const { data, error } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: name,
+      });
+      if (error) throw mapError(error);
+      return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+    },
+    async confirmEnrollment(factorId, code) {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+      if (error) throw mapError(error);
+    },
+    async verify(code) {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw mapError(error);
+      const factor = data.totp.find((f) => f.status === "verified");
+      if (!factor) throw new AuthError("forbidden");
+      const r = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+      if (r.error) throw mapError(r.error);
+    },
+    async remove(factorId) {
+      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      if (error) throw mapError(error);
+    },
   },
 };

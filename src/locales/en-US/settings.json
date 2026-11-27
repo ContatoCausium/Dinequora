@@ -107,5 +107,35 @@
     "planUpTo_other": "Up to {{total}} / mo with {{count}} locations",
     "previewManaged": "During the preview, billing for this workspace is arranged directly with your Dinequora contact. No card is stored or charged here.",
     "renewsManaged": "Managed by Dinequora"
+  },
+  "security": {
+    "title": "Security",
+    "description": "Protect your account with a second step at sign-in.",
+    "mfaTitle": "Two-step verification",
+    "statusOn": "On: each sign-in also asks for a code from your app.",
+    "statusOff": "Off: only your password protects this account.",
+    "mfaBody": "Use an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy…). After your password, Dinequora will ask for the 6-digit code the app shows.",
+    "appName": "Authenticator app",
+    "since": "added {{date}}",
+    "enable": "Turn on two-step verification",
+    "remove": "Remove",
+    "setupTitle": "Link your authenticator app",
+    "setupBody": "Scan the QR code with the app, then enter the 6-digit code it shows.",
+    "qrAlt": "QR code to link the authenticator app",
+    "secretHint": "Can't scan? Type this key in the app:",
+    "code": "Code from the app",
+    "cancel": "Cancel",
+    "confirm": "Confirm and turn on",
+    "enabled": "Two-step verification is on.",
+    "removeTitle": "Remove this authenticator?",
+    "removeBody": "Sign-ins will ask only for your password. You can link an app again at any time.",
+    "removeConfirm": "Remove authenticator",
+    "removed": "Authenticator removed.",
+    "errors": {
+      "format": "Enter the 6 digits shown in your app.",
+      "invalid": "That code is not valid or has expired. Try the current one.",
+      "reauth": "For your safety, sign in again with your code and then try once more.",
+      "unknown": "Something went wrong. Nothing was changed."
+    }
   }
 }

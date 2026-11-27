@@ -18,3 +18,8 @@ max_frequency = "1s"
 
 [auth.rate_limit]
 email_sent = 60
+
+# Two-step verification with an authenticator app (Settings > Security, /mfa).
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true

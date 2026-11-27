@@ -13,6 +13,8 @@ export type AuthUser = {
 
 export type AuthErrorCode =
   | "invalid_credentials"
+  | "invalid_code"
+  | "mfa_required"
   | "email_not_verified"
   | "email_taken"
   | "invalid_email"
@@ -35,6 +37,28 @@ export class AuthError extends Error {
 
 export type AuthEvent = "signed_in" | "signed_out" | "user_updated" | "password_recovery";
 
+/** An authenticator app (TOTP) linked to the account. */
+export type MfaFactor = { id: string; name: string | null; verified: boolean; createdAt: string };
+/** A new authenticator being linked: the QR code (an SVG data URL) and the secret to type by hand. */
+export type MfaEnrollment = { factorId: string; qrCode: string; secret: string };
+/** aal1 = password only; aal2 = password + authenticator code. */
+export type MfaAssurance = { current: "aal1" | "aal2"; next: "aal1" | "aal2" };
+
+/** Two-factor authentication with an authenticator app (TOTP). */
+export interface MfaService {
+  /** What this session has proven and what the account requires (next = aal2 once a factor is verified). */
+  assurance(): Promise<MfaAssurance>;
+  listFactors(): Promise<MfaFactor[]>;
+  /** Starts linking an authenticator app; finish with confirmEnrollment. */
+  enroll(name: string): Promise<MfaEnrollment>;
+  /** Confirms a new authenticator with its first code; the session becomes aal2. */
+  confirmEnrollment(factorId: string, code: string): Promise<void>;
+  /** Proves the second factor for this session (after the password). */
+  verify(code: string): Promise<void>;
+  /** Removes an authenticator (needs an aal2 session). */
+  remove(factorId: string): Promise<void>;
+}
+
 export interface AuthService {
   getUser(): Promise<AuthUser | null>;
   onChange(cb: (event: AuthEvent) => void): () => void;
@@ -52,4 +76,5 @@ export interface AuthService {
   sendPasswordReset(email: string): Promise<void>;
   updatePassword(password: string): Promise<void>;
   signOut(): Promise<void>;
+  mfa: MfaService;
 }
