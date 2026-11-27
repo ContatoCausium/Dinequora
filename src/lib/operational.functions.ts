@@ -9,7 +9,14 @@ import { toMenuReadModel } from "./menu-read-model";
 import { readNavCounts } from "./nav-counts";
 import { lookupSaleByKey } from "./pos-sale-lookup";
 import { readLedgerSummaryAggregated } from "./ledger-aggregate";
-import { TABLE_STATUSES, isTableStatus, toDiningRoom, toOpenSessions } from "./dining-room";
+import {
+  TABLE_STATUSES,
+  isTableStatus,
+  summarizeDay,
+  toDiningRoom,
+  toOpenSessions,
+} from "./dining-room";
+import { localDay, startOfLocalDay } from "./store-time";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -1217,4 +1224,60 @@ export const moveCheckRound = createServerFn({ method: "POST" })
     if (error)
       throw await refused(context.supabase, error, s.orgId, "tables.round_move", s.locationId);
     return { success: true };
+  });
+
+/**
+ * The store's day so far (its local calendar day, its IANA zone): checks closed, what tenders applied,
+ * tips by the table's server. Reads through RLS (tables.* at the store); tips are owed to the staff
+ * and never reach the ledger, so this is where they are seen.
+ */
+export const fetchDiningDaySummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore)
+  .handler(async ({ data, context }) => {
+    const sc = await scope(context.supabase, data.orgId, data.locationId);
+    if (!sc.location) throw new Error("location_required");
+    const tz = sc.location.timezone || "America/New_York";
+    const day = localDay(new Date(), tz);
+    const since = startOfLocalDay(day, tz).toISOString();
+    const c = context.supabase;
+    const [tenders, closed] = await Promise.all([
+      c
+        .from("dining_check_payments")
+        .select("amount_cents,tip_cents,status,check_id")
+        .eq("org_id", sc.org.id)
+        .eq("location_id", sc.location.id)
+        .gte("created_at", since),
+      c
+        .from("dining_checks")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", sc.org.id)
+        .eq("location_id", sc.location.id)
+        .eq("status", "closed")
+        .gte("closed_at", since),
+    ]);
+    if (tenders.error || closed.error) throw new Error("dining_read_failed");
+    const checkIds = [...new Set((tenders.data ?? []).map((t) => t.check_id))];
+    const checks = checkIds.length
+      ? await c.from("dining_checks").select("id,session_id,status").in("id", checkIds)
+      : { data: [], error: null };
+    if (checks.error) throw new Error("dining_read_failed");
+    const sessionIds = [...new Set((checks.data ?? []).map((x) => x.session_id))];
+    const sessions = sessionIds.length
+      ? await c.from("dining_sessions").select("id,server_id").in("id", sessionIds)
+      : { data: [], error: null };
+    if (sessions.error) throw new Error("dining_read_failed");
+    const serverIds = [...new Set((sessions.data ?? []).map((x) => x.server_id))];
+    const profiles = serverIds.length
+      ? await c.from("profiles").select("id,full_name").in("id", serverIds)
+      : { data: [], error: null };
+    if (profiles.error) throw new Error("dining_read_failed");
+    return summarizeDay({
+      day,
+      tenders: tenders.data ?? [],
+      checks: checks.data ?? [],
+      sessions: sessions.data ?? [],
+      closedToday: closed.count ?? 0,
+      profiles: profiles.data ?? [],
+    });
   });

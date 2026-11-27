@@ -278,5 +278,14 @@
     "closed": "Comanda paga e fechada.",
     "needSell": "Receber pagamento exige permissão de vender no POS.",
     "recordOnly": "Registra o pagamento recebido; o Dinequora ainda não cobra cartão diretamente."
+  },
+  "day": {
+    "label": "Hoje nesta loja",
+    "title": "Hoje",
+    "closed_one": "{{formatted}} comanda fechada",
+    "closed_other": "{{formatted}} comandas fechadas",
+    "received": "Recebido {{amount}}",
+    "tips": "Gorjetas {{amount}}",
+    "serverTips": "{{name}}: {{amount}} em gorjetas"
   }
 }
