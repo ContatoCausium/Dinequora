@@ -14,6 +14,7 @@ import {
   equalShares,
   itemsShareCents,
   parseMoneyInput,
+  summarizeDay,
   type DiningRoom,
 } from "@/lib/dining-room";
 
@@ -42,6 +43,7 @@ const api = vi.hoisted(() => ({
   payDiningCheck: vi.fn(),
   voidCheckPayment: vi.fn(),
   moveCheckRound: vi.fn(),
+  fetchDiningDaySummary: vi.fn(),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 const workspace = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
@@ -143,6 +145,13 @@ beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
   for (const f of Object.values(toast)) f.mockReset();
   api.fetchDiningRoom.mockImplementation(async () => room());
+  api.fetchDiningDaySummary.mockResolvedValue({
+    day: "2026-11-27",
+    checksClosed: 0,
+    receivedCents: 0,
+    tipsCents: 0,
+    byServer: [],
+  });
 });
 afterEach(cleanup);
 
@@ -605,5 +614,37 @@ describe("Tables screen: paying a check", () => {
     renderPage();
     const sheet = await openCheck1();
     expect(within(sheet).getByRole("button", { name: "Charge $5.84 and close" })).toBeDisabled();
+  });
+});
+
+describe("day summary", () => {
+  it("sums today's recorded tenders and gives each table's server its tips", () => {
+    const d = summarizeDay({
+      day: "2026-11-27",
+      tenders: [
+        { amount_cents: 584, tip_cents: 0, status: "recorded", check_id: "c1" },
+        { amount_cents: 1700, tip_cents: 306, status: "recorded", check_id: "c2" },
+        { amount_cents: 999, tip_cents: 500, status: "reversed", check_id: "c2" },
+        { amount_cents: 428, tip_cents: 64, status: "recorded", check_id: "c3" },
+      ],
+      checks: [
+        { id: "c1", session_id: "s1", status: "closed" },
+        { id: "c2", session_id: "s1", status: "closed" },
+        { id: "c3", session_id: "s2", status: "open" },
+      ],
+      sessions: [
+        { id: "s1", server_id: "u1" },
+        { id: "s2", server_id: "u2" },
+      ],
+      closedToday: 2,
+      profiles: [{ id: "u1", full_name: "Sam" }],
+    });
+    expect(d.receivedCents).toBe(584 + 1700 + 428);
+    expect(d.tipsCents).toBe(306 + 64);
+    expect(d.checksClosed).toBe(2);
+    expect(d.byServer).toEqual([
+      { serverId: "u1", name: "Sam", tipsCents: 306, tenders: 2 },
+      { serverId: "u2", name: null, tipsCents: 64, tenders: 1 },
+    ]);
   });
 });

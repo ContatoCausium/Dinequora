@@ -278,5 +278,14 @@
     "closed": "Check paid and closed.",
     "needSell": "Taking payments needs permission to sell at the POS.",
     "recordOnly": "Records the payment received; cards are not charged through Dinequora yet."
+  },
+  "day": {
+    "label": "Today at this store",
+    "title": "Today",
+    "closed_one": "{{formatted}} check closed",
+    "closed_other": "{{formatted}} checks closed",
+    "received": "Received {{amount}}",
+    "tips": "Tips {{amount}}",
+    "serverTips": "{{name}}: {{amount}} in tips"
   }
 }
