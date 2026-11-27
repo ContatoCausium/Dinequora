@@ -703,6 +703,40 @@ describe("Tables screen: check history", () => {
     expect(await within(dlg).findByText("Check paid and closed")).toBeInTheDocument();
     expect(api.fetchCheckHistory.mock.calls[0]![0].data.checkId).toBe(UUID(77));
   });
+
+  it("closed checks of another day: the day goes to the server, and back to today", async () => {
+    setWorkspace(roleDefaults("manager"));
+    api.fetchDiningDaySummary.mockResolvedValue({
+      day: "2026-11-27",
+      checksClosed: 1,
+      receivedCents: 100,
+      tipsCents: 0,
+      byServer: [],
+      byMethod: [],
+    });
+    api.fetchClosedChecksToday.mockResolvedValue([]);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Closed checks" }));
+    const dlg = await screen.findByRole("dialog", { name: "Checks closed today" });
+    expect(await within(dlg).findByText("No check closed today yet.")).toBeInTheDocument();
+    // pick the first earlier day in the list (yesterday)
+    fireEvent.keyDown(within(dlg).getByRole("combobox", { name: "Day" }), { key: "Enter" });
+    const options = await screen.findAllByRole("option");
+    expect(options[0]).toHaveTextContent("Today");
+    fireEvent.click(options[1]!);
+    await waitFor(() =>
+      expect(api.fetchClosedChecksToday.mock.lastCall?.[0].data.day).toMatch(/^\d{4}-\d{2}-\d{2}$/),
+    );
+    expect(await screen.findByRole("dialog", { name: /^Checks closed on / })).toBeInTheDocument();
+    expect(await screen.findByText("No check closed on that day.")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Day" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "Today" }));
+    await waitFor(() =>
+      expect(api.fetchClosedChecksToday).toHaveBeenLastCalledWith({
+        data: { orgId: expect.any(String), locationId: "store-1" },
+      }),
+    );
+  });
 });
 
 describe("day summary", () => {
