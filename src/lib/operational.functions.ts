@@ -18,6 +18,8 @@ import {
 } from "./dining-room";
 import { localDay, startOfLocalDay } from "./store-time";
 import { toCheckHistory, toClosedChecks } from "./check-history";
+import { mapResources, type Resources } from "./operational-mappers";
+import type { RecipeCost } from "./menu-engineering";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -1462,3 +1464,59 @@ export const fetchMenuItemSales = createServerFn({ method: "POST" })
       sales_cents: Number(r.sales_cents),
     }));
   });
+
+/**
+ * Current recipe cost per serving of each product at each store (database store ids), computed the
+ * same way the screens compute it (mapResources). Server-side helper for the assistant (0040/0042).
+ * Returns null when the member cannot see inventory costs (inventory_item_costs refuses): the caller
+ * then has no cost, never a zero.
+ */
+export async function readRecipeCosts(
+  client: SupabaseClient<Database>,
+  orgDbId: string,
+): Promise<RecipeCost[] | null> {
+  const [org, locations, inventory, recipes] = await Promise.all([
+    client.from("organizations").select("slug").eq("id", orgDbId).maybeSingle(),
+    client.from("locations").select("id,slug,timezone").eq("org_id", orgDbId),
+    client.from("inventory_items").select(INVENTORY_COLUMNS).eq("org_id", orgDbId),
+    client
+      .from("product_recipes")
+      .select("*,recipe_ingredients(*),menu_products(name,price_cents)")
+      .eq("org_id", orgDbId),
+  ]);
+  if (org.error || locations.error || inventory.error || recipes.error)
+    throw new Error("resources_read_failed");
+  const costRead = await client.rpc("inventory_item_costs", { _org_id: orgDbId });
+  if (costRead.error) {
+    if (costRead.error.message === "permission_denied") return null;
+    throw new Error("resources_read_failed");
+  }
+  const costs = new Map((costRead.data ?? []).map((r) => [r.item_id, r.cost_cents]));
+  const resources: Resources = {
+    orgId: org.data?.slug ?? orgDbId,
+    locations: locations.data ?? [],
+    costsVisible: true,
+    inventory: (inventory.data ?? []).map((i) => ({ ...i, cost_cents: costs.get(i.id) ?? null })),
+    recipes: recipes.data ?? [],
+    suppliers: [],
+    purchases: [],
+    movements: [],
+    expenses: [],
+  };
+  const idOf = new Map(
+    (locations.data ?? []).flatMap(
+      (l) =>
+        [
+          [l.slug, l.id],
+          [l.id, l.id],
+        ] as const,
+    ),
+  );
+  return mapResources(resources)
+    .recipes.filter((r) => r.productId && r.locationId)
+    .map((r) => ({
+      productId: r.productId as string,
+      locationId: idOf.get(r.locationId as string) ?? (r.locationId as string),
+      costPerServingCents: r.costPerServingCents,
+    }));
+}

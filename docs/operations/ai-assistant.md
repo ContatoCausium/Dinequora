@@ -36,13 +36,19 @@ parte que ela não pode ler vai como "não disponível", nunca como zero.
 
 O retrato tem:
 - **Razão financeiro dos últimos 30 dias:** vendas líquidas, CMV e despesas, por dia e por loja.
-- **Mais vendidos dos últimos 30 dias:** só pedidos pagos, não cancelados e não simulados.
+- **Mais vendidos dos últimos 30 dias:** pratos pedidos (pedidos não cancelados), lidos de
+  `menu_item_sales` (0042), agregados no banco: sem o antigo limite de 2.000 pedidos, que num mês
+  movimentado cortava a lista sem aviso.
+- **Engenharia de cardápio dos últimos 30 dias** (a mesma classificação da tela de Insights): classe,
+  vendidos, preço médio, custo da ficha e margem por unidade de cada prato, e os pratos vendidos sem
+  custo de ficha. Só vai quando a pessoa pode ver custos (`inventory.costs`); senão vai como "não
+  disponível".
 - **Estoque** no mínimo ou abaixo dele.
 - **Pedidos abertos agora.**
 - **Lojas e fusos.**
 
 **Não são enviados:** dados de clientes, nomes ou e-mails de funcionários, senhas, chaves, dados de
-cartão nem custos unitários de estoque.
+cartão nem o custo de cada item de estoque (só o custo da ficha por prato, para quem já vê custos).
 
 As instruções do modelo (`SYSTEM_PROMPT` em `src/lib/assistant.functions.ts`) mandam:
 - usar só o retrato;
