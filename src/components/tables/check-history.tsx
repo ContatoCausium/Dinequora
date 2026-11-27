@@ -136,9 +136,14 @@ export function ClosedChecksDialog({
   const { t, i18n } = useTranslation("tables");
   const money = (c: number) => fmtMoneyCents(c, i18n.language);
   const [historyOf, setHistoryOf] = useState<{ id: string; title: string } | null>(null);
+  /** Empty = today (the store's day, decided by the server). */
+  const [day, setDay] = useState("");
   const q = useQuery({
-    queryKey: ["dining-closed-today", orgId, storeId],
-    queryFn: () => fetchClosedChecksToday({ data: { orgId, locationId: storeId } }),
+    queryKey: ["dining-closed-today", orgId, storeId, day],
+    queryFn: () =>
+      fetchClosedChecksToday({
+        data: { orgId, locationId: storeId, ...(day ? { day } : {}) },
+      }),
     enabled: open,
     staleTime: 0,
   });
@@ -147,9 +152,26 @@ export function ClosedChecksDialog({
       <Dialog open={open && historyOf === null} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t("history.closedTitle")}</DialogTitle>
+            <DialogTitle>
+              {day ? t("history.closedTitleDay", { day }) : t("history.closedTitle")}
+            </DialogTitle>
             <DialogDescription>{t("history.closedHint")}</DialogDescription>
           </DialogHeader>
+          <label className="flex items-center gap-2 text-[13px]">
+            <span>{t("history.dayLabel")}</span>
+            <input
+              type="date"
+              value={day}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setDay(e.target.value)}
+              className="rounded-md border bg-background px-2 py-1 text-[13px]"
+            />
+            {day && (
+              <Button variant="ghost" size="sm" onClick={() => setDay("")}>
+                {t("history.today")}
+              </Button>
+            )}
+          </label>
           {q.isPending ? (
             <p className="text-sm text-muted-foreground">{t("history.closedLoading")}</p>
           ) : q.isError ? (
@@ -157,7 +179,9 @@ export function ClosedChecksDialog({
               {t("history.error")}
             </p>
           ) : q.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("history.closedEmpty")}</p>
+            <p className="text-sm text-muted-foreground">
+              {day ? t("history.closedEmptyDay") : t("history.closedEmpty")}
+            </p>
           ) : (
             <ul className="max-h-[60vh] divide-y overflow-y-auto">
               {q.data.map((c) => {

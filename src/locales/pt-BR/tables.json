@@ -334,7 +334,11 @@
     "closedHint": "Da mais recente para a mais antiga. Abra uma para ver o histórico.",
     "closedEmpty": "Nenhuma comanda fechada hoje ainda.",
     "closedLoading": "Carregando as comandas de hoje…",
-    "reason": "Motivo: {{reason}}"
+    "reason": "Motivo: {{reason}}",
+    "closedTitleDay": "Comandas fechadas em {{day}}",
+    "dayLabel": "Dia",
+    "today": "Hoje",
+    "closedEmptyDay": "Nenhuma comanda fechada nesse dia."
   },
   "close": {
     "print": "Imprimir fechamento",
