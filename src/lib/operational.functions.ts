@@ -1244,7 +1244,7 @@ export const fetchDiningDaySummary = createServerFn({ method: "POST" })
     const day = localDay(new Date(), tz);
     const since = startOfLocalDay(day, tz).toISOString();
     const c = context.supabase;
-    const [tenders, closed] = await Promise.all([
+    const [tenders, closed, open] = await Promise.all([
       c
         .from("dining_check_payments")
         .select("amount_cents,tip_cents,status,check_id,method")
@@ -1258,8 +1258,15 @@ export const fetchDiningDaySummary = createServerFn({ method: "POST" })
         .eq("location_id", sc.location.id)
         .eq("status", "closed")
         .gte("closed_at", since),
+      // Checks still open right now (any day): the drawer should not be closed over them.
+      c
+        .from("dining_checks")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", sc.org.id)
+        .eq("location_id", sc.location.id)
+        .eq("status", "open"),
     ]);
-    if (tenders.error || closed.error) throw new Error("dining_read_failed");
+    if (tenders.error || closed.error || open.error) throw new Error("dining_read_failed");
     const checkIds = [...new Set((tenders.data ?? []).map((t) => t.check_id))];
     const checks = checkIds.length
       ? await c.from("dining_checks").select("id,session_id,status").in("id", checkIds)
@@ -1281,6 +1288,7 @@ export const fetchDiningDaySummary = createServerFn({ method: "POST" })
       checks: checks.data ?? [],
       sessions: sessions.data ?? [],
       closedToday: closed.count ?? 0,
+      openNow: open.count ?? 0,
       profiles: profiles.data ?? [],
     });
   });

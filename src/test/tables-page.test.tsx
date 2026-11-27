@@ -779,6 +779,7 @@ describe("day summary", () => {
     setWorkspace(roleDefaults("manager"));
     api.fetchDiningDaySummary.mockResolvedValue({
       day: "2026-11-27",
+      checksOpen: 2,
       checksClosed: 2,
       receivedCents: 2712,
       tipsCents: 370,
@@ -792,5 +793,8 @@ describe("day summary", () => {
     const list = await screen.findByRole("list", { name: "Received today by payment method" });
     expect(within(list).getByText("Cash: $5.84")).toBeInTheDocument();
     expect(within(list).getByText("Card: $21.28 + $3.70 in tips")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 checks are still open: close them before closing the drawer."),
+    ).toBeInTheDocument();
   });
 });

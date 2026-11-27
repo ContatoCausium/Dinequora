@@ -49,6 +49,7 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
           day: t("close.day"),
           partial: t("close.partial"),
           checksClosed: t("close.checksClosed"),
+          checksOpen: t("close.checksOpen"),
           byMethod: t("close.byMethod"),
           method: (m) => t(`pay.methods.${m}`, { defaultValue: m }),
           tips: t("close.tips"),
@@ -89,6 +90,14 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
           {t("close.print")}
         </Button>
       </p>
+      {d.checksOpen > 0 && (
+        <p role="note" className="mt-1.5 font-medium text-warning-foreground">
+          {t("day.openChecks", {
+            count: d.checksOpen,
+            formatted: fmtNumber(d.checksOpen, i18n.language),
+          })}
+        </p>
+      )}
       {d.byMethod.length > 0 && (
         <ul
           aria-label={t("day.byMethodLabel")}

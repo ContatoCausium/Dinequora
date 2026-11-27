@@ -289,7 +289,9 @@
     "serverTips": "{{name}}: {{amount}} em gorjetas",
     "byMethodLabel": "Recebido hoje por forma de pagamento",
     "method": "{{method}}: {{amount}}",
-    "methodWithTips": "{{method}}: {{amount}} + {{tips}} de gorjeta"
+    "methodWithTips": "{{method}}: {{amount}} + {{tips}} de gorjeta",
+    "openChecks_one": "{{formatted}} comanda ainda está aberta: feche antes de fechar o caixa.",
+    "openChecks_other": "{{formatted}} comandas ainda estão abertas: feche antes de fechar o caixa."
   },
   "bill": {
     "print": "Imprimir conta",
@@ -352,6 +354,7 @@
     "tipsTotal": "Gorjetas",
     "byServer": "Gorjetas por garçom",
     "tipsNote": "Gorjetas são da equipe; não são receita.",
-    "printedAt": "Impresso em"
+    "printedAt": "Impresso em",
+    "checksOpen": "Comandas ainda abertas"
   }
 }
