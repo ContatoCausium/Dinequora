@@ -150,6 +150,69 @@ describe("assistant snapshot", () => {
   });
 });
 
+describe("assistant snapshot: purchase forecast", () => {
+  it("lists what to buy for 7 days from sales use; no use means no quantity", () => {
+    const snap = buildAssistantSnapshot({
+      organization: "Test Kitchen",
+      stores,
+      ledger: null,
+      inventory: [
+        {
+          id: "buns",
+          name: "Buns",
+          unit: "units",
+          quantity: 10,
+          min_quantity: 4,
+          location_id: "s1",
+          supplier: "Bakery",
+        },
+        {
+          id: "napkins",
+          name: "Napkins",
+          unit: "pack",
+          quantity: 1,
+          min_quantity: 3,
+          location_id: "s1",
+        },
+      ],
+      consumption: [{ inventory_item_id: "buns", consumed: 60 }],
+      itemSales: null,
+      recipeCosts: null,
+      openOrders: null,
+      now: "2026-11-27T15:00:00Z",
+    });
+    // 60/30 = 2 per day; 2 x 7 + 4 - 10 = 8
+    expect(snap.purchaseForecastNext7Days?.buy).toEqual([
+      {
+        item: "Buns",
+        store: "Downtown",
+        unit: "units",
+        onHand: 10,
+        usePerDay: 2,
+        lastsDays: 5,
+        buy: 8,
+        supplier: "Bakery",
+      },
+    ]);
+    expect(snap.purchaseForecastNext7Days?.atOrBelowMinimumWithoutSalesUse).toEqual(["Napkins"]);
+  });
+
+  it("without the consumption read there is no forecast (not available, never zero)", () => {
+    const snap = buildAssistantSnapshot({
+      organization: "Test Kitchen",
+      stores,
+      ledger: null,
+      inventory: [],
+      consumption: null,
+      itemSales: null,
+      recipeCosts: null,
+      openOrders: null,
+      now: "2026-11-27T15:00:00Z",
+    });
+    expect(snap.purchaseForecastNext7Days).toBeNull();
+  });
+});
+
 describe("assistant panel", () => {
   it("asks with the store scope and the history, and shows the answer", async () => {
     api.askAssistant.mockResolvedValue({
