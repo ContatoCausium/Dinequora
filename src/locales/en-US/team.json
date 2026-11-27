@@ -232,6 +232,7 @@
       "finance": "Finance",
       "expenses": "Expenses",
       "reports": "Reports",
+      "assistant": "AI assistant",
       "team": "Team",
       "settings": "Settings"
     },
@@ -260,6 +261,7 @@
       "locations": "Stores",
       "branding": "Branding",
       "billing": "Billing",
+      "use": "Use",
       "status": "Change status",
       "serve": "Serve tables",
       "resolve_pending": "Resolve pending sales"

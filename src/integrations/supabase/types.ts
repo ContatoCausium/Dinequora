@@ -3,6 +3,58 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      assistant_usage: {
+        Row: {
+          created_at: string;
+          id: string;
+          input_tokens: number;
+          location_id: string | null;
+          model: string;
+          org_id: string;
+          output_tokens: number;
+          question_chars: number;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          input_tokens: number;
+          location_id?: string | null;
+          model: string;
+          org_id: string;
+          output_tokens: number;
+          question_chars: number;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          input_tokens?: number;
+          location_id?: string | null;
+          model?: string;
+          org_id?: string;
+          output_tokens?: number;
+          question_chars?: number;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assistant_usage_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assistant_usage_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       audit_logs: {
         Row: {
           action: string;
@@ -2325,6 +2377,7 @@ export type Database = {
         Args: { _location_id?: string; _org_id: string; _perm: string };
         Returns: undefined;
       };
+      assistant_month_tokens: { Args: { _org_id: string }; Returns: number };
       audit_visible_location_ids: { Args: Record<PropertyKey, never>; Returns: string[] };
       billing_apply_stripe_event: {
         Args: {
@@ -2713,6 +2766,17 @@ export type Database = {
       receive_operational_purchase: {
         Args: { _client_event_id: string; _items: Json; _notes?: string; _purchase_id: string };
         Returns: string;
+      };
+      record_assistant_usage: {
+        Args: {
+          _input_tokens: number;
+          _location_id?: string;
+          _model: string;
+          _org_id: string;
+          _output_tokens: number;
+          _question_chars: number;
+        };
+        Returns: undefined;
       };
       record_operational_movement: {
         Args: {

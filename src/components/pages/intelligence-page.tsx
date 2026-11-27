@@ -22,6 +22,7 @@ import {
 import { fmtDateTime, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format";
 import { useWorkspace, useScopedLocations } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
+import { AssistantPanel } from "@/components/intelligence/assistant-panel";
 import { StatTile } from "@/components/app/stat-tile";
 import { EmptyState, LedgerIncompleteNotice, Skeleton, StateCard } from "@/components/app/states";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
@@ -301,7 +302,7 @@ const LEVEL_BADGE = { high: "danger", medium: "warning", low: "success" } as con
 export function IntelligencePage() {
   const { t, i18n } = useTranslation("intelligence");
   const lng = i18n.language;
-  const { org, locationId } = useWorkspace();
+  const { org, locationId, can } = useWorkspace();
   // Build-time profile: the client preview never shows the not-yet-connected WhatsApp integration.
   const showWhatsApp = !isClientPreview();
   const scopedLocations = useScopedLocations();
@@ -465,6 +466,8 @@ export function IntelligencePage() {
           />
         }
       />
+
+      {can("assistant.use") && <AssistantPanel orgId={org.id} locationId={locationId} />}
 
       {loadFailed ? (
         <div className="surface">
