@@ -120,56 +120,66 @@ export function FinancePage() {
 
   // Same paged loader as Reports (this used to be a single page of 200): the history up to the
   // browser cap, and the screen says so when older orders could not be included.
-  const load = useCallback(async () => {
+  // The figures come from the ledger and the expenses; the order history (several pages) is only
+  // used by the simulated-sales notice and the report exports. The screen shows the figures as soon
+  // as the ledger and the expenses arrive, and the exports wait for the orders (ordersLoading).
+  const loadCore = useCallback(async () => {
     // The whole ledger history (trend and "all time"), read completely or flagged incomplete.
-    const [r, o, l] = await Promise.all([
+    const [r, l] = await Promise.all([
       fetchOperationalResources({ data: { orgId: org.id } }),
-      fetchAllOrders(org.id, "all"),
       fetchLedgerSummary({ data: { orgId: org.id, days: null } }),
     ]);
-    return {
-      expenses: mapResources(r).expenses,
-      ledger: l,
-      orders: o.orders,
-      ordersMeta: { total: o.total, truncated: o.truncated },
-    };
+    return { expenses: mapResources(r).expenses, ledger: l };
   }, [org.id]);
+  const loadOrders = useCallback(() => fetchAllOrders(org.id, "all"), [org.id]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
 
   const reload = useCallback(async () => {
     try {
-      const d = await load();
+      const [d, o] = await Promise.all([loadCore(), loadOrders()]);
       setAllExpenses(d.expenses);
       setLedgerSummary(d.ledger);
-      setOrders(d.orders);
-      setOrdersMeta(d.ordersMeta);
+      setOrders(o.orders);
+      setOrdersMeta({ total: o.total, truncated: o.truncated });
+      setOrdersLoading(false);
       setState("ready");
     } catch {
       setState("error");
     }
-  }, [load]);
+  }, [loadCore, loadOrders]);
 
   useEffect(() => {
     let active = true;
+    let failed = false;
+    const fail = () => {
+      failed = true;
+      if (active) setState("error");
+    };
     setState("loading");
     setAllExpenses([]);
     setLedgerSummary(null);
     setOrders([]);
-    load()
+    setOrdersLoading(true);
+    loadCore()
       .then((d) => {
-        if (!active) return;
+        if (!active || failed) return;
         setAllExpenses(d.expenses);
         setLedgerSummary(d.ledger);
-        setOrders(d.orders);
-        setOrdersMeta(d.ordersMeta);
         setState("ready");
       })
-      .catch(() => {
-        if (active) setState("error");
-      });
+      .catch(fail);
+    loadOrders()
+      .then((o) => {
+        if (!active || failed) return;
+        setOrders(o.orders);
+        setOrdersMeta({ total: o.total, truncated: o.truncated });
+        setOrdersLoading(false);
+      })
+      .catch(fail);
     return () => {
       active = false;
     };
-  }, [load]);
+  }, [loadCore, loadOrders]);
 
   // ── Scoped figures (store switcher) ──
   const expenses = useMemo(
@@ -628,6 +638,7 @@ export function FinancePage() {
                 orgId={org.id}
                 trendEntries={trendRows}
                 orders={orders}
+                ordersLoading={ordersLoading}
                 stores={perStore}
                 currentMonth={storeToday.slice(0, 7)}
               />
