@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { saveOperationalRecord } from "@/lib/operational.functions";
@@ -61,6 +61,7 @@ export function OperationalCreateDialog({
   onSaved,
   locations,
   purchaseStatus = "sent",
+  initial,
 }: {
   kind: "inventory" | "supplier" | "purchase";
   open: boolean;
@@ -74,6 +75,17 @@ export function OperationalCreateDialog({
   locations?: { id: string; name: string }[] | undefined;
   /** "draft" when the user may create but not approve (send) purchase orders. */
   purchaseStatus?: "draft" | "sent" | undefined;
+  /** Purchase only: a line to start from (e.g. a purchase forecast suggestion). Editable. */
+  initial?:
+    | {
+        itemId: string;
+        quantity: number;
+        unitPriceCents?: number | undefined;
+        supplierId?: string | undefined;
+        locationId?: string | undefined;
+      }
+    | null
+    | undefined;
 }) {
   const { t } = useTranslation("operations");
   const [storeId, setStoreId] = useState("");
@@ -91,6 +103,15 @@ export function OperationalCreateDialog({
   const [discount, setDiscount] = useState("0");
   const [tax, setTax] = useState("0");
   const [shipping, setShipping] = useState("0");
+  // A suggested line fills the form each time the dialog opens with it (the user can still change it).
+  useEffect(() => {
+    if (!open || kind !== "purchase" || !initial) return;
+    setItemId(initial.itemId);
+    setQuantity(String(initial.quantity));
+    setPrice(((initial.unitPriceCents ?? 0) / 100).toFixed(2));
+    if (initial.supplierId) setSupplierId(initial.supplierId);
+    if (initial.locationId) setStoreId(initial.locationId);
+  }, [open, kind, initial]);
   async function save() {
     if (busy) return;
     const q = Number(quantity);
