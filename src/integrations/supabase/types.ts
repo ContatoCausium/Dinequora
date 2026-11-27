@@ -136,6 +136,72 @@ export type Database = {
         };
         Relationships: [];
       };
+      dining_check_payments: {
+        Row: {
+          amount_cents: number;
+          change_cents: number;
+          check_id: string;
+          client_key: string;
+          created_at: string;
+          created_by: string;
+          id: string;
+          location_id: string;
+          method: string;
+          org_id: string;
+          reversal_reason: string | null;
+          reversed_at: string | null;
+          reversed_by: string | null;
+          status: string;
+          tendered_cents: number | null;
+          tip_cents: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          amount_cents: number;
+          change_cents?: number;
+          check_id: string;
+          client_key: string;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          location_id: string;
+          method: string;
+          org_id: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          status?: string;
+          tendered_cents?: number | null;
+          tip_cents?: number;
+        };
+        Update: {
+          amount_cents?: number;
+          change_cents?: number;
+          check_id?: string;
+          client_key?: string;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          location_id?: string;
+          method?: string;
+          org_id?: string;
+          reversal_reason?: string | null;
+          reversed_at?: string | null;
+          reversed_by?: string | null;
+          status?: string;
+          tendered_cents?: number | null;
+          tip_cents?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_check_payments_org_id_location_id_check_id_fkey";
+            columns: ["org_id", "location_id", "check_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_checks";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
       dining_check_rounds: {
         Row: {
           check_id: string;
@@ -2376,6 +2442,8 @@ export type Database = {
         };
         Returns: string;
       };
+      dining_check_balance: { Args: { _check_id: string }; Returns: Record<string, unknown> };
+      dining_close_paid_check_internal: { Args: { _check_id: string }; Returns: undefined };
       dining_server_ok: {
         Args: { _location_id: string; _org_id: string; _user_id: string };
         Returns: boolean;
@@ -2521,6 +2589,10 @@ export type Database = {
       };
       member_permissions: { Args: { _member_id: string }; Returns: string[] };
       member_scope: { Args: { _member_id: string }; Returns: string[] };
+      move_check_round: {
+        Args: { _location_id: string; _order_id: string; _org_id: string; _to_check_id: string };
+        Returns: undefined;
+      };
       move_dining_session: {
         Args: { _location_id: string; _org_id: string; _session_id: string; _to_table_id: string };
         Returns: undefined;
@@ -2583,6 +2655,19 @@ export type Database = {
       org_feature_enabled: { Args: { _feature: string; _org_id: string }; Returns: boolean };
       org_is_operational: { Args: { _org_id: string }; Returns: boolean };
       orgs_with_any_permission: { Args: { _perms: string[] }; Returns: string[] };
+      pay_dining_check: {
+        Args: {
+          _amount_cents: number;
+          _check_id: string;
+          _client_key: string;
+          _location_id: string;
+          _method: string;
+          _org_id: string;
+          _tendered_cents?: number;
+          _tip_cents?: number;
+        };
+        Returns: Json;
+      };
       permission_catalog: { Args: Record<PropertyKey, never>; Returns: string[] };
       permission_feature_enabled: { Args: { _org_id: string; _perm: string }; Returns: boolean };
       persist_finalized_pos_sale_atomic: {
@@ -2791,6 +2876,10 @@ export type Database = {
         Returns: undefined;
       };
       valid_location_hours: { Args: { _hours: Json }; Returns: boolean };
+      void_check_payment: {
+        Args: { _location_id: string; _org_id: string; _payment_id: string; _reason: string };
+        Returns: undefined;
+      };
       write_audit: {
         Args: { _action: string; _meta: Json; _org: string; _target: string };
         Returns: undefined;

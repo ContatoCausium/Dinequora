@@ -274,6 +274,13 @@
       "when": 1795777279812,
       "tag": "0038_dining_sessions_checks_rounds",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795863679812,
+      "tag": "0039_dining_check_payments",
+      "breakpoints": true
     }
   ]
 }

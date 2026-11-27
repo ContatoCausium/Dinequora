@@ -52,11 +52,28 @@ export interface CheckRound {
   totalCents: number;
   items: RoundItem[];
 }
+export const TENDER_METHODS = ["cash", "card", "digital"] as const;
+export type TenderMethod = (typeof TENDER_METHODS)[number];
+export interface CheckTender {
+  id: string;
+  method: TenderMethod;
+  amountCents: number;
+  tipCents: number;
+  changeCents: number;
+  reversed: boolean;
+  createdAt: string;
+}
 export interface SessionCheck {
   id: string;
   number: number;
   label: string | null;
   rounds: CheckRound[];
+  /** Tenders recorded on this check (0039), reversed ones included (shown struck through). */
+  tenders: CheckTender[];
+  /** What the recorded (not reversed) tenders cover of the check. */
+  paidCents: number;
+  /** liveTotalCents - paidCents: what is left to pay. */
+  balanceCents: number;
   /** Sum of the rounds that are not cancelled (tax included): what this check will charge. */
   liveTotalCents: number;
   liveRounds: number;
@@ -101,6 +118,16 @@ export type SessionRows = {
     order_item_modifiers?: readonly { option_name: string }[] | null;
   }[];
   profiles: readonly { id: string; full_name: string | null }[];
+  tenders?: readonly {
+    id: string;
+    check_id: string;
+    method: string;
+    amount_cents: number;
+    tip_cents: number;
+    change_cents: number;
+    status: string;
+    created_at: string;
+  }[];
 };
 
 /** Open sessions with their open checks (by number) and each check's rounds (oldest first). */
@@ -137,12 +164,31 @@ export function toOpenSessions(rows: SessionRows): OpenSession[] {
       .map((c) => {
         const rounds = roundsOf(c.id);
         const live = rounds.filter((r) => r.status !== "cancelled");
+        const tenders: CheckTender[] = (rows.tenders ?? [])
+          .filter((p) => p.check_id === c.id)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))
+          .map((p) => ({
+            id: p.id,
+            method: (TENDER_METHODS as readonly string[]).includes(p.method)
+              ? (p.method as TenderMethod)
+              : "cash",
+            amountCents: p.amount_cents,
+            tipCents: p.tip_cents,
+            changeCents: p.change_cents,
+            reversed: p.status === "reversed",
+            createdAt: p.created_at,
+          }));
+        const liveTotalCents = live.reduce((n, r) => n + r.totalCents, 0);
+        const paidCents = tenders.filter((p) => !p.reversed).reduce((n, p) => n + p.amountCents, 0);
         return {
           id: c.id,
           number: c.number,
           label: c.label,
           rounds,
-          liveTotalCents: live.reduce((n, r) => n + r.totalCents, 0),
+          tenders,
+          paidCents,
+          balanceCents: Math.max(0, liveTotalCents - paidCents),
+          liveTotalCents,
           liveRounds: live.length,
         };
       });
@@ -292,7 +338,46 @@ export const DINING_ERRORS = [
   "insufficient_stock",
   "order_empty",
   "too_many_checks",
+  "invalid_payment",
+  "invalid_amount",
+  "invalid_tip",
+  "invalid_tendered",
+  "check_empty",
+  "payment_exceeds_balance",
+  "payment_not_found",
+  "reason_required",
+  "round_not_found",
+  "check_other_table",
+  "check_has_payments",
+  "isolation_unsupported",
 ] as const;
+
+/** Each payer's share when a balance is split equally: the first ones carry the odd cents. */
+export function equalShares(balanceCents: number, people: number): number[] {
+  const n = Math.max(1, Math.min(99, Math.floor(people)));
+  const base = Math.floor(balanceCents / n);
+  const extra = balanceCents - base * n;
+  return Array.from({ length: n }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+/** What a set of items costs with their share of the round's tax (rounded like the server's tax). */
+export function itemsShareCents(
+  items: readonly { subtotalCents: number; roundSubtotalCents: number; roundTaxCents: number }[],
+): number {
+  return items.reduce(
+    (n, i) =>
+      n +
+      i.subtotalCents +
+      (i.roundSubtotalCents > 0
+        ? Math.round((i.subtotalCents * i.roundTaxCents) / i.roundSubtotalCents)
+        : 0),
+    0,
+  );
+}
+
+/** A tip as a percentage of what the tender pays (whole cents). */
+export const tipCents = (amountCents: number, percent: number) =>
+  Math.round((amountCents * percent) / 100);
 export type DiningError = (typeof DINING_ERRORS)[number];
 
 /** The message key for an error thrown by a dining-room server function ("unknown" otherwise). */
@@ -300,4 +385,11 @@ export function diningErrorKey(e: unknown): DiningError | "unknown" {
   const message = e instanceof Error ? e.message : String(e ?? "");
   const found = DINING_ERRORS.find((c) => message === c || message.startsWith(`${c}:`));
   return found ?? "unknown";
+}
+
+/** Dollars typed by a person ("12", "12.5", "12,50") to cents; null when not a valid amount. */
+export function parseMoneyInput(v: string): number | null {
+  const s = v.trim().replace(",", ".");
+  if (!/^\d+(\.\d{0,2})?$/.test(s)) return null;
+  return Math.round(Number(s) * 100);
 }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ChefHat, Minus, Plus, Search, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowRightLeft, ChefHat, Minus, Plus, Search, Trash2, TriangleAlert } from "lucide-react";
+import { CheckPayment } from "@/components/tables/check-payment";
 
 import { OrderStatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ import {
   closeEmptyDiningSession,
   fetchOperationalMenu,
   fireCheckRound,
+  moveCheckRound,
   moveDiningSession,
   openDiningCheck,
   openDiningSession,
@@ -318,6 +320,8 @@ export function CheckSheet({
   const [confirmClose, setConfirmClose] = useState(false);
   const [guests, setGuests] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [moveRound, setMoveRound] = useState<string | null>(null);
+  const [moveRoundTo, setMoveRoundTo] = useState("");
   const [newCheck, setNewCheck] = useState<string | null>(null);
   const newCheckKey = useRef(newKey());
   const check = session?.checks.find((c) => c.id === activeId) ?? session?.checks[0] ?? null;
@@ -578,16 +582,38 @@ export function CheckSheet({
                                 status={r.status}
                                 label={t(`orders:statuses.${r.status}`, { defaultValue: r.status })}
                               />
-                              {can.refund && r.status !== "cancelled" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t("check.voidRound", { n: r.roundNo })}
-                                  onClick={() => setVoidTarget(r.orderId)}
-                                >
-                                  <Trash2 aria-hidden />
-                                </Button>
-                              )}
+                              {can.serve &&
+                                r.status !== "cancelled" &&
+                                session.checks.length > 1 &&
+                                check &&
+                                check.paidCents === 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={t("check.moveRound", { n: r.roundNo })}
+                                    onClick={() => {
+                                      setMoveRound(r.orderId);
+                                      setMoveRoundTo(
+                                        session.checks.find((c) => c.id !== check.id)?.id ?? "",
+                                      );
+                                    }}
+                                  >
+                                    <ArrowRightLeft aria-hidden />
+                                  </Button>
+                                )}
+                              {can.refund &&
+                                r.status !== "cancelled" &&
+                                check &&
+                                check.paidCents === 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={t("check.voidRound", { n: r.roundNo })}
+                                    onClick={() => setVoidTarget(r.orderId)}
+                                  >
+                                    <Trash2 aria-hidden />
+                                  </Button>
+                                )}
                             </span>
                           </div>
                           <ul className="space-y-0.5 text-[13px]">
@@ -624,8 +650,19 @@ export function CheckSheet({
                       <span className="tabular-nums">{money(session.liveTotalCents)}</span>
                     </p>
                   )}
-                  <p className="mt-0.5 text-[12px] text-muted-foreground">{t("check.payLater")}</p>
                 </section>
+
+                {check && check.liveRounds > 0 && (
+                  <CheckPayment
+                    key={check.id}
+                    check={check}
+                    orgId={orgId}
+                    storeId={storeId}
+                    can={{ sell: can.sell, serve: can.serve, refund: can.refund }}
+                    reload={reload}
+                    onSettled={() => setActiveId(null)}
+                  />
+                )}
 
                 {can.serve && (
                   <section aria-labelledby="check-next" className="space-y-3">
@@ -831,6 +868,62 @@ export function CheckSheet({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={moveRound !== null}
+        onOpenChange={(o) => !o && busy === null && setMoveRound(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("check.moveRoundTitle")}</DialogTitle>
+            <DialogDescription>{t("check.moveRoundBody")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="dining-move-round-to">{t("check.moveRoundTo")}</Label>
+            <Select value={moveRoundTo} onValueChange={setMoveRoundTo}>
+              <SelectTrigger id="dining-move-round-to">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {session?.checks
+                  .filter((c) => c.id !== check?.id)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {checkName(c)}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="mt-2 gap-2 sm:justify-end">
+            <Button variant="outline" disabled={busy !== null} onClick={() => setMoveRound(null)}>
+              {t("form.cancel")}
+            </Button>
+            <Button
+              disabled={busy !== null || !moveRoundTo}
+              onClick={() =>
+                moveRound &&
+                void run(
+                  "move-round",
+                  () =>
+                    moveCheckRound({
+                      data: {
+                        orgId,
+                        locationId: storeId,
+                        orderId: moveRound,
+                        toCheckId: moveRoundTo,
+                      },
+                    }),
+                  t("check.roundMoved"),
+                  () => setMoveRound(null),
+                )
+              }
+            >
+              {t("check.moveRoundConfirm")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
