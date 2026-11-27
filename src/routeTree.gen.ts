@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as MfaRouteImport } from './routes/mfa'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
@@ -40,6 +41,7 @@ import { Route as AuthenticatedControlSettingsRouteImport } from './routes/_auth
 import { Route as AuthenticatedControlSubscriptionsRouteImport } from './routes/_authenticated/control.subscriptions'
 import { Route as AuthenticatedAppSettingsBillingRouteImport } from './routes/_authenticated/_app/settings.billing'
 import { Route as AuthenticatedAppSettingsBrandingRouteImport } from './routes/_authenticated/_app/settings.branding'
+import { Route as AuthenticatedAppSettingsSecurityRouteImport } from './routes/_authenticated/_app/settings.security'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -53,6 +55,11 @@ const AuthRoute = AuthRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MfaRoute = MfaRouteImport.update({
+  id: '/mfa',
+  path: '/mfa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -207,11 +214,18 @@ const AuthenticatedAppSettingsBrandingRoute =
     path: '/settings/branding',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppSettingsSecurityRoute =
+  AuthenticatedAppSettingsSecurityRouteImport.update({
+    id: '/settings/security',
+    path: '/settings/security',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/mfa': typeof MfaRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/control': typeof AuthenticatedControlRouteWithChildren
@@ -238,11 +252,13 @@ export interface FileRoutesByFullPath {
   '/control/': typeof AuthenticatedControlIndexRoute
   '/settings/billing': typeof AuthenticatedAppSettingsBillingRoute
   '/settings/branding': typeof AuthenticatedAppSettingsBrandingRoute
+  '/settings/security': typeof AuthenticatedAppSettingsSecurityRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/mfa': typeof MfaRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
@@ -268,12 +284,14 @@ export interface FileRoutesByTo {
   '/control': typeof AuthenticatedControlIndexRoute
   '/settings/billing': typeof AuthenticatedAppSettingsBillingRoute
   '/settings/branding': typeof AuthenticatedAppSettingsBrandingRoute
+  '/settings/security': typeof AuthenticatedAppSettingsSecurityRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/mfa': typeof MfaRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
@@ -302,6 +320,7 @@ export interface FileRoutesById {
   '/_authenticated/control/': typeof AuthenticatedControlIndexRoute
   '/_authenticated/_app/settings/billing': typeof AuthenticatedAppSettingsBillingRoute
   '/_authenticated/_app/settings/branding': typeof AuthenticatedAppSettingsBrandingRoute
+  '/_authenticated/_app/settings/security': typeof AuthenticatedAppSettingsSecurityRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -309,6 +328,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/forgot-password'
+    | '/mfa'
     | '/reset-password'
     | '/signup'
     | '/control'
@@ -335,11 +355,13 @@ export interface FileRouteTypes {
     | '/control/'
     | '/settings/billing'
     | '/settings/branding'
+    | '/settings/security'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/forgot-password'
+    | '/mfa'
     | '/reset-password'
     | '/signup'
     | '/onboarding'
@@ -365,11 +387,13 @@ export interface FileRouteTypes {
     | '/control'
     | '/settings/billing'
     | '/settings/branding'
+    | '/settings/security'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
     | '/forgot-password'
+    | '/mfa'
     | '/reset-password'
     | '/signup'
     | '/_authenticated/_app'
@@ -398,12 +422,14 @@ export interface FileRouteTypes {
     | '/_authenticated/control/'
     | '/_authenticated/_app/settings/billing'
     | '/_authenticated/_app/settings/branding'
+    | '/_authenticated/_app/settings/security'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  MfaRoute: typeof MfaRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -430,6 +456,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mfa': {
+      id: '/mfa'
+      path: '/mfa'
+      fullPath: '/mfa'
+      preLoaderRoute: typeof MfaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -628,6 +661,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppSettingsBrandingRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/settings/security': {
+      id: '/_authenticated/_app/settings/security'
+      path: '/settings/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof AuthenticatedAppSettingsSecurityRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
   }
 }
 
@@ -646,6 +686,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppSettingsBillingRoute: typeof AuthenticatedAppSettingsBillingRoute
   AuthenticatedAppSettingsBrandingRoute: typeof AuthenticatedAppSettingsBrandingRoute
+  AuthenticatedAppSettingsSecurityRoute: typeof AuthenticatedAppSettingsSecurityRoute
 }
 
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
@@ -663,6 +704,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppSettingsBillingRoute: AuthenticatedAppSettingsBillingRoute,
   AuthenticatedAppSettingsBrandingRoute: AuthenticatedAppSettingsBrandingRoute,
+  AuthenticatedAppSettingsSecurityRoute: AuthenticatedAppSettingsSecurityRoute,
 }
 
 const AuthenticatedAppRouteRouteWithChildren =
@@ -716,6 +758,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  MfaRoute: MfaRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   InviteTokenRoute: InviteTokenRoute,
