@@ -154,6 +154,12 @@ checks the floor, the checks, that every closed check was paid exactly its round
 that an open check has no revenue yet; its order checks know the two dining rules (an open check's
 rounds have stock movements but no payment, revenue or COGS; a closed check's are written at close).
 
+**The two Insights alerts.** The week before the last one is busy (`BUSY_WEEK_FACTOR`, ~45% more orders on
+days -13..-7, `presentation` and `full` profiles only: `ledger-safe` has no row budget for it), so Insights at 7 days shows "sales down against the previous 7 days" while every month
+stays positive (a slow week would sink the start of a month, rent being fixed); Downtown's open purchase order pays
+18% more for frozen fries (`PRICE_RISE`; not received, so stock costs and COGS are unchanged), so the
+"supplier price rise" alert shows. `verify-dataset.mjs` checks both.
+
 Requires the migrations 0037-0046 and the dataset functions of this version on the destination
 (`PREVIEW_DB_OPERATION=functions` on the hosted preview, after `migrate`).
 

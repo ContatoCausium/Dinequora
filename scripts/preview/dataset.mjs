@@ -14,6 +14,12 @@
 // so that, executed in business-time order, no sale ever finds insufficient stock.
 
 export const DATASET_VERSION = 2;
+/** The week before the last one is busy (more orders; presentation and full profiles), so the 7-day
+ * sales-drop alert shows. */
+export const BUSY_WEEK_DAYS = 7;
+export const BUSY_WEEK_FACTOR = 1.45;
+/** Downtown's open purchase order pays more for one item, so the supplier-price alert shows. */
+export const PRICE_RISE = Object.freeze({ store: "downtown", sku: "FRIES", factor: 1.18 });
 
 // Volume profiles. Before wave 0 the app read the whole finance ledger in ONE PostgREST request,
 // capped at 1,000 rows, so "ledger-safe" kept the ledger under that cap. Since wave 0 the screens
@@ -865,9 +871,22 @@ export function buildDataset({ now, profile = "ledger-safe", seed = 20261114 } =
       const ymd = addDays(startYmd, day);
       const trend = 0.9 + (0.2 * day) / days; // gentle growth over the period
       const noise = 0.9 + r() * 0.2;
+      // A busy week before the last one (a festival in town): ~45% more orders on days -13..-7, so the
+      // 7-day view of Insights shows its "sales down against the previous 7 days" alert on real recorded
+      // sales, while every month-to-date result only gets better (a slow week would sink the start of a
+      // month: rent is fixed).
+      // ledger-safe has no room for it (its row cap leaves space for live demo sales only).
+      const busyWeek =
+        profile !== "ledger-safe" &&
+        day >= days - 2 * BUSY_WEEK_DAYS + 1 &&
+        day <= days - BUSY_WEEK_DAYS
+          ? BUSY_WEEK_FACTOR
+          : 1;
       const target = Math.max(
         1,
-        Math.round(store.baseOrders * volume * WEEKDAY_FACTOR[weekday(ymd)] * trend * noise),
+        Math.round(
+          store.baseOrders * volume * WEEKDAY_FACTOR[weekday(ymd)] * trend * noise * busyWeek,
+        ),
       );
       const openMin = store.open[0] * 60 + store.open[1];
       const closeMin = store.close[0] * 60 + store.close[1];
@@ -1115,14 +1134,20 @@ export function buildDataset({ now, profile = "ledger-safe", seed = 20261114 } =
     }
     const used = consumption(boundaries[receiptDays.length], boundaries[receiptDays.length + 1]);
     for (const s of STOCK) balance[s.sku] -= used.get(s.sku) ?? 0;
-    // One open purchase order (sent, not received) per store for the purchasing screen.
+    // One open purchase order (sent, not received) per store for the purchasing screen. Downtown's
+    // produce supplier raised the price of frozen fries in this order (+18% against the previous
+    // ones), so Insights shows its "supplier price rise" alert; it is not received, so stock costs and
+    // COGS stay as planned.
     const openPo = {
       key: `${store.key}-open`,
       supplier: "produce",
       items: ["LETTUCE", "TOMATO", "FRIES"].map((sku) => ({
         sku,
         quantity: stockBySku[sku].pack * 2,
-        unitPriceCents: stockBySku[sku].costCents,
+        unitPriceCents:
+          store.key === PRICE_RISE.store && sku === PRICE_RISE.sku
+            ? Math.round(stockBySku[sku].costCents * PRICE_RISE.factor)
+            : stockBySku[sku].costCents,
       })),
     };
     stockPlan[store.key] = {
