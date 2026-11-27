@@ -31,7 +31,9 @@ import {
   convertQuantity,
   EMAIL_DOMAIN,
   LEDGER_READ_CAP,
+  localYmd,
   ORG,
+  PRICE_RISE,
   PRODUCTS,
   STOCK,
   STORES,
@@ -686,6 +688,62 @@ const figures = {
   stockValue: Math.round(sum(items, (i) => Number(i.quantity) * i.cost_cents)) / 100,
   receipts: receipts.length,
 };
+
+// ---- the two Insights alerts the dataset is built to show ----------------------------------------
+{
+  // supplier price rise: Downtown's open order pays PRICE_RISE.factor x the previous price of one item
+  const dt = locByKey[PRICE_RISE.store];
+  const item = (
+    await all(svc, "inventory_items", "id,sku", (q) =>
+      q.eq("org_id", org.id).eq("location_id", dt.id).eq("sku", PRICE_RISE.sku),
+    )
+  )[0];
+  const lines = item
+    ? await all(svc, "purchase_order_items", "purchase_order_id,unit_price_cents", (q) =>
+        q.eq("inventory_item_id", item.id),
+      )
+    : [];
+  const pos = new Map(
+    (
+      await all(svc, "purchase_orders", "id,status,created_at", (q) =>
+        q.eq("org_id", org.id).eq("location_id", dt.id),
+      )
+    ).map((p) => [p.id, p]),
+  );
+  const priced = lines
+    .map((l) => ({ ...l, po: pos.get(l.purchase_order_id) }))
+    .filter((l) => l.po && l.po.status !== "draft" && l.po.status !== "cancelled")
+    .sort((a, b) => a.po.created_at.localeCompare(b.po.created_at));
+  const [prev, last] = priced.slice(-2);
+  const rise =
+    prev && last ? (last.unit_price_cents - prev.unit_price_cents) / prev.unit_price_cents : 0;
+  check(
+    "alerts: the latest order of one Downtown item costs 10% or more than the previous one",
+    rise >= 0.1,
+    `${(rise * 100).toFixed(1)}%`,
+  );
+  // sales drop, as Insights computes it: the last 7 local days (today included) against the 7 before
+  const todayYmd = localYmd(Date.now());
+  const shiftYmd = (ymd, k) =>
+    new Date(Date.parse(`${ymd}T12:00:00Z`) + k * 86_400_000).toISOString().slice(0, 10);
+  const net = (from, to) =>
+    sum(
+      entries.filter((e) => {
+        const d = localYmd(Date.parse(e.created_at));
+        return d >= from && d <= to && (e.kind === "revenue" || e.kind === "reversal_revenue");
+      }),
+      (e) => (e.kind === "revenue" ? e.amount_cents : -e.amount_cents),
+    );
+  const lastWeek = net(shiftYmd(todayYmd, -6), todayYmd);
+  const weekBefore = net(shiftYmd(todayYmd, -13), shiftYmd(todayYmd, -7));
+  // ledger-safe (local tests) has no busy week: its row cap has no room for it
+  const busyProfile = (creds.summary?.profile ?? "ledger-safe") !== "ledger-safe";
+  check(
+    "alerts: revenue of the last 7 days is 15% or more below the 7 days before (busy week before)",
+    !busyProfile || (weekBefore > 0 && lastWeek <= weekBefore * 0.85),
+    `${weekBefore ? (((lastWeek - weekBefore) / weekBefore) * 100).toFixed(1) : "-"}%`,
+  );
+}
 
 // ---- today's dining room (seed-dining.mjs, 0037-0039) ------------------------------------------
 {
