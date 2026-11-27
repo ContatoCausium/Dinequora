@@ -188,6 +188,7 @@ const GUARDED = [
   "open_dining_session",
   "pay_dining_check",
   "receive_operational_purchase",
+  "record_assistant_usage",
   "record_operational_movement",
   "remove_member",
   "resolve_pending_pos_sale",

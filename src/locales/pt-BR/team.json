@@ -232,6 +232,7 @@
       "finance": "Financeiro",
       "expenses": "Despesas",
       "reports": "Relatórios",
+      "assistant": "Assistente de IA",
       "team": "Equipe",
       "settings": "Configurações"
     },
@@ -260,6 +261,7 @@
       "locations": "Unidades",
       "branding": "Marca",
       "billing": "Cobrança",
+      "use": "Usar",
       "status": "Mudar status",
       "serve": "Atender mesas",
       "resolve_pending": "Resolver vendas pendentes"

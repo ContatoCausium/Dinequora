@@ -39,6 +39,7 @@ returns text[] language sql immutable set search_path = public as $$
     'finance.view',
     'expenses.view','expenses.create','expenses.edit','expenses.delete','expenses.pay',
     'reports.view','reports.export',
+    'assistant.use',
     'team.view','team.invite','team.manage','team.activity',
     'settings.locations','settings.branding','settings.billing'
   ]::text[]

@@ -105,6 +105,10 @@
 #      row per round (method or mixed), revenue and COGS once, session and table closed with the last
 #      check, voids blocked on paid checks, tender reversal, moving rounds; two payments for one
 #      balance and a payment vs a void in both orders
+#   5o. 0040 assistant usage (direct RPC calls as each role): the ai_assistant feature off by default
+#      and on for one organization; owner/manager/staff with and without a grant, another tenant,
+#      anon, invalid values, no direct writes; owner reads the organization's usage, a manager only
+#      their own; the month total; the audit keeps the size, never the question
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -183,6 +187,7 @@ must_refuse "POS sale flow" env QA_DB_URL="$DB_URL" node scripts/security/pos_sa
 must_refuse "dining room tables" env QA_DB_URL="$DB_URL" node scripts/security/dining_tables_integrity.mjs
 must_refuse "dining room checks" env QA_DB_URL="$DB_URL" node scripts/security/dining_checks_integrity.mjs
 must_refuse "dining room payments" env QA_DB_URL="$DB_URL" node scripts/security/dining_payments_integrity.mjs
+must_refuse "assistant usage" env QA_DB_URL="$DB_URL" node scripts/security/assistant_usage_integrity.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -315,6 +320,10 @@ echo "::endgroup::"
 
 echo "::group::5n. dining check payments (0039, direct RPC calls, two PostgreSQL sessions)"
 QA_DB_URL="$DB_URL" node scripts/security/dining_payments_integrity.mjs | tee "$ARTIFACTS/dining-payments.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5o. assistant usage (0040, direct RPC calls as each role)"
+QA_DB_URL="$DB_URL" node scripts/security/assistant_usage_integrity.mjs | tee "$ARTIFACTS/assistant-usage.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

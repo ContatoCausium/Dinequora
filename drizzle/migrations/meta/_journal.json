@@ -281,6 +281,13 @@
       "when": 1795863679812,
       "tag": "0039_dining_check_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795950079812,
+      "tag": "0040_ai_assistant",
+      "breakpoints": true
     }
   ]
 }
