@@ -3,6 +3,7 @@
  * through RLS as the asking member and this module compresses them into a small JSON the model reads.
  * A part the member cannot read arrives as null and stays null ("not available"), never as zero.
  */
+import { analyzeMenu, type MenuSalesRow, type RecipeCost } from "./menu-engineering";
 
 type LedgerRaw = {
   stores?: { id: string; today: string }[];
@@ -23,16 +24,10 @@ export interface AssistantSnapshotRows {
         location_id: string;
       }[]
     | null;
-  orders:
-    | readonly {
-        location_id: string;
-        status: string;
-        is_simulation: boolean;
-        order_items:
-          readonly { product_name: string; quantity: number; subtotal_cents: number }[] | null;
-        payments: readonly { status: string }[] | null;
-      }[]
-    | null;
+  /** menu_item_sales (0042) for the last 30 local days: aggregated, never truncated. */
+  itemSales: readonly MenuSalesRow[] | null;
+  /** Current recipe cost per product and store; null when the member cannot see costs. */
+  recipeCosts: readonly RecipeCost[] | null;
   openOrders: number | null;
   now: string;
 }
@@ -91,28 +86,47 @@ export function buildAssistantSnapshot(rows: AssistantSnapshotRows) {
     };
   }
 
-  // Best sellers: paid, not cancelled, not simulated orders of the last 30 days.
+  // Best sellers: dishes ordered (orders not cancelled) in the last 30 local days, all of them.
   let bestSellers: null | { product: string; quantity: number; salesCents: number }[] = null;
-  let paidOrders: number | null = null;
-  if (rows.orders) {
-    const by = new Map<string, { quantity: number; salesCents: number }>();
-    let n = 0;
-    for (const o of rows.orders) {
-      const paid = (o.payments ?? []).some((p) => p.status !== "reversed");
-      if (!paid || o.status === "cancelled" || o.is_simulation) continue;
-      n += 1;
-      for (const i of o.order_items ?? []) {
-        const cur = by.get(i.product_name) ?? { quantity: 0, salesCents: 0 };
-        cur.quantity += i.quantity;
-        cur.salesCents += i.subtotal_cents;
-        by.set(i.product_name, cur);
-      }
+  let menuEngineering: null | {
+    method: string;
+    averageMarginCents: number | null;
+    dishes: {
+      dish: string;
+      class: string | null;
+      sold: number;
+      avgPriceCents: number;
+      recipeCostCents: number | null;
+      marginPerUnitCents: number | null;
+    }[];
+    soldWithoutRecipeCost: string[];
+  } = null;
+  if (rows.itemSales) {
+    const by = new Map<string, { product: string; quantity: number; salesCents: number }>();
+    for (const r of rows.itemSales) {
+      const cur = by.get(r.product_id) ?? { product: r.product_name, quantity: 0, salesCents: 0 };
+      cur.quantity += Number(r.units);
+      cur.salesCents += Number(r.sales_cents);
+      by.set(r.product_id, cur);
     }
-    paidOrders = n;
-    bestSellers = [...by.entries()]
-      .map(([product, v]) => ({ product, ...v }))
-      .sort((a, b) => b.salesCents - a.salesCents)
-      .slice(0, 15);
+    bestSellers = [...by.values()].sort((a, b) => b.salesCents - a.salesCents).slice(0, 15);
+    if (rows.recipeCosts) {
+      const m = analyzeMenu(rows.itemSales, rows.recipeCosts);
+      menuEngineering = {
+        method:
+          "Kasavana & Smith: star = popular and high margin; plowhorse = popular, low margin; puzzle = high margin, sells little; dog = sells little, low margin. Popular = at least 70% of an even share of units; high margin = at least the average margin per unit. Margin per unit = average price sold - current recipe cost.",
+        averageMarginCents: m.averageMarginCents,
+        dishes: m.items.slice(0, 30).map((i) => ({
+          dish: i.name,
+          class: i.menuClass,
+          sold: i.units,
+          avgPriceCents: i.avgPriceCents,
+          recipeCostCents: i.unitCostCents,
+          marginPerUnitCents: i.marginCents,
+        })),
+        soldWithoutRecipeCost: m.noCost.slice(0, 20).map((i) => i.name),
+      };
+    }
   }
 
   const lowStock =
@@ -136,7 +150,7 @@ export function buildAssistantSnapshot(rows: AssistantSnapshotRows) {
     moneyUnit: "US cents",
     ledgerLast30Days: ledger,
     bestSellersLast30Days: bestSellers,
-    paidOrdersLast30Days: paidOrders,
+    menuEngineeringLast30Days: menuEngineering,
     stockAtOrBelowMinimum: lowStock,
     openOrdersNow: rows.openOrders,
   };

@@ -40,7 +40,8 @@ describe("assistant snapshot", () => {
         ],
       },
       inventory: [],
-      orders: [],
+      itemSales: [],
+      recipeCosts: [],
       openOrders: 2,
       now: "2026-11-27T15:00:00Z",
     });
@@ -56,11 +57,13 @@ describe("assistant snapshot", () => {
     expect(snap.openOrdersNow).toBe(2);
   });
 
-  it("counts only paid, live, real orders in best sellers; lists stock at or below its minimum", () => {
-    const item = (product_name: string, quantity: number, subtotal_cents: number) => ({
-      product_name,
-      quantity,
-      subtotal_cents,
+  it("best sellers come from the aggregated sales of every store; stock at or below its minimum", () => {
+    const sale = (store: string, product: string, units: number, sales: number) => ({
+      location_id: store,
+      product_id: product.toLowerCase(),
+      product_name: product,
+      units,
+      sales_cents: sales,
     });
     const snap = buildAssistantSnapshot({
       organization: "Test Kitchen",
@@ -70,57 +73,80 @@ describe("assistant snapshot", () => {
         { name: "Buns", unit: "units", quantity: 4, min_quantity: 10, location_id: "s1" },
         { name: "Beef", unit: "lb", quantity: 30, min_quantity: 10, location_id: "s1" },
       ],
-      orders: [
-        {
-          location_id: "s1",
-          status: "delivered",
-          is_simulation: false,
-          order_items: [item("Burger", 2, 2400)],
-          payments: [{ status: "recorded" }],
-        },
-        {
-          location_id: "s1",
-          status: "new",
-          is_simulation: false,
-          order_items: [item("Burger", 9, 9999)],
-          payments: [],
-        },
-        {
-          location_id: "s1",
-          status: "cancelled",
-          is_simulation: false,
-          order_items: [item("Soda", 9, 999)],
-          payments: [{ status: "reversed" }],
-        },
-        {
-          location_id: "s2",
-          status: "delivered",
-          is_simulation: true,
-          order_items: [item("Soda", 9, 999)],
-          payments: [{ status: "recorded" }],
-        },
-        {
-          location_id: "s2",
-          status: "ready",
-          is_simulation: false,
-          order_items: [item("Soda", 3, 825)],
-          payments: [{ status: "recorded" }],
-        },
+      itemSales: [
+        sale("s1", "Burger", 2, 2400),
+        sale("s2", "Burger", 1, 1200),
+        sale("s2", "Soda", 3, 825),
+        sale("s1", "Fries", 4, 1600),
+      ],
+      recipeCosts: [
+        { productId: "burger", locationId: "s1", costPerServingCents: 400 },
+        { productId: "burger", locationId: "s2", costPerServingCents: 400 },
+        { productId: "soda", locationId: "s2", costPerServingCents: 60 },
       ],
       openOrders: null,
       now: "2026-11-27T15:00:00Z",
     });
     expect(snap.bestSellersLast30Days).toEqual([
-      { product: "Burger", quantity: 2, salesCents: 2400 },
+      { product: "Burger", quantity: 3, salesCents: 3600 },
+      { product: "Fries", quantity: 4, salesCents: 1600 },
       { product: "Soda", quantity: 3, salesCents: 825 },
     ]);
-    expect(snap.paidOrdersLast30Days).toBe(2);
+    // Burger: 3 units, margin 12.00 - 4.00 = 8.00; Soda: 3 units, 2.75 - 0.60 = 2.15; Fries: no recipe
+    expect(snap.menuEngineeringLast30Days?.dishes).toEqual([
+      {
+        dish: "Burger",
+        class: "star",
+        sold: 3,
+        avgPriceCents: 1200,
+        recipeCostCents: 400,
+        marginPerUnitCents: 800,
+      },
+      {
+        dish: "Soda",
+        class: "plowhorse",
+        sold: 3,
+        avgPriceCents: 275,
+        recipeCostCents: 60,
+        marginPerUnitCents: 215,
+      },
+    ]);
+    expect(snap.menuEngineeringLast30Days?.soldWithoutRecipeCost).toEqual(["Fries"]);
     expect(snap.stockAtOrBelowMinimum).toEqual([
       { item: "Buns", store: "Downtown", quantity: 4, minimum: 10, unit: "units" },
     ]);
     // what the member cannot read stays "not available", never zero
     expect(snap.ledgerLast30Days).toBeNull();
     expect(snap.openOrdersNow).toBeNull();
+  });
+
+  it("without cost visibility there is no menu engineering; without sales, no best sellers", () => {
+    const base = {
+      organization: "Test Kitchen",
+      stores,
+      ledger: null,
+      inventory: null,
+      openOrders: null,
+      now: "2026-11-27T15:00:00Z",
+    };
+    const noCosts = buildAssistantSnapshot({
+      ...base,
+      itemSales: [
+        {
+          location_id: "s1",
+          product_id: "b",
+          product_name: "Burger",
+          units: 1,
+          sales_cents: 1200,
+        },
+      ],
+      recipeCosts: null,
+    });
+    expect(noCosts.bestSellersLast30Days).toHaveLength(1);
+    expect(noCosts.menuEngineeringLast30Days).toBeNull();
+    const noSales = buildAssistantSnapshot({ ...base, itemSales: null, recipeCosts: [] });
+    expect(noSales.bestSellersLast30Days).toBeNull();
+    expect(noSales.menuEngineeringLast30Days).toBeNull();
   });
 });
 
