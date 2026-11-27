@@ -68,6 +68,11 @@ O pedido ao modelo inclui:
 
 ## Custo e controle
 
+**Limite por minuto (rajada):** cada pessoa pode fazer no máximo `ASSISTANT_PER_MINUTE_LIMIT` perguntas
+por minuto (padrão 6; `0` desliga), contadas nas próprias linhas de `assistant_usage`. Acima disso a
+resposta é "espere um minuto", sem chamar o modelo. É um limite suave: perguntas ainda em andamento não
+foram registradas, então uma rajada simultânea pode passar por esse número; o teto mensal continua valendo.
+
 - **Registro de uso:** cada pergunta respondida grava em `assistant_usage` quem perguntou, a loja,
   o modelo e os tokens de entrada e saída. **A pergunta e a resposta não são guardadas.** A auditoria
   (`assistant.asked`) registra só o tamanho da pergunta e os tokens.
