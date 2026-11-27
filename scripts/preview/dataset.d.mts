@@ -70,6 +70,8 @@ export type Product = {
   recipe: [string, number, string, number][];
 };
 export const PRODUCTS: readonly Product[];
+/** Menu photo of each product id (paths the app serves from public/media/menu). */
+export const PRODUCT_PHOTOS: Readonly<Record<string, string>>;
 export type PlannedSale = {
   clientOrderId: string;
   store: string;

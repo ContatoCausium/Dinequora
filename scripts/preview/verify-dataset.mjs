@@ -34,6 +34,7 @@ import {
   localYmd,
   ORG,
   PRICE_RISE,
+  PRODUCT_PHOTOS,
   PRODUCTS,
   STOCK,
   STORES,
@@ -128,7 +129,7 @@ check(
 const products = await all(
   svc,
   "menu_products",
-  "id,client_id,price_cents,location_ids,active",
+  "id,client_id,price_cents,location_ids,active,image_url",
   (q) => q.eq("org_id", org.id),
 );
 check(
@@ -136,6 +137,14 @@ check(
   products.length === PRODUCTS.length && products.every((p) => p.active),
   products.length,
 );
+{
+  const wrong = products.filter((p) => (p.image_url ?? "") !== (PRODUCT_PHOTOS[p.client_id] ?? ""));
+  check(
+    "menu: the dishes show their photos (the app's licensed demo photos)",
+    !wrong.length,
+    `${products.filter((p) => p.image_url).length} with a photo, ${wrong.length} wrong`,
+  );
+}
 const items = await all(
   svc,
   "inventory_items",
