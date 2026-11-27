@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Download, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/app/page";
+import { Pager } from "@/components/app/data-table";
 import { StatTile } from "@/components/app/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,9 @@ interface FinanceReportsProps {
   stores: StoreResult[];
   currentMonth: string;
 }
+
+/** Rows of the report preview per page; the CSV, Excel and PDF exports always carry every row. */
+export const REPORT_PAGE_SIZE = 25;
 
 type RowsState =
   | { status: "loading" }
@@ -186,6 +190,17 @@ export function FinanceReports({
     lng,
     t,
   ]);
+
+  // The preview shows the report a page at a time (a cash-flow listing has a row per sale); a new
+  // report, store or data type starts again on page 1.
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [reportType, selectedLocation, selectedDataType]);
+  const pageCount = Math.max(1, Math.ceil(report.rows.length / REPORT_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = report.rows.slice(
+    (currentPage - 1) * REPORT_PAGE_SIZE,
+    currentPage * REPORT_PAGE_SIZE,
+  );
 
   // Revenue and cash-flow listings are built from individual ledger rows: until every row is read
   // (or if the read failed) they are not shown nor exported as if they were complete.
@@ -344,7 +359,7 @@ export function FinanceReports({
             </tr>
           </thead>
           <tbody className="divide-y">
-            {report.rows.map((row) => (
+            {pageRows.map((row) => (
               <tr key={row.id} className="transition-colors hover:bg-muted/40">
                 <td className="tabular whitespace-nowrap p-3 text-muted-foreground">
                   {row.isoDate
@@ -385,6 +400,13 @@ export function FinanceReports({
           </tbody>
         </table>
       </div>
+      <Pager
+        page={currentPage}
+        pageCount={pageCount}
+        pageSize={REPORT_PAGE_SIZE}
+        total={report.rows.length}
+        onPage={setPage}
+      />
     </Panel>
   );
 }
