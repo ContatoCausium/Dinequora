@@ -2649,6 +2649,17 @@ export type Database = {
       };
       member_permissions: { Args: { _member_id: string }; Returns: string[] };
       member_scope: { Args: { _member_id: string }; Returns: string[] };
+      menu_item_sales: {
+        Args: { _days?: number; _location_ids?: string[]; _org_id: string };
+        Returns: {
+          location_id: string;
+          orders: number;
+          product_id: string;
+          product_name: string;
+          sales_cents: number;
+          units: number;
+        }[];
+      };
       move_check_round: {
         Args: { _location_id: string; _order_id: string; _org_id: string; _to_check_id: string };
         Returns: undefined;

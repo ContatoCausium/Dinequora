@@ -1435,3 +1435,30 @@ export const fetchClosedChecksToday = createServerFn({ method: "POST" })
       tenders: tenders.data ?? [],
     });
   });
+
+/** Units and sales per menu product and store over the last N local days (0042, read under RLS). */
+export const fetchMenuItemSales = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      days: z.number().int().min(1).max(366),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const sc = await scope(context.supabase, data.orgId, data.locationId);
+    const { data: rows, error } = await context.supabase.rpc("menu_item_sales", {
+      _org_id: sc.org.id,
+      ...(sc.location ? { _location_ids: [sc.location.id] } : {}),
+      _days: data.days,
+    });
+    if (error) throw new Error("menu_sales_read_failed");
+    return (rows ?? []).map((r) => ({
+      location_id: r.location_id,
+      product_id: r.product_id,
+      product_name: r.product_name,
+      units: Number(r.units),
+      sales_cents: Number(r.sales_cents),
+    }));
+  });
