@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { History } from "lucide-react";
+import { History, Printer } from "lucide-react";
+import { useWorkspace } from "@/components/app/workspace-context";
+import { printHtml } from "@/lib/check-bill";
+import { dayCloseHtml } from "@/lib/day-close";
 
 import { ClosedChecksDialog } from "@/components/tables/check-history";
 import { Button } from "@/components/ui/button";
 
-import { fmtMoneyCents, fmtNumber } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtMoneyCents, fmtNumber } from "@/lib/format";
 import { fetchDiningDaySummary } from "@/lib/operational.functions";
 
 /**
@@ -17,6 +20,7 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
   const { t, i18n } = useTranslation("tables");
   const money = (c: number) => fmtMoneyCents(c, i18n.language);
   const [listOpen, setListOpen] = useState(false);
+  const { org } = useWorkspace();
   const q = useQuery({
     queryKey: ["dining-day", orgId, storeId],
     queryFn: () => fetchDiningDaySummary({ data: { orgId, locationId: storeId } }),
@@ -24,6 +28,39 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
   });
   if (!q.data) return null;
   const d = q.data;
+  /** The day close on paper (partial while the day is still open). */
+  const printDayClose = () =>
+    printHtml(
+      dayCloseHtml({
+        lang: i18n.language,
+        restaurant: org.name,
+        store: org.locations.find((l) => l.id === storeId)?.name ?? "",
+        summary: d,
+        dayLabel: fmtDate(d.day, i18n.language, {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        }),
+        partial: true,
+        money,
+        printedAt: fmtDateTime(new Date().toISOString(), i18n.language),
+        labels: {
+          title: t("close.title"),
+          day: t("close.day"),
+          partial: t("close.partial"),
+          checksClosed: t("close.checksClosed"),
+          byMethod: t("close.byMethod"),
+          method: (m) => t(`pay.methods.${m}`, { defaultValue: m }),
+          tips: t("close.tips"),
+          received: t("close.received"),
+          tipsTotal: t("close.tipsTotal"),
+          byServer: t("close.byServer"),
+          unknownServer: t("check.serverUnknown"),
+          tipsNote: t("close.tipsNote"),
+          printedAt: t("close.printedAt"),
+        },
+      }),
+    );
   return (
     <section aria-label={t("day.label")} className="surface px-4 py-3 text-[13px]">
       <p className="flex flex-wrap gap-x-4 gap-y-1">
@@ -47,6 +84,10 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
             {t("history.closedOpen")}
           </Button>
         )}
+        <Button variant="link" size="sm" className="h-auto p-0 text-[13px]" onClick={printDayClose}>
+          <Printer aria-hidden />
+          {t("close.print")}
+        </Button>
       </p>
       {d.byMethod.length > 0 && (
         <ul
