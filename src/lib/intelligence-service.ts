@@ -21,7 +21,9 @@ export type AgentQueryTopic =
   | "inventory"
   | "waste"
   | "suppliers"
-  | "store_performance";
+  | "store_performance"
+  | "purchase_forecast"
+  | "menu_engineering";
 
 export interface ExecutiveReportSection {
   title: string;
@@ -264,6 +266,31 @@ export function computeIntelligenceSummary(
  */
 export function classifyQueryTopic(query: string): AgentQueryTopic {
   const q = query.toLowerCase();
+  // What to buy next (purchase forecast) and which dishes to push (menu engineering) come first: their
+  // words ("comprar", "prato") would otherwise fall into purchasing or margin.
+  if (
+    q.includes("o que comprar") ||
+    q.includes("preciso comprar") ||
+    q.includes("devo comprar") ||
+    q.includes("repor") ||
+    q.includes("reposi") ||
+    q.includes("what to buy") ||
+    q.includes("what should i buy") ||
+    q.includes("need to buy") ||
+    q.includes("reorder") ||
+    q.includes("restock")
+  )
+    return "purchase_forecast";
+  if (
+    q.includes("prato") ||
+    q.includes("cardápio") ||
+    q.includes("cardapio") ||
+    q.includes("promov") ||
+    q.includes("dish") ||
+    q.includes("menu engineering") ||
+    q.includes("promote")
+  )
+    return "menu_engineering";
   if (
     q.includes("cmv") ||
     q.includes("custo de mercadoria") ||

@@ -41,7 +41,9 @@
       "sales": "Quanto de receita registramos?",
       "inventory": "Quais itens têm risco de ruptura?",
       "margin": "Como estão a margem bruta e as despesas?",
-      "suppliers": "Quantos pedidos de compra estão em aberto?"
+      "suppliers": "Quantos pedidos de compra estão em aberto?",
+      "purchase": "O que eu preciso comprar esta semana?",
+      "menu": "Quais pratos devo promover?"
     },
     "deterministic": "Calculado",
     "answeredAt": "Respondido {{time}}",
@@ -58,7 +60,9 @@
       "inventory": "Estoque",
       "waste": "Desperdício",
       "suppliers": "Compras",
-      "store_performance": "Desempenho das lojas"
+      "store_performance": "Desempenho das lojas",
+      "purchase_forecast": "Previsão de compras",
+      "menu_engineering": "Engenharia de cardápio"
     },
     "headlines": {
       "noRevenue": "Nenhuma receita foi registrada nos últimos {{days}} dias.",
@@ -69,20 +73,31 @@
       "waste": "O desperdício ainda não é registrado. {{count}} itens estão no estoque mínimo ou abaixo dele.",
       "suppliers": "{{open}} de {{total}} pedidos de compra registrados ainda estão em aberto.",
       "stores": "Receita registrada por loja nos últimos {{days}} dias.",
-      "noStores": "Nenhuma loja está disponível no seu escopo atual."
+      "noStores": "Nenhuma loja está disponível no seu escopo atual.",
+      "menu": "Estrelas: {{stars}}. Vale promover (boa margem, vende pouco): {{puzzles}}.",
+      "menuTooFew": "Para classificar, são precisos pelo menos dois pratos com custo de ficha técnica e vendas.",
+      "menuUnavailable": "As vendas por prato ainda não estão disponíveis. Tente de novo em instantes.",
+      "purchase_one": "{{count}} item precisa ser comprado para cobrir os próximos 7 dias.",
+      "purchase_other": "{{count}} itens precisam ser comprados para cobrir os próximos 7 dias.",
+      "purchaseNone": "No ritmo atual, nada precisa ser comprado para os próximos 7 dias.",
+      "purchaseUnavailable": "O consumo do estoque ainda não está disponível. Tente de novo em instantes."
     },
     "methods": {
       "cmv": "CMV = custo das fichas registrado (lançamentos de CMV, já descontados os estornos) ÷ receita registrada.",
       "finance": "Margem bruta = (receita − custo das fichas) ÷ receita. O resultado líquido também desconta as despesas ativas registradas.",
       "inventory": "Um item está baixo quando a quantidade registrada é igual ou menor que a quantidade mínima.",
       "suppliers": "Um pedido de compra fica em aberto enquanto não é recebido nem cancelado.",
-      "stores": "Receita por loja a partir dos lançamentos registrados, já descontados os estornos."
+      "stores": "Receita por loja a partir dos lançamentos registrados, já descontados os estornos.",
+      "menu": "Engenharia de cardápio (Kasavana & Smith): popularidade = participação nas unidades vendidas (70% de uma divisão igual ou mais); margem = preço médio vendido − custo atual da ficha, contra a média.",
+      "purchase": "Uso por dia = o que as vendas consumiram nos últimos 30 dias ÷ 30; comprar = uso por dia × 7 + mínimo − estoque, arredondado para cima."
     },
     "limits": {
       "ledger": "Somente pedidos que chegaram aos lançamentos são contados; canais de venda externos não estão conectados.",
       "waste": "Desperdício e perdas ainda não são registrados separadamente.",
       "inventory": "Depende de cada item ter uma quantidade mínima configurada.",
-      "suppliers": "A pontualidade de entrega depende do registro do recebimento no Dinequora."
+      "suppliers": "A pontualidade de entrega depende do registro do recebimento no Dinequora.",
+      "menu": "Pratos sem custo de ficha não são classificados; ingredientes de opções não estão na ficha.",
+      "purchase": "Itens sem uso em vendas não recebem quantidade; ajustes e perdas não contam como uso."
     },
     "labels": {
       "revenue": "Receita bruta",
@@ -96,7 +111,13 @@
       "tracked": "Itens monitorados",
       "purchasesTotal": "Pedidos de compra",
       "purchasesOpen": "Pedidos de compra em aberto",
-      "suppliers": "Fornecedores"
+      "suppliers": "Fornecedores",
+      "stars": "Estrelas (manter)",
+      "puzzles": "Enigmas (promover)",
+      "plowhorses": "Burros de carga (rever custo ou preço)",
+      "dogs": "Cães (refazer ou tirar)",
+      "noRecipeCost": "Vendidos sem custo de ficha (não classificados)",
+      "buyLine": "comprar {{buy}} {{unit}} · dura {{days}} dias"
     }
   },
   "insights": {
