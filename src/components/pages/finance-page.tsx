@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useScopedLocations } from "@/components/app/workspace-context";
+import { SalesTaxPanel } from "@/components/finance/sales-tax-panel";
 import { useTranslation } from "react-i18next";
 import { CircleAlert, Plus, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -92,6 +94,7 @@ const FINANCE_SPEC: Record<FinancePeriod, PeriodSpec> = {
 };
 
 export function FinancePage() {
+  const scopedLocationsForTax = useScopedLocations();
   const { t, i18n } = useTranslation("finance");
   const lng = i18n.language;
   const { org, locationId, user, can, canAny } = useWorkspace();
@@ -595,6 +598,13 @@ export function FinancePage() {
             )}
 
             <TabsContent value="reports" className="mt-4 space-y-4">
+              <SalesTaxPanel
+                orgId={org.id}
+                locationId={locationId}
+                storeName={(dbId) =>
+                  scopedLocationsForTax.find((l) => l.dbId === dbId)?.name ?? dbId
+                }
+              />
               <OrdersTruncatedNotice
                 shown={orders.length}
                 total={ordersMeta.total}

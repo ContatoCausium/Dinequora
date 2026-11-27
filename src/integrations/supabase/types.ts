@@ -2836,6 +2836,17 @@ export type Database = {
         Args: { _role: Database["public"]["Enums"]["org_role"] };
         Returns: string[];
       };
+      sales_tax_summary: {
+        Args: { _location_ids?: string[]; _months?: number; _org_id: string };
+        Returns: {
+          location_id: string;
+          month: string;
+          orders: number;
+          tax_cents: number;
+          taxable_cents: number;
+          total_cents: number;
+        }[];
+      };
       save_dining_section: {
         Args: {
           _location_id: string;
