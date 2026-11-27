@@ -7,6 +7,8 @@ export const ORDER_PAGE_SIZE = 200; // server-side maximum per request
 export const ORDER_HISTORY_CAP = 5000; // protects the browser; the UI says when the cap is hit
 const PAGE = ORDER_PAGE_SIZE;
 const HARD_CAP = ORDER_HISTORY_CAP;
+/** Pages of one read in flight at once, after the first page (which gives the total). */
+export const PARALLEL_PAGES = 4;
 
 /** One page request: what the fetchOperationalOrders server function accepts. */
 export interface OrderPageRequest {
@@ -60,19 +62,38 @@ async function readAllPages(
   opts: PagedReadOptions = {},
 ): Promise<{ orders: RecordedOrder[]; total: number; truncated: boolean }> {
   const byId = new Map<string, RecordedOrder>();
-  let total = 0;
+  const page = (offset: number) => {
+    if (opts.signal?.aborted) throw new DOMException("read abandoned", "AbortError");
+    return fetchPage({ data: { ...filter, limit: PAGE, offset } });
+  };
+  // The first page gives the total; the pages after it are read PARALLEL_PAGES at a time (each
+  // page is a round trip of a second or two on the hosted Worker, so 7 pages one after the other
+  // kept the Finance screen blank for ~14 s). Results are added in offset order, as before.
+  const first = await page(0);
+  opts.onPage?.();
+  let total = first.totalCount;
+  let done = first.orders.length < PAGE;
+  for (const order of first.orders) byId.set(order.id, order);
   let stoppedAtCap = false;
-  for (let offset = 0; ; offset += PAGE) {
+  let offset = PAGE;
+  while (!done && byId.size < total) {
     if (offset >= HARD_CAP) {
       stoppedAtCap = true;
       break;
     }
-    if (opts.signal?.aborted) throw new DOMException("read abandoned", "AbortError");
-    const page = await fetchPage({ data: { ...filter, limit: PAGE, offset } });
-    opts.onPage?.();
-    total = page.totalCount;
-    for (const order of page.orders) if (!byId.has(order.id)) byId.set(order.id, order);
-    if (page.orders.length < PAGE || byId.size >= total) break;
+    const wanted = Math.max(1, Math.ceil((total - offset) / PAGE));
+    const offsets: number[] = [];
+    for (let i = 0; i < Math.min(PARALLEL_PAGES, wanted) && offset < HARD_CAP; i++) {
+      offsets.push(offset);
+      offset += PAGE;
+    }
+    const pages = await Promise.all(offsets.map(page));
+    for (const p of pages) {
+      opts.onPage?.();
+      total = p.totalCount;
+      for (const order of p.orders) if (!byId.has(order.id)) byId.set(order.id, order);
+      if (p.orders.length < PAGE) done = true;
+    }
   }
   const orders = [...byId.values()];
   return { orders, total, truncated: stoppedAtCap && orders.length < total };

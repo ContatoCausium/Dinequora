@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ORDER_HISTORY_CAP,
   ORDER_PAGE_SIZE,
+  PARALLEL_PAGES,
   fetchAllOrders,
   type RecordedOrder,
 } from "../lib/recorded-data";
@@ -55,6 +56,29 @@ describe("fetchAllOrders — every order exactly once", () => {
     expectExactlyOnce(r.orders, rows);
     expect(sum(r.orders as unknown as Row[])).toBe(sum(rows));
     expect(r).toMatchObject({ total: 450, truncated: false });
+  });
+
+  it("after the first page, the next pages are read in parallel (at most PARALLEL_PAGES at once)", async () => {
+    const rows = history(1300); // 7 pages, like the demo's history
+    let inFlight = 0;
+    let peak = 0;
+    const db = database(rows);
+    const slow = async (req: Req) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      try {
+        return await db.fetchPage(req);
+      } finally {
+        inFlight -= 1;
+      }
+    };
+    const r = await fetchAllOrders("org", "all", undefined, slow);
+    expect(peak).toBe(PARALLEL_PAGES);
+    expect(db.calls.slice().sort((a, b) => a - b)).toEqual([0, 200, 400, 600, 800, 1000, 1200]);
+    // newest first, as the sequential read returned them
+    expect(r.orders.map((o) => o.id)).toEqual(rows.map((x) => x.id));
+    expect(r).toMatchObject({ total: 1300, truncated: false });
   });
 
   it("orders sharing the same instant (e.g. an import) are read once each", async () => {
