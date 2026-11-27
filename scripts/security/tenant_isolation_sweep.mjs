@@ -45,7 +45,66 @@ async function as(uid, fn) {
 }
 const denied = (r) => typeof r === "string" && /permission denied/.test(r);
 
+// Fixture: the step tests clean up what they create, so at this point the dining room and assistant
+// tables are empty and would only be "not exercised". One row in each, for the organization with the
+// most orders, committed for the sweep and deleted at the end (rows are tagged with SWEEP / sweep-).
+const FIX = { org: null, ids: {} };
+async function seedFixture() {
+  const [a] = await sql`
+    select o.org_id, o.location_id, o.id as order_id, m.user_id
+      from public.orders o
+      join public.organization_members m on m.org_id = o.org_id and m.role = 'owner'
+     where not exists (select 1 from public.dining_check_rounds r where r.order_id = o.id)
+     order by (select count(*) from public.orders x where x.org_id = o.org_id) desc, o.created_at desc
+     limit 1`;
+  if (!a) return false;
+  FIX.org = a.org_id;
+  const k = `sweep-${a.order_id}`;
+  await sql.begin(async (tx) => {
+    const feat = await tx`insert into public.org_features (org_id, feature, enabled)
+             values (${a.org_id}, 'table_service', true) on conflict (org_id, feature) do nothing
+             returning org_id`;
+    FIX.featureAdded = feat.length === 1;
+    const [sec] = await tx`insert into public.dining_sections (org_id, location_id, name)
+             values (${a.org_id}, ${a.location_id}, 'SWEEP') returning id`;
+    const [tab] = await tx`insert into public.dining_tables (org_id, location_id, section_id, label)
+             values (${a.org_id}, ${a.location_id}, ${sec.id}, 'SWEEP') returning id`;
+    await tx`insert into public.dining_table_status_events (org_id, location_id, table_id, from_status, to_status, actor_id)
+             values (${a.org_id}, ${a.location_id}, ${tab.id}, 'available', 'occupied', ${a.user_id})`;
+    const [ses] =
+      await tx`insert into public.dining_sessions (org_id, location_id, table_id, guests, server_id, client_key, opened_by)
+             values (${a.org_id}, ${a.location_id}, ${tab.id}, 2, ${a.user_id}, ${k}, ${a.user_id}) returning id`;
+    const [chk] =
+      await tx`insert into public.dining_checks (org_id, location_id, session_id, client_key)
+             values (${a.org_id}, ${a.location_id}, ${ses.id}, ${k}) returning id`;
+    await tx`insert into public.dining_check_rounds (org_id, location_id, check_id, order_id, round_no, fired_by)
+             values (${a.org_id}, ${a.location_id}, ${chk.id}, ${a.order_id}, 1, ${a.user_id})`;
+    await tx`insert into public.dining_check_payments (org_id, location_id, check_id, method, amount_cents, client_key, created_by)
+             values (${a.org_id}, ${a.location_id}, ${chk.id}, 'card', 100, ${k}, ${a.user_id})`;
+    await tx`insert into public.assistant_usage (org_id, user_id, model, input_tokens, output_tokens, question_chars)
+             values (${a.org_id}, ${a.user_id}, 'sweep-fixture', 1, 1, 1)`;
+    FIX.ids = { section: sec.id, table: tab.id, session: ses.id, check: chk.id };
+  });
+  return true;
+}
+async function dropFixture() {
+  if (!FIX.ids.table) return;
+  await sql.begin(async (tx) => {
+    await tx`delete from public.dining_check_payments where check_id = ${FIX.ids.check}`;
+    await tx`delete from public.dining_check_rounds where check_id = ${FIX.ids.check}`;
+    await tx`delete from public.dining_checks where id = ${FIX.ids.check}`;
+    await tx`delete from public.dining_sessions where id = ${FIX.ids.session}`;
+    await tx`delete from public.dining_table_status_events where table_id = ${FIX.ids.table}`;
+    await tx`delete from public.dining_tables where id = ${FIX.ids.table}`;
+    await tx`delete from public.dining_sections where id = ${FIX.ids.section}`;
+    await tx`delete from public.assistant_usage where org_id = ${FIX.org} and model = 'sweep-fixture'`;
+    if (FIX.featureAdded)
+      await tx`delete from public.org_features where org_id = ${FIX.org} and feature = 'table_service'`;
+  });
+}
+
 try {
+  check("fixture: dining room and assistant rows for one organization", await seedFixture());
   const relations = await sql`
     select c.relname as name, c.relkind as kind,
            coalesce((select option_value from pg_options_to_table(c.reloptions)
@@ -145,6 +204,14 @@ try {
 } catch (e) {
   check("run", false, code(e));
 } finally {
+  try {
+    await dropFixture();
+    const [{ n }] =
+      await sql`select count(*)::int n from public.dining_tables where label = 'SWEEP'`;
+    check("cleanup: the fixture rows are gone", n === 0, `${n}`);
+  } catch (e) {
+    check("cleanup", false, code(e));
+  }
   await sql.end({ timeout: 5 });
 }
 const failed = results.filter((r) => !r.ok);
