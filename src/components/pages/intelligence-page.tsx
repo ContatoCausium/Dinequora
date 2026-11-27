@@ -27,6 +27,10 @@ import { MenuEngineeringPanel } from "@/components/intelligence/menu-engineering
 import { mapResources } from "@/lib/operational-mappers";
 import type { RecipeCost } from "@/lib/menu-engineering";
 import { salesDrop, supplierPriceIncreases, type PriceIncrease } from "@/lib/smart-alerts";
+import { analyzeMenu, type MenuEngineering } from "@/lib/menu-engineering";
+import { purchaseForecast, type PurchaseForecast } from "@/lib/purchase-forecast";
+import { useQuery } from "@tanstack/react-query";
+import { fetchInventoryConsumption, fetchMenuItemSales } from "@/lib/operational.functions";
 import { StatTile } from "@/components/app/stat-tile";
 import { EmptyState, LedgerIncompleteNotice, Skeleton, StateCard } from "@/components/app/states";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
@@ -252,6 +256,11 @@ function answerQuery(
     periodDays: number;
     t: TFunction;
     lng: string;
+    /** Menu engineering of the period (null while loading or not readable). */
+    menu?: MenuEngineering | null;
+    /** 7-day purchase forecast from the last 30 days of sales use (null while loading). */
+    forecast?: PurchaseForecast | null;
+    storeLabel?: (locationId: string) => string;
   },
 ): AgentAnswer {
   const { summary, scoped, stores, periodDays, t, lng } = ctx;
@@ -266,6 +275,59 @@ function answerQuery(
     { label: t("agent.labels.net"), value: money(summary.netRevenueCents) },
   ];
   switch (topic) {
+    case "menu_engineering": {
+      const m = ctx.menu;
+      const names = (c: string) =>
+        (m?.items ?? [])
+          .filter((i) => i.menuClass === c)
+          .slice(0, 3)
+          .map((i) => i.name)
+          .join(", ") || "—";
+      return {
+        ...base,
+        headline: !m
+          ? t("agent.headlines.menuUnavailable")
+          : m.popularityThreshold === null
+            ? t("agent.headlines.menuTooFew")
+            : t("agent.headlines.menu", { stars: names("star"), puzzles: names("puzzle") }),
+        evidence: m
+          ? [
+              { label: t("agent.labels.stars"), value: names("star") },
+              { label: t("agent.labels.puzzles"), value: names("puzzle") },
+              { label: t("agent.labels.plowhorses"), value: names("plowhorse") },
+              { label: t("agent.labels.dogs"), value: names("dog") },
+              {
+                label: t("agent.labels.noRecipeCost"),
+                value: fmtNumber(m.noCost.length, lng),
+              },
+            ]
+          : [],
+        method: t("agent.methods.menu"),
+        limitation: t("agent.limits.menu"),
+      };
+    }
+    case "purchase_forecast": {
+      const f = ctx.forecast;
+      const label = ctx.storeLabel;
+      return {
+        ...base,
+        headline: !f
+          ? t("agent.headlines.purchaseUnavailable")
+          : f.lines.length === 0
+            ? t("agent.headlines.purchaseNone")
+            : t("agent.headlines.purchase", { count: f.lines.length }),
+        evidence: (f?.lines ?? []).slice(0, 6).map((l) => ({
+          label: label ? `${l.name} · ${label(l.locationId)}` : l.name,
+          value: t("agent.labels.buyLine", {
+            buy: fmtNumber(l.suggested, lng),
+            unit: l.unit,
+            days: fmtNumber(Math.floor(l.coverDays), lng),
+          }),
+        })),
+        method: t("agent.methods.purchase"),
+        limitation: t("agent.limits.purchase"),
+      };
+    }
     case "cmv":
       return {
         ...base,
@@ -483,6 +545,43 @@ export function IntelligencePage() {
   // Deterministic query agent (no LLM): answers from the summary shown on this page.
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<AgentAnswer | null>(null);
+  // Shared with the menu engineering panel (same query key) and the purchase forecast of Inventory.
+  const menuSales = useQuery({
+    queryKey: ["menu-item-sales", org.id, locationId, periodDays],
+    queryFn: () => fetchMenuItemSales({ data: { orgId: org.id, locationId, days: periodDays } }),
+    staleTime: 60_000,
+  });
+  const consumption = useQuery({
+    queryKey: ["inventory-consumption", org.id, locationId, 30],
+    queryFn: () => fetchInventoryConsumption({ data: { orgId: org.id, locationId, days: 30 } }),
+    staleTime: 60_000,
+  });
+  const menuResult = useMemo(
+    () => (menuSales.data ? analyzeMenu(menuSales.data, recipeCosts) : null),
+    [menuSales.data, recipeCosts],
+  );
+  const forecastResult = useMemo(() => {
+    if (!consumption.data || !scoped) return null;
+    return purchaseForecast(
+      scoped.inventory.map((i) => ({
+        id: i.id,
+        name: i.name,
+        unit: i.unit,
+        locationId: i.location_id,
+        quantity: Number(i.quantity),
+        minQuantity: Number(i.min_quantity),
+        supplier: i.supplier ?? "",
+        active: i.active,
+      })),
+      consumption.data,
+      30,
+      7,
+    );
+  }, [consumption.data, scoped]);
+  const storeLabelOf = useCallback(
+    (dbId: string) => scopedLocations.find((l) => l.dbId === dbId)?.name ?? dbId,
+    [scopedLocations],
+  );
   const ask = useCallback(
     (query: string, topic?: AgentQueryTopic) => {
       const q = query.trim();
@@ -495,10 +594,26 @@ export function IntelligencePage() {
           periodDays,
           t,
           lng,
+          menu: menuResult,
+          forecast: forecastResult,
+          ...(isAll ? { storeLabel: storeLabelOf } : {}),
         }),
       );
     },
-    [resources, ledger, summary, scoped, stores, periodDays, t, lng],
+    [
+      resources,
+      ledger,
+      summary,
+      scoped,
+      stores,
+      periodDays,
+      t,
+      lng,
+      menuResult,
+      forecastResult,
+      isAll,
+      storeLabelOf,
+    ],
   );
   // Answers are a snapshot of the selected scope/period; clear them when either changes.
   useEffect(() => {
@@ -511,6 +626,8 @@ export function IntelligencePage() {
     { topic: "inventory", key: "inventory" },
     { topic: "margin", key: "margin" },
     { topic: "suppliers", key: "suppliers" },
+    { topic: "purchase_forecast", key: "purchase" },
+    { topic: "menu_engineering", key: "menu" },
   ];
 
   const hasRevenue = summary.grossRevenueCents > 0;

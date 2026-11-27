@@ -49,6 +49,13 @@ describe("Dinequora Intelligence Service (Deterministic Logic)", () => {
     expect(classifyQueryTopic("How much revenue did we record?")).toBe("sales");
     expect(classifyQueryTopic("How many purchase orders are open?")).toBe("suppliers");
     expect(classifyQueryTopic("Which items are at risk of running out?")).toBe("inventory");
+    // purchase forecast and menu engineering come before purchasing and margin
+    expect(classifyQueryTopic("O que eu preciso comprar esta semana?")).toBe("purchase_forecast");
+    expect(classifyQueryTopic("Quais itens eu devo repor?")).toBe("purchase_forecast");
+    expect(classifyQueryTopic("What do I need to buy this week?")).toBe("purchase_forecast");
+    expect(classifyQueryTopic("Quais pratos devo promover?")).toBe("menu_engineering");
+    expect(classifyQueryTopic("Which dishes should I promote?")).toBe("menu_engineering");
+    expect(classifyQueryTopic("Qual a margem do cardápio?")).toBe("menu_engineering");
   });
 
   it("executes agent queries with deterministic routing and full executive breakdown", () => {
