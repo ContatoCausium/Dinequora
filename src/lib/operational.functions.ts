@@ -9,7 +9,7 @@ import { toMenuReadModel } from "./menu-read-model";
 import { readNavCounts } from "./nav-counts";
 import { lookupSaleByKey } from "./pos-sale-lookup";
 import { readLedgerSummaryAggregated } from "./ledger-aggregate";
-import { TABLE_STATUSES, isTableStatus, toDiningRoom } from "./dining-room";
+import { TABLE_STATUSES, isTableStatus, toDiningRoom, toOpenSessions } from "./dining-room";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -834,7 +834,64 @@ export const fetchDiningRoom = createServerFn({ method: "POST" })
         .is("archived_at", null),
     ]);
     if (sections.error || tables.error) throw new Error("dining_read_failed");
-    return toDiningRoom(s.locationId, sections.data ?? [], tables.data ?? []);
+    // Open sessions (0038): their checks, the rounds sent to the kitchen and the items of those orders.
+    const c = context.supabase;
+    const [sessions, store] = await Promise.all([
+      c
+        .from("dining_sessions")
+        .select("id,table_id,guests,server_id,opened_at")
+        .eq("org_id", s.orgId)
+        .eq("location_id", s.locationId)
+        .eq("status", "open"),
+      c.from("locations").select("tax_rate_ppm").eq("id", s.locationId).maybeSingle(),
+    ]);
+    if (sessions.error || store.error) throw new Error("dining_read_failed");
+    const sessionIds = (sessions.data ?? []).map((x) => x.id);
+    const checks = sessionIds.length
+      ? await c
+          .from("dining_checks")
+          .select("id,session_id,status,number,label")
+          .in("session_id", sessionIds)
+      : { data: [], error: null };
+    if (checks.error) throw new Error("dining_read_failed");
+    const checkIds = (checks.data ?? []).map((x) => x.id);
+    const rounds = checkIds.length
+      ? await c
+          .from("dining_check_rounds")
+          .select("check_id,order_id,round_no,fired_at")
+          .in("check_id", checkIds)
+      : { data: [], error: null };
+    if (rounds.error) throw new Error("dining_read_failed");
+    const orderIds = (rounds.data ?? []).map((x) => x.order_id);
+    const serverIds = [...new Set((sessions.data ?? []).map((x) => x.server_id))];
+    const [orders, items, profiles] = await Promise.all([
+      orderIds.length
+        ? c.from("orders").select("id,status,total_cents").in("id", orderIds)
+        : Promise.resolve({ data: [], error: null }),
+      orderIds.length
+        ? c
+            .from("order_items")
+            .select(
+              "order_id,product_name,quantity,subtotal_cents,notes,order_item_modifiers(option_name)",
+            )
+            .in("order_id", orderIds)
+        : Promise.resolve({ data: [], error: null }),
+      serverIds.length
+        ? c.from("profiles").select("id,full_name").in("id", serverIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (orders.error || items.error || profiles.error) throw new Error("dining_read_failed");
+    return toDiningRoom(s.locationId, sections.data ?? [], tables.data ?? [], {
+      taxRatePpm: store.data?.tax_rate_ppm ?? null,
+      sessions: toOpenSessions({
+        sessions: sessions.data ?? [],
+        checks: checks.data ?? [],
+        rounds: rounds.data ?? [],
+        orders: orders.data ?? [],
+        items: items.data ?? [],
+        profiles: profiles.data ?? [],
+      }),
+    });
   });
 
 export const saveDiningSection = createServerFn({ method: "POST" })
@@ -943,4 +1000,141 @@ export const setDiningTableStatus = createServerFn({ method: "POST" })
     if (error || !isTableStatus(status))
       throw await refused(context.supabase, error, s.orgId, "tables.status", s.locationId);
     return { conflict: false as const, status };
+  });
+
+// ---------------------------------------------------------------- dining sessions and rounds (0038)
+// A replayed request (same clientKey) returns the same session or order: the screen creates the key
+// once per action and sends it again on retry, so a lost reply never seats a party or sends a round
+// twice. Voiding a round uses changeOperationalOrder (cancel_order_with_reversal, orders.refund).
+export const openDiningSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      tableId: z.string().uuid(),
+      guests: z.number().int().min(1).max(99),
+      clientKey: z.string().min(1).max(160),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: id, error } = await context.supabase.rpc("open_dining_session", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _table_id: data.tableId,
+      _guests: data.guests,
+      _client_key: data.clientKey,
+    });
+    if (error || !id)
+      throw await refused(context.supabase, error, s.orgId, "tables.session_open", s.locationId);
+    return { id };
+  });
+
+export const updateDiningSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      id: z.string().uuid(),
+      guests: z.number().int().min(1).max(99),
+      serverId: z.string().uuid(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("update_dining_session", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _session_id: data.id,
+      _guests: data.guests,
+      _server_id: data.serverId,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.session_update", s.locationId);
+    return { success: true };
+  });
+
+export const fireCheckRound = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      checkId: z.string().uuid(),
+      clientKey: z.string().min(1).max(150),
+      taxRatePpm: z.number().int().min(0).max(1_000_000),
+      notes: z.string().max(500).optional(),
+      items: saleInputSchema.shape.items,
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: id, error } = await context.supabase.rpc("fire_check_round", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _check_id: data.checkId,
+      _client_key: data.clientKey,
+      _tax_rate_ppm: data.taxRatePpm,
+      _items: data.items.map((i) => ({
+        product_id: i.productId,
+        quantity: i.quantity,
+        notes: i.notes ?? null,
+        modifiers: i.modifiers.map((m) => ({ group_id: m.groupId, option_id: m.optionId })),
+      })),
+      ...(data.notes ? { _notes: data.notes } : {}),
+    });
+    if (error || !id)
+      throw await refused(context.supabase, error, s.orgId, "tables.round_fire", s.locationId);
+    return { id };
+  });
+
+export const moveDiningSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore.extend({ id: z.string().uuid(), toTableId: z.string().uuid() }))
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("move_dining_session", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _session_id: data.id,
+      _to_table_id: data.toTableId,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.session_move", s.locationId);
+    return { success: true };
+  });
+
+export const closeEmptyDiningSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore.extend({ id: z.string().uuid() }))
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { error } = await context.supabase.rpc("close_empty_dining_session", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _session_id: data.id,
+    });
+    if (error)
+      throw await refused(context.supabase, error, s.orgId, "tables.session_close", s.locationId);
+    return { success: true };
+  });
+
+/** Another check at the same table (each person or group pays their own; payment is step 3). */
+export const openDiningCheck = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    diningStore.extend({
+      sessionId: z.string().uuid(),
+      clientKey: z.string().min(1).max(160),
+      label: z.string().trim().max(40).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const { data: id, error } = await context.supabase.rpc("open_dining_check", {
+      _org_id: s.orgId,
+      _location_id: s.locationId,
+      _session_id: data.sessionId,
+      _client_key: data.clientKey,
+      ...(data.label ? { _label: data.label } : {}),
+    });
+    if (error || !id)
+      throw await refused(context.supabase, error, s.orgId, "tables.check_open", s.locationId);
+    return { id };
   });

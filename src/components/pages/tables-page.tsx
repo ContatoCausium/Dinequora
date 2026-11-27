@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -49,7 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { fmtNumber } from "@/lib/format";
+import { fmtMoneyCents, fmtNumber } from "@/lib/format";
 import {
   TABLE_STATUSES,
   countByStatus,
@@ -59,8 +59,11 @@ import {
   type DiningRoom,
   type DiningSection,
   type DiningTable,
+  type DraftLine,
+  type OpenSession,
   type TableStatus,
 } from "@/lib/dining-room";
+import { CheckSheet, SeatDialog } from "@/components/tables/check-sheet";
 import {
   archiveDiningSection,
   archiveDiningTable,
@@ -139,6 +142,9 @@ export function TablesPage() {
       storeName={store.name}
       canStatus={can("tables.status")}
       canManage={can("tables.manage")}
+      canServe={can("tables.serve")}
+      canSell={can("pos.sell")}
+      canRefund={can("orders.refund")}
     />
   );
 }
@@ -149,12 +155,18 @@ function Floor({
   storeName,
   canStatus,
   canManage,
+  canServe,
+  canSell,
+  canRefund,
 }: {
   orgId: string;
   storeId: string;
   storeName: string;
   canStatus: boolean;
   canManage: boolean;
+  canServe: boolean;
+  canSell: boolean;
+  canRefund: boolean;
 }) {
   const { t, i18n } = useTranslation("tables");
   const queryClient = useQueryClient();
@@ -174,6 +186,19 @@ function Floor({
   const [formError, setFormError] = useState<string | null>(null);
   const [archiveTable, setArchiveTable] = useState<DiningTable | null>(null);
   const [archiveSection, setArchiveSection] = useState<DiningSection | null>(null);
+  const [seatTable, setSeatTable] = useState<DiningTable | null>(null);
+  // A menu item that opens a dialog: the closing menu must not take the focus back to its trigger,
+  // or the dialog (and its first field) would lose it (keyboard and screen-reader users).
+  const dialogFromMenu = useRef(false);
+  const keepFocusForDialog = (e: Event) => {
+    if (dialogFromMenu.current) e.preventDefault();
+    dialogFromMenu.current = false;
+  };
+  // The check shown in the side sheet, by table (the session follows the party when it moves).
+  const [checkTableId, setCheckTableId] = useState<string | null>(null);
+  const [checkSessionId, setCheckSessionId] = useState<string | null>(null);
+  // Rounds being prepared, per check, kept while the screen is open (not sent = not recorded).
+  const [drafts, setDrafts] = useState<Record<string, DraftLine[]>>({});
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -440,12 +465,18 @@ function Floor({
                           <MoreHorizontal aria-hidden />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => openNewTable(g.section!.id)}>
+                      <DropdownMenuContent align="end" onCloseAutoFocus={keepFocusForDialog}>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            dialogFromMenu.current = true;
+                            openNewTable(g.section!.id);
+                          }}
+                        >
                           {t("actions.newTable")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => {
+                            dialogFromMenu.current = true;
                             setFormError(null);
                             setSectionForm({ id: g.section!.id, name: g.section!.name });
                           }}
@@ -455,7 +486,10 @@ function Floor({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onSelect={() => setArchiveSection(g.section)}
+                          onSelect={() => {
+                            dialogFromMenu.current = true;
+                            setArchiveSection(g.section);
+                          }}
                         >
                           {t("section.archive")}
                         </DropdownMenuItem>
@@ -473,10 +507,18 @@ function Floor({
                       <li key={table.id}>
                         <TableCard
                           table={table}
+                          session={data.sessions.find((x) => x.tableId === table.id) ?? null}
                           now={now}
                           busy={busy === table.id}
                           canStatus={canStatus}
                           canManage={canManage}
+                          canServe={canServe}
+                          onSeat={() => setSeatTable(table)}
+                          onOpenCheck={() => {
+                            const open = data.sessions.find((x) => x.tableId === table.id);
+                            setCheckSessionId(open?.id ?? null);
+                            setCheckTableId(table.id);
+                          }}
                           onStatus={(s) => void changeStatus(table, s)}
                           onEdit={() => {
                             setFormError(null);
@@ -498,6 +540,42 @@ function Floor({
           </div>
         </>
       )}
+
+      <SeatDialog
+        table={seatTable}
+        orgId={orgId}
+        storeId={storeId}
+        onClose={() => setSeatTable(null)}
+        onSeated={(tableId) => {
+          setSeatTable(null);
+          setCheckSessionId(null);
+          setCheckTableId(tableId);
+          void reload();
+        }}
+      />
+      {data &&
+        (() => {
+          const open =
+            data.sessions.find((x) => x.id === checkSessionId) ??
+            data.sessions.find((x) => x.tableId === checkTableId) ??
+            null;
+          return (
+            <CheckSheet
+              session={checkTableId || checkSessionId ? open : null}
+              room={data}
+              orgId={orgId}
+              storeId={storeId}
+              drafts={drafts}
+              setDraftFor={(checkId, lines) => setDrafts((d) => ({ ...d, [checkId]: lines }))}
+              can={{ serve: canServe, sell: canSell, refund: canRefund }}
+              onClose={() => {
+                setCheckTableId(null);
+                setCheckSessionId(null);
+              }}
+              reload={reload}
+            />
+          );
+        })()}
 
       {/* Table create / edit */}
       <Dialog
@@ -721,42 +799,67 @@ function Floor({
 
 function TableCard({
   table,
+  session,
   now,
   busy,
   canStatus,
   canManage,
+  canServe,
   onStatus,
   onEdit,
   onArchive,
+  onSeat,
+  onOpenCheck,
 }: {
   table: DiningTable;
+  session: OpenSession | null;
   now: number;
   busy: boolean;
   canStatus: boolean;
   canManage: boolean;
+  canServe: boolean;
   onStatus: (s: TableStatus) => void;
   onEdit: () => void;
   onArchive: () => void;
+  onSeat: () => void;
+  onOpenCheck: () => void;
 }) {
-  const { t } = useTranslation("tables");
+  const { t, i18n } = useTranslation("tables");
+  const dialogFromMenu = useRef(false);
+  // Open the dialog only after the menu has closed and given up the focus.
+  const viaDialog = (fn: () => void) => () => {
+    dialogFromMenu.current = true;
+    window.setTimeout(fn, 0);
+  };
   const style = STATUS_STYLE[table.status];
   const status = t(`status.${table.status}`);
   const seats = t("card.seats", { count: table.seats });
+  const party = session
+    ? t("card.party", {
+        count: session.guests,
+        total: fmtMoneyCents(session.liveTotalCents, i18n.language),
+      })
+    : null;
+  const canSeat =
+    canServe && !session && (table.status === "available" || table.status === "reserved");
+  // While a party is seated the table stays occupied (0038): no manual status change is offered.
+  const statusChoices = canStatus && !session;
+  const interactive = statusChoices || canManage || canSeat || session !== null;
   const body = (
     <>
       <span className="flex items-start justify-between gap-2">
         <span className="truncate text-xl font-semibold tracking-[-0.02em]">{table.label}</span>
-        {(canStatus || canManage) && (
+        {interactive && (
           <MoreHorizontal className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden />
         )}
       </span>
-      <span className="mt-0.5 block text-[12.5px] text-muted-foreground">{seats}</span>
+      <span className="mt-0.5 block text-[12.5px] text-muted-foreground">{party ?? seats}</span>
       <span className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
         <StatusBadge tone={style.tone} icon={style.icon}>
           {status}
         </StatusBadge>
         <span className="text-[12px] text-muted-foreground">
-          {sinceText(table.statusChangedAt, now, t)}
+          {sinceText(session?.openedAt ?? table.statusChangedAt, now, t)}
         </span>
       </span>
     </>
@@ -765,8 +868,9 @@ function TableCard({
     "block h-full w-full rounded-xl border bg-card p-3.5 text-left transition-colors",
     CARD_STYLE[table.status],
   );
+  const name = t("card.actions", { label: table.label, status, seats: party ?? seats });
 
-  if (!canStatus && !canManage)
+  if (!interactive)
     return (
       <div
         role="group"
@@ -783,7 +887,7 @@ function TableCard({
           type="button"
           disabled={busy}
           aria-busy={busy || undefined}
-          aria-label={t("card.actions", { label: table.label, status, seats })}
+          aria-label={name}
           className={cn(
             cardClass,
             "hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
@@ -792,9 +896,25 @@ function TableCard({
           {body}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-52">
-        {canStatus && (
+      <DropdownMenuContent
+        align="start"
+        className="min-w-52"
+        onCloseAutoFocus={(e) => {
+          if (dialogFromMenu.current) e.preventDefault();
+          dialogFromMenu.current = false;
+        }}
+      >
+        {session && (
+          <DropdownMenuItem onSelect={viaDialog(onOpenCheck)}>
+            {t("menu.openCheck")}
+          </DropdownMenuItem>
+        )}
+        {canSeat && (
+          <DropdownMenuItem onSelect={viaDialog(onSeat)}>{t("menu.seat")}</DropdownMenuItem>
+        )}
+        {statusChoices && (
           <>
+            {(session || canSeat) && <DropdownMenuSeparator />}
             <DropdownMenuLabel>{t("menu.changeStatus")}</DropdownMenuLabel>
             {TABLE_STATUSES.map((s) => {
               const Icon = STATUS_STYLE[s].icon;
@@ -816,11 +936,12 @@ function TableCard({
         )}
         {canManage && (
           <>
-            {canStatus && <DropdownMenuSeparator />}
-            <DropdownMenuItem onSelect={onEdit}>{t("menu.edit")}</DropdownMenuItem>
+            {(statusChoices || session || canSeat) && <DropdownMenuSeparator />}
+            <DropdownMenuItem onSelect={viaDialog(onEdit)}>{t("menu.edit")}</DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onSelect={onArchive}
+              disabled={session !== null}
+              onSelect={viaDialog(onArchive)}
             >
               {t("menu.archive")}
             </DropdownMenuItem>

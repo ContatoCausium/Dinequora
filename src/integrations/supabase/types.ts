@@ -136,6 +136,106 @@ export type Database = {
         };
         Relationships: [];
       };
+      dining_check_rounds: {
+        Row: {
+          check_id: string;
+          fired_at: string;
+          fired_by: string;
+          id: string;
+          location_id: string;
+          order_id: string;
+          org_id: string;
+          round_no: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          check_id: string;
+          fired_at?: string;
+          fired_by: string;
+          id?: string;
+          location_id: string;
+          order_id: string;
+          org_id: string;
+          round_no: number;
+        };
+        Update: {
+          check_id?: string;
+          fired_at?: string;
+          fired_by?: string;
+          id?: string;
+          location_id?: string;
+          order_id?: string;
+          org_id?: string;
+          round_no?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_check_rounds_org_id_location_id_check_id_fkey";
+            columns: ["org_id", "location_id", "check_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_checks";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+          {
+            foreignKeyName: "dining_check_rounds_org_id_location_id_order_id_fkey";
+            columns: ["org_id", "location_id", "order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
+      dining_checks: {
+        Row: {
+          client_key: string | null;
+          closed_at: string | null;
+          id: string;
+          label: string | null;
+          location_id: string;
+          number: number;
+          opened_at: string;
+          opened_by: string | null;
+          org_id: string;
+          session_id: string;
+          status: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          client_key?: string | null;
+          closed_at?: string | null;
+          id?: string;
+          label?: string | null;
+          location_id: string;
+          number?: number;
+          opened_at?: string;
+          opened_by?: string | null;
+          org_id: string;
+          session_id: string;
+          status?: string;
+        };
+        Update: {
+          client_key?: string | null;
+          closed_at?: string | null;
+          id?: string;
+          label?: string | null;
+          location_id?: string;
+          number?: number;
+          opened_at?: string;
+          opened_by?: string | null;
+          org_id?: string;
+          session_id?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_checks_org_id_location_id_session_id_fkey";
+            columns: ["org_id", "location_id", "session_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_sessions";
+            referencedColumns: ["org_id", "location_id", "id"];
+          },
+        ];
+      };
       dining_sections: {
         Row: {
           archived_at: string | null;
@@ -182,6 +282,74 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      dining_sessions: {
+        Row: {
+          client_key: string;
+          closed_at: string | null;
+          closed_by: string | null;
+          guests: number;
+          id: string;
+          location_id: string;
+          opened_at: string;
+          opened_by: string;
+          org_id: string;
+          server_id: string;
+          status: string;
+          table_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          client_key: string;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          guests: number;
+          id?: string;
+          location_id: string;
+          opened_at?: string;
+          opened_by: string;
+          org_id: string;
+          server_id: string;
+          status?: string;
+          table_id: string;
+        };
+        Update: {
+          client_key?: string;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          guests?: number;
+          id?: string;
+          location_id?: string;
+          opened_at?: string;
+          opened_by?: string;
+          org_id?: string;
+          server_id?: string;
+          status?: string;
+          table_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_sessions_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_sessions_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_sessions_org_id_location_id_table_id_fkey";
+            columns: ["org_id", "location_id", "table_id"];
+            isOneToOne: false;
+            referencedRelation: "dining_tables";
+            referencedColumns: ["org_id", "location_id", "id"];
           },
         ];
       };
@@ -2122,6 +2290,10 @@ export type Database = {
         Args: { _order_id: string; _reason?: string };
         Returns: undefined;
       };
+      close_empty_dining_session: {
+        Args: { _location_id: string; _org_id: string; _session_id: string };
+        Returns: undefined;
+      };
       create_invitation: {
         Args: {
           _email: string;
@@ -2204,6 +2376,20 @@ export type Database = {
         };
         Returns: string;
       };
+      dining_server_ok: {
+        Args: { _location_id: string; _org_id: string; _user_id: string };
+        Returns: boolean;
+      };
+      dining_table_set_status_internal: {
+        Args: {
+          _table: Omit<
+            Database["public"]["Tables"]["dining_tables"]["Row"],
+            Database["public"]["Tables"]["dining_tables"]["ComputedFields"]
+          >;
+          _to: string;
+        };
+        Returns: undefined;
+      };
       effective_permissions_for: {
         Args: {
           _extra: string[];
@@ -2251,6 +2437,18 @@ export type Database = {
           _table_number?: string;
           _tax_rate_ppm?: number;
           _type: Database["public"]["Enums"]["order_type"];
+        };
+        Returns: string;
+      };
+      fire_check_round: {
+        Args: {
+          _check_id: string;
+          _client_key: string;
+          _items: Json;
+          _location_id: string;
+          _notes?: string;
+          _org_id: string;
+          _tax_rate_ppm: number;
         };
         Returns: string;
       };
@@ -2323,6 +2521,10 @@ export type Database = {
       };
       member_permissions: { Args: { _member_id: string }; Returns: string[] };
       member_scope: { Args: { _member_id: string }; Returns: string[] };
+      move_dining_session: {
+        Args: { _location_id: string; _org_id: string; _session_id: string; _to_table_id: string };
+        Returns: undefined;
+      };
       my_member: {
         Args: { _org_id: string };
         Returns: {
@@ -2353,6 +2555,27 @@ export type Database = {
         }[];
       };
       my_permissions: { Args: { _org_id: string }; Returns: string[] };
+      open_dining_check: {
+        Args: {
+          _client_key: string;
+          _label?: string;
+          _location_id: string;
+          _org_id: string;
+          _session_id: string;
+        };
+        Returns: string;
+      };
+      open_dining_session: {
+        Args: {
+          _client_key: string;
+          _guests: number;
+          _location_id: string;
+          _org_id: string;
+          _server_id?: string;
+          _table_id: string;
+        };
+        Returns: string;
+      };
       operational_unit_quantity: {
         Args: { _from: string; _quantity: number; _to: string };
         Returns: number;
@@ -2538,6 +2761,16 @@ export type Database = {
       shares_org_with: { Args: { _user_id: string }; Returns: boolean };
       sync_org_entitlements: { Args: { _org_id: string }; Returns: undefined };
       transfer_ownership: { Args: { _new_owner: string; _org_id: string }; Returns: undefined };
+      update_dining_session: {
+        Args: {
+          _guests: number;
+          _location_id: string;
+          _org_id: string;
+          _server_id: string;
+          _session_id: string;
+        };
+        Returns: undefined;
+      };
       update_location: {
         Args: {
           _address: string;

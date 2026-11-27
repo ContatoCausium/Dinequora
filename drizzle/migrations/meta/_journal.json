@@ -267,6 +267,13 @@
       "when": 1795690879812,
       "tag": "0037_dining_room_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795777279812,
+      "tag": "0038_dining_sessions_checks_rounds",
+      "breakpoints": true
     }
   ]
 }

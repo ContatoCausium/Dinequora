@@ -261,6 +261,7 @@
       "branding": "Marca",
       "billing": "Cobrança",
       "status": "Mudar status",
+      "serve": "Atender mesas",
       "resolve_pending": "Resolver vendas pendentes"
     },
     "moduleActions": {

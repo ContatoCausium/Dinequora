@@ -176,7 +176,7 @@ returns text[] language sql immutable set search_path = public as $$
     'pos.view','pos.sell','pos.discount',
     'orders.view','orders.update','orders.refund','orders.resolve_pending',
     'kds.view','kds.operate',
-    'tables.view','tables.status','tables.manage',
+    'tables.view','tables.status','tables.serve','tables.manage',
     'menu.view','menu.create','menu.edit','menu.delete',
     'inventory.view','inventory.create','inventory.edit','inventory.adjust','inventory.transfer','inventory.costs',
     'recipes.view','recipes.edit',
