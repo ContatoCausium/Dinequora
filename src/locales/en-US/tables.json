@@ -310,7 +310,7 @@
     "open": "History",
     "openFor": "History of {{check}}",
     "title": "History · {{check}}",
-    "hint": "Everything that happened on this check, oldest first. Reasons for voids and reversals are kept with the managers.",
+    "hint": "Everything that happened on this check, oldest first. Reversal reasons show only to who can reverse payments.",
     "listLabel": "Check events",
     "loading": "Loading the history…",
     "error": "The history could not be loaded. Try again.",
@@ -330,6 +330,7 @@
     "closedTitle": "Checks closed today",
     "closedHint": "Newest first. Open one to see its history.",
     "closedEmpty": "No check closed today yet.",
-    "closedLoading": "Loading today's checks…"
+    "closedLoading": "Loading today's checks…",
+    "reason": "Reason: {{reason}}"
   }
 }

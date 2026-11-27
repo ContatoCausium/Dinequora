@@ -41,7 +41,8 @@
     "0037_dining_room_tables": "efb53702eb966b39c4ea60bdceb095fb8f58feff52621e207ab845d75b098b42",
     "0038_dining_sessions_checks_rounds": "7d0955e7090345aaf2a8cf25de7b1a2bed60a509afffbf9ddf6d9f170dce8b14",
     "0039_dining_check_payments": "fc58a071bddee76495e7c105ced71fe9f720a0e659a26e51c57b1696fa3c8b91",
-    "0040_ai_assistant": "497d47294e003d10f6f8ffc6244d91abe6e4351a6dab51929092cc566fc22438"
+    "0040_ai_assistant": "497d47294e003d10f6f8ffc6244d91abe6e4351a6dab51929092cc566fc22438",
+    "0041_check_reversal_reason_privacy": "e26ec76219c6335b5392de18ebb6ddc3695b2b3cc205cd205a8a93326c95e76b"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

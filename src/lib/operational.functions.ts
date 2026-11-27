@@ -1308,7 +1308,7 @@ export const fetchCheckHistory = createServerFn({ method: "POST" })
       c
         .from("dining_check_payments")
         .select(
-          "method,amount_cents,tip_cents,status,created_at,created_by,reversed_at,reversed_by",
+          "id,method,amount_cents,tip_cents,status,created_at,created_by,reversed_at,reversed_by",
         )
         .eq("check_id", id),
       // Activity log: RLS returns rows only to members with team.activity at this store.
@@ -1364,6 +1364,17 @@ export const fetchCheckHistory = createServerFn({ method: "POST" })
       ? await c.from("profiles").select("id,full_name").in("id", people)
       : { data: [], error: null };
     if (profiles.error) throw new Error("dining_read_failed");
+    // Reversal reasons (0041): only who holds orders.refund at the store gets them; for everyone else
+    // the database refuses and the history simply shows no reason.
+    let reasons: { payment_id: string; reason: string }[] = [];
+    if ((tenders.data ?? []).some((t) => t.status === "reversed")) {
+      const r = await c.rpc("list_check_reversal_reasons", {
+        _org_id: s.orgId,
+        _location_id: s.locationId,
+        _check_id: id,
+      });
+      if (!r.error) reasons = r.data ?? [];
+    }
     return toCheckHistory({
       check: check.data,
       rounds: rounds.data ?? [],
@@ -1373,6 +1384,7 @@ export const fetchCheckHistory = createServerFn({ method: "POST" })
       moves: moveRows,
       otherChecks: others.data ?? [],
       profiles: profiles.data ?? [],
+      reversalReasons: reasons,
     });
   });
 

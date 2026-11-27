@@ -106,6 +106,11 @@ export function CheckHistoryDialog({
                       · {t("history.by", { name: e.actor })}
                     </span>
                   )}
+                  {e.reason && (
+                    <span className="block text-muted-foreground">
+                      {t("history.reason", { reason: e.reason })}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}
