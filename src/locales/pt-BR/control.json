@@ -560,5 +560,25 @@
       "confirm": "Confirmar ação"
     },
     "nothingApplied": "Nada foi alterado: esta ação depende do provedor de cobrança, que não está conectado."
+  },
+  "modules": {
+    "title": "Módulos",
+    "hint": "Ligue módulos para esta organização. Cada mudança é auditada; um módulo desligado fica oculto para todos nela, inclusive proprietários.",
+    "toggle": "{{name}} para esta organização",
+    "turnedOn": "{{name}} ligado.",
+    "turnedOff": "{{name}} desligado.",
+    "failed": "A mudança não foi salva. Tente de novo.",
+    "loadFailed": "Não foi possível carregar os módulos.",
+    "names": {
+      "table_service": "Mesas e comandas",
+      "ai_assistant": "Assistente de IA",
+      "multi_tender_payments": "Vários pagamentos",
+      "card_terminals": "Maquininhas de cartão",
+      "cash_management": "Gestão de caixa",
+      "cloud_printing": "Impressão na nuvem",
+      "delivery_channels": "Canais de delivery",
+      "integrations": "Integrações",
+      "tax_engine": "Motor de impostos"
+    }
   }
 }
