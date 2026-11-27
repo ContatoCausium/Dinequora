@@ -23,6 +23,9 @@ import { fmtDateTime, fmtMoneyCents, fmtNumber, fmtPercent } from "@/lib/format"
 import { useWorkspace, useScopedLocations } from "@/components/app/workspace-context";
 import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { AssistantPanel } from "@/components/intelligence/assistant-panel";
+import { MenuEngineeringPanel } from "@/components/intelligence/menu-engineering-panel";
+import { mapResources } from "@/lib/operational-mappers";
+import type { RecipeCost } from "@/lib/menu-engineering";
 import { StatTile } from "@/components/app/stat-tile";
 import { EmptyState, LedgerIncompleteNotice, Skeleton, StateCard } from "@/components/app/states";
 import { WhatsAppPreviewCard } from "@/components/intelligence/whatsapp-preview-card";
@@ -346,6 +349,28 @@ export function IntelligencePage() {
       active = false;
     };
   }, [org.id, spec, reloadKey]);
+
+  // Current recipe cost per serving of each product at each store (database store ids), for menu
+  // engineering. An unknown cost stays NaN and the dish is listed as "no recipe cost".
+  const recipeCosts = useMemo<RecipeCost[]>(() => {
+    if (!resources) return [];
+    const idOf = new Map(
+      resources.locations.flatMap(
+        (l) =>
+          [
+            [l.slug, l.id],
+            [l.id, l.id],
+          ] as const,
+      ),
+    );
+    return mapResources(resources)
+      .recipes.filter((r) => r.productId && r.locationId)
+      .map((r) => ({
+        productId: r.productId as string,
+        locationId: idOf.get(r.locationId as string) ?? (r.locationId as string),
+        costPerServingCents: r.costPerServingCents,
+      }));
+  }, [resources]);
 
   const isAll = locationId === "all";
   const scopeLabel = isAll ? t("allStores") : (scopedLocations[0]?.name ?? t("allStores"));
@@ -765,6 +790,13 @@ export function IntelligencePage() {
               />
             )}
           </div>
+
+          <MenuEngineeringPanel
+            orgId={org.id}
+            locationId={locationId}
+            periodDays={periodDays}
+            recipes={recipeCosts}
+          />
         </>
       )}
     </div>

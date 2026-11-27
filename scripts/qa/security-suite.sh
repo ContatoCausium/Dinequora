@@ -113,6 +113,8 @@
 #      columns still read, SELECT * refused); list_check_reversal_reasons() answers owner and manager
 #      (orders.refund at the store) with that check's reasons only; staff, another tenant, a store of
 #      another tenant and anon refused
+#   5q. 0042 menu item sales (SECURITY INVOKER read): units, sales and orders per product and store,
+#      cancelled orders left out, the store's last N local days; another tenant and anon get nothing
 #   6. demo reconstruction: seed-demo-orgs.sql twice, MARAO and Harbor match the demo, no duplicates
 #   7. order history paging against the database: every order exactly once (ties, >200, 5,000 cap,
 #      sales created mid-read), totals match the table; kitchen board: every open ticket once with
@@ -193,6 +195,7 @@ must_refuse "dining room checks" env QA_DB_URL="$DB_URL" node scripts/security/d
 must_refuse "dining room payments" env QA_DB_URL="$DB_URL" node scripts/security/dining_payments_integrity.mjs
 must_refuse "assistant usage" env QA_DB_URL="$DB_URL" node scripts/security/assistant_usage_integrity.mjs
 must_refuse "reversal reasons" env QA_DB_URL="$DB_URL" node scripts/security/check_reversal_reason_privacy.mjs
+must_refuse "menu item sales" env QA_DB_URL="$DB_URL" node scripts/security/menu_item_sales_integrity.mjs
 must_refuse "API privileges" env QA_DB_URL="$DB_URL" node scripts/security/api_privileges.mjs
 must_refuse "privilege model" run_sql scripts/qa/hosted-default-privileges.sql
 must_refuse "integration test" env QA_PAGING_DB=1 SB_URL="$API_URL" SB_ANON="$ANON_KEY" SB_SERVICE="$SERVICE_ROLE_KEY" CREDS_FILE="$ARTIFACTS/refused-seed.json" QA_DB_URL="$DB_URL" QA_PROJECT="$QA_PROJECT" npx --no-install vitest run src/test/integration/menu-archive.db.test.ts
@@ -333,6 +336,10 @@ echo "::endgroup::"
 
 echo "::group::5p. check payment reversal reasons (0041, reads and RPC calls as each role)"
 QA_DB_URL="$DB_URL" node scripts/security/check_reversal_reason_privacy.mjs | tee "$ARTIFACTS/reversal-reasons.txt" | grep -v "^PASS"
+echo "::endgroup::"
+
+echo "::group::5q. menu item sales (0042, SECURITY INVOKER read as each role)"
+QA_DB_URL="$DB_URL" node scripts/security/menu_item_sales_integrity.mjs | tee "$ARTIFACTS/menu-item-sales.txt" | grep -v "^PASS"
 echo "::endgroup::"
 
 echo "::group::6. demo reconstruction"

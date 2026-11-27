@@ -125,6 +125,7 @@
     "function|list_pending_sale_reasons(_org_id uuid, _location_id uuid, _client_order_id text, _limit integer)|authenticated|EXECUTE",
     "function|log_access_denied(_org_id uuid, _action text, _location_id uuid, _detail text)|authenticated|EXECUTE",
     "function|member_scope(_member_id uuid)|authenticated|EXECUTE",
+    "function|menu_item_sales(_org_id uuid, _location_ids uuid[], _days integer)|authenticated|EXECUTE",
     "function|move_check_round(_org_id uuid, _location_id uuid, _order_id uuid, _to_check_id uuid)|authenticated|EXECUTE",
     "function|move_dining_session(_org_id uuid, _location_id uuid, _session_id uuid, _to_table_id uuid)|authenticated|EXECUTE",
     "function|my_member(_org_id uuid)|authenticated|EXECUTE",

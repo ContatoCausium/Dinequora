@@ -233,5 +233,43 @@
       "busy": "O assistente está ocupado agora. Tente de novo em um minuto.",
       "unavailable": "O assistente está indisponível agora. Nada foi alterado."
     }
+  },
+  "menuEng": {
+    "title": "Engenharia de cardápio",
+    "subtitle_one": "Quanto cada prato vende contra quanto deixa por unidade, no último {{count}} dia.",
+    "subtitle_other": "Quanto cada prato vende contra quanto deixa por unidade, nos últimos {{count}} dias.",
+    "openMenu": "Cardápio e fichas",
+    "loadFailed": "Não foi possível carregar as vendas por prato. Tente de novo.",
+    "emptyTitle": "Nenhum prato vendido no período",
+    "emptyBody_one": "A engenharia de cardápio precisa de vendas do último {{count}} dia.",
+    "emptyBody_other": "A engenharia de cardápio precisa de vendas dos últimos {{count}} dias.",
+    "legend": "Pratos por classe",
+    "classes": {
+      "star": "Estrela",
+      "plowhorse": "Burro de carga",
+      "puzzle": "Enigma",
+      "dog": "Cão"
+    },
+    "advice": {
+      "star": "Vende bem e deixa boa margem. Mantenha a qualidade e o destaque no cardápio.",
+      "plowhorse": "Vende bem, margem baixa. Reveja a porção, o custo da ficha ou o preço.",
+      "puzzle": "Boa margem, vende pouco. Dê destaque, sugira na mesa ou mude o nome.",
+      "dog": "Vende pouco, margem baixa. Refaça o prato ou tire do cardápio."
+    },
+    "tooFew": "Para classificar, são precisos pelo menos dois pratos com custo de ficha técnica e vendas.",
+    "tableLabel": "Pratos vendidos, por classe",
+    "cols": {
+      "dish": "Prato",
+      "class": "Classe",
+      "units": "Vendidos",
+      "mix": "Mix",
+      "price": "Preço médio",
+      "cost": "Custo da ficha",
+      "margin": "Margem / un."
+    },
+    "noCost_one": "{{count}} prato vendido sem custo de ficha técnica não foi classificado: {{names}}.",
+    "noCost_other": "{{count}} pratos vendidos sem custo de ficha técnica não foram classificados: {{names}}.",
+    "andMore": "e mais {{count}}",
+    "method": "Popular: pelo menos {{mix}} das unidades (70% de uma divisão igual). Margem alta: pelo menos {{margin}} por unidade (a média). Preço é a média vendida, com opções, antes de descontos e imposto; custo é o da ficha técnica atual."
   }
 }

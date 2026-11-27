@@ -233,5 +233,43 @@
       "busy": "The assistant is busy right now. Try again in a minute.",
       "unavailable": "The assistant is unavailable right now. Nothing was changed."
     }
+  },
+  "menuEng": {
+    "title": "Menu engineering",
+    "subtitle_one": "How much each dish sells against what it leaves per unit, last {{count}} day.",
+    "subtitle_other": "How much each dish sells against what it leaves per unit, last {{count}} days.",
+    "openMenu": "Menu and recipes",
+    "loadFailed": "Sales per dish could not be loaded. Try again.",
+    "emptyTitle": "No dish sold in the period",
+    "emptyBody_one": "Menu engineering needs sales from the last {{count}} day.",
+    "emptyBody_other": "Menu engineering needs sales from the last {{count}} days.",
+    "legend": "Dishes by class",
+    "classes": {
+      "star": "Star",
+      "plowhorse": "Plowhorse",
+      "puzzle": "Puzzle",
+      "dog": "Dog"
+    },
+    "advice": {
+      "star": "Sells well and leaves a good margin. Keep quality and its place on the menu.",
+      "plowhorse": "Sells well, low margin. Review the portion, the recipe cost or the price.",
+      "puzzle": "Good margin, sells little. Feature it, suggest it at the table or rename it.",
+      "dog": "Sells little, low margin. Rework it or take it off the menu."
+    },
+    "tooFew": "At least two dishes with a recipe cost and sales are needed to classify them.",
+    "tableLabel": "Dishes sold, by class",
+    "cols": {
+      "dish": "Dish",
+      "class": "Class",
+      "units": "Sold",
+      "mix": "Mix",
+      "price": "Avg. price",
+      "cost": "Recipe cost",
+      "margin": "Margin / unit"
+    },
+    "noCost_one": "{{count}} dish sold without a recipe cost is not classified: {{names}}.",
+    "noCost_other": "{{count}} dishes sold without a recipe cost are not classified: {{names}}.",
+    "andMore": "and {{count}} more",
+    "method": "Popular: at least {{mix}} of the units (70% of an even share). High margin: at least {{margin}} per unit (the average). Price is the average sold, with options, before discounts and tax; cost is the current recipe cost."
   }
 }

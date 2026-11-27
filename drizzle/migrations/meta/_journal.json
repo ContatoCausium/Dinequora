@@ -295,6 +295,13 @@
       "when": 1796036479812,
       "tag": "0041_check_reversal_reason_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1796122879812,
+      "tag": "0042_menu_item_sales",
+      "breakpoints": true
     }
   ]
 }
