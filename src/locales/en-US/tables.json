@@ -287,5 +287,23 @@
     "received": "Received {{amount}}",
     "tips": "Tips {{amount}}",
     "serverTips": "{{name}}: {{amount}} in tips"
+  },
+  "bill": {
+    "print": "Print check",
+    "title": "Check · {{label}}",
+    "table": "Table",
+    "check": "Check",
+    "guests": "Guests",
+    "server": "Server",
+    "round": "Round",
+    "subtotal": "Subtotal",
+    "tax": "Sales tax",
+    "total": "Total",
+    "paid": "Paid",
+    "balance": "Balance due",
+    "tipTitle": "Tip suggestions (on the subtotal):",
+    "tipLine": "{{percent}}%: {{tip}} → total {{total}}",
+    "thanks": "Thank you!",
+    "printedAt": "Printed"
   }
 }

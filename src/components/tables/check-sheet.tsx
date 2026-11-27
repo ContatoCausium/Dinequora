@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { ArrowRightLeft, ChefHat, Minus, Plus, Search, Trash2, TriangleAlert } from "lucide-react";
+import {
+  ArrowRightLeft,
+  ChefHat,
+  Printer,
+  Minus,
+  Plus,
+  Search,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { CheckPayment } from "@/components/tables/check-payment";
+import { useWorkspace } from "@/components/app/workspace-context";
+import { checkBillHtml, printHtml } from "@/lib/check-bill";
 
 import { OrderStatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
@@ -31,7 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { fmtMoneyCents } from "@/lib/format";
+import { fmtDateTime, fmtMoneyCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   diningErrorKey,
@@ -42,6 +53,7 @@ import {
   type DiningTable,
   type DraftLine,
   type OpenSession,
+  type SessionCheck,
 } from "@/lib/dining-room";
 import {
   changeOperationalOrder,
@@ -306,6 +318,43 @@ export function CheckSheet({
 }) {
   const { t, i18n } = useTranslation(["tables", "orders"]);
   const money = (c: number) => fmtMoneyCents(c, i18n.language);
+  const { org } = useWorkspace();
+  /** The check as a printed bill (pre-bill or after a partial payment), from a hidden iframe. */
+  const printBill = (c: SessionCheck) => {
+    if (!session) return;
+    const tableLabel = room.tables.find((x) => x.id === session.tableId)?.label ?? "";
+    printHtml(
+      checkBillHtml({
+        lang: i18n.language,
+        restaurant: org.name,
+        store: org.locations.find((l) => l.id === storeId)?.name ?? "",
+        tableLabel,
+        checkName: c.label ?? t("check.checkN", { n: c.number }),
+        guests: session.guests,
+        serverName: session.serverName,
+        check: c,
+        money,
+        printedAt: fmtDateTime(new Date().toISOString(), i18n.language),
+        labels: {
+          title: t("bill.title", { label: tableLabel }),
+          table: t("bill.table"),
+          check: t("bill.check"),
+          guests: t("bill.guests"),
+          server: t("bill.server"),
+          round: t("bill.round"),
+          subtotal: t("bill.subtotal"),
+          tax: t("bill.tax"),
+          total: t("bill.total"),
+          paid: t("bill.paid"),
+          balance: t("bill.balance"),
+          tipTitle: t("bill.tipTitle"),
+          tipLine: (percent, tip, total) => t("bill.tipLine", { percent, tip, total }),
+          thanks: t("bill.thanks"),
+          printedAt: t("bill.printedAt"),
+        },
+      }),
+    );
+  };
   const table = room.tables.find((x) => x.id === session?.tableId) ?? null;
   const [menu, setMenu] = useState<MenuItem[] | null>(null);
   const [menuError, setMenuError] = useState(false);
@@ -649,6 +698,17 @@ export function CheckSheet({
                       <span>{t("check.tableTotal")}</span>
                       <span className="tabular-nums">{money(session.liveTotalCents)}</span>
                     </p>
+                  )}
+                  {check && check.liveRounds > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => printBill(check)}
+                    >
+                      <Printer aria-hidden />
+                      {t("bill.print")}
+                    </Button>
                   )}
                 </section>
 
