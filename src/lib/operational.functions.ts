@@ -16,7 +16,7 @@ import {
   toDiningRoom,
   toOpenSessions,
 } from "./dining-room";
-import { localDay, startOfLocalDay } from "./store-time";
+import { localDay, shiftDay, startOfLocalDay } from "./store-time";
 import { toCheckHistory, toClosedChecks } from "./check-history";
 import { mapResources, type Resources } from "./operational-mappers";
 import type { RecipeCost } from "./menu-engineering";
@@ -1394,12 +1394,24 @@ export const fetchCheckHistory = createServerFn({ method: "POST" })
  * table is freed. */
 export const fetchClosedChecksToday = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(diningStore)
+  .inputValidator(
+    diningStore.extend({
+      /** A local calendar day of the store (YYYY-MM-DD); today when absent. Up to 90 days back. */
+      day: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .optional(),
+    }),
+  )
   .handler(async ({ data, context }) => {
     const sc = await scope(context.supabase, data.orgId, data.locationId);
     if (!sc.location) throw new Error("location_required");
     const tz = sc.location.timezone || "America/New_York";
-    const since = startOfLocalDay(localDay(new Date(), tz), tz).toISOString();
+    const today = localDay(new Date(), tz);
+    const day =
+      data.day && data.day <= today && data.day >= shiftDay(today, -90) ? data.day : today;
+    const since = startOfLocalDay(day, tz).toISOString();
+    const until = startOfLocalDay(shiftDay(day, 1), tz).toISOString();
     const c = context.supabase;
     const checks = await c
       .from("dining_checks")
@@ -1408,6 +1420,7 @@ export const fetchClosedChecksToday = createServerFn({ method: "POST" })
       .eq("location_id", sc.location.id)
       .eq("status", "closed")
       .gte("closed_at", since)
+      .lt("closed_at", until)
       .order("closed_at", { ascending: false })
       .limit(200);
     if (checks.error) throw new Error("dining_read_failed");

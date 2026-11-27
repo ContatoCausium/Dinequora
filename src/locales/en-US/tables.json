@@ -334,7 +334,11 @@
     "closedHint": "Newest first. Open one to see its history.",
     "closedEmpty": "No check closed today yet.",
     "closedLoading": "Loading today's checks…",
-    "reason": "Reason: {{reason}}"
+    "reason": "Reason: {{reason}}",
+    "closedTitleDay": "Checks closed on {{day}}",
+    "dayLabel": "Day",
+    "today": "Today",
+    "closedEmptyDay": "No check closed on that day."
   },
   "close": {
     "print": "Print day close",

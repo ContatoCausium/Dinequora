@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { History } from "lucide-react";
@@ -12,7 +12,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { CheckEvent } from "@/lib/check-history";
-import { fmtDateTime, fmtMoneyCents } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtMoneyCents } from "@/lib/format";
+import { localDay, shiftDay } from "@/lib/store-time";
+import { FormSelect } from "@/components/ui/form-select";
 import { fetchCheckHistory, fetchClosedChecksToday } from "@/lib/operational.functions";
 
 const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
@@ -136,9 +138,19 @@ export function ClosedChecksDialog({
   const { t, i18n } = useTranslation("tables");
   const money = (c: number) => fmtMoneyCents(c, i18n.language);
   const [historyOf, setHistoryOf] = useState<{ id: string; title: string } | null>(null);
+  /** Empty = today (the store's day, decided by the server). */
+  const [day, setDay] = useState("");
+  /** The 13 days before today (the viewer's calendar; the server clamps to the store's own days). */
+  const recentDays = useMemo(() => {
+    const today = localDay(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone);
+    return Array.from({ length: 13 }, (_, i) => shiftDay(today, -(i + 1)));
+  }, []);
   const q = useQuery({
-    queryKey: ["dining-closed-today", orgId, storeId],
-    queryFn: () => fetchClosedChecksToday({ data: { orgId, locationId: storeId } }),
+    queryKey: ["dining-closed-today", orgId, storeId, day],
+    queryFn: () =>
+      fetchClosedChecksToday({
+        data: { orgId, locationId: storeId, ...(day ? { day } : {}) },
+      }),
     enabled: open,
     staleTime: 0,
   });
@@ -147,9 +159,31 @@ export function ClosedChecksDialog({
       <Dialog open={open && historyOf === null} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t("history.closedTitle")}</DialogTitle>
+            <DialogTitle>
+              {day
+                ? t("history.closedTitleDay", {
+                    day: fmtDate(day, i18n.language, { day: "numeric", month: "short" }),
+                  })
+                : t("history.closedTitle")}
+            </DialogTitle>
             <DialogDescription>{t("history.closedHint")}</DialogDescription>
           </DialogHeader>
+          <div className="flex items-center gap-2 text-[13px]">
+            <span aria-hidden>{t("history.dayLabel")}</span>
+            <FormSelect
+              aria-label={t("history.dayLabel")}
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+              size="sm"
+            >
+              <option value="">{t("history.today")}</option>
+              {recentDays.map((d) => (
+                <option key={d} value={d}>
+                  {fmtDate(d, i18n.language, { weekday: "short", day: "numeric", month: "short" })}
+                </option>
+              ))}
+            </FormSelect>
+          </div>
           {q.isPending ? (
             <p className="text-sm text-muted-foreground">{t("history.closedLoading")}</p>
           ) : q.isError ? (
@@ -157,7 +191,9 @@ export function ClosedChecksDialog({
               {t("history.error")}
             </p>
           ) : q.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("history.closedEmpty")}</p>
+            <p className="text-sm text-muted-foreground">
+              {day ? t("history.closedEmptyDay") : t("history.closedEmpty")}
+            </p>
           ) : (
             <ul className="max-h-[60vh] divide-y overflow-y-auto">
               {q.data.map((c) => {
