@@ -43,6 +43,7 @@ import {
   filterOrdersByStation,
   assignDefaultStation,
   formatPlacedAt,
+  kitchenClockZone,
   recentlyCompleted,
   simulateIncomingOrder,
 } from "@/lib/kds-service";
@@ -319,9 +320,12 @@ export function KDSPage() {
     }
   };
   const [recallOpen, setRecallOpen] = useState(false);
+  // In the store's zone, like the "placed at" time of each ticket (not the device's zone).
+  const clockZone = kitchenClockZone(org.locations, locationId);
   const clock = new Intl.DateTimeFormat(i18n.language, {
     hour: "numeric",
     minute: "2-digit",
+    ...(clockZone ? { timeZone: clockZone } : {}),
   }).format(nowTick);
   const lateIn = (list: Order[]) =>
     list.filter((o) => getTicketUrgency(o.createdAt) !== "normal").length;

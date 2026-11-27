@@ -6,6 +6,7 @@ import {
   filterOrdersByStation,
   mergeKDSOrders,
   DEFAULT_THRESHOLDS,
+  kitchenClockZone,
 } from "@/lib/kds-service";
 import { Order } from "../lib/orders-service";
 
@@ -267,5 +268,22 @@ describe("kds-service", () => {
 
     const grillFiltered = filterOrdersByStation([emptyOrder], "grill");
     expect(grillFiltered.length).toBe(0);
+  });
+});
+
+describe("kitchen clock zone", () => {
+  const stores = [
+    { id: "downtown", timezone: "America/New_York" },
+    { id: "westside", timezone: "America/New_York" },
+    { id: "airport", timezone: "America/Chicago" },
+  ];
+  it("uses the chosen store's zone, not the device's", () => {
+    expect(kitchenClockZone(stores, "airport")).toBe("America/Chicago");
+    expect(kitchenClockZone(stores, "downtown")).toBe("America/New_York");
+  });
+  it("with all stores: their common zone, or the device's zone when they differ", () => {
+    expect(kitchenClockZone(stores.slice(0, 2), "all")).toBe("America/New_York");
+    expect(kitchenClockZone(stores, "all")).toBeUndefined();
+    expect(kitchenClockZone([{ id: "x", timezone: null }], "all")).toBeUndefined();
   });
 });

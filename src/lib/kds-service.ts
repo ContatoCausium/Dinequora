@@ -172,6 +172,23 @@ export function formatPlacedAt(iso: string, language: string, timeZone?: string)
   }).format(new Date(iso));
 }
 
+/**
+ * Time zone of the kitchen clock: the chosen store's zone (tickets show their store's time, so the
+ * clock must too); with "all stores", their common zone, or the device's zone (undefined) when the
+ * stores are in different zones.
+ */
+export function kitchenClockZone(
+  locations: readonly { id: string; timezone?: string | null | undefined }[],
+  locationId: string,
+): string | undefined {
+  const zones = new Set(
+    (locationId === "all" ? locations : locations.filter((l) => l.id === locationId))
+      .map((l) => l.timezone)
+      .filter((z): z is string => !!z),
+  );
+  return zones.size === 1 ? [...zones][0] : undefined;
+}
+
 /** How long a delivered ticket stays in "Completed": the recent part of the shift, not the day. */
 export const COMPLETED_WINDOW_MS = 2 * 60 * 60 * 1000;
 
