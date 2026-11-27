@@ -45,7 +45,8 @@
     "0041_check_reversal_reason_privacy": "e26ec76219c6335b5392de18ebb6ddc3695b2b3cc205cd205a8a93326c95e76b",
     "0042_menu_item_sales": "13b69486570b15162a4f645e25c3d7cedabdaa338c0af6742d5fcacbd5cd8e3c",
     "0043_platform_admin_hardening": "1deb00d05fe800ffbad2241daf8bc6a1dcc2c02ab3c43720f1b683a056a3c2fa",
-    "0044_inventory_consumption": "839fc1f308b531ba604fd874a11b2b11c2e63e471d9b7829394f2338ed453d7f"
+    "0044_inventory_consumption": "839fc1f308b531ba604fd874a11b2b11c2e63e471d9b7829394f2338ed453d7f",
+    "0045_sales_tax_summary": "e9b1a6c3294428c6c2f46d5d3eeff97f008c91bf2c95e9786c056a8f59878729"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",

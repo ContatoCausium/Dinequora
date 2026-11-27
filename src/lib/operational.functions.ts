@@ -1544,3 +1544,31 @@ export async function readRecipeCosts(
       costPerServingCents: r.costPerServingCents,
     }));
 }
+
+/** Sales tax collected per store and local month (0045, read under RLS). */
+export const fetchSalesTaxSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      locationId: z.string().min(1),
+      months: z.number().int().min(1).max(24),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const sc = await scope(context.supabase, data.orgId, data.locationId);
+    const { data: rows, error } = await context.supabase.rpc("sales_tax_summary", {
+      _org_id: sc.org.id,
+      ...(sc.location ? { _location_ids: [sc.location.id] } : {}),
+      _months: data.months,
+    });
+    if (error) throw new Error("sales_tax_read_failed");
+    return (rows ?? []).map((r) => ({
+      location_id: r.location_id,
+      month: r.month,
+      orders: Number(r.orders),
+      taxable_cents: Number(r.taxable_cents),
+      tax_cents: Number(r.tax_cents),
+      total_cents: Number(r.total_cents),
+    }));
+  });

@@ -155,6 +155,7 @@
     "function|role_default_permissions(_role public.org_role)|anon|EXECUTE",
     "function|role_default_permissions(_role public.org_role)|authenticated|EXECUTE",
     "function|role_default_permissions(_role public.org_role)|service_role|EXECUTE",
+    "function|sales_tax_summary(_org_id uuid, _location_ids uuid[], _months integer)|authenticated|EXECUTE",
     "function|save_dining_section(_org_id uuid, _location_id uuid, _name text, _sort_order integer, _section_id uuid)|authenticated|EXECUTE",
     "function|save_dining_table(_org_id uuid, _location_id uuid, _label text, _seats integer, _sort_order integer, _table_id uuid, _section_id uuid)|authenticated|EXECUTE",
     "function|save_location_with_managers(_id uuid, _name text, _address text, _phone text, _timezone text, _hours jsonb, _member_ids uuid[])|authenticated|EXECUTE",
