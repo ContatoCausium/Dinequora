@@ -10,7 +10,9 @@ const plans: PlanDef[] = [
   {
     id: "starter",
     name: "Starter",
-    price_per_location_cents: 8900,
+    monthly_price_cents: 6900,
+    implementation_fee_cents: 14900,
+    implementation_fee_is_minimum: false,
     currency: "usd",
     default_store_limit: 1,
     trial_store_limit: 1,
@@ -67,8 +69,9 @@ describe("platform overview", () => {
       plans,
       NOW,
     );
-    expect(o.actualMrrCents).toBe(2 * 8900);
-    expect(o.actualArrCents).toBe(2 * 8900 * 12);
+    // a flat monthly subscription per organization (0047), whatever its number of locations
+    expect(o.actualMrrCents).toBe(6900);
+    expect(o.actualArrCents).toBe(6900 * 12);
     expect(o.activeSubscriptions).toBe(1);
   });
 

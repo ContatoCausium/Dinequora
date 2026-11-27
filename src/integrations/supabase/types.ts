@@ -152,7 +152,10 @@ export type Database = {
           default_store_limit: number;
           entitlements: NonNullable<Json>;
           id: string;
+          implementation_fee_cents: number;
+          implementation_fee_is_minimum: boolean;
           is_placeholder_pricing: boolean;
+          monthly_price_cents: number | null;
           name: string;
           price_per_location_cents: number;
           stripe_price_id: string | null;
@@ -166,7 +169,10 @@ export type Database = {
           default_store_limit?: number;
           entitlements?: NonNullable<Json>;
           id: string;
+          implementation_fee_cents?: number;
+          implementation_fee_is_minimum?: boolean;
           is_placeholder_pricing?: boolean;
+          monthly_price_cents?: number | null;
           name: string;
           price_per_location_cents?: number;
           stripe_price_id?: string | null;
@@ -179,7 +185,10 @@ export type Database = {
           default_store_limit?: number;
           entitlements?: NonNullable<Json>;
           id?: string;
+          implementation_fee_cents?: number;
+          implementation_fee_is_minimum?: boolean;
           is_placeholder_pricing?: boolean;
+          monthly_price_cents?: number | null;
           name?: string;
           price_per_location_cents?: number;
           stripe_price_id?: string | null;

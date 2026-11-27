@@ -466,7 +466,10 @@
       "billingHint": "Catalog prices; billing provider not connected",
       "sales": "Restaurant sales metrics",
       "salesHint": "Calculated from each restaurant’s recorded orders and ledger. Illustrative figures appear only while presentation mode is turned on in a browser, and are never stored."
-    }
+    },
+    "custom": "Custom",
+    "implementation": "+ {{price}} implementation",
+    "implementationFrom": "implementation from {{price}}"
   },
   "demo": {
     "subtitle": "Preview branding, onboarding and location workflows with synthetic data.",

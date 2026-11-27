@@ -169,8 +169,8 @@ function BillingPage() {
           {!preview && (
             <Panel title={t("billing.plans")} subtitle={t("billing.plansNote")}>
               <ul className="flex flex-col gap-2">
-                {/* Smallest plan first. Prices are the placeholder per-location values stored in
-                  billing_plans; the monthly figure below is derived from them, never invented. */}
+                {/* Smallest plan first. Prices come from billing_plans (0047: the website's prices,
+                  a flat monthly subscription plus a one-time implementation fee). */}
                 {[...(data?.plans ?? [])]
                   .sort(
                     (a, b) =>
@@ -188,9 +188,9 @@ function BillingPage() {
                       <div className="flex items-baseline justify-between">
                         <span className="text-sm font-semibold">{p.name}</span>
                         <span className="tabular text-sm">
-                          {p.price_per_location_cents
-                            ? t("billing.perLocation", {
-                                price: fmtCurrency(p.price_per_location_cents / 100, lng),
+                          {p.monthly_price_cents != null
+                            ? t("billing.perMonth", {
+                                price: fmtCurrency(p.monthly_price_cents / 100, lng),
                               })
                             : t("billing.custom")}
                         </span>
@@ -201,15 +201,14 @@ function BillingPage() {
                           days: p.trial_days,
                         })}
                       </p>
-                      {p.price_per_location_cents > 0 && (p.default_store_limit ?? 0) > 1 && (
+                      {p.implementation_fee_cents > 0 && (
                         <p className="tabular mt-0.5 text-xs text-muted-foreground">
-                          {t("billing.planUpTo", {
-                            count: p.default_store_limit,
-                            total: fmtCurrency(
-                              (p.price_per_location_cents * p.default_store_limit) / 100,
-                              lng,
-                            ),
-                          })}
+                          {t(
+                            p.implementation_fee_is_minimum
+                              ? "billing.implementationFrom"
+                              : "billing.implementation",
+                            { price: fmtCurrency(p.implementation_fee_cents / 100, lng) },
+                          )}
                         </p>
                       )}
                     </li>

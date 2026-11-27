@@ -201,9 +201,9 @@ export async function listPlans(): Promise<PlanDef[]> {
   const { data, error } = await supabase
     .from("billing_plans")
     .select(
-      "id,name,price_per_location_cents,currency,default_store_limit,trial_store_limit,trial_days,is_placeholder_pricing",
+      "id,name,monthly_price_cents,implementation_fee_cents,implementation_fee_is_minimum,currency,default_store_limit,trial_store_limit,trial_days,is_placeholder_pricing",
     )
-    .order("price_per_location_cents");
+    .order("default_store_limit");
   if (error) throw new Error(requestErrorKind(error));
   return data as PlanDef[];
 }
@@ -266,8 +266,8 @@ const DEFAULT_PLANS: FullPlanDef[] = [
     id: "starter",
     name: "Starter",
     description: "Essential tools for a single location",
-    priceMonthlyUsd: 29,
-    priceAnnualUsd: 290,
+    priceMonthlyUsd: 69,
+    priceAnnualUsd: 703.8,
     maxLocations: 1,
     maxEmployees: 10,
     trialDays: 14,
@@ -281,9 +281,9 @@ const DEFAULT_PLANS: FullPlanDef[] = [
     id: "growth",
     name: "Growth",
     description: "Scale to multiple locations with advanced features",
-    priceMonthlyUsd: 79,
-    priceAnnualUsd: 790,
-    maxLocations: 5,
+    priceMonthlyUsd: 119,
+    priceAnnualUsd: 1213.8,
+    maxLocations: 3,
     maxEmployees: 50,
     trialDays: 14,
     trialStoreLimit: 2,
@@ -303,9 +303,9 @@ const DEFAULT_PLANS: FullPlanDef[] = [
     id: "enterprise",
     name: "Enterprise",
     description: "Unlimited scale with dedicated support and SLA",
-    priceMonthlyUsd: 199,
-    priceAnnualUsd: 1990,
-    maxLocations: 999,
+    priceMonthlyUsd: 0,
+    priceAnnualUsd: 0,
+    maxLocations: 50,
     maxEmployees: 9999,
     trialDays: 30,
     trialStoreLimit: 5,
@@ -338,7 +338,7 @@ export async function listFullPlans(): Promise<FullPlanDef[]> {
       ...dp,
       ...(db
         ? {
-            priceMonthlyUsd: db.price_per_location_cents / 100,
+            priceMonthlyUsd: (db.monthly_price_cents ?? 0) / 100,
             maxLocations: db.default_store_limit,
             trialDays: db.trial_days,
             trialStoreLimit: db.trial_store_limit,

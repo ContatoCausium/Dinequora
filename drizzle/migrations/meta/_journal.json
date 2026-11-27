@@ -330,6 +330,13 @@
       "when": 1796468479812,
       "tag": "0046_tips_by_server",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1796554879812,
+      "tag": "0047_plan_prices_from_website",
+      "breakpoints": true
     }
   ]
 }
