@@ -335,5 +335,19 @@
     "closedEmpty": "Nenhuma comanda fechada hoje ainda.",
     "closedLoading": "Carregando as comandas de hoje…",
     "reason": "Motivo: {{reason}}"
+  },
+  "close": {
+    "print": "Imprimir fechamento",
+    "title": "Fechamento do dia",
+    "day": "Dia",
+    "partial": "Parcial: o dia ainda está aberto",
+    "checksClosed": "Comandas fechadas",
+    "byMethod": "Recebido por forma de pagamento",
+    "tips": "gorjetas",
+    "received": "Recebido",
+    "tipsTotal": "Gorjetas",
+    "byServer": "Gorjetas por garçom",
+    "tipsNote": "Gorjetas são da equipe; não são receita.",
+    "printedAt": "Impresso em"
   }
 }
