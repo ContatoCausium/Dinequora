@@ -17,6 +17,7 @@ import {
   toOpenSessions,
 } from "./dining-room";
 import { localDay, startOfLocalDay } from "./store-time";
+import { toCheckHistory, toClosedChecks } from "./check-history";
 import {
   LedgerReadError,
   readLedgerRows,
@@ -1279,5 +1280,146 @@ export const fetchDiningDaySummary = createServerFn({ method: "POST" })
       sessions: sessions.data ?? [],
       closedToday: closed.count ?? 0,
       profiles: profiles.data ?? [],
+    });
+  });
+
+/** The history of one check (open or closed) at this store: see check-history.ts. */
+export const fetchCheckHistory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore.extend({ checkId: z.string().uuid() }))
+  .handler(async ({ data, context }) => {
+    const s = await diningScope(context.supabase, data);
+    const c = context.supabase;
+    const check = await c
+      .from("dining_checks")
+      .select("id,session_id,status,opened_at,opened_by,closed_at")
+      .eq("org_id", s.orgId)
+      .eq("location_id", s.locationId)
+      .eq("id", data.checkId)
+      .maybeSingle();
+    if (check.error) throw new Error("dining_read_failed");
+    if (!check.data) throw new Error("check_not_found");
+    const id = check.data.id;
+    const [rounds, tenders, moves] = await Promise.all([
+      c
+        .from("dining_check_rounds")
+        .select("order_id,round_no,fired_at,fired_by")
+        .eq("check_id", id),
+      c
+        .from("dining_check_payments")
+        .select(
+          "method,amount_cents,tip_cents,status,created_at,created_by,reversed_at,reversed_by",
+        )
+        .eq("check_id", id),
+      // Activity log: RLS returns rows only to members with team.activity at this store.
+      c
+        .from("audit_logs")
+        .select("created_at,actor_id,metadata")
+        .eq("org_id", s.orgId)
+        .eq("action", "tables.round_moved")
+        .or(`metadata->>from.eq.${id},metadata->>to.eq.${id}`),
+    ]);
+    if (rounds.error || tenders.error) throw new Error("dining_read_failed");
+    const moveRows = (moves.error ? [] : (moves.data ?? [])).map((m) => ({
+      created_at: m.created_at,
+      actor_id: m.actor_id,
+      metadata: (m.metadata ?? null) as { from?: string; to?: string } | null,
+    }));
+    const orderIds = (rounds.data ?? []).map((r) => r.order_id);
+    const otherIds = [
+      ...new Set(
+        moveRows
+          .flatMap((m) => [m.metadata?.from, m.metadata?.to])
+          .filter((x): x is string => !!x && x !== id),
+      ),
+    ];
+    const [orders, cancels, others] = await Promise.all([
+      orderIds.length
+        ? c.from("orders").select("id,total_cents").in("id", orderIds)
+        : Promise.resolve({ data: [], error: null }),
+      orderIds.length
+        ? c
+            .from("order_status_history")
+            .select("order_id,created_at,actor_id")
+            .in("order_id", orderIds)
+            .eq("to_status", "cancelled")
+        : Promise.resolve({ data: [], error: null }),
+      otherIds.length
+        ? c.from("dining_checks").select("id,number,label").in("id", otherIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (orders.error || cancels.error || others.error) throw new Error("dining_read_failed");
+    const people = [
+      ...new Set(
+        [
+          check.data.opened_by,
+          ...(rounds.data ?? []).map((r) => r.fired_by),
+          ...(cancels.data ?? []).map((x) => x.actor_id),
+          ...(tenders.data ?? []).flatMap((t) => [t.created_by, t.reversed_by]),
+          ...moveRows.map((m) => m.actor_id),
+        ].filter((x): x is string => !!x),
+      ),
+    ];
+    const profiles = people.length
+      ? await c.from("profiles").select("id,full_name").in("id", people)
+      : { data: [], error: null };
+    if (profiles.error) throw new Error("dining_read_failed");
+    return toCheckHistory({
+      check: check.data,
+      rounds: rounds.data ?? [],
+      orders: orders.data ?? [],
+      cancellations: cancels.data ?? [],
+      tenders: tenders.data ?? [],
+      moves: moveRows,
+      otherChecks: others.data ?? [],
+      profiles: profiles.data ?? [],
+    });
+  });
+
+/** Checks closed today at this store (newest first), so their history stays reachable after the
+ * table is freed. */
+export const fetchClosedChecksToday = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(diningStore)
+  .handler(async ({ data, context }) => {
+    const sc = await scope(context.supabase, data.orgId, data.locationId);
+    if (!sc.location) throw new Error("location_required");
+    const tz = sc.location.timezone || "America/New_York";
+    const since = startOfLocalDay(localDay(new Date(), tz), tz).toISOString();
+    const c = context.supabase;
+    const checks = await c
+      .from("dining_checks")
+      .select("id,session_id,number,label,closed_at")
+      .eq("org_id", sc.org.id)
+      .eq("location_id", sc.location.id)
+      .eq("status", "closed")
+      .gte("closed_at", since)
+      .order("closed_at", { ascending: false })
+      .limit(200);
+    if (checks.error) throw new Error("dining_read_failed");
+    const ids = (checks.data ?? []).map((x) => x.id);
+    const sessionIds = [...new Set((checks.data ?? []).map((x) => x.session_id))];
+    const [sessions, tenders] = await Promise.all([
+      sessionIds.length
+        ? c.from("dining_sessions").select("id,table_id").in("id", sessionIds)
+        : Promise.resolve({ data: [], error: null }),
+      ids.length
+        ? c
+            .from("dining_check_payments")
+            .select("check_id,amount_cents,tip_cents,status")
+            .in("check_id", ids)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (sessions.error || tenders.error) throw new Error("dining_read_failed");
+    const tableIds = [...new Set((sessions.data ?? []).map((x) => x.table_id))];
+    const tables = tableIds.length
+      ? await c.from("dining_tables").select("id,label").in("id", tableIds)
+      : { data: [], error: null };
+    if (tables.error) throw new Error("dining_read_failed");
+    return toClosedChecks({
+      checks: checks.data ?? [],
+      sessions: sessions.data ?? [],
+      tables: tables.data ?? [],
+      tenders: tenders.data ?? [],
     });
   });

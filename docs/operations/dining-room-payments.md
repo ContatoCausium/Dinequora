@@ -92,3 +92,25 @@ desenho de distribuição e conferência. Este é o desenho, e **a trava continu
 2. Remover `pay_dining_check`, `void_check_payment`, `move_check_round` e as funções internas.
 3. Remover `dining_check_payments`.
 4. Voltar o check de `payments.method` sem `mixed`, só se nenhuma linha usar esse valor.
+
+## Histórico da comanda (sem migration)
+
+Botão **Histórico** na comanda aberta e lista **Comandas fechadas** no painel "Hoje" (comandas fechadas
+no dia local da loja, mais recentes primeiro, até 200). A linha do tempo é montada em
+`src/lib/check-history.ts` só com o que o salão já pode ler pelas políticas de RLS existentes:
+
+| Evento | Fonte | Quem |
+|---|---|---|
+| Comanda aberta | `dining_checks.opened_at/opened_by` | quem abriu |
+| Rodada enviada | `dining_check_rounds.fired_at/fired_by` + `orders.total_cents` | quem enviou |
+| Rodada cancelada | `order_status_history` (`to_status = 'cancelled'`) | quem cancelou |
+| Pagamento e estorno | `dining_check_payments` (`created_*`, `reversed_*`) | quem registrou / estornou |
+| Rodada movida | `audit_logs` (`tables.round_moved`, metadata `from`/`to`) | só aparece para quem tem `team.activity` na loja; os demais não recebem linhas (RLS) |
+| Comanda fechada / anulada | `dining_checks.closed_at` + `status` | sem autor |
+
+**Motivos** de cancelamento e de estorno **não** são lidos nem mostrados aqui. Nenhuma função nova
+no banco, nenhum privilégio novo: as funções de servidor `fetchCheckHistory` e `fetchClosedChecksToday`
+usam o cliente do usuário (RLS) e o escopo `diningScope`/`scope` de sempre.
+
+Testes: `src/test/check-history.test.ts` (ordem, desempates, cancelamento duplicado ou de outro pedido
+ignorado, movimentos, comanda anulada, lista do dia) e `src/test/tables-page.test.tsx` ("check history").

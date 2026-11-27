@@ -1,5 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { History } from "lucide-react";
+
+import { ClosedChecksDialog } from "@/components/tables/check-history";
+import { Button } from "@/components/ui/button";
 
 import { fmtMoneyCents, fmtNumber } from "@/lib/format";
 import { fetchDiningDaySummary } from "@/lib/operational.functions";
@@ -11,6 +16,7 @@ import { fetchDiningDaySummary } from "@/lib/operational.functions";
 export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: string }) {
   const { t, i18n } = useTranslation("tables");
   const money = (c: number) => fmtMoneyCents(c, i18n.language);
+  const [listOpen, setListOpen] = useState(false);
   const q = useQuery({
     queryKey: ["dining-day", orgId, storeId],
     queryFn: () => fetchDiningDaySummary({ data: { orgId, locationId: storeId } }),
@@ -30,6 +36,17 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
         </span>
         <span>{t("day.received", { amount: money(d.receivedCents) })}</span>
         <span>{t("day.tips", { amount: money(d.tipsCents) })}</span>
+        {d.checksClosed > 0 && (
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-[13px]"
+            onClick={() => setListOpen(true)}
+          >
+            <History aria-hidden />
+            {t("history.closedOpen")}
+          </Button>
+        )}
       </p>
       {d.byServer.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-muted-foreground">
@@ -43,6 +60,12 @@ export function DaySummaryPanel({ orgId, storeId }: { orgId: string; storeId: st
           ))}
         </ul>
       )}
+      <ClosedChecksDialog
+        orgId={orgId}
+        storeId={storeId}
+        open={listOpen}
+        onClose={() => setListOpen(false)}
+      />
     </section>
   );
 }

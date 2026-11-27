@@ -305,5 +305,31 @@
     "tipLine": "{{percent}}%: {{tip}} → total {{total}}",
     "thanks": "Thank you!",
     "printedAt": "Printed"
+  },
+  "history": {
+    "open": "History",
+    "openFor": "History of {{check}}",
+    "title": "History · {{check}}",
+    "hint": "Everything that happened on this check, oldest first. Reasons for voids and reversals are kept with the managers.",
+    "listLabel": "Check events",
+    "loading": "Loading the history…",
+    "error": "The history could not be loaded. Try again.",
+    "opened": "Check opened",
+    "roundFired": "Round {{n}} sent to the kitchen · {{amount}}",
+    "roundVoided": "Round {{n}} voided, ingredients back to stock",
+    "roundMovedIn": "A round came from {{check}}",
+    "roundMovedOut": "A round moved to {{check}}",
+    "anotherCheck": "another check",
+    "paid": "Payment of {{amount}} · {{method}}",
+    "paidWithTip": "Payment of {{amount}} · {{method}} · tip {{tip}}",
+    "reversed": "Payment of {{amount}} ({{method}}) reversed",
+    "closed": "Check paid and closed",
+    "voided": "Check closed with nothing to pay",
+    "by": "by {{name}}",
+    "closedOpen": "Closed checks",
+    "closedTitle": "Checks closed today",
+    "closedHint": "Newest first. Open one to see its history.",
+    "closedEmpty": "No check closed today yet.",
+    "closedLoading": "Loading today's checks…"
   }
 }

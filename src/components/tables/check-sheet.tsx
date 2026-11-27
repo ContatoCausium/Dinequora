@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowRightLeft,
   ChefHat,
+  History,
   Printer,
   Minus,
   Plus,
@@ -12,6 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { CheckPayment } from "@/components/tables/check-payment";
+import { CheckHistoryDialog } from "@/components/tables/check-history";
 import { useWorkspace } from "@/components/app/workspace-context";
 import { checkBillHtml, printHtml } from "@/lib/check-bill";
 
@@ -364,6 +366,7 @@ export function CheckSheet({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<string | null>(null);
+  const [historyOf, setHistoryOf] = useState<string | null>(null);
   const [moveTo, setMoveTo] = useState<string>("");
   const [moving, setMoving] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
@@ -699,16 +702,19 @@ export function CheckSheet({
                       <span className="tabular-nums">{money(session.liveTotalCents)}</span>
                     </p>
                   )}
-                  {check && check.liveRounds > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => printBill(check)}
-                    >
-                      <Printer aria-hidden />
-                      {t("bill.print")}
-                    </Button>
+                  {check && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {check.liveRounds > 0 && (
+                        <Button variant="outline" size="sm" onClick={() => printBill(check)}>
+                          <Printer aria-hidden />
+                          {t("bill.print")}
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => setHistoryOf(check.id)}>
+                        <History aria-hidden />
+                        {t("history.open")}
+                      </Button>
+                    </div>
                   )}
                 </section>
 
@@ -859,6 +865,18 @@ export function CheckSheet({
           )}
         </SheetContent>
       </Sheet>
+
+      <CheckHistoryDialog
+        orgId={orgId}
+        storeId={storeId}
+        checkId={session ? historyOf : null}
+        title={(() => {
+          const c = session?.checks.find((x) => x.id === historyOf);
+          const table = room.tables.find((x) => x.id === session?.tableId)?.label ?? "";
+          return c ? `${table} · ${checkName(c)}` : table;
+        })()}
+        onClose={() => setHistoryOf(null)}
+      />
 
       <ModifierDialog
         item={picking}
