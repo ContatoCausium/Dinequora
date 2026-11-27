@@ -9,6 +9,8 @@ export type Inline =
   | string
   | { fact: keyof CompanyFacts }
   | { strong: string }
+  /** A business rule the owner has not decided yet: shown as a visible "[preencher: …]" marker. */
+  | { pending: string }
   | { href: string; label: string; external?: boolean };
 
 export type Block = { p: Inline[] } | { ul: Inline[][] };

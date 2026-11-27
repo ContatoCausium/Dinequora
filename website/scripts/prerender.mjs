@@ -13,6 +13,8 @@ const pages = [
   { locale: "pt", page: "home", file: "dist/pt/index.html" },
   { locale: "en", page: "privacy", file: "dist/privacy/index.html" },
   { locale: "pt", page: "privacy", file: "dist/pt/privacy/index.html" },
+  { locale: "en", page: "terms", file: "dist/terms/index.html" },
+  { locale: "pt", page: "terms", file: "dist/pt/terms/index.html" },
 ];
 
 for (const { locale, page, file } of pages) {

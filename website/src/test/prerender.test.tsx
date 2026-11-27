@@ -29,6 +29,15 @@ describe("build-time pre-render", () => {
     expect(en).not.toContain('id="dq-name-mask"');
   });
 
+  it("renders the terms of use in each language, with the footer link", () => {
+    const en = render("en", "terms");
+    const pt = render("pt", "terms");
+    expect(en).toMatch(/<h1[^>]*>Terms of Use<\/h1>/);
+    expect(pt).toMatch(/<h1[^>]*>Termos de Uso<\/h1>/);
+    expect(en).toContain('href="/terms/"');
+    expect(pt).toContain('href="/pt/terms/"');
+  });
+
   it("puts both versions of the masked name in the HTML (CSS picks one per screen)", () => {
     const en = render("en");
     expect(en).toContain('id="dq-name-mask"');

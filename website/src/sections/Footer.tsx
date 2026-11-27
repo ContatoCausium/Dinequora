@@ -8,7 +8,10 @@ import { pagePath, type PageId } from "../i18n/meta";
 
 /** Links to the legal pages, shown in the bottom bar of every page. */
 export function getLegalLinks(locale: Locale) {
-  return [{ label: pick(locale, "Privacy policy", "Política de privacidade"), href: pagePath("privacy", locale) }];
+  return [
+    { label: pick(locale, "Privacy policy", "Política de privacidade"), href: pagePath("privacy", locale) },
+    { label: pick(locale, "Terms of use", "Termos de uso"), href: pagePath("terms", locale) },
+  ];
 }
 
 function getColumns(locale: Locale, page: PageId) {

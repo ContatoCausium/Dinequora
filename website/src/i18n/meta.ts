@@ -20,9 +20,9 @@ export function localeFromPath(pathname: string): Locale | null {
   return /^\/pt(\/|$)/.test(pathname) ? "pt" : null;
 }
 
-/** Legal pages, each a static page per language (`/privacy/` and `/pt/privacy/`). */
-export type LegalPageId = "privacy";
-export const LEGAL_PAGES: readonly LegalPageId[] = ["privacy"];
+/** Legal pages, each a static page per language (`/privacy/`, `/pt/privacy/`, `/terms/`, `/pt/terms/`). */
+export type LegalPageId = "privacy" | "terms";
+export const LEGAL_PAGES: readonly LegalPageId[] = ["privacy", "terms"];
 
 /** Every static page of the site: the home page and the legal pages. */
 export type PageId = "home" | LegalPageId;
@@ -87,6 +87,16 @@ export const legalMeta: Record<LegalPageId, Record<Locale, { title: string; desc
     pt: {
       title: "Política de Privacidade — Dinequora",
       description: "Como o site da Dinequora trata as suas informações: o que coletamos, para quê, com quem compartilhamos, por quanto tempo guardamos e seus direitos.",
+    },
+  },
+  terms: {
+    en: {
+      title: "Terms of Use — Dinequora",
+      description: "Rules for using the Dinequora website and subscribing to Dinequora: plans, billing periods, implementation fee, cancellation, refunds and governing law.",
+    },
+    pt: {
+      title: "Termos de Uso — Dinequora",
+      description: "As regras para usar o site e assinar a Dinequora: planos, períodos de cobrança, taxa de implantação, cancelamento, reembolso e lei aplicável.",
     },
   },
 };
