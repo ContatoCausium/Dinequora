@@ -678,7 +678,6 @@ describe("Tables screen: check history", () => {
       tipsCents: 300,
       byServer: [],
       byMethod: [],
-      byMethod: [],
     });
     api.fetchClosedChecksToday.mockResolvedValue([
       {
