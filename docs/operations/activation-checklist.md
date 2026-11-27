@@ -2,7 +2,7 @@
 
 Tudo abaixo **depende de autorização expressa** (documento mestre: nenhuma migration hospedada, deploy ou
 ligação de módulo para organização real sem autorização específica). Nenhum passo foi executado.
-Estado em 27/11/2026: a main tem as migrations **0037 a 0044**; o Supabase do Client Preview e o Worker
+Estado em 27/11/2026: a main tem as migrations **0037 a 0045**; o Supabase do Client Preview e o Worker
 continuam no build anterior (634bc38); todos os módulos novos estão **desligados** em todas as
 organizações.
 
@@ -18,13 +18,14 @@ organizações.
 | 0042      | `menu_item_sales` (engenharia de cardápio)                                       | só leitura                                                                                                                                                       |
 | 0043      | Endurecimento das funções de administrador                                       | **antes:** confirmar que nenhum admin de plataforma é membro de organização cliente (a regra nova recusa no próximo vínculo; vínculos antigos não são desfeitos) |
 | 0044      | `inventory_consumption` e índice em `inventory_movements`                        | o índice segura um lock SHARE enquanto é criado; tabela pequena hoje                                                                                             |
+| 0045      | `sales_tax_summary` (relatório de imposto)                                       | só leitura                                                                                                                                                       |
 
 ## 2. Client Preview (`docs/operations/client-preview.md`)
 
 1. **Inspecionar (só leitura)**, §5.7: `PREVIEW_DB_OPERATION=inspect` com a confirmação
    `client-preview:db-inspect:client-preview:<ref>`. Deve responder estado `preview`.
 2. **Migrar**: `PREVIEW_DB_OPERATION=migrate` com `client-preview:db-migrate:client-preview:<ref>`.
-   Aplica 0037–0044 pelo mesmo `drizzle-kit migrate` da CI, com TLS verificado e bloqueio de produção por
+   Aplica 0037–0045 pelo mesmo `drizzle-kit migrate` da CI, com TLS verificado e bloqueio de produção por
    nome. Depois, `inspect` de novo.
 3. **Build e deploy do Worker** do commit aprovado da main, §3 e §4 (perfil `client-preview`, checagem
    do bundle), com `preview_urls` desligado (§7a).
