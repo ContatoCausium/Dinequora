@@ -178,7 +178,18 @@ const json = (status: number, body: Record<string, unknown>) =>
  */
 export async function handleStripeWebhook(
   request: Request,
-  { secret, apply, now }: { secret: string | undefined; apply: ApplyBillingUpdate; now?: number },
+  {
+    secret,
+    apply,
+    notify,
+    now,
+  }: {
+    secret: string | undefined;
+    apply: ApplyBillingUpdate;
+    /** After a first-time apply only (never for a duplicate); its errors never fail the webhook. */
+    notify?: (update: BillingUpdate) => Promise<unknown>;
+    now?: number;
+  },
 ): Promise<Response> {
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
   if (!secret) return json(503, { error: "not_configured" });
@@ -195,10 +206,18 @@ export async function handleStripeWebhook(
   }
   const mapped = mapStripeEvent(event);
   if (mapped.kind === "ignore") return json(200, { received: true, ignored: mapped.reason });
+  let applied: boolean;
   try {
-    const applied = await apply(mapped.update);
-    return json(200, { received: true, duplicate: !applied });
+    applied = await apply(mapped.update);
   } catch {
     return json(500, { error: "apply_failed" });
   }
+  if (applied && notify) {
+    try {
+      await notify(mapped.update);
+    } catch {
+      // Reported by the caller; the event is applied, so Stripe must not retry it.
+    }
+  }
+  return json(200, { received: true, duplicate: !applied });
 }

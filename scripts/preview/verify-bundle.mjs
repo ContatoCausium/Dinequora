@@ -38,7 +38,7 @@ export const TARGETS = Object.freeze({
     // Stripe Billing: the webhook applies events with the service-role client and the billing
     // functions read the Stripe secret key, both from Worker secrets. Allowed in SERVER files
     // only; any of them in public/ (the browser) is still an error.
-    serverOnlyNames: ["SUPABASE_SERVICE_ROLE_KEY", "STRIPE_SECRET"],
+    serverOnlyNames: ["SUPABASE_SERVICE_ROLE_KEY", "STRIPE_SECRET", "RESEND_API_KEY"],
   },
 });
 const TEXT =
