@@ -1,14 +1,16 @@
-import { isClientPreview } from "./deployment-profile";
+import { securityHeadersEnabled } from "./deployment-profile";
 
 /**
- * Response headers for the client-preview profile, added by `src/server.ts` to every response the
+ * Response headers of the hosted builds (client-preview and production profiles), added by
+ * `src/server.ts` to every response the
  * server renders (pages, server functions, error pages). Static assets are served by the platform
  * without running the server; `scripts/preview/build-client-preview.mjs` writes the same no-index
  * and hardening headers for them in `.output/public/_headers`.
  *
  * Deliberately no script-src/style-src policy: SSR streams inline hydration scripts and the app loads
  * Google Fonts, so a full CSP needs its own validation. The directives below cannot break rendering.
- * Off in the standard profile, where the Lovable editor embeds the app in an iframe.
+ * Off in the standard profile, where the Lovable editor embeds the app in an iframe
+ * (`securityHeadersEnabled`).
  */
 export const CLIENT_PREVIEW_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   "X-Robots-Tag": "noindex, nofollow, noarchive",
@@ -42,7 +44,7 @@ export function clientPreviewHeaders(requestUrl: string): Record<string, string>
 export function withSecurityHeaders(
   response: Response,
   request: Request,
-  enabled: boolean = isClientPreview(),
+  enabled: boolean = securityHeadersEnabled(),
 ): Response {
   // A protocol switch (101) cannot be rebuilt; the app never upgrades a connection.
   if (!enabled || response.status === 101) return response;

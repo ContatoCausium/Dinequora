@@ -15,6 +15,28 @@ import { Buffer } from "node:buffer";
 import { fileURLToPath } from "node:url";
 
 export const WORKER_NAME = "dinequora-client-preview";
+/** Production Worker and the app's custom domain (scripts/production/build-production.mjs). */
+export const PRODUCTION_WORKER_NAME = "dinequora-app";
+export const PRODUCTION_DOMAIN = "app.dinequora.com";
+/**
+ * What each deploy target's wrangler.json must say. The client preview is served on workers.dev
+ * only (behind Cloudflare Access); production is served on its custom domain only, never on
+ * workers.dev. Neither may have version preview URLs (they bypass both).
+ */
+export const TARGETS = Object.freeze({
+  "client-preview": {
+    workerName: WORKER_NAME,
+    workersDev: true,
+    routes: undefined,
+    profile: "client-preview",
+  },
+  production: {
+    workerName: PRODUCTION_WORKER_NAME,
+    workersDev: false,
+    routes: [{ pattern: PRODUCTION_DOMAIN, custom_domain: true }],
+    profile: "production",
+  },
+});
 const TEXT =
   /\.(mjs|js|cjs|json|html|css|txt|svg|webmanifest|map)$|(^|[\\/])_headers$|(^|[\\/])_redirects$/;
 
@@ -77,7 +99,12 @@ function refOf(url) {
  * Scans a build output directory. Returns { errors, warnings, stats }; each finding is
  * { file, message } with paths relative to the output directory.
  */
-export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishableKey, deny = [] }) {
+export function scanBundle(
+  outputDir,
+  { expectedSupabaseUrl, expectedPublishableKey, deny = [], target = "client-preview" },
+) {
+  const T = TARGETS[target];
+  if (!T) throw new Error(`unknown deploy target ${target}`);
   const errors = [];
   const warnings = [];
   const err = (file, message) => errors.push({ file, message });
@@ -107,8 +134,11 @@ export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishable
   if (nitro.preset !== "cloudflare-module")
     err("nitro.json", `preset is ${String(nitro.preset)}, expected cloudflare-module`);
   const wrangler = JSON.parse(fs.readFileSync(path.join(root, "server/wrangler.json"), "utf8"));
-  if (wrangler.name !== WORKER_NAME)
-    err("server/wrangler.json", `worker name is ${String(wrangler.name)}, expected ${WORKER_NAME}`);
+  if (wrangler.name !== T.workerName)
+    err(
+      "server/wrangler.json",
+      `worker name is ${String(wrangler.name)}, expected ${T.workerName}`,
+    );
   if (!(wrangler.compatibility_flags ?? []).includes("nodejs_compat"))
     err("server/wrangler.json", "nodejs_compat flag missing");
   // Version preview URLs bypass the Cloudflare Access application of the workers.dev URL, and
@@ -118,11 +148,22 @@ export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishable
       "server/wrangler.json",
       "preview_urls must be false (preview URLs bypass Cloudflare Access)",
     );
-  if (wrangler.workers_dev !== true)
-    err("server/wrangler.json", "workers_dev must be true (the preview is served on workers.dev)");
-  for (const key of ["routes", "route", "custom_domains"])
-    if (wrangler[key] !== undefined)
-      err("server/wrangler.json", `unexpected ${key} (the preview is served on workers.dev only)`);
+  if (wrangler.workers_dev !== T.workersDev)
+    err(
+      "server/wrangler.json",
+      T.workersDev
+        ? "workers_dev must be true (the preview is served on workers.dev)"
+        : "workers_dev must be false (production is served on its custom domain only)",
+    );
+  for (const key of ["route", "custom_domains"])
+    if (wrangler[key] !== undefined) err("server/wrangler.json", `unexpected ${key}`);
+  if (JSON.stringify(wrangler.routes) !== JSON.stringify(T.routes))
+    err(
+      "server/wrangler.json",
+      T.routes
+        ? `routes must be exactly the custom domain ${PRODUCTION_DOMAIN}`
+        : "unexpected routes (the preview is served on workers.dev only)",
+    );
   for (const key of ["vars", "secrets", "d1_databases", "kv_namespaces", "r2_buckets"])
     if (wrangler[key] !== undefined)
       err(
@@ -176,7 +217,7 @@ export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishable
     }
 
     const hasUrl = expectedHost !== null && text.includes(expectedHost);
-    const hasProfile = text.includes('"client-preview"') || text.includes("`client-preview`");
+    const hasProfile = text.includes(`"${T.profile}"`) || text.includes(`\`${T.profile}\``);
     if (inPublic) {
       urlInClient ||= hasUrl;
       keyInClient ||= text.includes(expectedPublishableKey);
@@ -192,9 +233,9 @@ export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishable
   if (!urlInServer) err("server", "the expected Supabase URL is not in the server bundle");
   if (!keyInClient) err("public", "the expected publishable key is not in the browser bundle");
   if (!profileInClient)
-    err("public", "the browser bundle was not built with the client-preview profile");
+    err("public", `the browser bundle was not built with the ${T.profile} profile`);
   if (!profileInServer)
-    err("server", "the server bundle was not built with the client-preview profile");
+    err("server", `the server bundle was not built with the ${T.profile} profile`);
 
   const robots = path.join(root, "public/robots.txt");
   if (
@@ -212,9 +253,13 @@ export function scanBundle(outputDir, { expectedSupabaseUrl, expectedPublishable
   return { errors, warnings, stats: { files: files.length } };
 }
 
-export function printReport({ errors, warnings, stats }, log = console.log) {
+export function printReport(
+  { errors, warnings, stats },
+  log = console.log,
+  target = "client-preview",
+) {
   log(
-    `client-preview bundle check: ${stats.files} files, ${errors.length} errors, ${warnings.length} warnings`,
+    `${target} bundle check: ${stats.files} files, ${errors.length} errors, ${warnings.length} warnings`,
   );
   for (const e of errors) log(`  ERROR   ${e.file}: ${e.message}`);
   for (const w of warnings) log(`  warning ${w.file}: ${w.message}`);
