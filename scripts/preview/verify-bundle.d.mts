@@ -11,6 +11,7 @@ export const TARGETS: Readonly<
       workersDev: boolean;
       routes: { pattern: string; custom_domain: boolean }[] | undefined;
       profile: string;
+      serverOnlyNames?: string[];
     }
   >
 >;

@@ -106,7 +106,28 @@
     "renewsManaged": "Gerenciado pela Dinequora",
     "perMonth": "{{price}} / mês",
     "implementation": "+ {{price}} de implantação (uma vez)",
-    "implementationFrom": "Implantação a partir de {{price}}"
+    "implementationFrom": "Implantação a partir de {{price}}",
+    "testMode": "Modo de teste: os pagamentos passam pelo ambiente de teste da Stripe e nenhum cartão real é cobrado.",
+    "subscribe": "Assinar o {{plan}}",
+    "manage": "Gerenciar assinatura",
+    "manageNote": "Troque o cartão, baixe as faturas ou cancele no portal seguro da Stripe.",
+    "checkoutReturned": "Obrigado! A Stripe está confirmando o pagamento. Sua assinatura atualiza aqui em alguns segundos.",
+    "checkoutCanceled": "O pagamento foi cancelado. Nada foi cobrado.",
+    "checkoutErrors": {
+      "not_configured": "Os pagamentos online ainda não estão disponíveis. Fale com a equipe Dinequora.",
+      "already_subscribed": "Você já tem uma assinatura. Use Gerenciar assinatura para alterá-la.",
+      "plan_unavailable": "Este plano não pode ser contratado online. Fale com a equipe Dinequora.",
+      "no_customer": "Ainda não há assinatura online para gerenciar.",
+      "unavailable": "Não foi possível falar com o serviço de pagamento. Tente de novo em instantes."
+    },
+    "eventKinds": {
+      "invoice.paid": "Pagamento recebido",
+      "invoice.payment_failed": "Pagamento recusado",
+      "customer.subscription.created": "Assinatura iniciada",
+      "customer.subscription.updated": "Assinatura atualizada",
+      "customer.subscription.deleted": "Assinatura cancelada",
+      "checkout.session.completed": "Pagamento concluído"
+    }
   },
   "security": {
     "title": "Segurança",
