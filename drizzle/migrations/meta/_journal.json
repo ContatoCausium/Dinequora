@@ -344,6 +344,13 @@
       "when": 1796558479812,
       "tag": "0048_billing_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1796562079812,
+      "tag": "0049_billing_clear_canceled_at",
+      "breakpoints": true
     }
   ]
 }
