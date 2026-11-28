@@ -111,7 +111,7 @@ async function ensurePrice(key, plan, kind, productHint = null) {
   ).data[0];
   let product = found?.product?.id ?? productHint;
   // Keep the product's name in step with this script (older runs named both products alike).
-  if (product && found.product.name !== name)
+  if (found && product && found.product.name !== name)
     await stripe(key, "POST", `/v1/products/${product}`, {
       name,
       metadata: { plan_id: plan.id, kind },
