@@ -1,7 +1,8 @@
 // Creates (or checks) the Stripe catalog for Dinequora Billing, idempotently:
-//   - one product per self-serve plan, a monthly price and a one-time implementation price, found by
-//     lookup key (dinequora_<plan>_monthly / dinequora_<plan>_implementation), amounts = billing_plans
-//     (migration 0047, the website's prices);
+//   - one product per self-serve plan with three recurring prices (monthly, every 6 months, yearly;
+//     the longer periods paid upfront with the website's discount) and one product for the one-time
+//     implementation price, found by lookup key (dinequora_<plan>_monthly | _semiannual | _annual |
+//     _implementation), amounts = billing_plans (migrations 0047 and 0048, the website's prices);
 //   - the default billing portal configuration (card, invoices, cancel at period end), if none;
 //   - optionally the webhook endpoint (--webhook-url), whose signing secret is APPENDED to the file
 //     given by --secret-out and never printed.
@@ -17,9 +18,30 @@ import { fileURLToPath } from "node:url";
 export const API_VERSION = "2025-03-31.basil";
 /** Self-serve plans (Enterprise is a contract: no online checkout). Amounts in US cents. */
 export const PLANS = [
-  { id: "starter", name: "Dinequora Starter", monthly: 6900, implementation: 14900 },
-  { id: "growth", name: "Dinequora Growth", monthly: 11900, implementation: 39999 },
+  {
+    id: "starter",
+    name: "Dinequora Starter",
+    monthly: 6900,
+    semiannual: 38100,
+    annual: 70400,
+    implementation: 14900,
+  },
+  {
+    id: "growth",
+    name: "Dinequora Growth",
+    monthly: 11900,
+    semiannual: 65700,
+    annual: 121400,
+    implementation: 39999,
+  },
 ];
+/** Recurring price kinds and their Stripe interval. */
+export const RECURRING = {
+  monthly: { interval: "month", interval_count: 1 },
+  semiannual: { interval: "month", interval_count: 6 },
+  annual: { interval: "year", interval_count: 1 },
+};
+export const PRICE_KINDS = ["monthly", "semiannual", "annual", "implementation"];
 export const WEBHOOK_EVENTS = [
   "checkout.session.completed",
   "customer.subscription.created",
@@ -30,6 +52,8 @@ export const WEBHOOK_EVENTS = [
 ];
 export const lookupKeys = (planId) => ({
   monthly: `dinequora_${planId}_monthly`,
+  semiannual: `dinequora_${planId}_semiannual`,
+  annual: `dinequora_${planId}_annual`,
   implementation: `dinequora_${planId}_implementation`,
 });
 
@@ -68,11 +92,12 @@ async function stripe(key, method, p, params = {}) {
   return json;
 }
 
-/** One product per plan and kind, so the invoice shows "Dinequora Starter" and "… implementation". */
+/** The subscription prices share the plan's product; the implementation has its own, so the
+ * invoice shows "Dinequora Starter" and "Dinequora Starter implementation". */
 export const productName = (plan, kind) =>
-  kind === "monthly" ? plan.name : `${plan.name} implementation`;
+  kind === "implementation" ? `${plan.name} implementation` : plan.name;
 
-async function ensurePrice(key, plan, kind) {
+async function ensurePrice(key, plan, kind, productHint = null) {
   const lookup = lookupKeys(plan.id)[kind];
   const amount = plan[kind];
   const name = productName(plan, kind);
@@ -84,14 +109,19 @@ async function ensurePrice(key, plan, kind) {
       expand: ["data.product"],
     })
   ).data[0];
-  let product = found?.product?.id ?? null;
+  let product = found?.product?.id ?? productHint;
   // Keep the product's name in step with this script (older runs named both products alike).
   if (product && found.product.name !== name)
     await stripe(key, "POST", `/v1/products/${product}`, {
       name,
       metadata: { plan_id: plan.id, kind },
     });
-  if (found && found.unit_amount === amount && found.currency === "usd")
+  const recurring = RECURRING[kind] ?? null;
+  const sameInterval =
+    !recurring ||
+    (found?.recurring?.interval === recurring.interval &&
+      (found?.recurring?.interval_count ?? 1) === recurring.interval_count);
+  if (found && found.unit_amount === amount && found.currency === "usd" && sameInterval)
     return {
       lookup,
       id: found.id,
@@ -110,7 +140,7 @@ async function ensurePrice(key, plan, kind) {
     transfer_lookup_key: true,
     nickname: name,
     metadata: { plan_id: plan.id, kind },
-    ...(kind === "monthly" ? { recurring: { interval: "month" } } : {}),
+    ...(recurring ? { recurring } : {}),
   });
   return { lookup, id: price.id, product, state: found ? "replaced" : "created" };
 }
@@ -165,11 +195,15 @@ async function main(argv) {
   const key = process.env.STRIPE_SECRET_KEY ?? "";
   if (!/^(sk|rk)_test_/.test(key))
     throw new Error("refusing: STRIPE_SECRET_KEY must be a TEST key (sk_test_/rk_test_)");
-  for (const plan of PLANS)
-    for (const kind of ["monthly", "implementation"]) {
-      const r = await ensurePrice(key, plan, kind);
+  for (const plan of PLANS) {
+    // The 6-month and yearly prices go on the monthly price's product (one product per plan).
+    let planProduct = null;
+    for (const kind of PRICE_KINDS) {
+      const r = await ensurePrice(key, plan, kind, kind === "implementation" ? null : planProduct);
+      if (kind === "monthly") planProduct = r.product;
       console.log(`price ${r.lookup}: ${r.state} (${r.id})`);
     }
+  }
   const portal = await ensurePortal(key);
   console.log(`billing portal configuration: ${portal.state} (${portal.id})`);
   if (opts.webhookUrl) {

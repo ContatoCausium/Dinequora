@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { useWorkspace } from "@/components/app/workspace-context";
-import { PageHeader, Panel } from "@/components/app/page";
+import { PageHeader, Panel, Segmented } from "@/components/app/page";
 import { AppError, EmptyState } from "@/components/app/states";
 import { fetchBilling } from "@/lib/org-service";
 import { countBillableStores } from "@/lib/access-rules";
@@ -27,6 +27,13 @@ import { fmtCurrency, fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { isClientPreview } from "@/lib/deployment-profile";
 import { getBillingMode, openBillingPortal, startCheckout } from "@/lib/billing.functions";
+import {
+  BILLING_PERIODS,
+  PERIOD_MONTHS,
+  periodPriceCents,
+  periodSavingsCents,
+  type BillingPeriod,
+} from "@/lib/billing-periods";
 
 export const Route = createFileRoute("/_authenticated/_app/settings/billing")({
   head: () => ({
@@ -69,6 +76,8 @@ function BillingPage() {
   });
   const mode = preview ? "off" : (modeQuery.data?.mode ?? "off");
   const [busy, setBusy] = useState<string | null>(null);
+  // Monthly, every 6 months or yearly (0048): the price shown and the one checkout charges.
+  const [period, setPeriod] = useState<BillingPeriod>("monthly");
   // Back from Stripe Checkout: the browser never reports success; the signed webhook updates the
   // subscription a few seconds later, so the page refetches instead of trusting the return URL.
   const [returned, setReturned] = useState<"success" | "canceled" | null>(null);
@@ -101,7 +110,7 @@ function BillingPage() {
     setBusy(null);
   };
   const subscribe = (planId: string) =>
-    go(`plan:${planId}`, () => startCheckout({ data: { orgId: orgDbId, planId } }));
+    go(`plan:${planId}`, () => startCheckout({ data: { orgId: orgDbId, planId, period } }));
   const manage = () => go("portal", () => openBillingPortal({ data: { orgId: orgDbId } }));
 
   if (role !== "owner") {
@@ -175,6 +184,14 @@ function BillingPage() {
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
                   <Item label={t("billing.plan")} value={plan?.name ?? sub.plan_id} />
                   <Item label={t("billing.status")} value={<StatusPill status={sub.status} />} />
+                  {sub.stripe_subscription_id && (
+                    <Item
+                      label={t("billing.billingPeriod")}
+                      value={t(`billing.periods.${sub.billing_period}`, {
+                        defaultValue: sub.billing_period,
+                      })}
+                    />
+                  )}
                   {/* Stores in use come from the stores themselves (same count as the Stores page);
                       the billed quantity is what the billing provider last synced, shown separately. */}
                   <Item
@@ -258,6 +275,18 @@ function BillingPage() {
           </div>
           {!preview && (
             <Panel title={t("billing.plans")} subtitle={t("billing.plansNote")}>
+              <div className="mb-3">
+                <Segmented
+                  fill
+                  label={t("billing.periodPicker")}
+                  value={period}
+                  onChange={setPeriod}
+                  options={BILLING_PERIODS.map((v) => ({
+                    value: v,
+                    label: t(`billing.periods.${v}`),
+                  }))}
+                />
+              </div>
               <ul className="flex flex-col gap-2">
                 {/* Smallest plan first. Prices come from billing_plans (0047: the website's prices,
                   a flat monthly subscription plus a one-time implementation fee). */}
@@ -267,56 +296,70 @@ function BillingPage() {
                       (a.default_store_limit ?? 0) - (b.default_store_limit ?? 0) ||
                       a.name.localeCompare(b.name),
                   )
-                  .map((p) => (
-                    <li
-                      key={p.id}
-                      className={cn(
-                        "rounded-lg border p-3.5",
-                        p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
-                      )}
-                    >
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-sm font-semibold">{p.name}</span>
-                        <span className="tabular text-sm">
-                          {p.monthly_price_cents != null
-                            ? t("billing.perMonth", {
-                                price: fmtCurrency(p.monthly_price_cents / 100, lng),
-                              })
-                            : t("billing.custom")}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t("billing.planMeta", {
-                          count: p.default_store_limit,
-                          days: p.trial_days,
-                        })}
-                      </p>
-                      {p.implementation_fee_cents > 0 && (
-                        <p className="tabular mt-0.5 text-xs text-muted-foreground">
-                          {t(
-                            p.implementation_fee_is_minimum
-                              ? "billing.implementationFrom"
-                              : "billing.implementation",
-                            { price: fmtCurrency(p.implementation_fee_cents / 100, lng) },
-                          )}
-                        </p>
-                      )}
-                      {mode !== "off" &&
-                        p.monthly_price_cents != null &&
-                        !p.implementation_fee_is_minimum &&
-                        !(sub?.stripe_subscription_id && sub.status !== "canceled") && (
-                          <Button
-                            className="mt-3 w-full"
-                            size="sm"
-                            disabled={busy !== null}
-                            onClick={() => void subscribe(p.id)}
-                          >
-                            {busy === `plan:${p.id}` && <Loader2 className="size-4 animate-spin" />}
-                            {t("billing.subscribe", { plan: p.name })}
-                          </Button>
+                  .map((p) => {
+                    const charge = periodPriceCents(p, period);
+                    const savings = periodSavingsCents(p, period);
+                    return (
+                      <li
+                        key={p.id}
+                        className={cn(
+                          "rounded-lg border p-3.5",
+                          p.id === sub?.plan_id && "border-primary/50 bg-primary-soft/40",
                         )}
-                    </li>
-                  ))}
+                      >
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-sm font-semibold">{p.name}</span>
+                          <span className="tabular text-sm">
+                            {charge != null
+                              ? t(`billing.perPeriod.${period}`, {
+                                  price: fmtCurrency(charge / 100, lng),
+                                })
+                              : t("billing.custom")}
+                          </span>
+                        </div>
+                        {charge != null && period !== "monthly" && (
+                          <p className="tabular mt-0.5 text-xs text-success">
+                            {t("billing.periodEquivalent", {
+                              price: fmtCurrency(charge / PERIOD_MONTHS[period] / 100, lng),
+                              savings: fmtCurrency(savings / 100, lng),
+                            })}
+                          </p>
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t("billing.planMeta", {
+                            count: p.default_store_limit,
+                            days: p.trial_days,
+                          })}
+                        </p>
+                        {p.implementation_fee_cents > 0 && (
+                          <p className="tabular mt-0.5 text-xs text-muted-foreground">
+                            {t(
+                              p.implementation_fee_is_minimum
+                                ? "billing.implementationFrom"
+                                : "billing.implementation",
+                              { price: fmtCurrency(p.implementation_fee_cents / 100, lng) },
+                            )}
+                          </p>
+                        )}
+                        {mode !== "off" &&
+                          charge != null &&
+                          !p.implementation_fee_is_minimum &&
+                          !(sub?.stripe_subscription_id && sub.status !== "canceled") && (
+                            <Button
+                              className="mt-3 w-full"
+                              size="sm"
+                              disabled={busy !== null}
+                              onClick={() => void subscribe(p.id)}
+                            >
+                              {busy === `plan:${p.id}` && (
+                                <Loader2 className="size-4 animate-spin" />
+                              )}
+                              {t("billing.subscribe", { plan: p.name })}
+                            </Button>
+                          )}
+                      </li>
+                    );
+                  })}
               </ul>
             </Panel>
           )}

@@ -2,7 +2,12 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { stripeKeyMode, stripeRequest, StripeApiError } from "./stripe-api";
-import { buildCheckoutParams, implementationLookupKey, monthlyLookupKey } from "./checkout-params";
+import { periodPriceCents, type BillingPeriod } from "@/lib/billing-periods";
+import {
+  buildCheckoutParams,
+  implementationLookupKey,
+  subscriptionLookupKey,
+} from "./checkout-params";
 
 /**
  * Server-only Stripe Billing logic (reads the STRIPE_* Worker secrets). Loaded by
@@ -50,10 +55,11 @@ async function requireOwner(client: SupabaseClient<Database>, orgId: string): Pr
 
 export async function startCheckoutForOwner(
   client: SupabaseClient<Database>,
-  input: { orgId: string; planId: string },
+  input: { orgId: string; planId: string; period?: BillingPeriod },
   origin: string,
   env: Record<string, string | undefined> = process.env,
 ): Promise<CheckoutResult> {
+  const period: BillingPeriod = input.period ?? "monthly";
   if (billingMode(env) === "off") return { status: "not_configured" };
   const key = env["STRIPE_SECRET_KEY"]!;
   const sub = await requireOwner(client, input.orgId);
@@ -64,33 +70,35 @@ export async function startCheckoutForOwner(
   const plan = await client
     .from("billing_plans")
     .select(
-      "id, monthly_price_cents, implementation_fee_cents, implementation_fee_is_minimum, active",
+      "id, monthly_price_cents, semiannual_price_cents, annual_price_cents, implementation_fee_cents, implementation_fee_is_minimum, active",
     )
     .eq("id", input.planId)
     .maybeSingle();
-  // Contract plans (no monthly price, or an implementation fee "from") go through sales.
+  // Contract plans (no monthly price, or an implementation fee "from") go through sales, and a
+  // period the plan does not offer (no price for it) cannot be bought.
+  const charge = plan.data ? periodPriceCents(plan.data, period) : null;
   if (
     plan.error ||
     !plan.data ||
     plan.data.active === false ||
     plan.data.monthly_price_cents == null ||
+    charge == null ||
     plan.data.implementation_fee_is_minimum
   )
     return { status: "plan_unavailable" };
   const fee = plan.data.implementation_fee_cents;
 
   try {
-    const wanted = [monthlyLookupKey(input.planId)];
+    const wanted = [subscriptionLookupKey(input.planId, period)];
     if (fee > 0) wanted.push(implementationLookupKey(input.planId));
     const prices = await stripeRequest<{
       data: { id: string; lookup_key: string | null; unit_amount: number | null }[];
     }>(key, "GET", "/v1/prices", { active: true, lookup_keys: wanted, limit: 10 });
     const byKey = new Map(prices.data.map((p) => [p.lookup_key, p]));
-    const monthly = byKey.get(monthlyLookupKey(input.planId));
+    const recurring = byKey.get(subscriptionLookupKey(input.planId, period));
     const impl = byKey.get(implementationLookupKey(input.planId));
     // Stripe's price must be the plan's price: never charge an amount the app does not show.
-    if (!monthly || monthly.unit_amount !== plan.data.monthly_price_cents)
-      return { status: "plan_unavailable" };
+    if (!recurring || recurring.unit_amount !== charge) return { status: "plan_unavailable" };
     if (fee > 0 && (!impl || impl.unit_amount !== fee)) return { status: "plan_unavailable" };
 
     const { data: user } = await client.auth.getUser();
@@ -101,7 +109,8 @@ export async function startCheckoutForOwner(
       buildCheckoutParams({
         orgId: input.orgId,
         planId: input.planId,
-        monthlyPriceId: monthly.id,
+        period,
+        subscriptionPriceId: recurring.id,
         implementationPriceId: fee > 0 && impl ? impl.id : null,
         customerId: sub?.stripe_customer_id ?? null,
         email: user.user?.email ?? null,

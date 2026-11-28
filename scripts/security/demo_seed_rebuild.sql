@@ -32,7 +32,7 @@ DECLARE
        {"slug": "loc_harbor_1", "name": "Harbor Taco · Demo Store", "address": null, "phone": null,
         "timezone": "America/New_York", "status": "active", "hours": {}, "is_verified": false,
         "tax_rate_ppm": null}],
-     "subscription": {"plan_id": "starter", "status": "active", "billed_locations": 1,
+     "subscription": {"plan_id": "starter", "status": "active", "billing_period": "monthly", "billed_locations": 1,
                       "trial_ends_at": null, "current_period_start": null, "current_period_end": null,
                       "grace_ends_at": null, "cancel_at_period_end": false, "canceled_at": null,
                       "stripe_customer_id": null, "stripe_subscription_id": null}},
@@ -53,7 +53,7 @@ DECLARE
         "address": "61 Hollis St, Framingham, MA 01702", "phone": null,
         "timezone": "America/New_York", "status": "active", "hours": {}, "is_verified": true,
         "tax_rate_ppm": null}],
-     "subscription": {"plan_id": "starter", "status": "active", "billed_locations": 3,
+     "subscription": {"plan_id": "starter", "status": "active", "billing_period": "monthly", "billed_locations": 3,
                       "trial_ends_at": null, "current_period_start": null, "current_period_end": null,
                       "grace_ends_at": null, "cancel_at_period_end": false, "canceled_at": null,
                       "stripe_customer_id": null, "stripe_subscription_id": null}}

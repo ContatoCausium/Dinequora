@@ -75,7 +75,7 @@
     "function|assert_org_operational(_org_id uuid)|service_role|EXECUTE",
     "function|assistant_month_tokens(_org_id uuid)|authenticated|EXECUTE",
     "function|audit_visible_location_ids()|authenticated|EXECUTE",
-    "function|billing_apply_stripe_event(_event_id text, _type text, _org_id uuid, _customer text, _subscription text, _status text, _plan text, _period_start timestamp with time zone, _period_end timestamp with time zone, _cancel_at_period_end boolean, _amount_cents integer, _currency text)|service_role|EXECUTE",
+    "function|billing_apply_stripe_event(_event_id text, _type text, _org_id uuid, _customer text, _subscription text, _status text, _plan text, _period_start timestamp with time zone, _period_end timestamp with time zone, _cancel_at_period_end boolean, _amount_cents integer, _currency text, _billing_period text)|service_role|EXECUTE",
     "function|bootstrap_first_platform_admin(_user_id uuid, _authorization_note text)|service_role|EXECUTE",
     "function|can_access_location(_location_id uuid)|authenticated|EXECUTE",
     "function|can_manage_member(_member_id uuid)|anon|EXECUTE",

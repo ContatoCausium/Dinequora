@@ -356,6 +356,8 @@ export type BillingSummary = {
   subscription: {
     plan_id: string;
     status: string;
+    /** monthly | semiannual | annual (0048). */
+    billing_period: string;
     billed_locations: number;
     trial_ends_at: string | null;
     current_period_end: string | null;
@@ -368,6 +370,9 @@ export type BillingSummary = {
     name: string;
     /** Flat monthly subscription; null = priced by contract (0047). */
     monthly_price_cents: number | null;
+    /** Charged every 6 months / every year, upfront; null = not offered (0048). */
+    semiannual_price_cents: number | null;
+    annual_price_cents: number | null;
     implementation_fee_cents: number;
     implementation_fee_is_minimum: boolean;
     default_store_limit: number;
@@ -389,14 +394,14 @@ export async function fetchBilling(orgDbId: string): Promise<BillingSummary> {
     supabase
       .from("subscriptions")
       .select(
-        "plan_id, status, billed_locations, trial_ends_at, current_period_end, grace_ends_at, cancel_at_period_end, stripe_subscription_id",
+        "plan_id, status, billing_period, billed_locations, trial_ends_at, current_period_end, grace_ends_at, cancel_at_period_end, stripe_subscription_id",
       )
       .eq("org_id", orgDbId)
       .maybeSingle(),
     supabase
       .from("billing_plans")
       .select(
-        "id, name, monthly_price_cents, implementation_fee_cents, implementation_fee_is_minimum, default_store_limit, trial_days, is_placeholder_pricing",
+        "id, name, monthly_price_cents, semiannual_price_cents, annual_price_cents, implementation_fee_cents, implementation_fee_is_minimum, default_store_limit, trial_days, is_placeholder_pricing",
       )
       .order("default_store_limit"),
     supabase

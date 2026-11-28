@@ -30,10 +30,19 @@ Code: `src/lib/billing.functions.ts` (checkout, portal, mode), `src/lib/stripe/s
 `src/server.ts` (route), `scripts/stripe/setup-catalog.mjs` (catalog). Tests:
 `src/test/stripe-billing.test.ts`.
 
-- **Prices**: one Stripe product per self-serve plan (Starter, Growth) with a monthly price and a
-  one-time implementation price, found by lookup key `dinequora_<plan>_monthly` /
-  `dinequora_<plan>_implementation`. Amounts equal `billing_plans` (0047); checkout refuses when
-  Stripe's amount differs from the plan's, so the app never charges a price it does not show.
+- **Prices**: one Stripe product per self-serve plan (Starter, Growth) with three recurring prices
+  (monthly; every 6 months, 8% off; yearly, 15% off; the longer periods paid upfront, rounded to
+  whole dollars as on the website) and a one-time implementation price on its own product, found by
+  lookup key `dinequora_<plan>_monthly | _semiannual | _annual | _implementation`. Amounts equal
+  `billing_plans` (0047 monthly + implementation, 0048 `semiannual_price_cents` /
+  `annual_price_cents`): Starter $69 / $381 / $704, Growth $119 / $657 / $1,214. Checkout refuses
+  when Stripe's amount differs from the plan's, so the app never charges a price it does not show.
+- **Billing period** (0048): the owner picks monthly, 6 months or yearly on the billing page; the
+  period travels in the Checkout metadata (`billing_period`) and the webhook stores it in
+  `subscriptions.billing_period` (`billing_apply_stripe_event(..., _billing_period)`; a
+  subscription event reads it from the price's interval). Approved rules: no refund when a prepaid
+  period is canceled midway; access runs to the end of the paid period (portal cancels at period
+  end). The implementation fee is never discounted.
   Enterprise (contract, implementation "from") has no online checkout.
 - **Checkout**: owner-only server function (`is_org_owner` as the signed-in user). Mode
   `subscription`: monthly price + implementation on the first invoice. `client_reference_id`,
@@ -62,8 +71,8 @@ Code: `src/lib/billing.functions.ts` (checkout, portal, mode), `src/lib/stripe/s
   key). E-mail errors are reported (`billing.email_failed`) and never fail the webhook; Resend's
   `Idempotency-Key` (event id + owner) stops repeats. Monthly receipts are Stripe's (live mode:
   Settings → Customer emails → successful payments, finalized invoices); test mode sends none.
-- **Not yet**: per-location quantity sync (prices are flat since 0047), semiannual/annual prepaid
-  terms, taxes (Stripe Tax), live mode.
+- **Not yet**: per-location quantity sync (prices are flat since 0047), switching period or plan
+  in the portal (through support for now), taxes (Stripe Tax), live mode.
 
 ### Operator steps (test mode)
 

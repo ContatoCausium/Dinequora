@@ -104,7 +104,6 @@
     "billedPendingSync": "{{count}} — ainda sem sincronização: os pagamentos online não estão conectados",
     "previewManaged": "Durante o preview, a cobrança deste ambiente é combinada diretamente com o seu contato na Dinequora. Nenhum cartão é guardado ou cobrado aqui.",
     "renewsManaged": "Gerenciado pela Dinequora",
-    "perMonth": "{{price}} / mês",
     "implementation": "+ {{price}} de implantação (uma vez)",
     "implementationFrom": "Implantação a partir de {{price}}",
     "testMode": "Modo de teste: os pagamentos passam pelo ambiente de teste da Stripe e nenhum cartão real é cobrado.",
@@ -127,7 +126,20 @@
       "customer.subscription.updated": "Assinatura atualizada",
       "customer.subscription.deleted": "Assinatura cancelada",
       "checkout.session.completed": "Pagamento concluído"
-    }
+    },
+    "billingPeriod": "Período de cobrança",
+    "periodPicker": "Período de cobrança",
+    "periods": {
+      "monthly": "Mensal",
+      "semiannual": "Semestral",
+      "annual": "Anual"
+    },
+    "perPeriod": {
+      "monthly": "{{price}} / mês",
+      "semiannual": "{{price}} / 6 meses",
+      "annual": "{{price}} / ano"
+    },
+    "periodEquivalent": "equivale a {{price}}/mês · economia de {{savings}}"
   },
   "security": {
     "title": "Segurança",

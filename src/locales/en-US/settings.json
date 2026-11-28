@@ -104,7 +104,6 @@
     "billedPendingSync": "{{count}} — not synced yet: online payments aren’t connected",
     "previewManaged": "During the preview, billing for this workspace is arranged directly with your Dinequora contact. No card is stored or charged here.",
     "renewsManaged": "Managed by Dinequora",
-    "perMonth": "{{price}} / month",
     "implementation": "+ {{price}} one-time implementation",
     "implementationFrom": "Implementation from {{price}}",
     "testMode": "Test mode: payments go through Stripe's test environment and no real card is charged.",
@@ -127,7 +126,20 @@
       "customer.subscription.updated": "Subscription updated",
       "customer.subscription.deleted": "Subscription canceled",
       "checkout.session.completed": "Checkout completed"
-    }
+    },
+    "billingPeriod": "Billing period",
+    "periodPicker": "Billing period",
+    "periods": {
+      "monthly": "Monthly",
+      "semiannual": "Every 6 months",
+      "annual": "Yearly"
+    },
+    "perPeriod": {
+      "monthly": "{{price}} / month",
+      "semiannual": "{{price}} / 6 months",
+      "annual": "{{price}} / year"
+    },
+    "periodEquivalent": "{{price}}/month equivalent · save {{savings}}"
   },
   "security": {
     "title": "Security",
