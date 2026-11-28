@@ -49,7 +49,8 @@
     "0045_sales_tax_summary": "e9b1a6c3294428c6c2f46d5d3eeff97f008c91bf2c95e9786c056a8f59878729",
     "0046_tips_by_server": "e3c2bf2b21444cce2a8148fe654c165ea8f32ad6dda43255bf83e52bcb0ea397",
     "0047_plan_prices_from_website": "534a29e6ec12df1cd54e037c52ff70cf080aea4f6468bd28e69c776717ed1469",
-    "0048_billing_periods": "a07baad9a901bdae55fe7ca5c693bcaf07fa5599ae9f168266133dac828a0822"
+    "0048_billing_periods": "a07baad9a901bdae55fe7ca5c693bcaf07fa5599ae9f168266133dac828a0822",
+    "0049_billing_clear_canceled_at": "43e7beea288f729da2649296d2ccd2724fad96a33d07b3d89aea79855ae87fd2"
   },
   "orphans": {
     "0010_fix_admin_list_platform_admins.sql": "3f216ec6b31a05ff40494ff4be2438cb55674c0d88c757c27656162e8dd3177d",
