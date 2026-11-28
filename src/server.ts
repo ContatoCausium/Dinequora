@@ -75,11 +75,26 @@ function isH3SwallowedErrorBody(body: string): boolean {
  * role (billing_apply_stripe_event is EXECUTE-granted to service_role only).
  */
 async function handleStripeWebhookRequest(request: Request): Promise<Response> {
-  const [{ handleStripeWebhook }, { supabaseAdmin }] = await Promise.all([
+  const [{ handleStripeWebhook }, { supabaseAdmin }, { notifyBillingChange }] = await Promise.all([
     import("./lib/stripe/billing-webhook"),
     import("./integrations/supabase/client.server"),
+    import("./lib/stripe/billing-notify"),
   ]);
+  // Stripe calls the app's own public address, so the request origin is the link in the e-mails.
+  const appUrl = new URL(request.url).origin;
   return handleStripeWebhook(request, {
+    notify: async (update) => {
+      try {
+        const result = await notifyBillingChange(supabaseAdmin, update, appUrl);
+        if (result.status === "sent" && result.failed > 0)
+          captureError(new Error(`billing e-mail not delivered to ${result.failed} owner(s)`), {
+            event: "billing.email_failed",
+            ...requestContext(request),
+          });
+      } catch (error) {
+        captureError(error, { event: "billing.email_failed", ...requestContext(request) });
+      }
+    },
     secret: process.env["STRIPE_WEBHOOK_SECRET"],
     apply: async (update) => {
       // Several arguments are nullable; the generated types mark every argument as required.
