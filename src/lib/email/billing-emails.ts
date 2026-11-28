@@ -5,6 +5,7 @@
  * Same look as the Auth e-mails (scripts/email/build-auth-templates.mjs: colors, logo, footer).
  * Monthly receipts are not sent here: Stripe sends them in live mode (Settings > Customer emails).
  */
+import type { BillingPeriod } from "@/lib/billing-periods";
 import type { BillingUpdate } from "@/lib/stripe/billing-webhook";
 
 export type BillingEmailKind = "activated" | "payment_failed" | "canceled";
@@ -64,9 +65,11 @@ export function formatMoney(cents: number, currency: string, lang: EmailLang): s
 export type BillingEmailData = {
   orgName: string;
   planName: string;
-  /** Plan monthly price (activated) or the failed invoice amount (payment_failed). */
+  /** The period's price (activated) or the failed invoice amount (payment_failed). */
   amountCents: number | null;
   currency: string;
+  /** How often the subscription is charged (0048); monthly when unknown. */
+  period?: BillingPeriod;
   /** Origin of the app, e.g. https://app.dinequora.com. */
   appUrl: string;
 };
@@ -75,7 +78,7 @@ type Copy = {
   subject: string;
   preheader: string;
   heading: string;
-  /** Paragraphs; {org} {plan} {amount} are replaced (HTML-escaped in the HTML version). */
+  /** Paragraphs; {org} {plan} {amount} {renew} are replaced (HTML-escaped in the HTML version). */
   body: string[];
   cta: string;
 };
@@ -88,7 +91,7 @@ const COPY: Record<BillingEmailKind, Record<EmailLang, Copy>> = {
       heading: "Your plan is active",
       body: [
         "Thanks for subscribing. {org} is now on the Dinequora {plan} plan{amount}.",
-        "The subscription renews automatically each month. You can see invoices, update your card or cancel anytime in Billing.",
+        "The subscription renews automatically {renew}. You can see invoices, update your card or cancel anytime in Billing.",
       ],
       cta: "Open billing",
     },
@@ -98,7 +101,7 @@ const COPY: Record<BillingEmailKind, Record<EmailLang, Copy>> = {
       heading: "Seu plano está ativo",
       body: [
         "Obrigado por assinar. {org} agora está no plano Dinequora {plan}{amount}.",
-        "A assinatura renova automaticamente todo mês. Você pode ver as faturas, trocar o cartão ou cancelar quando quiser em Cobrança.",
+        "A assinatura renova automaticamente {renew}. Você pode ver as faturas, trocar o cartão ou cancelar quando quiser em Cobrança.",
       ],
       cta: "Abrir cobrança",
     },
@@ -154,10 +157,23 @@ const FOOTER: Record<EmailLang, string> = {
   pt: "Você recebeu este e-mail porque é dono(a) de {org} no Dinequora.",
 };
 
+/** "/month", " every 6 months", "/year" after the price of the period. */
+const PER: Record<BillingPeriod, Record<EmailLang, string>> = {
+  monthly: { en: "/month", pt: "/mês" },
+  semiannual: { en: " every 6 months", pt: " a cada 6 meses" },
+  annual: { en: "/year", pt: "/ano" },
+};
+/** When the subscription renews. */
+const RENEW: Record<BillingPeriod, Record<EmailLang, string>> = {
+  monthly: { en: "each month", pt: "todo mês" },
+  semiannual: { en: "every 6 months", pt: "a cada 6 meses" },
+  annual: { en: "every year", pt: "todo ano" },
+};
+
 function amountPhrase(kind: BillingEmailKind, d: BillingEmailData, lang: EmailLang): string {
   if (d.amountCents == null) return "";
   const money = formatMoney(d.amountCents, d.currency, lang);
-  if (kind === "activated") return lang === "pt" ? ` (${money}/mês)` : ` (${money}/month)`;
+  if (kind === "activated") return ` (${money}${PER[d.period ?? "monthly"][lang]})`;
   return lang === "pt" ? ` de ${money}` : ` of ${money}`;
 }
 
@@ -175,7 +191,8 @@ export function renderBillingEmail(
     s
       .replace("{org}", () => esc(d.orgName))
       .replace("{plan}", () => esc(d.planName))
-      .replace("{amount}", () => esc(amount));
+      .replace("{amount}", () => esc(amount))
+      .replace("{renew}", () => esc(RENEW[d.period ?? "monthly"][lang]));
   const plain = (s: string) => s;
   const link = `${d.appUrl.replace(/\/+$/, "")}/settings/billing`;
   const subject = fill(c.subject, plain);

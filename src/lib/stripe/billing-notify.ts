@@ -6,6 +6,7 @@ import {
   renderBillingEmail,
   type BillingEmailKind,
 } from "@/lib/email/billing-emails";
+import { isBillingPeriod, periodPriceCents, type BillingPeriod } from "@/lib/billing-periods";
 import type { BillingUpdate } from "./billing-webhook";
 
 /**
@@ -34,14 +35,18 @@ async function loadContext(admin: SupabaseClient<Database>, update: BillingUpdat
       .select("user_id")
       .eq("org_id", update._org_id)
       .eq("role", "owner"),
-    admin.from("subscriptions").select("plan_id").eq("org_id", update._org_id).maybeSingle(),
+    admin
+      .from("subscriptions")
+      .select("plan_id, billing_period")
+      .eq("org_id", update._org_id)
+      .maybeSingle(),
   ]);
   if (org.error || members.error || sub.error) throw new Error("billing_notify_lookup_failed");
   const planId = update._plan ?? sub.data?.plan_id ?? null;
   const plan = planId
     ? await admin
         .from("billing_plans")
-        .select("name, monthly_price_cents, currency")
+        .select("name, monthly_price_cents, semiannual_price_cents, annual_price_cents, currency")
         .eq("id", planId)
         .maybeSingle()
     : null;
@@ -58,10 +63,14 @@ async function loadContext(admin: SupabaseClient<Database>, update: BillingUpdat
       lang: emailLang(data.user?.user_metadata?.["preferred_language"]),
     });
   }
+  const stored = sub.data?.billing_period;
+  const period: BillingPeriod =
+    update._billing_period ?? (isBillingPeriod(stored) ? stored : "monthly");
   return {
     orgName: org.data?.name ?? "",
     planName: plan?.data?.name ?? planId ?? "",
-    monthlyCents: plan?.data?.monthly_price_cents ?? null,
+    period,
+    periodCents: plan?.data ? periodPriceCents(plan.data, period) : null,
     planCurrency: plan?.data?.currency ?? "usd",
     owners,
   };
@@ -81,7 +90,7 @@ export async function notifyBillingChange(
 
   const ctx = await loadContext(admin, update);
   if (ctx.owners.length === 0) return { status: "skipped", reason: "no_owners" };
-  const amountCents = kind === "activated" ? ctx.monthlyCents : update._amount_cents;
+  const amountCents = kind === "activated" ? ctx.periodCents : update._amount_cents;
   const currency = (kind === "activated" ? ctx.planCurrency : update._currency) ?? "usd";
   const from = env["BILLING_EMAIL_FROM"]?.trim() || DEFAULT_BILLING_FROM;
 
@@ -93,6 +102,7 @@ export async function notifyBillingChange(
       planName: ctx.planName,
       amountCents,
       currency,
+      period: ctx.period,
       appUrl,
     });
     try {

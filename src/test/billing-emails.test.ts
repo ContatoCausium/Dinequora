@@ -42,6 +42,7 @@ const update = (over: Partial<BillingUpdate> = {}): BillingUpdate => ({
   _cancel_at_period_end: null,
   _amount_cents: null,
   _currency: null,
+  _billing_period: null,
   ...over,
 });
 
@@ -121,7 +122,13 @@ function fakeAdmin({
     organizations: { name: "Teste Dinequora" },
     organization_members: owners.map((o) => ({ user_id: o.id })),
     subscriptions: { plan_id: "starter" },
-    billing_plans: { name: "Starter", monthly_price_cents: 6900, currency: "usd" },
+    billing_plans: {
+      name: "Starter",
+      monthly_price_cents: 6900,
+      semiannual_price_cents: 38100,
+      annual_price_cents: 70400,
+      currency: "usd",
+    },
   };
   const filters: Record<string, [string, unknown][]> = {};
   const from = (table: string) => {
@@ -213,6 +220,14 @@ describe("notifyBillingChange", () => {
     expect(r).toEqual({ status: "sent", kind: "payment_failed", sent: 0, failed: 1 });
     const body = JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body));
     expect(body.text).toContain("The payment of $69.00 for the Starter plan of Teste Dinequora");
+  });
+
+  it("activation e-mails the price of the period that was bought", async () => {
+    const { admin } = fakeAdmin({ owners: [{ id: "u1", email: "owner@example.com", lang: "en" }] });
+    const f = okFetch();
+    await notifyBillingChange(admin, update({ _billing_period: "annual" }), APP, env, f);
+    const body = JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.text).toContain("on the Dinequora Starter plan ($704.00/year).");
   });
 
   it("skips owners without an e-mail and reports no owners", async () => {

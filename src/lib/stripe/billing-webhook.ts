@@ -1,3 +1,4 @@
+import { isBillingPeriod, periodFromRecurring, type BillingPeriod } from "@/lib/billing-periods";
 import { verifyStripeSignature } from "./stripe-api";
 
 /**
@@ -34,6 +35,8 @@ export type BillingUpdate = {
   _cancel_at_period_end: boolean | null;
   _amount_cents: number | null;
   _currency: string | null;
+  /** monthly | semiannual | annual (0048); null keeps the stored period. */
+  _billing_period: BillingPeriod | null;
 };
 
 /** The fields read from Stripe payloads (everything else is ignored). */
@@ -57,7 +60,12 @@ type Field =
   | "subscription_details"
   | "amount_paid"
   | "amount_due"
-  | "currency";
+  | "currency"
+  | "billing_period"
+  | "price"
+  | "recurring"
+  | "interval"
+  | "interval_count";
 type Obj = Partial<Record<Field, unknown>>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
@@ -69,6 +77,7 @@ const iso = (unix: unknown): string | null => {
   return n === null ? null : new Date(n * 1000).toISOString();
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const period = (v: unknown): BillingPeriod | null => (isBillingPeriod(v) ? v : null);
 const orgId = (...candidates: unknown[]): string | null => {
   for (const c of candidates) {
     const s = str(c);
@@ -99,6 +108,7 @@ export function mapStripeEvent(event: unknown): MappedEvent {
     _cancel_at_period_end: null as boolean | null,
     _amount_cents: null as number | null,
     _currency: null as string | null,
+    _billing_period: null as BillingPeriod | null,
   };
 
   if (type === "checkout.session.completed") {
@@ -112,6 +122,7 @@ export function mapStripeEvent(event: unknown): MappedEvent {
         _org_id: org,
         _subscription: id(o.subscription),
         _plan: str(meta.plan_id),
+        _billing_period: period(meta.billing_period),
       },
     };
   }
@@ -122,6 +133,8 @@ export function mapStripeEvent(event: unknown): MappedEvent {
     if (!org) return { kind: "ignore", reason: "no_organization" };
     // API 2025-03-31.basil moved the billing period to the subscription items.
     const item = obj((obj(o.items).data as unknown[] | undefined)?.[0]);
+    // The price's interval is the truth (a change in the portal keeps the old metadata).
+    const recurring = obj(obj(item.price).recurring);
     return {
       kind: "apply",
       update: {
@@ -134,6 +147,9 @@ export function mapStripeEvent(event: unknown): MappedEvent {
         _period_end: iso(item.current_period_end ?? o.current_period_end),
         _cancel_at_period_end:
           typeof o.cancel_at_period_end === "boolean" ? o.cancel_at_period_end : null,
+        _billing_period:
+          periodFromRecurring(recurring.interval, recurring.interval_count) ??
+          period(meta.billing_period),
       },
     };
   }
@@ -156,6 +172,7 @@ export function mapStripeEvent(event: unknown): MappedEvent {
         _plan: str(meta.plan_id),
         _amount_cents: num(paid ? o.amount_paid : o.amount_due),
         _currency: str(o.currency),
+        _billing_period: period(meta.billing_period),
       },
     };
   }

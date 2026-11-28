@@ -1,20 +1,25 @@
+import type { BillingPeriod } from "@/lib/billing-periods";
+
 /** Stripe Checkout request and price lookup keys (pure; shared by the server code and the tests). */
-export const monthlyLookupKey = (planId: string) => `dinequora_${planId}_monthly`;
+export const subscriptionLookupKey = (planId: string, period: BillingPeriod) =>
+  `dinequora_${planId}_${period}`;
+export const monthlyLookupKey = (planId: string) => subscriptionLookupKey(planId, "monthly");
 export const implementationLookupKey = (planId: string) => `dinequora_${planId}_implementation`;
 
 /** The Checkout Session request (pure, tested). */
 export function buildCheckoutParams(input: {
   orgId: string;
   planId: string;
-  monthlyPriceId: string;
+  period: BillingPeriod;
+  subscriptionPriceId: string;
   implementationPriceId: string | null;
   customerId: string | null;
   email: string | null;
   origin: string;
 }) {
-  const metadata = { org_id: input.orgId, plan_id: input.planId };
+  const metadata = { org_id: input.orgId, plan_id: input.planId, billing_period: input.period };
   const lineItems: { price: string; quantity: number }[] = [
-    { price: input.monthlyPriceId, quantity: 1 },
+    { price: input.subscriptionPriceId, quantity: 1 },
   ];
   if (input.implementationPriceId)
     lineItems.push({ price: input.implementationPriceId, quantity: 1 });

@@ -3,12 +3,14 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { STRIPE_IN_BUILD } from "./stripe/build-flags";
+import { BILLING_PERIODS, type BillingPeriod } from "./billing-periods";
 import type { BillingMode, CheckoutResult, PortalResult } from "./stripe/billing-server";
 
 /**
  * Stripe Billing for the Dinequora subscription (docs/billing-and-entitlements.md).
  *
- * - Checkout: the owner picks a plan; the server creates a Stripe Checkout Session (monthly price +
+ * - Checkout: the owner picks a plan and a billing period (monthly, 6 months or yearly, 0048); the
+ *   server creates a Stripe Checkout Session (the period's price +
  *   the one-time implementation fee on the first invoice) and the browser is only redirected. The
  *   browser never reports success: the subscription changes only through the signed webhook.
  * - Portal: the owner manages card, invoices and cancellation in Stripe's billing portal.
@@ -32,7 +34,13 @@ export const getBillingMode = createServerFn({ method: "GET" })
 
 export const startCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ orgId: z.string().min(1), planId: z.string().min(1).max(40) }))
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      planId: z.string().min(1).max(40),
+      period: z.enum(BILLING_PERIODS as [BillingPeriod, ...BillingPeriod[]]).default("monthly"),
+    }),
+  )
   .handler(async ({ data, context }): Promise<CheckoutResult> =>
     STRIPE_IN_BUILD
       ? (await import("./stripe/billing-server")).startCheckoutForOwner(

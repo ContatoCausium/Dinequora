@@ -155,7 +155,9 @@ export type Database = {
           implementation_fee_cents: number;
           implementation_fee_is_minimum: boolean;
           is_placeholder_pricing: boolean;
+          annual_price_cents: number | null;
           monthly_price_cents: number | null;
+          semiannual_price_cents: number | null;
           name: string;
           price_per_location_cents: number;
           stripe_price_id: string | null;
@@ -172,7 +174,9 @@ export type Database = {
           implementation_fee_cents?: number;
           implementation_fee_is_minimum?: boolean;
           is_placeholder_pricing?: boolean;
+          annual_price_cents?: number | null;
           monthly_price_cents?: number | null;
+          semiannual_price_cents?: number | null;
           name: string;
           price_per_location_cents?: number;
           stripe_price_id?: string | null;
@@ -188,7 +192,9 @@ export type Database = {
           implementation_fee_cents?: number;
           implementation_fee_is_minimum?: boolean;
           is_placeholder_pricing?: boolean;
+          annual_price_cents?: number | null;
           monthly_price_cents?: number | null;
+          semiannual_price_cents?: number | null;
           name?: string;
           price_per_location_cents?: number;
           stripe_price_id?: string | null;
@@ -2108,6 +2114,7 @@ export type Database = {
       subscriptions: {
         Row: {
           billed_locations: number;
+          billing_period: string;
           cancel_at_period_end: boolean;
           canceled_at: string | null;
           current_period_end: string | null;
@@ -2124,6 +2131,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           billed_locations?: number;
+          billing_period?: string;
           cancel_at_period_end?: boolean;
           canceled_at?: string | null;
           current_period_end?: string | null;
@@ -2139,6 +2147,7 @@ export type Database = {
         };
         Update: {
           billed_locations?: number;
+          billing_period?: string;
           cancel_at_period_end?: boolean;
           canceled_at?: string | null;
           current_period_end?: string | null;
@@ -2391,6 +2400,7 @@ export type Database = {
       billing_apply_stripe_event: {
         Args: {
           _amount_cents: number;
+          _billing_period?: string;
           _cancel_at_period_end: boolean;
           _currency: string;
           _customer: string;

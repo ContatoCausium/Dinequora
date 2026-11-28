@@ -337,6 +337,13 @@
       "when": 1796554879812,
       "tag": "0047_plan_prices_from_website",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1796558479812,
+      "tag": "0048_billing_periods",
+      "breakpoints": true
     }
   ]
 }

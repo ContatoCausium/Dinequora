@@ -300,7 +300,8 @@ describe("checkout", () => {
   const base = {
     orgId: ORG,
     planId: "starter",
-    monthlyPriceId: "price_m",
+    period: "monthly" as const,
+    subscriptionPriceId: "price_m",
     implementationPriceId: "price_i",
     customerId: null,
     email: "owner@example.com",
@@ -315,7 +316,11 @@ describe("checkout", () => {
       { price: "price_i", quantity: 1 },
     ]);
     expect(p.client_reference_id).toBe(ORG);
-    expect(p.subscription_data.metadata).toEqual({ org_id: ORG, plan_id: "starter" });
+    expect(p.subscription_data.metadata).toEqual({
+      org_id: ORG,
+      plan_id: "starter",
+      billing_period: "monthly",
+    });
     expect(p).toMatchObject({ customer_email: "owner@example.com" });
     expect(p.success_url).toBe("https://app.dinequora.com/settings/billing?checkout=success");
     expect(p.cancel_url).toBe("https://app.dinequora.com/settings/billing?checkout=canceled");
