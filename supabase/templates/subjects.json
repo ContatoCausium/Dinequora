@@ -1,0 +1,8 @@
+{
+  "confirmation": "{{ $pt := false }}{{ with .Data }}{{ if eq (printf \"%v\" .preferred_language) \"pt-BR\" }}{{ $pt = true }}{{ end }}{{ end }}{{ if $pt }}Confirme sua conta Dinequora{{ else }}Confirm your Dinequora account{{ end }}",
+  "recovery": "{{ $pt := false }}{{ with .Data }}{{ if eq (printf \"%v\" .preferred_language) \"pt-BR\" }}{{ $pt = true }}{{ end }}{{ end }}{{ if $pt }}Redefina sua senha Dinequora{{ else }}Reset your Dinequora password{{ end }}",
+  "magic_link": "{{ $pt := false }}{{ with .Data }}{{ if eq (printf \"%v\" .preferred_language) \"pt-BR\" }}{{ $pt = true }}{{ end }}{{ end }}{{ if $pt }}Seu link de acesso ao Dinequora{{ else }}Your Dinequora sign-in link{{ end }}",
+  "email_change": "{{ $pt := false }}{{ with .Data }}{{ if eq (printf \"%v\" .preferred_language) \"pt-BR\" }}{{ $pt = true }}{{ end }}{{ end }}{{ if $pt }}Confirme seu novo e-mail Dinequora{{ else }}Confirm your new Dinequora email{{ end }}",
+  "invite": "{{ $pt := false }}{{ with .Data }}{{ if eq (printf \"%v\" .preferred_language) \"pt-BR\" }}{{ $pt = true }}{{ end }}{{ end }}{{ if $pt }}Você foi convidado para o Dinequora{{ else }}You're invited to Dinequora{{ end }}",
+  "reauthentication": "{{ $pt := false }}{{ with .Data }}{{ if eq (printf \"%v\" .preferred_language) \"pt-BR\" }}{{ $pt = true }}{{ end }}{{ end }}{{ if $pt }}Seu código de verificação Dinequora{{ else }}Your Dinequora verification code{{ end }}"
+}

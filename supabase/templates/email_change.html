@@ -1,0 +1,22 @@
+{{ $pt := false }}{{ with .Data }}{{ if eq (printf "%v" .preferred_language) "pt-BR" }}{{ $pt = true }}{{ end }}{{ end }}<!doctype html>
+<html lang="{{ if $pt }}pt-BR{{ else }}en{{ end }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>{{ if $pt }}Confirme seu novo e-mail Dinequora{{ else }}Confirm your new Dinequora email{{ end }}</title></head>
+<body style="margin:0;padding:0;background:#f2f0ec;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1d1713">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">{{ if $pt }}Confirme a troca do e-mail da sua conta.{{ else }}Confirm the change of your account email.{{ end }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f0ec"><tr><td align="center" style="padding:40px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
+<tr><td style="padding:0 4px 20px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td width="36" valign="middle" style="width:36px"><img src="https://app.dinequora.com/email/dinequora-mark.png" width="36" height="36" alt="" style="display:block;width:36px;height:36px;border:0;outline:none;text-decoration:none"></td>
+<td valign="middle" style="padding-left:10px;font-size:20px;font-weight:700;letter-spacing:-.02em;color:#1d1713">Dinequora</td>
+</tr></table></td></tr>
+<tr><td style="background:#ffffff;border:1px solid #e5e2df;border-radius:12px;padding:36px 32px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td style="font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.02em;color:#1d1713;padding-bottom:12px">{{ if $pt }}Confirme seu novo e-mail{{ else }}Confirm your new email{{ end }}</td></tr>
+<tr><td style="font-size:15px;line-height:1.6;color:#4a433e;padding-bottom:20px">{{ if $pt }}Confirme que {{ .NewEmail }} deve passar a ser o e-mail da sua conta Dinequora.{{ else }}Confirm that {{ .NewEmail }} should become the email address of your Dinequora account.{{ end }}</td></tr>
+<tr><td style="padding:8px 0 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#b5452a"><a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px">{{ if $pt }}Confirmar novo e-mail{{ else }}Confirm new email{{ end }}</a></td></tr></table></td></tr>
+<tr><td style="font-size:13px;line-height:1.6;color:#68625d;padding-bottom:24px">{{ if $pt }}Se o botão não funcionar, copie este link no navegador:{{ else }}If the button doesn't work, copy this link into your browser:{{ end }}<br><a href="{{ .ConfirmationURL }}" style="color:#b5452a;word-break:break-all">{{ .ConfirmationURL }}</a></td></tr>
+<tr><td style="border-top:1px solid #e5e2df;padding-top:18px;font-size:12px;line-height:1.6;color:#68625d">{{ if $pt }}Se você não pediu essa troca, ignore este e-mail e redefina sua senha.{{ else }}If you didn't ask for this change, ignore this email and reset your password.{{ end }}</td></tr>
+</table></td></tr>
+<tr><td align="center" style="padding:20px 8px 0;font-size:12px;line-height:1.6;color:#68625d">Dinequora &middot; {{ if $pt }}A operação do restaurante em um só lugar{{ else }}Restaurant operations in one place{{ end }}<br>{{ if $pt }}Dúvidas?{{ else }}Questions?{{ end }} <a href="mailto:support@dinequora.com" style="color:#68625d">support@dinequora.com</a></td></tr>
+</table></td></tr></table>
+</body></html>
