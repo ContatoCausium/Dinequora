@@ -71,8 +71,23 @@ Code: `src/lib/billing.functions.ts` (checkout, portal, mode), `src/lib/stripe/s
   key). E-mail errors are reported (`billing.email_failed`) and never fail the webhook; Resend's
   `Idempotency-Key` (event id + owner) stops repeats. Monthly receipts are Stripe's (live mode:
   Settings → Customer emails → successful payments, finalized invoices); test mode sends none.
-- **Not yet**: per-location quantity sync (prices are flat since 0047), switching period or plan
-  in the portal (through support for now), taxes (Stripe Tax), live mode.
+- **Plan and period changes** (`src/lib/billing-changes.ts`, `changePlanForOwner` in
+  `src/lib/stripe/billing-server.ts`; rules approved 2026-11-28): on the billing page the owner
+  previews, then confirms.
+  - Longer period on the same plan (monthly -> 6 months -> yearly): now, the unused time is
+    credited, no implementation fee (`proration_behavior=always_invoice`,
+    `payment_behavior=error_if_incomplete`: a declined card changes nothing).
+  - Bigger plan (more locations): now, with credit, plus only the implementation DIFFERENCE (the
+    bigger plan's fee minus implementation already paid, read from the customer's paid invoices).
+  - Smaller plan or shorter period: at the end of the paid period through a subscription schedule
+    (`end_behavior=release`), no refund; it can be canceled before it takes effect. A smaller plan
+    must fit the active locations.
+  - Bigger plan with a shorter period at once: support.
+  - Buying again after a cancellation charges only the implementation not yet paid.
+  - The webhook takes the plan from the price's lookup key and e-mails the owners "plan changed"
+    when the subscription's price changes.
+- **Not yet**: per-location quantity sync (prices are flat since 0047), taxes (Stripe Tax), live
+  mode.
 
 ### Operator steps (test mode)
 

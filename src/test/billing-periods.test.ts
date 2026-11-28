@@ -73,7 +73,7 @@ describe("checkout and webhook carry the period", () => {
       planId: "growth",
       period: "annual",
       subscriptionPriceId: "price_y",
-      implementationPriceId: "price_i",
+      implementation: { price: "price_i" },
       customerId: null,
       email: null,
       origin: "https://app.dinequora.com",

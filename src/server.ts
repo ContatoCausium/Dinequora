@@ -83,9 +83,16 @@ async function handleStripeWebhookRequest(request: Request): Promise<Response> {
   // Stripe calls the app's own public address, so the request origin is the link in the e-mails.
   const appUrl = new URL(request.url).origin;
   return handleStripeWebhook(request, {
-    notify: async (update) => {
+    notify: async (update, info) => {
       try {
-        const result = await notifyBillingChange(supabaseAdmin, update, appUrl);
+        const result = await notifyBillingChange(
+          supabaseAdmin,
+          update,
+          appUrl,
+          process.env,
+          fetch,
+          info,
+        );
         if (result.status === "sent" && result.failed > 0)
           captureError(new Error(`billing e-mail not delivered to ${result.failed} owner(s)`), {
             event: "billing.email_failed",

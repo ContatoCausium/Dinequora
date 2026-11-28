@@ -8,16 +8,22 @@
 import type { BillingPeriod } from "@/lib/billing-periods";
 import type { BillingUpdate } from "@/lib/stripe/billing-webhook";
 
-export type BillingEmailKind = "activated" | "payment_failed" | "canceled";
+export type BillingEmailKind = "activated" | "changed" | "payment_failed" | "canceled";
 export type EmailLang = "en" | "pt";
 
 /**
  * Which e-mail an applied event sends, by event type so each fires once per Stripe event:
  * - checkout.session.completed: the subscription was just bought (once per checkout);
+ * - customer.subscription.updated with a new price: a plan or period change took effect;
  * - invoice.payment_failed: a renewal charge failed (Stripe retries; each attempt is a new event);
  * - customer.subscription.deleted: the subscription ended.
  */
-export function billingEmailKind(update: Pick<BillingUpdate, "_type">): BillingEmailKind | null {
+export function billingEmailKind(
+  update: Pick<BillingUpdate, "_type">,
+  info: { itemsChanged?: boolean } = {},
+): BillingEmailKind | null {
+  // customer.subscription.updated whose price changed: a plan or period change took effect.
+  if (update._type === "customer.subscription.updated" && info.itemsChanged) return "changed";
   switch (update._type) {
     case "checkout.session.completed":
       return "activated";
@@ -106,6 +112,28 @@ const COPY: Record<BillingEmailKind, Record<EmailLang, Copy>> = {
       cta: "Abrir cobrança",
     },
   },
+  changed: {
+    en: {
+      subject: "Your Dinequora plan was changed",
+      preheader: "Your new plan is in place.",
+      heading: "Your plan was changed",
+      body: [
+        "{org} is now on the Dinequora {plan} plan{amount}.",
+        "The subscription renews automatically {renew}. You can see invoices, update your card or cancel anytime in Billing.",
+      ],
+      cta: "Open billing",
+    },
+    pt: {
+      subject: "Seu plano Dinequora foi alterado",
+      preheader: "Seu novo plano já está valendo.",
+      heading: "Seu plano foi alterado",
+      body: [
+        "{org} agora está no plano Dinequora {plan}{amount}.",
+        "A assinatura renova automaticamente {renew}. Você pode ver as faturas, trocar o cartão ou cancelar quando quiser em Cobrança.",
+      ],
+      cta: "Abrir cobrança",
+    },
+  },
   payment_failed: {
     en: {
       subject: "Payment failed for your Dinequora subscription",
@@ -173,7 +201,8 @@ const RENEW: Record<BillingPeriod, Record<EmailLang, string>> = {
 function amountPhrase(kind: BillingEmailKind, d: BillingEmailData, lang: EmailLang): string {
   if (d.amountCents == null) return "";
   const money = formatMoney(d.amountCents, d.currency, lang);
-  if (kind === "activated") return ` (${money}${PER[d.period ?? "monthly"][lang]})`;
+  if (kind === "activated" || kind === "changed")
+    return ` (${money}${PER[d.period ?? "monthly"][lang]})`;
   return lang === "pt" ? ` de ${money}` : ` of ${money}`;
 }
 

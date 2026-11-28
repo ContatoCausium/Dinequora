@@ -82,16 +82,18 @@ export async function notifyBillingChange(
   appUrl: string,
   env: Record<string, string | undefined> = process.env,
   fetchImpl: typeof fetch = fetch,
+  info: { itemsChanged?: boolean } = {},
 ): Promise<NotifyResult> {
-  const kind = billingEmailKind(update);
+  const kind = billingEmailKind(update, info);
   if (!kind) return { status: "skipped", reason: "no_email_for_event" };
   const key = env["RESEND_API_KEY"]?.trim();
   if (!key) return { status: "skipped", reason: "not_configured" };
 
   const ctx = await loadContext(admin, update);
   if (ctx.owners.length === 0) return { status: "skipped", reason: "no_owners" };
-  const amountCents = kind === "activated" ? ctx.periodCents : update._amount_cents;
-  const currency = (kind === "activated" ? ctx.planCurrency : update._currency) ?? "usd";
+  const planPrice = kind === "activated" || kind === "changed";
+  const amountCents = planPrice ? ctx.periodCents : update._amount_cents;
+  const currency = (planPrice ? ctx.planCurrency : update._currency) ?? "usd";
   const from = env["BILLING_EMAIL_FROM"]?.trim() || DEFAULT_BILLING_FROM;
 
   let sent = 0;

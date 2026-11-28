@@ -4,7 +4,13 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { STRIPE_IN_BUILD } from "./stripe/build-flags";
 import { BILLING_PERIODS, type BillingPeriod } from "./billing-periods";
-import type { BillingMode, CheckoutResult, PortalResult } from "./stripe/billing-server";
+import type {
+  BillingMode,
+  ChangeResult,
+  CheckoutResult,
+  PendingChange,
+  PortalResult,
+} from "./stripe/billing-server";
 
 /**
  * Stripe Billing for the Dinequora subscription (docs/billing-and-entitlements.md).
@@ -19,7 +25,7 @@ import type { BillingMode, CheckoutResult, PortalResult } from "./stripe/billing
  * Stripe (never the client preview). Off until the server has the Stripe secret key and the webhook
  * signing secret; live keys stay off unless STRIPE_LIVE_ENABLED is exactly "true".
  */
-export type { BillingMode, CheckoutResult, PortalResult };
+export type { BillingMode, ChangeResult, CheckoutResult, PendingChange, PortalResult };
 
 /** Same origin as the request: Stripe sends the owner back to the app they came from. */
 const requestOrigin = () => new URL(getRequest().url).origin;
@@ -62,4 +68,53 @@ export const openBillingPortal = createServerFn({ method: "POST" })
           requestOrigin(),
         )
       : { status: "not_configured" },
+  );
+
+const periodSchema = z.enum(BILLING_PERIODS as [BillingPeriod, ...BillingPeriod[]]);
+
+/**
+ * Change the plan or billing period of a live subscription (src/lib/billing-changes.ts): bigger
+ * plan or longer period now, with credit and only the implementation difference; smaller plan or
+ * shorter period at the end of the paid period. `confirm: false` only previews.
+ */
+export const changePlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      orgId: z.string().min(1),
+      planId: z.string().min(1).max(40),
+      period: periodSchema,
+      confirm: z.boolean(),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<ChangeResult> =>
+    STRIPE_IN_BUILD
+      ? (await import("./stripe/billing-server")).changePlanForOwner(context.supabase, data)
+      : { status: "not_configured" },
+  );
+
+/** The change waiting for the end of the paid period, if any. */
+export const getPendingChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ orgId: z.string().min(1) }))
+  .handler(async ({ data, context }): Promise<PendingChange> =>
+    STRIPE_IN_BUILD
+      ? (await import("./stripe/billing-server")).pendingChangeForOwner(context.supabase, data)
+      : null,
+  );
+
+export const cancelPendingChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ orgId: z.string().min(1) }))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ status: "canceled" | "none" | "not_configured" | "unavailable" }> =>
+      STRIPE_IN_BUILD
+        ? (await import("./stripe/billing-server")).cancelPendingChangeForOwner(
+            context.supabase,
+            data,
+          )
+        : { status: "not_configured" },
   );

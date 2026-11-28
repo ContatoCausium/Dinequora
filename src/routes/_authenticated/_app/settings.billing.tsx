@@ -26,7 +26,25 @@ import { countBillableStores } from "@/lib/access-rules";
 import { fmtCurrency, fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { isClientPreview } from "@/lib/deployment-profile";
-import { getBillingMode, openBillingPortal, startCheckout } from "@/lib/billing.functions";
+import {
+  cancelPendingChange,
+  changePlan,
+  getBillingMode,
+  getPendingChange,
+  openBillingPortal,
+  startCheckout,
+  type ChangeResult,
+} from "@/lib/billing.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   BILLING_PERIODS,
   PERIOD_MONTHS,
@@ -106,6 +124,76 @@ function BillingPage() {
       );
     } catch {
       toast.error(t("billing.checkoutErrors.unavailable"));
+    }
+    setBusy(null);
+  };
+  // A live Stripe subscription changes plan/period here (billing-changes.ts): preview first.
+  const live =
+    !!data?.subscription?.stripe_subscription_id && data.subscription.status !== "canceled";
+  const pendingQuery = useQuery({
+    queryKey: ["billing-pending-change", orgDbId],
+    queryFn: () => getPendingChange({ data: { orgId: orgDbId } }),
+    enabled: role === "owner" && !preview && mode !== "off" && live,
+  });
+  const pending = pendingQuery.data ?? null;
+  const [changePreview, setChangePreview] = useState<Extract<
+    ChangeResult,
+    { status: "preview" }
+  > | null>(null);
+  const changeError = (status: string) =>
+    toast.error(
+      t(`billing.changeErrors.${status}`, { defaultValue: t("billing.changeErrors.unavailable") }),
+    );
+  const askChange = async (planId: string) => {
+    setBusy(`change:${planId}`);
+    try {
+      const r = await changePlan({ data: { orgId: orgDbId, planId, period, confirm: false } });
+      if (r.status === "preview") setChangePreview(r);
+      else changeError(r.status);
+    } catch {
+      changeError("unavailable");
+    }
+    setBusy(null);
+  };
+  const confirmChange = async () => {
+    if (!changePreview) return;
+    setBusy("confirm");
+    try {
+      const r = await changePlan({
+        data: {
+          orgId: orgDbId,
+          planId: changePreview.planId,
+          period: changePreview.period,
+          confirm: true,
+        },
+      });
+      if (r.status === "changed" || r.status === "scheduled") {
+        toast.success(
+          t(r.status === "changed" ? "billing.change.done" : "billing.change.scheduled"),
+        );
+        setChangePreview(null);
+        // The subscription row changes through the signed webhook a few seconds later.
+        [0, 3000, 8000].forEach((ms) =>
+          window.setTimeout(() => {
+            void refetch();
+            void pendingQuery.refetch();
+          }, ms),
+        );
+      } else changeError(r.status);
+    } catch {
+      changeError("unavailable");
+    }
+    setBusy(null);
+  };
+  const undoPending = async () => {
+    setBusy("pending");
+    try {
+      const r = await cancelPendingChange({ data: { orgId: orgDbId } });
+      if (r.status === "canceled") toast.success(t("billing.pendingCanceled"));
+      else changeError(r.status);
+      void pendingQuery.refetch();
+    } catch {
+      changeError("unavailable");
     }
     setBusy(null);
   };
@@ -223,6 +311,27 @@ function BillingPage() {
                     }
                   />
                 </dl>
+              )}
+              {pending && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-info/40 bg-info/10 p-3 text-sm">
+                  <span>
+                    {t("billing.pending", {
+                      plan:
+                        data?.plans.find((p) => p.id === pending.planId)?.name ?? pending.planId,
+                      period: t(`billing.periods.${pending.period}`),
+                      date: date(pending.effectiveAt),
+                    })}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => void undoPending()}
+                  >
+                    {busy === "pending" && <Loader2 className="size-4 animate-spin" />}
+                    {t("billing.cancelPending")}
+                  </Button>
+                </div>
               )}
               {mode !== "off" && sub?.stripe_subscription_id && (
                 <div className="mt-5 border-t pt-4">
@@ -357,6 +466,31 @@ function BillingPage() {
                               {t("billing.subscribe", { plan: p.name })}
                             </Button>
                           )}
+                        {mode !== "off" &&
+                          charge != null &&
+                          !p.implementation_fee_is_minimum &&
+                          live &&
+                          (p.id === sub?.plan_id && period === sub?.billing_period ? (
+                            <p className="mt-3 text-center text-xs font-medium text-primary">
+                              {t("billing.currentPlan")}
+                            </p>
+                          ) : (
+                            <Button
+                              className="mt-3 w-full"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy !== null}
+                              onClick={() => void askChange(p.id)}
+                            >
+                              {busy === `change:${p.id}` && (
+                                <Loader2 className="size-4 animate-spin" />
+                              )}
+                              {t("billing.changeTo", {
+                                plan: p.name,
+                                period: t(`billing.periods.${period}`),
+                              })}
+                            </Button>
+                          ))}
                       </li>
                     );
                   })}
@@ -365,6 +499,92 @@ function BillingPage() {
           )}
         </div>
       )}
+      <AlertDialog
+        open={changePreview !== null}
+        onOpenChange={(open) => {
+          if (!open) setChangePreview(null);
+        }}
+      >
+        <AlertDialogContent>
+          {changePreview && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t("billing.change.title", {
+                    plan:
+                      data?.plans.find((p) => p.id === changePreview.planId)?.name ??
+                      changePreview.planId,
+                    period: t(`billing.periods.${changePreview.period}`),
+                  })}
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      {t(`billing.perPeriod.${changePreview.period}`, {
+                        price: fmtCurrency(changePreview.newPriceCents / 100, lng),
+                      })}
+                    </p>
+                    {changePreview.kind === "now" ? (
+                      <dl className="tabular space-y-1">
+                        {changePreview.creditCents > 0 && (
+                          <Row
+                            label={t("billing.change.credit")}
+                            value={`- ${fmtCurrency(changePreview.creditCents / 100, lng)}`}
+                          />
+                        )}
+                        {changePreview.implementationCents > 0 && (
+                          <Row
+                            label={t("billing.change.implementation")}
+                            value={fmtCurrency(changePreview.implementationCents / 100, lng)}
+                          />
+                        )}
+                        <Row
+                          strong
+                          label={t("billing.change.dueToday")}
+                          value={fmtCurrency(changePreview.amountDueCents / 100, lng)}
+                        />
+                        <p className="pt-1 text-xs">{t("billing.change.chargedNow")}</p>
+                      </dl>
+                    ) : (
+                      <p>
+                        {t("billing.change.laterBody", { date: date(changePreview.effectiveAt) })}
+                      </p>
+                    )}
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy !== null}>
+                  {t("billing.change.keep")}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={busy !== null}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void confirmChange();
+                  }}
+                >
+                  {busy === "confirm" && <Loader2 className="size-4 animate-spin" />}
+                  {t(
+                    changePreview.kind === "now"
+                      ? "billing.change.confirmNow"
+                      : "billing.change.confirmLater",
+                  )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={cn("flex justify-between gap-4", strong && "font-semibold text-foreground")}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }

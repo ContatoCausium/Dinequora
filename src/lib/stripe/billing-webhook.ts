@@ -1,4 +1,5 @@
 import { isBillingPeriod, periodFromRecurring, type BillingPeriod } from "@/lib/billing-periods";
+import { parseLookupKey } from "@/lib/billing-changes";
 import { verifyStripeSignature } from "./stripe-api";
 
 /**
@@ -65,7 +66,9 @@ type Field =
   | "price"
   | "recurring"
   | "interval"
-  | "interval_count";
+  | "interval_count"
+  | "lookup_key"
+  | "previous_attributes";
 type Obj = Partial<Record<Field, unknown>>;
 const obj = (v: unknown): Obj => (v && typeof v === "object" ? (v as Obj) : {});
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
@@ -87,7 +90,8 @@ const orgId = (...candidates: unknown[]): string | null => {
 };
 
 export type MappedEvent =
-  | { kind: "apply"; update: BillingUpdate }
+  /** itemsChanged: the subscription's price changed (a plan or period change took effect). */
+  | { kind: "apply"; update: BillingUpdate; itemsChanged?: boolean }
   | { kind: "ignore"; reason: "unhandled_type" | "no_organization" };
 
 /** Pure mapping of a (signature-verified) Stripe event to the database update. */
@@ -133,8 +137,10 @@ export function mapStripeEvent(event: unknown): MappedEvent {
     if (!org) return { kind: "ignore", reason: "no_organization" };
     // API 2025-03-31.basil moved the billing period to the subscription items.
     const item = obj((obj(o.items).data as unknown[] | undefined)?.[0]);
-    // The price's interval is the truth (a change in the portal keeps the old metadata).
+    // The price is the truth (interval -> period, lookup key -> plan); metadata is the fallback.
     const recurring = obj(obj(item.price).recurring);
+    const fromKey = parseLookupKey(str(obj(item.price).lookup_key));
+    const previous = obj(obj(e.data).previous_attributes);
     return {
       kind: "apply",
       update: {
@@ -142,7 +148,7 @@ export function mapStripeEvent(event: unknown): MappedEvent {
         _org_id: org,
         _subscription: str(o.id),
         _status: type === "customer.subscription.deleted" ? "canceled" : str(o.status),
-        _plan: str(meta.plan_id),
+        _plan: fromKey && fromKey.kind !== "implementation" ? fromKey.planId : str(meta.plan_id),
         _period_start: iso(item.current_period_start ?? o.current_period_start),
         _period_end: iso(item.current_period_end ?? o.current_period_end),
         _cancel_at_period_end:
@@ -151,6 +157,7 @@ export function mapStripeEvent(event: unknown): MappedEvent {
           periodFromRecurring(recurring.interval, recurring.interval_count) ??
           period(meta.billing_period),
       },
+      itemsChanged: type === "customer.subscription.updated" && previous.items !== undefined,
     };
   }
 
@@ -204,7 +211,7 @@ export async function handleStripeWebhook(
     secret: string | undefined;
     apply: ApplyBillingUpdate;
     /** After a first-time apply only (never for a duplicate); its errors never fail the webhook. */
-    notify?: (update: BillingUpdate) => Promise<unknown>;
+    notify?: (update: BillingUpdate, info: { itemsChanged: boolean }) => Promise<unknown>;
     now?: number;
   },
 ): Promise<Response> {
@@ -231,7 +238,7 @@ export async function handleStripeWebhook(
   }
   if (applied && notify) {
     try {
-      await notify(mapped.update);
+      await notify(mapped.update, { itemsChanged: mapped.itemsChanged === true });
     } catch {
       // Reported by the caller; the event is applied, so Stripe must not retry it.
     }

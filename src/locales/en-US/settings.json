@@ -139,7 +139,36 @@
       "semiannual": "{{price}} / 6 months",
       "annual": "{{price}} / year"
     },
-    "periodEquivalent": "{{price}}/month equivalent · save {{savings}}"
+    "periodEquivalent": "{{price}}/month equivalent · save {{savings}}",
+    "currentPlan": "Your current plan",
+    "changeTo": "Switch to {{plan}} · {{period}}",
+    "pending": "Change scheduled: {{plan}} · {{period}} from {{date}}.",
+    "cancelPending": "Cancel change",
+    "pendingCanceled": "Scheduled change canceled.",
+    "change": {
+      "title": "Switch to {{plan}} · {{period}}",
+      "credit": "Credit for the unused time",
+      "implementation": "Implementation (difference)",
+      "dueToday": "Charged today",
+      "chargedNow": "The new plan starts today and the subscription's card is charged now.",
+      "laterBody": "The change takes effect on {{date}}, at the end of the period already paid. Until then you keep your current plan. Nothing is charged now and the paid period is not refunded.",
+      "keep": "Keep current plan",
+      "confirmNow": "Confirm and pay",
+      "confirmLater": "Schedule change",
+      "done": "Plan changed. It may take a few seconds to show here.",
+      "scheduled": "Change scheduled for the end of the paid period."
+    },
+    "changeErrors": {
+      "same": "This is already your plan.",
+      "contact_support": "To move to a bigger plan with a shorter period at the same time, contact support.",
+      "plan_unavailable": "This plan or period is not available online right now.",
+      "too_many_locations": "You have more active locations than this plan allows. Deactivate some first.",
+      "fix_payment_first": "Update your card in Manage subscription first: the last payment failed.",
+      "payment_failed": "The card was declined. Nothing was changed.",
+      "no_subscription": "There is no active subscription to change.",
+      "not_configured": "Online payments are not connected yet.",
+      "unavailable": "The change could not be made right now. Try again in a moment."
+    }
   },
   "security": {
     "title": "Security",
