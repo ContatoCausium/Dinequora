@@ -53,6 +53,15 @@ Code: `src/lib/billing.functions.ts` (checkout, portal, mode), `src/lib/stripe/s
 - **Switch**: off until the Worker has `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`; live keys stay
   off unless `STRIPE_LIVE_ENABLED=true`. The webhook also needs `SUPABASE_SERVICE_ROLE_KEY` (secret
   key of the project). All three are Worker secrets (`wrangler secret put`), never `VITE_` values.
+- **E-mails to the owners** (`src/lib/email/billing-emails.ts`, `src/lib/stripe/billing-notify.ts`,
+  tests `src/test/billing-emails.test.ts`): after a first-time apply of `checkout.session.completed`
+  (plan active), `invoice.payment_failed` (update the card) or `customer.subscription.deleted`
+  (canceled), every owner of the organization gets a branded e-mail in their sign-up language, sent
+  through Resend from `Dinequora <billing@send.dinequora.com>` (override `BILLING_EMAIL_FROM`), reply
+  to `billing@dinequora.com`. Off until the Worker has the `RESEND_API_KEY` secret (a sending-only
+  key). E-mail errors are reported (`billing.email_failed`) and never fail the webhook; Resend's
+  `Idempotency-Key` (event id + owner) stops repeats. Monthly receipts are Stripe's (live mode:
+  Settings → Customer emails → successful payments, finalized invoices); test mode sends none.
 - **Not yet**: per-location quantity sync (prices are flat since 0047), semiannual/annual prepaid
   terms, taxes (Stripe Tax), live mode.
 
@@ -63,6 +72,6 @@ Code: `src/lib/billing.functions.ts` (checkout, portal, mode), `src/lib/stripe/s
 2. `node --env-file=<secrets file> scripts/stripe/setup-catalog.mjs --webhook-url
 https://app.dinequora.com/api/public/stripe-webhook --secret-out <secrets file>`.
 3. `wrangler secret put` STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and SUPABASE_SERVICE_ROLE_KEY on
-   the Worker; redeploy not needed for secrets.
+   the Worker (and RESEND_API_KEY for the owner e-mails); redeploy not needed for secrets.
 4. Test with Stripe's test cards (4242…, 4000 0000 0000 0341 for a failing renewal) and check
    `subscriptions`, `billing_events` and the billing page.
