@@ -12,17 +12,30 @@ export function buildCheckoutParams(input: {
   planId: string;
   period: BillingPeriod;
   subscriptionPriceId: string;
-  implementationPriceId: string | null;
+  /**
+   * The implementation still owed: the plan's price when the whole fee is due, or an amount on the
+   * implementation product when part of it was already paid (a plan bought again); null = nothing.
+   */
+  implementation: { price: string } | { product: string; amountCents: number } | null;
   customerId: string | null;
   email: string | null;
   origin: string;
 }) {
   const metadata = { org_id: input.orgId, plan_id: input.planId, billing_period: input.period };
-  const lineItems: { price: string; quantity: number }[] = [
-    { price: input.subscriptionPriceId, quantity: 1 },
-  ];
-  if (input.implementationPriceId)
-    lineItems.push({ price: input.implementationPriceId, quantity: 1 });
+  const lineItems: (
+    | { price: string; quantity: number }
+    | {
+        price_data: { currency: "usd"; product: string; unit_amount: number };
+        quantity: number;
+      }
+  )[] = [{ price: input.subscriptionPriceId, quantity: 1 }];
+  const impl = input.implementation;
+  if (impl && "price" in impl) lineItems.push({ price: impl.price, quantity: 1 });
+  else if (impl && impl.amountCents > 0)
+    lineItems.push({
+      price_data: { currency: "usd", product: impl.product, unit_amount: impl.amountCents },
+      quantity: 1,
+    });
   return {
     mode: "subscription",
     line_items: lineItems,

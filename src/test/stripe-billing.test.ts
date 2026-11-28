@@ -302,7 +302,7 @@ describe("checkout", () => {
     planId: "starter",
     period: "monthly" as const,
     subscriptionPriceId: "price_m",
-    implementationPriceId: "price_i",
+    implementation: { price: "price_i" },
     customerId: null,
     email: "owner@example.com",
     origin: "https://app.dinequora.com",
@@ -327,7 +327,7 @@ describe("checkout", () => {
   });
 
   it("reuses the organization's Stripe customer, and skips a missing implementation price", () => {
-    const p = buildCheckoutParams({ ...base, customerId: "cus_1", implementationPriceId: null });
+    const p = buildCheckoutParams({ ...base, customerId: "cus_1", implementation: null });
     expect(p).toMatchObject({ customer: "cus_1" });
     expect(p).not.toHaveProperty("customer_email");
     expect(p.line_items).toHaveLength(1);

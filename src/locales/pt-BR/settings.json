@@ -139,7 +139,36 @@
       "semiannual": "{{price}} / 6 meses",
       "annual": "{{price}} / ano"
     },
-    "periodEquivalent": "equivale a {{price}}/mês · economia de {{savings}}"
+    "periodEquivalent": "equivale a {{price}}/mês · economia de {{savings}}",
+    "currentPlan": "Seu plano atual",
+    "changeTo": "Mudar para {{plan}} · {{period}}",
+    "pending": "Mudança agendada: {{plan}} · {{period}} a partir de {{date}}.",
+    "cancelPending": "Cancelar mudança",
+    "pendingCanceled": "Mudança agendada cancelada.",
+    "change": {
+      "title": "Mudar para {{plan}} · {{period}}",
+      "credit": "Crédito pelos dias não usados",
+      "implementation": "Implantação (diferença)",
+      "dueToday": "Cobrado hoje",
+      "chargedNow": "O novo plano começa hoje e o cartão da assinatura é cobrado agora.",
+      "laterBody": "A mudança vale a partir de {{date}}, no fim do período já pago. Até lá você continua no plano atual. Nada é cobrado agora e o período pago não é reembolsado.",
+      "keep": "Manter plano atual",
+      "confirmNow": "Confirmar e pagar",
+      "confirmLater": "Agendar mudança",
+      "done": "Plano alterado. Pode levar alguns segundos para aparecer aqui.",
+      "scheduled": "Mudança agendada para o fim do período pago."
+    },
+    "changeErrors": {
+      "same": "Este já é o seu plano.",
+      "contact_support": "Para ir para um plano maior com período menor ao mesmo tempo, fale com o suporte.",
+      "plan_unavailable": "Este plano ou período não está disponível online agora.",
+      "too_many_locations": "Você tem mais unidades ativas do que este plano permite. Desative algumas antes.",
+      "fix_payment_first": "Atualize o cartão em Gerenciar assinatura antes: o último pagamento falhou.",
+      "payment_failed": "O cartão foi recusado. Nada foi alterado.",
+      "no_subscription": "Não há assinatura ativa para alterar.",
+      "not_configured": "Os pagamentos online ainda não estão conectados.",
+      "unavailable": "Não foi possível fazer a mudança agora. Tente de novo em instantes."
+    }
   },
   "security": {
     "title": "Segurança",
