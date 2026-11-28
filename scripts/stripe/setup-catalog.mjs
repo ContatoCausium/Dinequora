@@ -68,35 +68,47 @@ async function stripe(key, method, p, params = {}) {
   return json;
 }
 
+/** One product per plan and kind, so the invoice shows "Dinequora Starter" and "… implementation". */
+export const productName = (plan, kind) =>
+  kind === "monthly" ? plan.name : `${plan.name} implementation`;
+
 async function ensurePrice(key, plan, kind) {
   const lookup = lookupKeys(plan.id)[kind];
   const amount = plan[kind];
+  const name = productName(plan, kind);
   const found = (
-    await stripe(key, "GET", "/v1/prices", { lookup_keys: [lookup], active: true, limit: 1 })
+    await stripe(key, "GET", "/v1/prices", {
+      lookup_keys: [lookup],
+      active: true,
+      limit: 1,
+      expand: ["data.product"],
+    })
   ).data[0];
-  if (found && found.unit_amount === amount && found.currency === "usd")
-    return { lookup, id: found.id, product: found.product, state: "exists" };
-  let product = found?.product;
-  if (!product) {
-    const existing = await stripe(key, "GET", "/v1/products/search", {
-      query: `metadata['plan_id']:'${plan.id}'`,
+  let product = found?.product?.id ?? null;
+  // Keep the product's name in step with this script (older runs named both products alike).
+  if (product && found.product.name !== name)
+    await stripe(key, "POST", `/v1/products/${product}`, {
+      name,
+      metadata: { plan_id: plan.id, kind },
     });
-    product =
-      existing.data[0]?.id ??
-      (
-        await stripe(key, "POST", "/v1/products", {
-          name: plan.name,
-          metadata: { plan_id: plan.id },
-        })
-      ).id;
-  }
+  if (found && found.unit_amount === amount && found.currency === "usd")
+    return {
+      lookup,
+      id: found.id,
+      product,
+      state: found.product.name !== name ? "renamed" : "exists",
+    };
+  if (!product)
+    product = (
+      await stripe(key, "POST", "/v1/products", { name, metadata: { plan_id: plan.id, kind } })
+    ).id;
   const price = await stripe(key, "POST", "/v1/prices", {
     product,
     currency: "usd",
     unit_amount: amount,
     lookup_key: lookup,
     transfer_lookup_key: true,
-    nickname: kind === "monthly" ? `${plan.name} monthly` : `${plan.name} implementation`,
+    nickname: name,
     metadata: { plan_id: plan.id, kind },
     ...(kind === "monthly" ? { recurring: { interval: "month" } } : {}),
   });
