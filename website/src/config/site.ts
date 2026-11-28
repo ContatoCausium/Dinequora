@@ -11,19 +11,21 @@ function trimSlash(value: string): string {
 const rawAppUrl = (import.meta.env.VITE_APP_URL as string | undefined)?.trim() ?? "";
 const rawEndpoint = (import.meta.env.VITE_DEMO_REQUEST_ENDPOINT as string | undefined)?.trim() ?? "";
 
-/** Base URL of the restaurant application. Empty string = same origin. */
-export const APP_URL = trimSlash(rawAppUrl);
+/** The published restaurant application (Cloudflare Worker dinequora-app, live since 2026-11-28). */
+export const PRODUCTION_APP_URL = "https://app.dinequora.com";
+
+/** Base URL of the restaurant application: VITE_APP_URL when set, otherwise the production app. */
+export const APP_URL = trimSlash(rawAppUrl) || PRODUCTION_APP_URL;
 
 export type AppRoutes = { readonly login: string; readonly signup: string };
 
 /**
- * Login and sign-up routes of the restaurant application, or `null` while the application is
- * not published. Links are off unless VITE_APP_LINKS_ENABLED is exactly "true", so a build never
- * points visitors at an address that does not exist yet; while off, the header, mobile menu and
- * footer show "Coming soon" and render no link to the application.
+ * Login and sign-up routes of the restaurant application. The application is published, so the
+ * links are on by default; VITE_APP_LINKS_ENABLED="false" is the kill switch that brings back the
+ * "Coming soon" state (header, mobile menu and footer show the badge and render no link).
  */
 export function getAppRoutes(env: { VITE_APP_LINKS_ENABLED?: string | undefined }, appUrl: string): AppRoutes | null {
-  if (env.VITE_APP_LINKS_ENABLED?.trim() !== "true") return null;
+  if (env.VITE_APP_LINKS_ENABLED?.trim() === "false") return null;
   return { login: `${appUrl}/auth`, signup: `${appUrl}/signup` };
 }
 
