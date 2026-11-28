@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App } from "../App";
-import { getAppRoutes } from "../config/site";
+import { APP_URL, getAppRoutes, PRODUCTION_APP_URL } from "../config/site";
 import { featureCategories } from "../content/features";
 import { detectInitialLocale, STORAGE_KEY } from "../i18n/locale";
 import { addressFor } from "../i18n/meta";
@@ -53,16 +53,14 @@ describe("Dinequora marketing site", () => {
     expect(container.querySelector("#demo")).not.toBeNull();
   });
 
-  it("keeps app links off unless explicitly enabled", () => {
-    expect(getAppRoutes({}, "https://app.dinequora.com")).toBeNull();
-    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "" }, "https://app.dinequora.com")).toBeNull();
-    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "false" }, "https://app.dinequora.com")).toBeNull();
-    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "1" }, "https://app.dinequora.com")).toBeNull();
-    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "true" }, "https://app.dinequora.com")).toEqual({
-      login: "https://app.dinequora.com/auth",
-      signup: "https://app.dinequora.com/signup",
-    });
-    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: " true " }, "")).toEqual({ login: "/auth", signup: "/signup" });
+  it("links to the published app by default, off only with the kill switch", () => {
+    const routes = { login: "https://app.dinequora.com/auth", signup: "https://app.dinequora.com/signup" };
+    expect(getAppRoutes({}, PRODUCTION_APP_URL)).toEqual(routes);
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "" }, PRODUCTION_APP_URL)).toEqual(routes);
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "true" }, PRODUCTION_APP_URL)).toEqual(routes);
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: "false" }, PRODUCTION_APP_URL)).toBeNull();
+    expect(getAppRoutes({ VITE_APP_LINKS_ENABLED: " false " }, PRODUCTION_APP_URL)).toBeNull();
+    expect(APP_URL).toBe(PRODUCTION_APP_URL);
   });
 
   it("has no in-page links pointing at missing anchors", () => {
