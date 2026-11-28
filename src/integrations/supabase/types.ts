@@ -148,6 +148,7 @@ export type Database = {
       billing_plans: {
         Row: {
           active: boolean;
+          annual_price_cents: number | null;
           currency: string;
           default_store_limit: number;
           entitlements: NonNullable<Json>;
@@ -155,11 +156,10 @@ export type Database = {
           implementation_fee_cents: number;
           implementation_fee_is_minimum: boolean;
           is_placeholder_pricing: boolean;
-          annual_price_cents: number | null;
           monthly_price_cents: number | null;
-          semiannual_price_cents: number | null;
           name: string;
           price_per_location_cents: number;
+          semiannual_price_cents: number | null;
           stripe_price_id: string | null;
           trial_days: number;
           trial_store_limit: number;
@@ -167,6 +167,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           active?: boolean;
+          annual_price_cents?: number | null;
           currency?: string;
           default_store_limit?: number;
           entitlements?: NonNullable<Json>;
@@ -174,17 +175,17 @@ export type Database = {
           implementation_fee_cents?: number;
           implementation_fee_is_minimum?: boolean;
           is_placeholder_pricing?: boolean;
-          annual_price_cents?: number | null;
           monthly_price_cents?: number | null;
-          semiannual_price_cents?: number | null;
           name: string;
           price_per_location_cents?: number;
+          semiannual_price_cents?: number | null;
           stripe_price_id?: string | null;
           trial_days?: number;
           trial_store_limit?: number;
         };
         Update: {
           active?: boolean;
+          annual_price_cents?: number | null;
           currency?: string;
           default_store_limit?: number;
           entitlements?: NonNullable<Json>;
@@ -192,11 +193,10 @@ export type Database = {
           implementation_fee_cents?: number;
           implementation_fee_is_minimum?: boolean;
           is_placeholder_pricing?: boolean;
-          annual_price_cents?: number | null;
           monthly_price_cents?: number | null;
-          semiannual_price_cents?: number | null;
           name?: string;
           price_per_location_cents?: number;
+          semiannual_price_cents?: number | null;
           stripe_price_id?: string | null;
           trial_days?: number;
           trial_store_limit?: number;
