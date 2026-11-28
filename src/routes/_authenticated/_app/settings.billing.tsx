@@ -1,17 +1,22 @@
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import {
   CheckCircle2,
   CircleAlert,
   Clock,
   CreditCard,
+  ExternalLink,
+  FlaskConical,
   Info,
   Loader2,
   ReceiptText,
   ShieldAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 import { useWorkspace } from "@/components/app/workspace-context";
 import { PageHeader, Panel } from "@/components/app/page";
@@ -21,6 +26,7 @@ import { countBillableStores } from "@/lib/access-rules";
 import { fmtCurrency, fmtDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { isClientPreview } from "@/lib/deployment-profile";
+import { getBillingMode, openBillingPortal, startCheckout } from "@/lib/billing.functions";
 
 export const Route = createFileRoute("/_authenticated/_app/settings/billing")({
   head: () => ({
@@ -54,6 +60,49 @@ function BillingPage() {
     queryFn: () => fetchBilling(orgDbId),
     enabled: role === "owner",
   });
+  // Whether the server can open Stripe Checkout (STRIPE_* secrets); never in the client preview.
+  const modeQuery = useQuery({
+    queryKey: ["billing-mode"],
+    queryFn: () => getBillingMode(),
+    enabled: role === "owner" && !preview,
+    staleTime: 5 * 60_000,
+  });
+  const mode = preview ? "off" : (modeQuery.data?.mode ?? "off");
+  const [busy, setBusy] = useState<string | null>(null);
+  // Back from Stripe Checkout: the browser never reports success; the signed webhook updates the
+  // subscription a few seconds later, so the page refetches instead of trusting the return URL.
+  const [returned, setReturned] = useState<"success" | "canceled" | null>(null);
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get("checkout");
+    if (value !== "success" && value !== "canceled") return;
+    setReturned(value);
+    window.history.replaceState(null, "", window.location.pathname);
+    if (value !== "success") return;
+    const timers = [3000, 8000, 15000].map((ms) => window.setTimeout(() => void refetch(), ms));
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, [refetch]);
+
+  const go = async (key: string, run: () => Promise<{ status: string; url?: string }>) => {
+    setBusy(key);
+    try {
+      const r = await run();
+      if (r.status === "redirect" && r.url) {
+        window.location.assign(r.url);
+        return;
+      }
+      toast.error(
+        t(`billing.checkoutErrors.${r.status}`, {
+          defaultValue: t("billing.checkoutErrors.unavailable"),
+        }),
+      );
+    } catch {
+      toast.error(t("billing.checkoutErrors.unavailable"));
+    }
+    setBusy(null);
+  };
+  const subscribe = (planId: string) =>
+    go(`plan:${planId}`, () => startCheckout({ data: { orgId: orgDbId, planId } }));
+  const manage = () => go("portal", () => openBillingPortal({ data: { orgId: orgDbId } }));
 
   if (role !== "owner") {
     return (
@@ -83,12 +132,31 @@ function BillingPage() {
         description={t("billing.subtitle", { org: org.name })}
       />
 
+      {returned && (
+        <div
+          role="status"
+          className={cn(
+            "surface mb-6 flex items-start gap-3 p-4 text-sm",
+            returned === "success" ? "border-success/40 bg-success/10" : "text-muted-foreground",
+          )}
+        >
+          <Info className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
+          <p>
+            {t(returned === "success" ? "billing.checkoutReturned" : "billing.checkoutCanceled")}
+          </p>
+        </div>
+      )}
       {preview ? (
         <div className="surface mb-6 flex items-start gap-3 p-4 text-sm text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
           <p>{t("billing.previewManaged")}</p>
         </div>
-      ) : (
+      ) : mode === "test" ? (
+        <div className="surface mb-6 flex items-start gap-3 border-info/40 bg-info/10 p-4 text-sm">
+          <FlaskConical className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
+          <p>{t("billing.testMode")}</p>
+        </div>
+      ) : mode === "live" ? null : (
         <div className="surface mb-6 flex items-start gap-3 border-warning/40 bg-warning/10 p-4 text-sm">
           <CreditCard className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
           <p>{t("billing.notConnected")}</p>
@@ -139,6 +207,24 @@ function BillingPage() {
                   />
                 </dl>
               )}
+              {mode !== "off" && sub?.stripe_subscription_id && (
+                <div className="mt-5 border-t pt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => void manage()}
+                  >
+                    {busy === "portal" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="size-4" />
+                    )}
+                    {t("billing.manage")}
+                  </Button>
+                  <p className="mt-2 text-xs text-muted-foreground">{t("billing.manageNote")}</p>
+                </div>
+              )}
             </Panel>
             <Panel title={t("billing.history")} bodyClassName="p-0">
               {!data?.events.length ? (
@@ -153,7 +239,11 @@ function BillingPage() {
                       key={e.id}
                       className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
                     >
-                      <span className="min-w-0 truncate">{e.description ?? e.kind}</span>
+                      <span className="min-w-0 truncate">
+                        {t(`billing.eventKinds.${e.kind}`, {
+                          defaultValue: e.description ?? e.kind,
+                        })}
+                      </span>
                       <span className="tabular text-xs text-muted-foreground">
                         {date(e.occurred_at)}
                       </span>
@@ -211,6 +301,20 @@ function BillingPage() {
                           )}
                         </p>
                       )}
+                      {mode !== "off" &&
+                        p.monthly_price_cents != null &&
+                        !p.implementation_fee_is_minimum &&
+                        !(sub?.stripe_subscription_id && sub.status !== "canceled") && (
+                          <Button
+                            className="mt-3 w-full"
+                            size="sm"
+                            disabled={busy !== null}
+                            onClick={() => void subscribe(p.id)}
+                          >
+                            {busy === `plan:${p.id}` && <Loader2 className="size-4 animate-spin" />}
+                            {t("billing.subscribe", { plan: p.name })}
+                          </Button>
+                        )}
                     </li>
                   ))}
               </ul>

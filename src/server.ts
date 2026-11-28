@@ -5,6 +5,8 @@ import { renderErrorPage } from "./lib/error-page";
 import { captureError } from "./lib/observability";
 import { configureObservability } from "./lib/observability-config";
 import { withSecurityHeaders } from "./lib/security-headers";
+import { STRIPE_WEBHOOK_PATH } from "./lib/stripe/billing-webhook";
+import type { Database } from "./integrations/supabase/types";
 
 // Alert/exception destinations come only from server environment variables; none by default.
 configureObservability(process.env);
@@ -67,8 +69,41 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+/**
+ * Stripe webhook (src/lib/stripe/billing-webhook.ts): handled before the app router because it has
+ * no session and needs the raw body for the signature check. Applies the event with the service
+ * role (billing_apply_stripe_event is EXECUTE-granted to service_role only).
+ */
+async function handleStripeWebhookRequest(request: Request): Promise<Response> {
+  const [{ handleStripeWebhook }, { supabaseAdmin }] = await Promise.all([
+    import("./lib/stripe/billing-webhook"),
+    import("./integrations/supabase/client.server"),
+  ]);
+  return handleStripeWebhook(request, {
+    secret: process.env["STRIPE_WEBHOOK_SECRET"],
+    apply: async (update) => {
+      // Several arguments are nullable; the generated types mark every argument as required.
+      const { data, error } = await supabaseAdmin.rpc(
+        "billing_apply_stripe_event",
+        update as unknown as Database["public"]["Functions"]["billing_apply_stripe_event"]["Args"],
+      );
+      if (error) {
+        captureError(new Error(`stripe webhook apply failed: ${error.message}`), {
+          event: "billing.stripe_webhook_failed",
+          critical: true,
+          ...requestContext(request),
+        });
+        throw error;
+      }
+      return data === true;
+    },
+  });
+}
+
 async function handle(request: Request, env: unknown, ctx: unknown): Promise<Response> {
   const language = request.headers.get("accept-language") ?? "en-US";
+  if (new URL(request.url).pathname === STRIPE_WEBHOOK_PATH)
+    return handleStripeWebhookRequest(request);
   try {
     const handler = await getServerEntry();
     const response = await handler.fetch(request, env, ctx);

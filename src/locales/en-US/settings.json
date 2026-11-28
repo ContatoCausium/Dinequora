@@ -106,7 +106,28 @@
     "renewsManaged": "Managed by Dinequora",
     "perMonth": "{{price}} / month",
     "implementation": "+ {{price}} one-time implementation",
-    "implementationFrom": "Implementation from {{price}}"
+    "implementationFrom": "Implementation from {{price}}",
+    "testMode": "Test mode: payments go through Stripe's test environment and no real card is charged.",
+    "subscribe": "Subscribe to {{plan}}",
+    "manage": "Manage subscription",
+    "manageNote": "Change your card, download invoices or cancel in Stripe's secure portal.",
+    "checkoutReturned": "Thanks! Stripe is confirming your payment. Your subscription updates here in a few seconds.",
+    "checkoutCanceled": "Checkout was canceled. Nothing was charged.",
+    "checkoutErrors": {
+      "not_configured": "Online payments aren't available yet. Contact the Dinequora team.",
+      "already_subscribed": "You already have a subscription. Use Manage subscription to change it.",
+      "plan_unavailable": "This plan can't be bought online. Contact the Dinequora team.",
+      "no_customer": "There's no online subscription to manage yet.",
+      "unavailable": "Couldn't reach the payment service. Try again in a moment."
+    },
+    "eventKinds": {
+      "invoice.paid": "Payment received",
+      "invoice.payment_failed": "Payment failed",
+      "customer.subscription.created": "Subscription started",
+      "customer.subscription.updated": "Subscription updated",
+      "customer.subscription.deleted": "Subscription canceled",
+      "checkout.session.completed": "Checkout completed"
+    }
   },
   "security": {
     "title": "Security",
