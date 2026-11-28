@@ -2,8 +2,8 @@
  * Minimal Stripe REST client and webhook signature check, with no SDK: plain `fetch` and Web Crypto,
  * so the same code runs in the Cloudflare Worker and in tests.
  *
- * The secret key (STRIPE_SECRET_KEY) and the webhook signing secret (STRIPE_WEBHOOK_SECRET) are
- * server-only Worker secrets; nothing here is ever imported by browser code with a key.
+ * The Stripe secret key and the webhook signing secret are server-only Worker secrets, passed in
+ * by the callers; this module reads no environment variable.
  */
 
 /** Pinned so request and response shapes do not change under us when Stripe releases a version. */

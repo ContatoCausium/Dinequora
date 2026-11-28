@@ -5,8 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { captureError } from "./lib/observability";
 import { configureObservability } from "./lib/observability-config";
 import { withSecurityHeaders } from "./lib/security-headers";
-import { STRIPE_WEBHOOK_PATH } from "./lib/stripe/billing-webhook";
-import { STRIPE_IN_BUILD } from "./lib/stripe/build-flags";
+import { STRIPE_IN_BUILD, STRIPE_WEBHOOK_PATH } from "./lib/stripe/build-flags";
 import type { Database } from "./integrations/supabase/types";
 
 // Alert/exception destinations come only from server environment variables; none by default.

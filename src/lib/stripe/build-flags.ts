@@ -8,3 +8,6 @@
  */
 export const STRIPE_IN_BUILD: boolean =
   import.meta.env.VITE_DEPLOYMENT_PROFILE !== "client-preview";
+
+/** Stripe webhook endpoint, handled in src/server.ts (kept here so the route check imports nothing else). */
+export const STRIPE_WEBHOOK_PATH = "/api/public/stripe-webhook";

@@ -9,7 +9,7 @@ import { verifyStripeSignature } from "./stripe-api";
  * `metadata.org_id`, and the subscription with `metadata.org_id` / `metadata.plan_id`
  * (billing.functions.ts), so every event names its organization without trusting the browser.
  */
-export const STRIPE_WEBHOOK_PATH = "/api/public/stripe-webhook";
+export { STRIPE_WEBHOOK_PATH } from "./build-flags";
 
 export const HANDLED_EVENTS = [
   "checkout.session.completed",

@@ -14,8 +14,8 @@ import type { BillingMode, CheckoutResult, PortalResult } from "./stripe/billing
  * - Portal: the owner manages card, invoices and cancellation in Stripe's billing portal.
  *
  * The Stripe logic lives in ./stripe/billing-server.ts and is loaded only in builds that include
- * Stripe (never the client preview). Off until the server has STRIPE_SECRET_KEY and
- * STRIPE_WEBHOOK_SECRET; live keys stay off unless STRIPE_LIVE_ENABLED is exactly "true".
+ * Stripe (never the client preview). Off until the server has the Stripe secret key and the webhook
+ * signing secret; live keys stay off unless STRIPE_LIVE_ENABLED is exactly "true".
  */
 export type { BillingMode, CheckoutResult, PortalResult };
 
