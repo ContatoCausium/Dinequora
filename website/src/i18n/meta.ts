@@ -20,13 +20,32 @@ export function localeFromPath(pathname: string): Locale | null {
   return /^\/pt(\/|$)/.test(pathname) ? "pt" : null;
 }
 
+/** Legal pages, each a static page per language (`/privacy/` and `/pt/privacy/`). */
+export type LegalPageId = "privacy";
+export const LEGAL_PAGES: readonly LegalPageId[] = ["privacy"];
+
+/** Every static page of the site: the home page and the legal pages. */
+export type PageId = "home" | LegalPageId;
+
+/** Path of a page in one language: `/`, `/pt/`, `/privacy/`, `/pt/privacy/`. */
+export function pagePath(page: PageId, locale: Locale): string {
+  return page === "home" ? localePath[locale] : `${localePath[locale]}${page}/`;
+}
+
+/** The page a path shows; anything that is not a legal page is the home page. */
+export function pageFromPath(pathname: string): PageId {
+  const rest = pathname.replace(/^\/pt(?=\/|$)/, "").replace(/^\/+|\/+$/g, "");
+  return (LEGAL_PAGES as readonly string[]).includes(rest) ? (rest as LegalPageId) : "home";
+}
+
 /**
- * The address of a language version: `/` (English) or `/pt/` (Portuguese), keeping other query
- * parameters and the #section, and dropping the legacy `lang` parameter.
+ * The address of a page in one language: `/` (English) or `/pt/` (Portuguese) for the home page,
+ * `/privacy/` or `/pt/privacy/` for a legal page, keeping other query parameters and the #section,
+ * and dropping the legacy `lang` parameter. The page defaults to the one of the current address.
  */
-export function addressFor(locale: Locale, current: string): string {
+export function addressFor(locale: Locale, current: string, page?: PageId): string {
   const url = new URL(current);
-  url.pathname = localePath[locale];
+  url.pathname = pagePath(page ?? pageFromPath(url.pathname), locale);
   url.searchParams.delete("lang");
   return url.pathname + url.search + url.hash;
 }
@@ -57,3 +76,22 @@ export const pageMeta: Record<Locale, PageMeta> = {
     noscript: "Dinequora — Plataforma de Inteligência para Restaurantes. Ative o JavaScript para ver este site.",
   },
 };
+
+/** Head metadata of the legal pages (title and description; the social cards reuse them). */
+export const legalMeta: Record<LegalPageId, Record<Locale, { title: string; description: string }>> = {
+  privacy: {
+    en: {
+      title: "Privacy Policy — Dinequora",
+      description: "How the Dinequora website handles your information: what we collect, why, who we share it with, how long we keep it and how to exercise your rights.",
+    },
+    pt: {
+      title: "Política de Privacidade — Dinequora",
+      description: "Como o site da Dinequora trata as suas informações: o que coletamos, para quê, com quem compartilhamos, por quanto tempo guardamos e seus direitos.",
+    },
+  },
+};
+
+/** Title and description of any page in one language. */
+export function metaFor(page: PageId, locale: Locale): { title: string; description: string } {
+  return page === "home" ? pageMeta[locale] : legalMeta[page][locale];
+}

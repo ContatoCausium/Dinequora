@@ -3,7 +3,8 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
-import { demoEndpointCspProblem, englishIndexHtml, portugueseIndexHtml, robotsTxt, sitemapXml } from "./src/build/seo.ts";
+import { demoEndpointCspProblem, englishIndexHtml, legalIndexHtml, portugueseIndexHtml, robotsTxt, sitemapXml } from "./src/build/seo.ts";
+import { LEGAL_PAGES, pagePath } from "./src/i18n/meta.ts";
 
 /**
  * English page head: when VITE_SITE_URL is set, absolute Open Graph image URLs (social crawlers
@@ -45,6 +46,7 @@ function preloadHeadlineFont(): Plugin {
  * Build output beyond the bundle:
  *  - pt/index.html: the Portuguese page with its own static head (lang, title, description,
  *    canonical /pt/, hreflang), derived from the built English page;
+ *  - privacy/index.html and pt/privacy/index.html: the legal pages, with their own static head;
  *  - robots.txt (always) and sitemap.xml (when VITE_SITE_URL is set);
  *  - stops the build if the demo-request endpoint would be blocked by the CSP in public/_headers.
  */
@@ -64,6 +66,12 @@ function languagePagesAndSeoFiles(siteUrl: string, demoEndpoint: string): Plugin
       if (!english || english.type !== "asset") this.error("index.html was not emitted");
       const source = typeof english.source === "string" ? english.source : new TextDecoder().decode(english.source);
       this.emitFile({ type: "asset", fileName: "pt/index.html", source: portugueseIndexHtml(source, siteUrl) });
+      for (const page of LEGAL_PAGES) {
+        for (const locale of ["en", "pt"] as const) {
+          const fileName = `${pagePath(page, locale).slice(1)}index.html`;
+          this.emitFile({ type: "asset", fileName, source: legalIndexHtml(source, siteUrl, page, locale) });
+        }
+      }
       this.emitFile({ type: "asset", fileName: "robots.txt", source: robotsTxt(siteUrl) });
       if (siteUrl.trim()) this.emitFile({ type: "asset", fileName: "sitemap.xml", source: sitemapXml(siteUrl) });
     },

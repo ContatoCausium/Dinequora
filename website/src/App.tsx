@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Header } from "./sections/Header";
 import { CinemaHero } from "./sections/CinemaHero";
 import { NightStory, Prologue } from "./sections/Story";
@@ -14,14 +15,37 @@ import { WhatsAppFloat } from "./components/whatsapp";
 import { SmoothScroll } from "./components/cinema/SmoothScroll";
 import { FactsBand, Marquee, PointerFx } from "./components/cinema/fx";
 import { LocaleProvider } from "./i18n/LocaleProvider";
+import { LegalPage } from "./sections/LegalPage";
 import { pick, useLocale, type Locale } from "./i18n/locale";
+import type { PageId } from "./i18n/meta";
 
-export function App({ initialLocale }: { initialLocale?: Locale }) {
+/** The site: the home page, or a legal page (privacy policy) when `page` names one. */
+export function App({ initialLocale, page = "home" }: { initialLocale?: Locale; page?: PageId }) {
   return (
-    <LocaleProvider {...(initialLocale ? { initial: initialLocale } : {})}>
-      <Page />
+    <LocaleProvider page={page} {...(initialLocale ? { initial: initialLocale } : {})}>
+      {page === "home" ? <Page /> : <LegalPage page={page} />}
     </LocaleProvider>
   );
+}
+
+/**
+ * Opening the home page at a #section (a shared link, or a footer link on a legal page): the
+ * pre-rendered HTML has no scroll-scene heights yet, so the browser's own jump lands short of the
+ * section. Jump again once the app has laid the page out.
+ */
+function useScrollToHashOnLoad() {
+  useEffect(() => {
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (!id) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const target = document.getElementById(id);
+        // scrollIntoView is missing in some test DOMs; real browsers all have it.
+        if (target && typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "start", behavior: "instant" });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 }
 
 /**
@@ -31,6 +55,7 @@ export function App({ initialLocale }: { initialLocale?: Locale }) {
  */
 function Page() {
   const { locale } = useLocale();
+  useScrollToHashOnLoad();
   return (
     <>
       <SmoothScroll />

@@ -10,9 +10,9 @@
  *   5. English.
  */
 import { createContext, useContext } from "react";
-import { htmlLang, localeFromPath, localePath, pageMeta, type Locale } from "./meta";
+import { htmlLang, localeFromPath, localePath, pageMeta, pagePath, type Locale, type PageId } from "./meta";
 
-export { htmlLang, localeFromPath, localePath, pageMeta, type Locale };
+export { htmlLang, localeFromPath, localePath, pageMeta, pagePath, type Locale, type PageId };
 
 export const LOCALES: readonly Locale[] = ["en", "pt"];
 
@@ -45,9 +45,10 @@ export function detectInitialLocale(): Locale {
   return browser.startsWith("pt") ? "pt" : "en";
 }
 
-type LocaleContextValue = { locale: Locale; setLocale: (locale: Locale) => void };
+/** The active language and the page being shown (the home page or a legal page). */
+type LocaleContextValue = { locale: Locale; setLocale: (locale: Locale) => void; page: PageId };
 
-export const LocaleContext = createContext<LocaleContextValue>({ locale: "en", setLocale: () => {} });
+export const LocaleContext = createContext<LocaleContextValue>({ locale: "en", setLocale: () => {}, page: "home" });
 
 export function useLocale(): LocaleContextValue {
   return useContext(LocaleContext);
