@@ -13,12 +13,12 @@ import {
   mapStripeEvent,
   type BillingUpdate,
 } from "@/lib/stripe/billing-webhook";
+import { billingMode } from "@/lib/stripe/billing-server";
 import {
-  billingMode,
   buildCheckoutParams,
   implementationLookupKey,
   monthlyLookupKey,
-} from "@/lib/billing.functions";
+} from "@/lib/stripe/checkout-params";
 import { PLANS, WEBHOOK_EVENTS, lookupKeys } from "../../scripts/stripe/setup-catalog.mjs";
 
 /**

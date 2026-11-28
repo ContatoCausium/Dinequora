@@ -35,6 +35,10 @@ export const TARGETS = Object.freeze({
     workersDev: false,
     routes: [{ pattern: PRODUCTION_DOMAIN, custom_domain: true }],
     profile: "production",
+    // Stripe Billing: the webhook applies events with the service-role client and the billing
+    // functions read the Stripe secret key, both from Worker secrets. Allowed in SERVER files
+    // only; any of them in public/ (the browser) is still an error.
+    serverOnlyNames: ["SUPABASE_SERVICE_ROLE_KEY", "STRIPE_SECRET"],
   },
 });
 const TEXT =
@@ -207,7 +211,9 @@ export function scanBundle(
       if (!ALLOWED_LOCAL_URLS.has(m)) err(r, "local or private backend URL");
     if (DB_URL.test(text)) err(r, "database connection string");
     DB_URL.lastIndex = 0;
-    for (const [needle, what] of FORBIDDEN) if (text.includes(needle)) err(r, what);
+    for (const [needle, what] of FORBIDDEN)
+      if (text.includes(needle) && (inPublic || !(T.serverOnlyNames ?? []).includes(needle)))
+        err(r, inPublic ? `${what} in a public file` : what);
     denyList.forEach((needle, i) => {
       if (text.includes(needle)) err(r, `denied string #${i + 1} (PREVIEW_BUNDLE_DENY)`);
     });

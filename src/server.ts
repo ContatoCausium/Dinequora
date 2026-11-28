@@ -6,6 +6,7 @@ import { captureError } from "./lib/observability";
 import { configureObservability } from "./lib/observability-config";
 import { withSecurityHeaders } from "./lib/security-headers";
 import { STRIPE_WEBHOOK_PATH } from "./lib/stripe/billing-webhook";
+import { STRIPE_IN_BUILD } from "./lib/stripe/build-flags";
 import type { Database } from "./integrations/supabase/types";
 
 // Alert/exception destinations come only from server environment variables; none by default.
@@ -102,7 +103,8 @@ async function handleStripeWebhookRequest(request: Request): Promise<Response> {
 
 async function handle(request: Request, env: unknown, ctx: unknown): Promise<Response> {
   const language = request.headers.get("accept-language") ?? "en-US";
-  if (new URL(request.url).pathname === STRIPE_WEBHOOK_PATH)
+  // Not in the client-preview build (build-flags.ts): the branch and its imports are dropped there.
+  if (STRIPE_IN_BUILD && new URL(request.url).pathname === STRIPE_WEBHOOK_PATH)
     return handleStripeWebhookRequest(request);
   try {
     const handler = await getServerEntry();

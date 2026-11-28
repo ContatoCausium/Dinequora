@@ -163,6 +163,25 @@ describe("production output", () => {
     }
   });
 
+  it("allows the Stripe and service-role names in server files only", () => {
+    const out = fixture();
+    hardenProductionOutput(out);
+    fs.writeFileSync(
+      path.join(out, "server/billing.mjs"),
+      `const k = process.env["STRIPE_SECRET_KEY"]; const s = process.env["SUPABASE_SERVICE_ROLE_KEY"];`,
+    );
+    expect(scan(out).errors).toEqual([]);
+    // The client preview still refuses them on the server...
+    expect(
+      scanBundle(out, { expectedSupabaseUrl: URL_, expectedPublishableKey: KEY }).errors.some((e) =>
+        /service-role client|payment provider/.test(e.message),
+      ),
+    ).toBe(true);
+    // ...and production refuses them in the browser bundle.
+    fs.writeFileSync(path.join(out, "public/assets/leak.js"), `x="STRIPE_SECRET_KEY"`);
+    expect(scan(out).errors.length).toBeGreaterThan(0);
+  });
+
   it("a production output fails the client-preview check, and the other way round", () => {
     const out = fixture();
     hardenProductionOutput(out);
